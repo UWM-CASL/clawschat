@@ -11,6 +11,17 @@ function postStatus(message) {
   self.postMessage({ type: 'status', payload: { message } });
 }
 
+function postProgress({ percent = 0, message = 'Loading model files...' }) {
+  const boundedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  self.postMessage({
+    type: 'progress',
+    payload: {
+      percent: boundedPercent,
+      message,
+    },
+  });
+}
+
 async function loadTransformers() {
   if (cachedModule) {
     return cachedModule;
@@ -58,12 +69,25 @@ async function initialize(payload) {
         postStatus(`Model ${requestedModelId} is unavailable. Falling back to ${modelId}.`);
       }
       postStatus(`Loading ${modelId} with ${backend.toUpperCase()}...`);
+      postProgress({ percent: 5, message: `Preparing ${backend.toUpperCase()} backend...` });
       model = await pipeline('text-generation', modelId, {
         device: backend,
+        progress_callback: (progress) => {
+          const rawProgress = progress?.progress;
+          const normalizedProgress =
+            typeof rawProgress === 'number'
+              ? rawProgress <= 1
+                ? rawProgress * 100
+                : rawProgress
+              : 0;
+          const label = progress?.status || progress?.file || 'Loading model files...';
+          postProgress({ percent: normalizedProgress, message: String(label) });
+        },
       });
       tokenizer = model.tokenizer;
       backendInUse = backend;
       loadedModelId = modelId;
+      postProgress({ percent: 100, message: `Loaded ${modelId} (${backend.toUpperCase()}).` });
       self.postMessage({
         type: 'init-success',
         payload: { backend, modelId },
@@ -81,6 +105,7 @@ async function initialize(payload) {
       message: `Failed to initialize model. ${errors.join(' | ')}`,
     },
   });
+  postProgress({ percent: 0, message: 'Model load failed.' });
   postStatus('Error initializing model');
 }
 

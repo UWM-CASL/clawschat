@@ -18,6 +18,13 @@ const backendSelect = document.getElementById('backendSelect');
 const statusRegion = document.getElementById('statusRegion');
 const loadModelButton = document.getElementById('loadModelButton');
 const debugInfo = document.getElementById('debugInfo');
+const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
+const modelLoadProgressLabel = document.getElementById('modelLoadProgressLabel');
+const modelLoadProgressValue = document.getElementById('modelLoadProgressValue');
+const modelLoadProgressBar = document.getElementById('modelLoadProgressBar');
+const modelLoadError = document.getElementById('modelLoadError');
+const modelLoadErrorSummary = document.getElementById('modelLoadErrorSummary');
+const modelLoadErrorDetails = document.getElementById('modelLoadErrorDetails');
 const stopButton = document.getElementById('stopButton');
 const sendButton = document.getElementById('sendButton');
 const conversationList = document.getElementById('conversationList');
@@ -30,6 +37,7 @@ const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const engine = new LLMEngineClient();
 let modelReady = false;
 let isGenerating = false;
+let isLoadingModel = false;
 let conversationCount = conversationList ? conversationList.children.length : 0;
 const debugEntries = [];
 const MAX_DEBUG_ENTRIES = 120;
@@ -54,14 +62,72 @@ function setStatus(message) {
 
 function updateActionButtons() {
   if (sendButton) {
-    sendButton.disabled = isGenerating || !modelReady;
+    sendButton.disabled = isGenerating || isLoadingModel || !modelReady;
   }
   if (loadModelButton) {
-    loadModelButton.disabled = isGenerating;
+    loadModelButton.disabled = isGenerating || isLoadingModel;
   }
   if (stopButton) {
     stopButton.disabled = !isGenerating;
   }
+}
+
+function showProgressRegion(show) {
+  if (!modelLoadProgressWrap) {
+    return;
+  }
+  modelLoadProgressWrap.classList.toggle('d-none', !show);
+}
+
+function clearLoadError() {
+  if (modelLoadError) {
+    modelLoadError.classList.add('d-none');
+  }
+  if (modelLoadErrorSummary) {
+    modelLoadErrorSummary.textContent = '';
+  }
+  if (modelLoadErrorDetails) {
+    modelLoadErrorDetails.replaceChildren();
+  }
+}
+
+function setLoadProgress({ percent = 0, message = 'Preparing model...' }) {
+  const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  if (modelLoadProgressLabel) {
+    modelLoadProgressLabel.textContent = message;
+  }
+  if (modelLoadProgressValue) {
+    modelLoadProgressValue.textContent = `${Math.round(numericPercent)}%`;
+  }
+  if (modelLoadProgressBar) {
+    modelLoadProgressBar.style.width = `${numericPercent}%`;
+    modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(numericPercent)}`);
+  }
+}
+
+function showLoadError(errorMessage) {
+  if (!modelLoadError) {
+    return;
+  }
+
+  const parts = String(errorMessage || 'Unknown initialization error')
+    .split(' | ')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  const [summary, ...details] = parts;
+  if (modelLoadErrorSummary) {
+    modelLoadErrorSummary.textContent = summary || 'Failed to initialize the selected model.';
+  }
+  if (modelLoadErrorDetails) {
+    modelLoadErrorDetails.replaceChildren();
+    details.forEach((detail) => {
+      const item = document.createElement('li');
+      item.textContent = detail;
+      modelLoadErrorDetails.appendChild(item);
+    });
+  }
+  modelLoadError.classList.remove('d-none');
 }
 
 function getStoredThemePreference() {
@@ -182,15 +248,24 @@ async function initializeEngine() {
   appendDebug(
     `Initialize requested (model=${config.modelId}, backendPreference=${config.backendPreference})`,
   );
+  isLoadingModel = true;
+  clearLoadError();
+  showProgressRegion(true);
+  setLoadProgress({ percent: 0, message: 'Starting model load...' });
+  updateActionButtons();
   setStatus('Loading model...');
   try {
     await engine.initialize(config);
     modelReady = true;
+    isLoadingModel = false;
+    setLoadProgress({ percent: 100, message: 'Model ready.' });
     appendDebug('Model initialization succeeded.');
     updateActionButtons();
   } catch (error) {
     modelReady = false;
+    isLoadingModel = false;
     setStatus(`Error: ${error.message}`);
+    showLoadError(error.message);
     appendDebug(`Model initialization failed: ${error.message}`);
     updateActionButtons();
     throw error;
@@ -216,10 +291,17 @@ engine.onBackendResolved = (backend) => {
   setStatus(`Ready (${backend.toUpperCase()})`);
 };
 
+engine.onProgress = (progress) => {
+  const message = progress?.message || 'Loading model files...';
+  const percent = Number.isFinite(progress?.percent) ? progress.percent : 0;
+  setLoadProgress({ percent, message });
+};
+
 const themePreference = getStoredThemePreference();
 applyTheme(themePreference);
 restoreInferencePreferences();
 setStatus('Welcome. Choose a model, then select Load model.');
+showProgressRegion(false);
 updateActionButtons();
 
 if (themeSelect) {

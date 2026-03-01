@@ -13,6 +13,7 @@ export class LLMEngineClient {
     };
     this.onStatus = () => {};
     this.onBackendResolved = () => {};
+    this.onProgress = () => {};
   }
 
   async initialize(config = {}) {
@@ -119,6 +120,11 @@ export class LLMEngineClient {
 
     if (data.type === 'status') {
       this.onStatus(data.payload.message);
+      return;
+    }
+
+    if (data.type === 'progress') {
+      this.onProgress(data.payload || {});
       return;
     }
 
