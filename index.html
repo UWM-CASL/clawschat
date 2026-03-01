@@ -5,11 +5,185 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Browser LLM Runner</title>
   </head>
-  <body>
-    <main id="app" class="container py-4" aria-label="Application">
-      <h1 class="h3 mb-3">Browser LLM Runner</h1>
-      <p class="mb-0">Build pipeline is configured and ready for app implementation.</p>
-    </main>
+  <body class="app-body">
+    <div class="app-shell">
+      <aside
+        class="offcanvas-md offcanvas-start conversation-panel"
+        tabindex="-1"
+        id="conversationPanel"
+        aria-labelledby="conversationPanelLabel"
+      >
+        <div class="offcanvas-header border-bottom">
+          <h2 class="offcanvas-title h5 mb-0" id="conversationPanelLabel">Conversations</h2>
+          <button
+            type="button"
+            class="btn-close d-md-none"
+            data-bs-dismiss="offcanvas"
+            data-bs-target="#conversationPanel"
+            aria-label="Close conversations"
+          ></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column gap-3 p-3">
+          <button id="newConversationBtn" type="button" class="btn btn-primary w-100">
+            New Conversation
+          </button>
+          <nav aria-label="Conversation list">
+            <ul id="conversationList" class="list-unstyled d-flex flex-column gap-2 mb-0">
+              <li class="conversation-item is-active">
+                <button type="button" class="conversation-select" aria-current="page">
+                  Biology Study Plan
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-link text-danger conversation-delete"
+                  aria-label="Delete Biology Study Plan conversation"
+                >
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M6.5 1h3l.5 1H13a.5.5 0 0 1 0 1h-.6l-.7 10.2A2 2 0 0 1 9.7 15H6.3a2 2 0 0 1-2-1.8L3.6 3H3a.5.5 0 0 1 0-1h3zM5 3l.7 10.1a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 3zM7 5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 7 5m2 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 9 5"
+                    />
+                  </svg>
+                </button>
+              </li>
+              <li class="conversation-item">
+                <button type="button" class="conversation-select">Chemistry Notes</button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-link text-danger conversation-delete"
+                  aria-label="Delete Chemistry Notes conversation"
+                >
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M6.5 1h3l.5 1H13a.5.5 0 0 1 0 1h-.6l-.7 10.2A2 2 0 0 1 9.7 15H6.3a2 2 0 0 1-2-1.8L3.6 3H3a.5.5 0 0 1 0-1h3zM5 3l.7 10.1a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 3zM7 5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 7 5m2 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 9 5"
+                    />
+                  </svg>
+                </button>
+              </li>
+              <li class="conversation-item">
+                <button type="button" class="conversation-select">World History Essay</button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-link text-danger conversation-delete"
+                  aria-label="Delete World History Essay conversation"
+                >
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M6.5 1h3l.5 1H13a.5.5 0 0 1 0 1h-.6l-.7 10.2A2 2 0 0 1 9.7 15H6.3a2 2 0 0 1-2-1.8L3.6 3H3a.5.5 0 0 1 0-1h3zM5 3l.7 10.1a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 3zM7 5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 7 5m2 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 9 5"
+                    />
+                  </svg>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </aside>
+
+      <div class="main-column">
+        <header class="top-bar">
+          <div class="d-flex align-items-center gap-2">
+            <button
+              type="button"
+              class="btn btn-outline-secondary d-md-none"
+              data-bs-toggle="offcanvas"
+              data-bs-target="#conversationPanel"
+              aria-controls="conversationPanel"
+            >
+              Conversations
+            </button>
+            <h1 class="h4 mb-0">Student Chat</h1>
+          </div>
+          <button
+            type="button"
+            class="btn icon-button"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#settingsDrawer"
+            aria-controls="settingsDrawer"
+            aria-label="Open settings"
+          >
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M9.7 1.2a.8.8 0 0 0-1.4 0l-.4.9a.8.8 0 0 1-.8.5l-1-.1a.8.8 0 0 0-.8.5l-.5.9a.8.8 0 0 1-.7.4l-1 .1a.8.8 0 0 0-.6 1.2l.5.8a.8.8 0 0 1 0 .9l-.5.8a.8.8 0 0 0 .6 1.2l1 .1a.8.8 0 0 1 .7.4l.5.9a.8.8 0 0 0 .8.5l1-.1a.8.8 0 0 1 .8.5l.4.9a.8.8 0 0 0 1.4 0l.4-.9a.8.8 0 0 1 .8-.5l1 .1a.8.8 0 0 0 .8-.5l.5-.9a.8.8 0 0 1 .7-.4l1-.1a.8.8 0 0 0 .6-1.2l-.5-.8a.8.8 0 0 1 0-.9l.5-.8a.8.8 0 0 0-.6-1.2l-1-.1a.8.8 0 0 1-.7-.4l-.5-.9a.8.8 0 0 0-.8-.5l-1 .1a.8.8 0 0 1-.8-.5zM8 10.4A2.4 2.4 0 1 1 8 5.6a2.4 2.4 0 0 1 0 4.8"
+              />
+            </svg>
+          </button>
+        </header>
+
+        <main class="chat-main">
+          <section class="chat-transcript-wrap" aria-label="Chat transcript">
+            <ol id="chatTranscript" class="chat-transcript">
+              <li class="message-row model-message">
+                <p class="message-speaker">Model</p>
+                <p class="message-bubble">
+                  Hi Alex, ready to continue your algebra review? We can do 5 quick practice
+                  problems.
+                </p>
+              </li>
+              <li class="message-row user-message">
+                <p class="message-speaker">User</p>
+                <p class="message-bubble">Yes. Start with one about linear equations.</p>
+              </li>
+              <li class="message-row model-message">
+                <p class="message-speaker">Model</p>
+                <p class="message-bubble">
+                  Great. Solve for x: 3x + 7 = 25. Type your steps and I will check each one.
+                </p>
+              </li>
+            </ol>
+          </section>
+        </main>
+
+        <form class="composer" aria-label="Message input">
+          <label class="visually-hidden" for="messageInput">Message input</label>
+          <textarea
+            id="messageInput"
+            class="form-control"
+            rows="2"
+            placeholder="Type your message..."
+          ></textarea>
+          <div class="d-flex justify-content-end gap-2 mt-2">
+            <button type="button" class="btn btn-outline-secondary">Stop generating</button>
+            <button type="submit" class="btn btn-primary">Send</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <aside
+      class="offcanvas offcanvas-end settings-drawer"
+      tabindex="-1"
+      id="settingsDrawer"
+      aria-labelledby="settingsDrawerLabel"
+    >
+      <div class="offcanvas-header">
+        <h2 class="offcanvas-title h5 mb-0" id="settingsDrawerLabel">Settings</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <form class="d-flex flex-column gap-3">
+          <div>
+            <label class="form-label" for="themeSelect">Theme</label>
+            <select id="themeSelect" class="form-select">
+              <option selected>Light</option>
+              <option>Dark</option>
+              <option>System</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" for="responseStyle">Response style</label>
+            <select id="responseStyle" class="form-select">
+              <option selected>Balanced</option>
+              <option>Concise</option>
+              <option>Detailed</option>
+            </select>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="streamToggle" checked />
+            <label class="form-check-label" for="streamToggle">Stream responses</label>
+          </div>
+        </form>
+      </div>
+    </aside>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
