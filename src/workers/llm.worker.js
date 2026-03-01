@@ -45,10 +45,11 @@ function resolvePrompt(rawPrompt) {
 }
 
 async function initialize(payload) {
-  const requestedModelId = payload.modelId || 'onnx-community/gemma-3-1b-ONNX-GQA';
+  const requestedModelId = payload.modelId || 'Xenova/distilgpt2';
   const modelId =
-    requestedModelId === 'onnx-community/gemma-3-1b-it-ONNX-GQA'
-      ? 'onnx-community/gemma-3-1b-ONNX-GQA'
+    requestedModelId === 'onnx-community/gemma-3-1b-it-ONNX-GQA' ||
+    requestedModelId === 'onnx-community/gemma-3-1b-ONNX-GQA'
+      ? 'Xenova/distilgpt2'
       : requestedModelId;
   const backendPreference = payload.backendPreference || 'auto';
   const attempts = getBackendAttemptOrder(backendPreference);
@@ -57,6 +58,7 @@ async function initialize(payload) {
   const { env, pipeline, TextStreamer: StreamerClass } = await loadTransformers();
   TextStreamer = StreamerClass;
   env.allowRemoteModels = true;
+  env.useBrowserCache = true;
 
   for (const backend of attempts) {
     if (backend === 'webgpu' && !(typeof navigator !== 'undefined' && 'gpu' in navigator)) {
@@ -95,7 +97,15 @@ async function initialize(payload) {
       postStatus(`Ready (${backend.toUpperCase()})`);
       return;
     } catch (error) {
-      errors.push(`${backend.toUpperCase()}: ${error?.message || 'Unknown initialization error'}`);
+      const rawMessage = error?.message || 'Unknown initialization error';
+      const isUnauthorized = /unauthorized|401|403/i.test(rawMessage);
+      if (isUnauthorized) {
+        errors.push(
+          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like Xenova/distilgpt2, or self-host pinned model files for static delivery.)`,
+        );
+      } else {
+        errors.push(`${backend.toUpperCase()}: ${rawMessage}`);
+      }
     }
   }
 

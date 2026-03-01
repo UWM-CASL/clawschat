@@ -12,12 +12,15 @@ Student-facing browser chat UI with local model inference.
   - `CPU only`
 - `Auto` attempts WebGPU first and falls back to CPU if unavailable or initialization fails.
 - The selected backend and model are stored in `localStorage`.
+- Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
 - Debug status history is available in `Settings -> Debug info` (accordion).
 
 ## Supported model
 
-- `onnx-community/gemma-3-1b-ONNX-GQA`
-- Legacy stored ID `onnx-community/gemma-3-1b-it-ONNX-GQA` is automatically remapped to the supported model.
+- `Xenova/distilgpt2`
+- Legacy stored IDs are automatically remapped to the supported model:
+  - `onnx-community/gemma-3-1b-it-ONNX-GQA`
+  - `onnx-community/gemma-3-1b-ONNX-GQA`
 
 ## Scripts
 
