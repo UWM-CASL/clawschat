@@ -22,25 +22,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build static site
         env:
           # Recommended for Vite-style builds so assets resolve under /<repo>/ on Pages.
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-        run: pnpm build
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
