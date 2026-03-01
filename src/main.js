@@ -16,6 +16,8 @@ const themeSelect = document.getElementById('themeSelect');
 const modelSelect = document.getElementById('modelSelect');
 const backendSelect = document.getElementById('backendSelect');
 const statusRegion = document.getElementById('statusRegion');
+const loadModelButton = document.getElementById('loadModelButton');
+const debugInfo = document.getElementById('debugInfo');
 const stopButton = document.getElementById('stopButton');
 const sendButton = document.getElementById('sendButton');
 const conversationList = document.getElementById('conversationList');
@@ -29,16 +31,33 @@ const engine = new LLMEngineClient();
 let modelReady = false;
 let isGenerating = false;
 let conversationCount = conversationList ? conversationList.children.length : 0;
+const debugEntries = [];
+const MAX_DEBUG_ENTRIES = 120;
+
+function appendDebug(message) {
+  const timestamp = new Date().toLocaleTimeString();
+  debugEntries.push(`[${timestamp}] ${message}`);
+  if (debugEntries.length > MAX_DEBUG_ENTRIES) {
+    debugEntries.shift();
+  }
+  if (debugInfo) {
+    debugInfo.textContent = debugEntries.join('\n');
+  }
+}
 
 function setStatus(message) {
   if (statusRegion) {
     statusRegion.textContent = message;
   }
+  appendDebug(`Status: ${message}`);
 }
 
 function updateActionButtons() {
   if (sendButton) {
-    sendButton.disabled = isGenerating;
+    sendButton.disabled = isGenerating || !modelReady;
+  }
+  if (loadModelButton) {
+    loadModelButton.disabled = isGenerating;
   }
   if (stopButton) {
     stopButton.disabled = !isGenerating;
@@ -160,13 +179,20 @@ function addMessage({ speaker, text, role }) {
 
 async function initializeEngine() {
   const config = readEngineConfigFromUI();
+  appendDebug(
+    `Initialize requested (model=${config.modelId}, backendPreference=${config.backendPreference})`,
+  );
   setStatus('Loading model...');
   try {
     await engine.initialize(config);
     modelReady = true;
+    appendDebug('Model initialization succeeded.');
+    updateActionButtons();
   } catch (error) {
     modelReady = false;
     setStatus(`Error: ${error.message}`);
+    appendDebug(`Model initialization failed: ${error.message}`);
+    updateActionButtons();
     throw error;
   }
 }
@@ -174,13 +200,11 @@ async function initializeEngine() {
 async function reinitializeEngineFromSettings() {
   persistInferencePreferences();
   modelReady = false;
+  setStatus('Settings updated. Select Load model to apply.');
+  appendDebug('Inference settings changed; awaiting manual load.');
+  updateActionButtons();
   if (isGenerating) {
     return;
-  }
-  try {
-    await initializeEngine();
-  } catch (error) {
-    // Status is already updated in initializeEngine.
   }
 }
 
@@ -195,8 +219,8 @@ engine.onBackendResolved = (backend) => {
 const themePreference = getStoredThemePreference();
 applyTheme(themePreference);
 restoreInferencePreferences();
+setStatus('Welcome. Choose a model, then select Load model.');
 updateActionButtons();
-initializeEngine().catch(() => {});
 
 if (themeSelect) {
   themeSelect.addEventListener('change', (event) => {
@@ -224,6 +248,20 @@ if (modelSelect) {
 if (backendSelect) {
   backendSelect.addEventListener('change', () => {
     reinitializeEngineFromSettings();
+  });
+}
+
+if (loadModelButton) {
+  loadModelButton.addEventListener('click', async () => {
+    if (isGenerating) {
+      return;
+    }
+    persistInferencePreferences();
+    try {
+      await initializeEngine();
+    } catch (error) {
+      // Status is already updated in initializeEngine.
+    }
   });
 }
 
@@ -280,9 +318,11 @@ if (stopButton) {
       await engine.cancelGeneration();
       modelReady = true;
       setStatus('Stopped');
+      appendDebug('Generation canceled by user.');
     } catch (error) {
       modelReady = false;
       setStatus(`Error: ${error.message}`);
+      appendDebug(`Cancel failed: ${error.message}`);
     } finally {
       isGenerating = false;
       updateActionButtons();
@@ -299,11 +339,12 @@ if (chatForm && messageInput && chatTranscript) {
     }
 
     if (!modelReady) {
-      try {
-        await initializeEngine();
-      } catch {
-        return;
+      setStatus('Please load a model before sending a message.');
+      appendDebug('Send blocked: model not ready.');
+      if (loadModelButton) {
+        loadModelButton.focus();
       }
+      return;
     }
 
     addMessage({ speaker: 'User', text: value, role: 'user' });
@@ -322,6 +363,7 @@ if (chatForm && messageInput && chatTranscript) {
         },
         onComplete: (finalText) => {
           modelBubble.textContent = finalText || modelText || '[No output]';
+          appendDebug('Generation completed.');
           isGenerating = false;
           updateActionButtons();
         },
@@ -330,6 +372,7 @@ if (chatForm && messageInput && chatTranscript) {
           isGenerating = false;
           updateActionButtons();
           setStatus('Generation failed');
+          appendDebug(`Generation error: ${message}`);
         },
       });
     } catch (error) {
@@ -337,6 +380,7 @@ if (chatForm && messageInput && chatTranscript) {
       isGenerating = false;
       updateActionButtons();
       setStatus('Generation failed');
+      appendDebug(`Generation error: ${error.message}`);
     }
   });
 }

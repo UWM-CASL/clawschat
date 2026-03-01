@@ -110,6 +110,29 @@
         </header>
 
         <main class="chat-main">
+          <section class="welcome-panel card shadow-sm mb-3" aria-labelledby="welcomeTitle">
+            <div class="card-body">
+              <h2 id="welcomeTitle" class="h5">Welcome</h2>
+              <p class="mb-3">
+                Choose a model, then select <strong>Load model</strong> before sending messages.
+              </p>
+              <div class="row g-3 align-items-end">
+                <div class="col-sm-8">
+                  <label class="form-label" for="modelSelect">Model</label>
+                  <select id="modelSelect" class="form-select">
+                    <option value="onnx-community/gemma-3-1b-ONNX-GQA" selected>
+                      onnx-community/gemma-3-1b-ONNX-GQA
+                    </option>
+                  </select>
+                </div>
+                <div class="col-sm-4">
+                  <button id="loadModelButton" type="button" class="btn btn-primary w-100">
+                    Load model
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
           <section class="chat-transcript-wrap" aria-label="Chat transcript">
             <ol id="chatTranscript" class="chat-transcript">
               <li class="message-row model-message">
@@ -162,14 +185,6 @@
       <div class="offcanvas-body">
         <form class="d-flex flex-column gap-3">
           <div>
-            <label class="form-label" for="modelSelect">Model</label>
-            <select id="modelSelect" class="form-select">
-              <option value="onnx-community/gemma-3-1b-ONNX-GQA" selected>
-                onnx-community/gemma-3-1b-ONNX-GQA
-              </option>
-            </select>
-          </div>
-          <div>
             <label class="form-label" for="backendSelect">Execution backend</label>
             <select id="backendSelect" class="form-select">
               <option value="auto" selected>Auto (WebGPU then CPU)</option>
@@ -196,6 +211,32 @@
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" role="switch" id="streamToggle" checked />
             <label class="form-check-label" for="streamToggle">Stream responses</label>
+          </div>
+          <div class="accordion" id="debugAccordion">
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="debugAccordionHeading">
+                <button
+                  class="accordion-button collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#debugAccordionBody"
+                  aria-expanded="false"
+                  aria-controls="debugAccordionBody"
+                >
+                  Debug info
+                </button>
+              </h2>
+              <div
+                id="debugAccordionBody"
+                class="accordion-collapse collapse"
+                aria-labelledby="debugAccordionHeading"
+                data-bs-parent="#debugAccordion"
+              >
+                <div class="accordion-body">
+                  <pre id="debugInfo" class="debug-info mb-0" aria-live="off"></pre>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       </div>

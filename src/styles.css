@@ -140,6 +140,13 @@
   padding: 1.25rem 1rem;
 }
 
+.welcome-panel {
+  max-width: 900px;
+  margin: 0 auto 1rem;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
 .chat-transcript-wrap {
   max-width: 900px;
   margin: 0 auto;
@@ -232,6 +239,19 @@
   background-color: var(--surface-elevated);
   border-color: var(--border-soft);
   color: var(--ink-strong);
+}
+
+.debug-info {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 0.5rem;
+  background: var(--surface-muted);
+  color: var(--ink-strong);
+  font-size: 0.8rem;
 }
 
 @media (max-width: 575.98px) {

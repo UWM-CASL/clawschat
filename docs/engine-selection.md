@@ -9,6 +9,8 @@ Inference is executed in a dedicated Web Worker (`src/workers/llm.worker.js`).
 - `cpu`: CPU only
 
 The resolved backend is shown in the status region in the main UI.
+Initialization is user-triggered from the welcome/setup panel (`Load model`).
+If model/backend settings change, the UI requires another explicit load.
 
 ## UI boundary
 
