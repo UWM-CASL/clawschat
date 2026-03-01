@@ -60,7 +60,6 @@ const modelLoadProgressBar = document.getElementById('modelLoadProgressBar');
 const modelLoadError = document.getElementById('modelLoadError');
 const modelLoadErrorSummary = document.getElementById('modelLoadErrorSummary');
 const modelLoadErrorDetails = document.getElementById('modelLoadErrorDetails');
-const stopButton = document.getElementById('stopButton');
 const sendButton = document.getElementById('sendButton');
 const conversationList = document.getElementById('conversationList');
 const newConversationBtn = document.getElementById('newConversationBtn');
@@ -278,18 +277,35 @@ function ensureConversation() {
 }
 
 function updateActionButtons() {
+  updateSendButtonMode();
   if (sendButton) {
-    sendButton.disabled = isGenerating || isLoadingModel || !modelReady;
+    sendButton.disabled = isLoadingModel || (!isGenerating && !modelReady);
   }
   if (loadModelButton) {
     loadModelButton.disabled = isGenerating || isLoadingModel;
   }
-  if (stopButton) {
-    stopButton.disabled = !isGenerating;
-  }
   if (newConversationBtn) {
     newConversationBtn.disabled = isGenerating;
   }
+}
+
+function updateSendButtonMode() {
+  if (!sendButton) {
+    return;
+  }
+  if (isGenerating) {
+    sendButton.type = 'button';
+    sendButton.textContent = 'Stop generating';
+    sendButton.classList.remove('btn-primary');
+    sendButton.classList.add('btn-outline-secondary');
+    sendButton.setAttribute('aria-label', 'Stop generating');
+    return;
+  }
+  sendButton.type = 'submit';
+  sendButton.textContent = 'Send';
+  sendButton.classList.remove('btn-outline-secondary');
+  sendButton.classList.add('btn-primary');
+  sendButton.setAttribute('aria-label', 'Send message');
 }
 
 function showProgressRegion(show) {
@@ -597,11 +613,12 @@ if (conversationList) {
   });
 }
 
-if (stopButton) {
-  stopButton.addEventListener('click', async () => {
+if (sendButton) {
+  sendButton.addEventListener('click', async (event) => {
     if (!isGenerating) {
       return;
     }
+    event.preventDefault();
     setStatus('Stopping generation...');
     try {
       await engine.cancelGeneration();

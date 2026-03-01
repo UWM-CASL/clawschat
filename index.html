@@ -27,7 +27,8 @@
           <button id="newConversationBtn" type="button" class="btn btn-primary w-100">
             New Conversation
           </button>
-          <nav aria-label="Conversation list">
+          <h2 id="conversationListHeading" class="visually-hidden">Conversations</h2>
+          <nav aria-labelledby="conversationListHeading">
             <ul id="conversationList" class="list-unstyled d-flex flex-column gap-2 mb-0"></ul>
           </nav>
         </div>
@@ -122,14 +123,13 @@
 
         <form class="composer" aria-label="Message input">
           <label class="visually-hidden" for="messageInput">Message input</label>
-          <textarea
-            id="messageInput"
-            class="form-control"
-            rows="2"
-            placeholder="Type your message..."
-          ></textarea>
-          <div class="d-flex justify-content-end gap-2 mt-2">
-            <button id="stopButton" type="button" class="btn btn-outline-secondary">Stop generating</button>
+          <div class="composer-row">
+            <textarea
+              id="messageInput"
+              class="form-control"
+              rows="2"
+              placeholder="Type your message..."
+            ></textarea>
             <button id="sendButton" type="submit" class="btn btn-primary">Send</button>
           </div>
         </form>
