@@ -14,6 +14,9 @@ Student-facing browser chat UI with local model inference.
 - The selected backend and model are stored in `localStorage`.
 - Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
 - Debug status history is available in `Settings -> Debug info` (accordion).
+- Conversation list and transcript are state-driven (no placeholder messages).
+- New conversations start untitled and are automatically renamed after the first model response based on conversation content.
+- Model load progress UI collapses after successful initialization.
 
 ## Supported model
 

@@ -7,12 +7,45 @@ const THEME_STORAGE_KEY = 'ui-theme-preference';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const DEFAULT_MODEL = 'onnx-community/Qwen3-0.6B-ONNX';
+const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
 const LEGACY_MODEL_ALIASES = {
   'onnx-community/gemma-3-1b-it-ONNX-GQA': DEFAULT_MODEL,
   'onnx-community/gemma-3-1b-ONNX-GQA': DEFAULT_MODEL,
   'Xenova/distilgpt2': DEFAULT_MODEL,
 };
 const SUPPORTED_MODELS = new Set([DEFAULT_MODEL]);
+const TITLE_STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'by',
+  'for',
+  'from',
+  'how',
+  'i',
+  'in',
+  'is',
+  'it',
+  'its',
+  'me',
+  'my',
+  'of',
+  'on',
+  'or',
+  'our',
+  'that',
+  'the',
+  'this',
+  'to',
+  'we',
+  'with',
+  'you',
+  'your',
+]);
 
 const themeSelect = document.getElementById('themeSelect');
 const modelSelect = document.getElementById('modelSelect');
@@ -40,7 +73,10 @@ const engine = new LLMEngineClient();
 let modelReady = false;
 let isGenerating = false;
 let isLoadingModel = false;
-let conversationCount = conversationList ? conversationList.children.length : 0;
+let conversationCount = 0;
+let conversationIdCounter = 0;
+let activeConversationId = null;
+const conversations = [];
 const debugEntries = [];
 const MAX_DEBUG_ENTRIES = 120;
 
@@ -62,6 +98,163 @@ function setStatus(message) {
   appendDebug(`Status: ${message}`);
 }
 
+function getActiveConversation() {
+  return conversations.find((conversation) => conversation.id === activeConversationId) || null;
+}
+
+function createConversation(name) {
+  conversationCount += 1;
+  return {
+    id: `conversation-${++conversationIdCounter}`,
+    name: name || `${UNTITLED_CONVERSATION_PREFIX} ${conversationCount}`,
+    messages: [],
+    hasGeneratedName: false,
+  };
+}
+
+function normalizeConversationName(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (trimmed.length <= 64) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, 61).trimEnd()}...`;
+}
+
+function deriveConversationName(conversation) {
+  const firstUserMessage = conversation.messages.find((message) => message.role === 'user')?.text || '';
+  const firstModelMessage = conversation.messages.find((message) => message.role === 'model')?.text || '';
+  const source = `${firstUserMessage} ${firstModelMessage}`
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!source) {
+    return conversation.name;
+  }
+
+  const scoredTokens = new Map();
+  source.split(' ').forEach((token) => {
+    if (token.length < 3 || TITLE_STOP_WORDS.has(token)) {
+      return;
+    }
+    const existing = scoredTokens.get(token) || { count: 0, order: scoredTokens.size };
+    existing.count += 1;
+    scoredTokens.set(token, existing);
+  });
+
+  const topTokens = [...scoredTokens.entries()]
+    .sort((a, b) => b[1].count - a[1].count || a[1].order - b[1].order)
+    .slice(0, 4)
+    .map(([token]) => token.charAt(0).toUpperCase() + token.slice(1));
+
+  if (!topTokens.length) {
+    return conversation.name;
+  }
+
+  return normalizeConversationName(topTokens.join(' '));
+}
+
+function addMessageToConversation(conversation, role, text) {
+  const normalizedRole = role === 'user' ? 'user' : 'model';
+  const message = {
+    id: `${conversation.id}-message-${conversation.messages.length + 1}`,
+    role: normalizedRole,
+    speaker: normalizedRole === 'user' ? 'User' : 'Model',
+    text: String(text || ''),
+  };
+  conversation.messages.push(message);
+  return message;
+}
+
+function renderConversationList() {
+  if (!conversationList) {
+    return;
+  }
+  conversationList.replaceChildren();
+
+  conversations.forEach((conversation) => {
+    const item = document.createElement('li');
+    item.className = `conversation-item${conversation.id === activeConversationId ? ' is-active' : ''}`;
+    item.dataset.conversationId = conversation.id;
+
+    const selectButton = document.createElement('button');
+    selectButton.type = 'button';
+    selectButton.className = 'conversation-select';
+    selectButton.textContent = conversation.name;
+    if (conversation.id === activeConversationId) {
+      selectButton.setAttribute('aria-current', 'page');
+    }
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'btn btn-sm btn-link text-danger conversation-delete';
+    deleteButton.setAttribute('aria-label', `Delete ${conversation.name} conversation`);
+    deleteButton.innerHTML = `
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M6.5 1h3l.5 1H13a.5.5 0 0 1 0 1h-.6l-.7 10.2A2 2 0 0 1 9.7 15H6.3a2 2 0 0 1-2-1.8L3.6 3H3a.5.5 0 0 1 0-1h3zM5 3l.7 10.1a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 3zM7 5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 7 5m2 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 9 5"></path>
+      </svg>
+    `;
+
+    item.append(selectButton, deleteButton);
+    conversationList.appendChild(item);
+  });
+}
+
+function addMessageElement(message) {
+  if (!chatTranscript) {
+    return null;
+  }
+  const item = document.createElement('li');
+  item.className = `message-row ${message.role === 'user' ? 'user-message' : 'model-message'}`;
+  item.innerHTML = `
+    <p class="message-speaker">${message.speaker}</p>
+    <p class="message-bubble"></p>
+  `;
+  const bubble = item.querySelector('.message-bubble');
+  if (bubble) {
+    bubble.textContent = message.text;
+  }
+  chatTranscript.appendChild(item);
+  item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return bubble;
+}
+
+function renderTranscript() {
+  if (!chatTranscript) {
+    return;
+  }
+  chatTranscript.replaceChildren();
+  const conversation = getActiveConversation();
+  if (!conversation) {
+    return;
+  }
+  conversation.messages.forEach((message) => {
+    addMessageElement(message);
+  });
+}
+
+function setActiveConversationById(conversationId) {
+  if (activeConversationId === conversationId) {
+    return;
+  }
+  activeConversationId = conversationId;
+  renderConversationList();
+  renderTranscript();
+}
+
+function ensureConversation() {
+  if (getActiveConversation()) {
+    return;
+  }
+  const conversation = createConversation();
+  conversations.unshift(conversation);
+  activeConversationId = conversation.id;
+}
+
 function updateActionButtons() {
   if (sendButton) {
     sendButton.disabled = isGenerating || isLoadingModel || !modelReady;
@@ -71,6 +264,9 @@ function updateActionButtons() {
   }
   if (stopButton) {
     stopButton.disabled = !isGenerating;
+  }
+  if (newConversationBtn) {
+    newConversationBtn.disabled = isGenerating;
   }
 }
 
@@ -193,58 +389,6 @@ function persistInferencePreferences() {
   localStorage.setItem(BACKEND_STORAGE_KEY, backendSelect?.value || 'auto');
 }
 
-function setActiveConversation(item) {
-  if (!conversationList) {
-    return;
-  }
-
-  conversationList.querySelectorAll('.conversation-item').forEach((entry) => {
-    entry.classList.remove('is-active');
-    const button = entry.querySelector('.conversation-select');
-    if (button) {
-      button.removeAttribute('aria-current');
-    }
-  });
-
-  item.classList.add('is-active');
-  const activeButton = item.querySelector('.conversation-select');
-  if (activeButton) {
-    activeButton.setAttribute('aria-current', 'page');
-  }
-}
-
-function createConversationItem(name) {
-  const item = document.createElement('li');
-  item.className = 'conversation-item';
-  item.innerHTML = `
-    <button type="button" class="conversation-select">${name}</button>
-    <button
-      type="button"
-      class="btn btn-sm btn-link text-danger conversation-delete"
-      aria-label="Delete ${name} conversation"
-    >
-      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M6.5 1h3l.5 1H13a.5.5 0 0 1 0 1h-.6l-.7 10.2A2 2 0 0 1 9.7 15H6.3a2 2 0 0 1-2-1.8L3.6 3H3a.5.5 0 0 1 0-1h3zM5 3l.7 10.1a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 3zM7 5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 7 5m2 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6A.5.5 0 0 1 9 5"></path>
-      </svg>
-    </button>
-  `;
-  return item;
-}
-
-function addMessage({ speaker, text, role }) {
-  const item = document.createElement('li');
-  item.className = `message-row ${role === 'user' ? 'user-message' : 'model-message'}`;
-  item.innerHTML = `
-    <p class="message-speaker">${speaker}</p>
-    <p class="message-bubble"></p>
-  `;
-  const bubble = item.querySelector('.message-bubble');
-  bubble.textContent = text;
-  chatTranscript.appendChild(item);
-  item.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  return bubble;
-}
-
 async function initializeEngine() {
   const config = readEngineConfigFromUI();
   appendDebug(
@@ -261,6 +405,11 @@ async function initializeEngine() {
     modelReady = true;
     isLoadingModel = false;
     setLoadProgress({ percent: 100, message: 'Model ready.' });
+    window.setTimeout(() => {
+      if (modelReady && !isLoadingModel) {
+        showProgressRegion(false);
+      }
+    }, 300);
     appendDebug('Model initialization succeeded.');
     updateActionButtons();
   } catch (error) {
@@ -302,6 +451,9 @@ engine.onProgress = (progress) => {
 const themePreference = getStoredThemePreference();
 applyTheme(themePreference);
 restoreInferencePreferences();
+ensureConversation();
+renderConversationList();
+renderTranscript();
 setStatus('Welcome. Choose a model, then select Load model.');
 showProgressRegion(false);
 updateActionButtons();
@@ -349,13 +501,16 @@ if (loadModelButton) {
   });
 }
 
-if (newConversationBtn && conversationList) {
+if (newConversationBtn) {
   newConversationBtn.addEventListener('click', () => {
-    conversationCount += 1;
-    const name = `New Conversation ${conversationCount}`;
-    const newItem = createConversationItem(name);
-    conversationList.prepend(newItem);
-    setActiveConversation(newItem);
+    if (isGenerating) {
+      return;
+    }
+    const conversation = createConversation();
+    conversations.unshift(conversation);
+    activeConversationId = conversation.id;
+    renderConversationList();
+    renderTranscript();
   });
 }
 
@@ -366,27 +521,45 @@ if (conversationList) {
       return;
     }
 
+    if (isGenerating) {
+      return;
+    }
+
     const deleteButton = target.closest('.conversation-delete');
     if (deleteButton) {
       const item = deleteButton.closest('.conversation-item');
-      if (!item) {
+      const conversationId = item?.dataset.conversationId;
+      if (!conversationId) {
         return;
       }
 
-      const wasActive = item.classList.contains('is-active');
-      item.remove();
-
-      if (wasActive && conversationList.firstElementChild) {
-        setActiveConversation(conversationList.firstElementChild);
+      const index = conversations.findIndex((conversation) => conversation.id === conversationId);
+      if (index < 0) {
+        return;
       }
+
+      const wasActive = activeConversationId === conversationId;
+      conversations.splice(index, 1);
+
+      if (!conversations.length) {
+        const replacement = createConversation();
+        conversations.push(replacement);
+      }
+
+      if (wasActive) {
+        activeConversationId = conversations[0].id;
+      }
+      renderConversationList();
+      renderTranscript();
       return;
     }
 
     const selectButton = target.closest('.conversation-select');
     if (selectButton) {
       const item = selectButton.closest('.conversation-item');
-      if (item) {
-        setActiveConversation(item);
+      const conversationId = item?.dataset.conversationId;
+      if (conversationId) {
+        setActiveConversationById(conversationId);
       }
     }
   });
@@ -431,10 +604,18 @@ if (chatForm && messageInput && chatTranscript) {
       return;
     }
 
-    addMessage({ speaker: 'User', text: value, role: 'user' });
+    const activeConversation = getActiveConversation();
+    if (!activeConversation) {
+      return;
+    }
+
+    const userMessage = addMessageToConversation(activeConversation, 'user', value);
+    addMessageElement(userMessage);
     messageInput.value = '';
-    const modelBubble = addMessage({ speaker: 'Model', text: '', role: 'model' });
-    let modelText = '';
+
+    const modelMessage = addMessageToConversation(activeConversation, 'model', '');
+    const modelBubble = addMessageElement(modelMessage);
+    let streamedText = '';
 
     isGenerating = true;
     updateActionButtons();
@@ -442,17 +623,33 @@ if (chatForm && messageInput && chatTranscript) {
     try {
       await engine.generate(value, {
         onToken: (chunk) => {
-          modelText += chunk;
-          modelBubble.textContent = modelText.trimStart();
+          streamedText += chunk;
+          modelMessage.text = streamedText.trimStart();
+          if (modelBubble) {
+            modelBubble.textContent = modelMessage.text;
+          }
         },
         onComplete: (finalText) => {
-          modelBubble.textContent = finalText || modelText || '[No output]';
+          modelMessage.text = finalText || streamedText.trimStart() || '[No output]';
+          if (modelBubble) {
+            modelBubble.textContent = modelMessage.text;
+          }
+
+          if (!activeConversation.hasGeneratedName && modelMessage.text !== '[No output]') {
+            activeConversation.name = deriveConversationName(activeConversation);
+            activeConversation.hasGeneratedName = true;
+            renderConversationList();
+          }
+
           appendDebug('Generation completed.');
           isGenerating = false;
           updateActionButtons();
         },
         onError: (message) => {
-          modelBubble.textContent = `Generation error: ${message}`;
+          modelMessage.text = `Generation error: ${message}`;
+          if (modelBubble) {
+            modelBubble.textContent = modelMessage.text;
+          }
           isGenerating = false;
           updateActionButtons();
           setStatus('Generation failed');
@@ -460,7 +657,10 @@ if (chatForm && messageInput && chatTranscript) {
         },
       });
     } catch (error) {
-      modelBubble.textContent = `Generation error: ${error.message}`;
+      modelMessage.text = `Generation error: ${error.message}`;
+      if (modelBubble) {
+        modelBubble.textContent = modelMessage.text;
+      }
       isGenerating = false;
       updateActionButtons();
       setStatus('Generation failed');
