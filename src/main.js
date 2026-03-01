@@ -1,9 +1,19 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import './styles.css';
+import { LLMEngineClient } from './llm/engine-client.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
+const MODEL_STORAGE_KEY = 'llm-model-preference';
+const BACKEND_STORAGE_KEY = 'llm-backend-preference';
+const DEFAULT_MODEL = 'onnx-community/gemma-3-1b-ONNX-GQA';
+
 const themeSelect = document.getElementById('themeSelect');
+const modelSelect = document.getElementById('modelSelect');
+const backendSelect = document.getElementById('backendSelect');
+const statusRegion = document.getElementById('statusRegion');
+const stopButton = document.getElementById('stopButton');
+const sendButton = document.getElementById('sendButton');
 const conversationList = document.getElementById('conversationList');
 const newConversationBtn = document.getElementById('newConversationBtn');
 const chatForm = document.querySelector('.composer');
@@ -11,7 +21,25 @@ const messageInput = document.getElementById('messageInput');
 const chatTranscript = document.getElementById('chatTranscript');
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
+const engine = new LLMEngineClient();
+let modelReady = false;
+let isGenerating = false;
 let conversationCount = conversationList ? conversationList.children.length : 0;
+
+function setStatus(message) {
+  if (statusRegion) {
+    statusRegion.textContent = message;
+  }
+}
+
+function updateActionButtons() {
+  if (sendButton) {
+    sendButton.disabled = isGenerating;
+  }
+  if (stopButton) {
+    stopButton.disabled = !isGenerating;
+  }
+}
 
 function getStoredThemePreference() {
   const storedPreference = localStorage.getItem(THEME_STORAGE_KEY);
@@ -37,25 +65,28 @@ function applyTheme(preference) {
   }
 }
 
-const themePreference = getStoredThemePreference();
-applyTheme(themePreference);
-
-if (themeSelect) {
-  themeSelect.addEventListener('change', (event) => {
-    const value = event.target.value;
-    if (value !== 'light' && value !== 'dark' && value !== 'system') {
-      return;
-    }
-    localStorage.setItem(THEME_STORAGE_KEY, value);
-    applyTheme(value);
-  });
+function restoreInferencePreferences() {
+  const storedModel = localStorage.getItem(MODEL_STORAGE_KEY);
+  const storedBackend = localStorage.getItem(BACKEND_STORAGE_KEY);
+  if (modelSelect && storedModel) {
+    modelSelect.value = storedModel;
+  }
+  if (backendSelect && storedBackend) {
+    backendSelect.value = storedBackend;
+  }
 }
 
-colorSchemeQuery.addEventListener('change', () => {
-  if (getStoredThemePreference() === 'system') {
-    applyTheme('system');
-  }
-});
+function readEngineConfigFromUI() {
+  return {
+    modelId: modelSelect?.value || DEFAULT_MODEL,
+    backendPreference: backendSelect?.value || 'auto',
+  };
+}
+
+function persistInferencePreferences() {
+  localStorage.setItem(MODEL_STORAGE_KEY, modelSelect?.value || DEFAULT_MODEL);
+  localStorage.setItem(BACKEND_STORAGE_KEY, backendSelect?.value || 'auto');
+}
 
 function setActiveConversation(item) {
   if (!conversationList) {
@@ -93,6 +124,89 @@ function createConversationItem(name) {
     </button>
   `;
   return item;
+}
+
+function addMessage({ speaker, text, role }) {
+  const item = document.createElement('li');
+  item.className = `message-row ${role === 'user' ? 'user-message' : 'model-message'}`;
+  item.innerHTML = `
+    <p class="message-speaker">${speaker}</p>
+    <p class="message-bubble"></p>
+  `;
+  const bubble = item.querySelector('.message-bubble');
+  bubble.textContent = text;
+  chatTranscript.appendChild(item);
+  item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return bubble;
+}
+
+async function initializeEngine() {
+  const config = readEngineConfigFromUI();
+  setStatus('Loading model...');
+  try {
+    await engine.initialize(config);
+    modelReady = true;
+  } catch (error) {
+    modelReady = false;
+    setStatus(`Error: ${error.message}`);
+    throw error;
+  }
+}
+
+async function reinitializeEngineFromSettings() {
+  persistInferencePreferences();
+  modelReady = false;
+  if (isGenerating) {
+    return;
+  }
+  try {
+    await initializeEngine();
+  } catch (error) {
+    // Status is already updated in initializeEngine.
+  }
+}
+
+engine.onStatus = (message) => {
+  setStatus(message);
+};
+
+engine.onBackendResolved = (backend) => {
+  setStatus(`Ready (${backend.toUpperCase()})`);
+};
+
+const themePreference = getStoredThemePreference();
+applyTheme(themePreference);
+restoreInferencePreferences();
+updateActionButtons();
+initializeEngine().catch(() => {});
+
+if (themeSelect) {
+  themeSelect.addEventListener('change', (event) => {
+    const value = event.target.value;
+    if (value !== 'light' && value !== 'dark' && value !== 'system') {
+      return;
+    }
+    localStorage.setItem(THEME_STORAGE_KEY, value);
+    applyTheme(value);
+  });
+}
+
+colorSchemeQuery.addEventListener('change', () => {
+  if (getStoredThemePreference() === 'system') {
+    applyTheme('system');
+  }
+});
+
+if (modelSelect) {
+  modelSelect.addEventListener('change', () => {
+    reinitializeEngineFromSettings();
+  });
+}
+
+if (backendSelect) {
+  backendSelect.addEventListener('change', () => {
+    reinitializeEngineFromSettings();
+  });
 }
 
 if (newConversationBtn && conversationList) {
@@ -138,23 +252,77 @@ if (conversationList) {
   });
 }
 
+if (stopButton) {
+  stopButton.addEventListener('click', async () => {
+    if (!isGenerating) {
+      return;
+    }
+    setStatus('Stopping generation...');
+    try {
+      await engine.cancelGeneration();
+      modelReady = true;
+      setStatus('Stopped');
+    } catch (error) {
+      modelReady = false;
+      setStatus(`Error: ${error.message}`);
+    } finally {
+      isGenerating = false;
+      updateActionButtons();
+    }
+  });
+}
+
 if (chatForm && messageInput && chatTranscript) {
-  chatForm.addEventListener('submit', (event) => {
+  chatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const value = messageInput.value.trim();
-    if (!value) {
+    if (!value || isGenerating) {
       return;
     }
 
-    const message = document.createElement('li');
-    message.className = 'message-row user-message';
-    message.innerHTML = `
-      <p class="message-speaker">User</p>
-      <p class="message-bubble"></p>
-    `;
-    message.querySelector('.message-bubble').textContent = value;
-    chatTranscript.appendChild(message);
+    if (!modelReady) {
+      try {
+        await initializeEngine();
+      } catch {
+        return;
+      }
+    }
+
+    addMessage({ speaker: 'User', text: value, role: 'user' });
     messageInput.value = '';
-    messageInput.focus();
+    const modelBubble = addMessage({ speaker: 'Model', text: '', role: 'model' });
+    let modelText = '';
+
+    isGenerating = true;
+    updateActionButtons();
+
+    try {
+      await engine.generate(value, {
+        onToken: (chunk) => {
+          modelText += chunk;
+          modelBubble.textContent = modelText.trimStart();
+        },
+        onComplete: (finalText) => {
+          modelBubble.textContent = finalText || modelText || '[No output]';
+          isGenerating = false;
+          updateActionButtons();
+        },
+        onError: (message) => {
+          modelBubble.textContent = `Generation error: ${message}`;
+          isGenerating = false;
+          updateActionButtons();
+          setStatus('Generation failed');
+        },
+      });
+    } catch (error) {
+      modelBubble.textContent = `Generation error: ${error.message}`;
+      isGenerating = false;
+      updateActionButtons();
+      setStatus('Generation failed');
+    }
   });
 }
+
+window.addEventListener('beforeunload', () => {
+  engine.dispose();
+});

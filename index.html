@@ -92,6 +92,7 @@
             </button>
             <h1 class="h4 mb-0">Student Chat</h1>
           </div>
+          <p id="statusRegion" class="status-pill mb-0" role="status" aria-live="polite">Ready</p>
           <button
             type="button"
             class="btn icon-button"
@@ -141,8 +142,8 @@
             placeholder="Type your message..."
           ></textarea>
           <div class="d-flex justify-content-end gap-2 mt-2">
-            <button type="button" class="btn btn-outline-secondary">Stop generating</button>
-            <button type="submit" class="btn btn-primary">Send</button>
+            <button id="stopButton" type="button" class="btn btn-outline-secondary">Stop generating</button>
+            <button id="sendButton" type="submit" class="btn btn-primary">Send</button>
           </div>
         </form>
       </div>
@@ -160,6 +161,22 @@
       </div>
       <div class="offcanvas-body">
         <form class="d-flex flex-column gap-3">
+          <div>
+            <label class="form-label" for="modelSelect">Model</label>
+            <select id="modelSelect" class="form-select">
+              <option value="onnx-community/gemma-3-1b-ONNX-GQA" selected>
+                onnx-community/gemma-3-1b-ONNX-GQA
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" for="backendSelect">Execution backend</label>
+            <select id="backendSelect" class="form-select">
+              <option value="auto" selected>Auto (WebGPU then CPU)</option>
+              <option value="webgpu">WebGPU only</option>
+              <option value="cpu">CPU only</option>
+            </select>
+          </div>
           <div>
             <label class="form-label" for="themeSelect">Theme</label>
             <select id="themeSelect" class="form-select">
