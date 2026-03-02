@@ -17,6 +17,8 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - `parameters`
   - `outputKey` (optional variable name for later step prompts)
   - `responseFormat`
+  - `outputProcessing` (optional post-processing options)
+- `outputProcessing.stripThinking: true` removes model thinking sections (for example `<think>...</think>`) from that step output before it is stored in `finalOutput`, `previousStepOutput`, `stepNOutput`, and any `outputKey`.
 - The app renders prompt templates with `{{...}}` placeholders and sends each step through `LLMEngineClient` in order.
 - Each completed step output is available to later steps via:
   - `{{previousStepOutput}}` and `{{lastStepOutput}}`

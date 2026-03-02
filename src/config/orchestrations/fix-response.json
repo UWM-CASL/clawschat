@@ -12,6 +12,9 @@
       "responseFormat": {
         "type": "plain_text",
         "instructions": "Return only the issue bullets. If no issues are found, return exactly: NO_ISSUES"
+      },
+      "outputProcessing": {
+        "stripThinking": true
       }
     },
     {
@@ -25,6 +28,9 @@
       "responseFormat": {
         "type": "plain_text",
         "instructions": "Return only the revised assistant response. No edit notes."
+      },
+      "outputProcessing": {
+        "stripThinking": true
       }
     },
     {
@@ -36,6 +42,9 @@
       "responseFormat": {
         "type": "plain_text",
         "instructions": "Return only the final corrected response. No validation notes."
+      },
+      "outputProcessing": {
+        "stripThinking": true
       }
     }
   ]

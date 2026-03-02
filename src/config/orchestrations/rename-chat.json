@@ -13,6 +13,9 @@
       "responseFormat": {
         "type": "plain_text",
         "instructions": "Return only the title text. No quotes. No explanation."
+      },
+      "outputProcessing": {
+        "stripThinking": true
       }
     }
   ]

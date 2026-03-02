@@ -995,10 +995,36 @@ function requestSingleGeneration(prompt) {
   });
 }
 
+function removeGenericThinkingSections(text) {
+  return String(text || '').replace(/<think\b[^>]*>[\s\S]*?(?:<\/think>|$)/gi, '');
+}
+
+function formatOrchestrationStepOutput(step, rawOutput, thinkingTags) {
+  const output = String(rawOutput || '').trim();
+  if (!output) {
+    return '';
+  }
+
+  const stripThinking = Boolean(step?.outputProcessing?.stripThinking);
+  if (!stripThinking) {
+    return output;
+  }
+
+  const parsed = parseThinkingText(output, thinkingTags);
+  const withoutThinking = parsed.response.trim();
+  if (withoutThinking) {
+    return withoutThinking;
+  }
+
+  return removeGenericThinkingSections(output).trim();
+}
+
 async function runOrchestration(orchestration, variables = {}, options = {}) {
   const orchestrationId = typeof orchestration?.id === 'string' ? orchestration.id : 'unnamed-orchestration';
   const runFinalStep = options?.runFinalStep !== false;
   const steps = getOrchestrationSteps(orchestration);
+  const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const thinkingTags = getThinkingTagsForModel(selectedModelId);
   const promptVariables = { ...variables };
   appendDebug(`Orchestration started: ${orchestrationId} (${steps.length} steps)`);
 
@@ -1021,7 +1047,8 @@ async function runOrchestration(orchestration, variables = {}, options = {}) {
     }
 
     appendDebug(`Orchestration step ${index + 1}/${steps.length}: ${orchestrationId} [${stepName}]`);
-    const stepOutput = await requestSingleGeneration(stepPrompt);
+    const rawStepOutput = await requestSingleGeneration(stepPrompt);
+    const stepOutput = formatOrchestrationStepOutput(step, rawStepOutput, thinkingTags);
     promptVariables.previousStepOutput = stepOutput;
     promptVariables.lastStepOutput = stepOutput;
     promptVariables[`step${index + 1}Output`] = stepOutput;
