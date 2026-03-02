@@ -1387,10 +1387,10 @@ function addMessageElement(message, options = {}) {
           data-message-id="${message.id}"
           aria-label="Fix response"
           data-bs-toggle="tooltip"
-          data-bs-title="Fix"
+          data-bs-title="Fix response"
         >
-          <i class="bi bi-wrench" aria-hidden="true"></i>
-          <span class="visually-hidden">Fix</span>
+          <i class="bi bi-wrench-adjustable-circle" aria-hidden="true"></i>
+          <span class="visually-hidden">Fix response</span>
         </button>
         <button
           type="button"
