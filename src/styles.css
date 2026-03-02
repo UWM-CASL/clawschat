@@ -697,13 +697,33 @@
 }
 
 .settings-page {
-  max-width: 980px;
-  margin: 0 auto;
+  min-height: 100%;
+  width: 100%;
+  padding: 1rem;
+  display: flex;
+  align-items: stretch;
 }
 
 .settings-page-inner {
+  width: 100%;
   background: var(--surface);
-  min-height: calc(100dvh - 13rem);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-tabs-column {
+  width: 15rem;
+  max-width: 15rem;
+  flex: 0 0 15rem;
 }
 
 .settings-tabs {
@@ -733,6 +753,11 @@
 
 .settings-tab-panel {
   min-height: 100%;
+}
+
+.settings-panels {
+  flex: 1;
+  min-width: 0;
 }
 
 .settings-page .form-select,
