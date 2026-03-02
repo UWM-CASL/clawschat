@@ -1112,7 +1112,7 @@ function setModelBubbleContent(message, refs) {
 
   refs.thinkingRegion.classList.toggle('d-none', !hasThinking);
   refs.thinkingToggle.textContent = thinkingLabel;
-  refs.thinkingToggle.setAttribute('aria-expanded', String(hasThinking && isExpanded));
+  refs.thinkingToggle.setAttribute('aria-expanded', String(isExpanded));
   refs.thinkingBody.hidden = !hasThinking || !isExpanded;
   refs.thoughtsText.textContent = message.thoughts || '';
   refs.responseText.textContent = message.response || message.text || '';
@@ -1134,10 +1134,11 @@ function refreshModelThinkingVisibility() {
   });
 }
 
-function addMessageElement(message) {
+function addMessageElement(message, options = {}) {
   if (!chatTranscript) {
     return null;
   }
+  const shouldScroll = options.scroll !== false;
   const item = document.createElement('li');
   item.className = `message-row ${message.role === 'user' ? 'user-message' : 'model-message'}`;
   item.dataset.messageId = message.id;
@@ -1236,7 +1237,9 @@ function addMessageElement(message) {
   }
   chatTranscript.appendChild(item);
   initializeTooltips(item);
-  scrollTranscriptToBottom();
+  if (shouldScroll) {
+    scrollTranscriptToBottom();
+  }
   return item;
 }
 
@@ -1278,10 +1281,11 @@ function scrollTranscriptToBottom() {
   chatMain.scrollTop = chatMain.scrollHeight;
 }
 
-function renderTranscript() {
+function renderTranscript(options = {}) {
   if (!chatTranscript) {
     return;
   }
+  const shouldScrollToBottom = options.scrollToBottom !== false;
   disposeTooltips(chatTranscript);
   chatTranscript.replaceChildren();
   const conversation = getActiveConversation();
@@ -1295,9 +1299,11 @@ function renderTranscript() {
     return;
   }
   getConversationPathMessages(conversation).forEach((message) => {
-    addMessageElement(message);
+    addMessageElement(message, { scroll: false });
   });
-  scrollTranscriptToBottom();
+  if (shouldScrollToBottom) {
+    scrollTranscriptToBottom();
+  }
 }
 
 function setRegionVisibility(region, visible) {
@@ -1900,11 +1906,20 @@ function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction) {
   }
 
   window.setTimeout(() => {
+    const outgoingTop = outgoingItem instanceof HTMLElement ? outgoingItem.getBoundingClientRect().top : null;
     if (outgoingBubble) {
       outgoingBubble.classList.remove(outgoingClass);
     }
-    renderTranscript();
+    renderTranscript({ scrollToBottom: false });
     const incomingItem = chatTranscript.querySelector(`[data-message-id="${incomingMessageId}"]`);
+    if (
+      chatMain &&
+      Number.isFinite(outgoingTop) &&
+      incomingItem instanceof HTMLElement
+    ) {
+      const incomingTop = incomingItem.getBoundingClientRect().top;
+      chatMain.scrollTop += incomingTop - outgoingTop;
+    }
     const incomingBubble = incomingItem?.querySelector('.message-bubble');
     const incomingClass = direction < 0 ? 'variant-switch-in-left' : 'variant-switch-in-right';
     if (incomingBubble) {
