@@ -2501,11 +2501,19 @@ function saveUserMessageEdit(messageId) {
   renderTranscript();
   updateActionButtons();
   queueConversationStateSave();
-  setStatus(
+  const saveStatus =
     removedCount > 0
       ? 'Message saved. Later turns were removed from this branch.'
-      : 'Message saved.',
-  );
+      : 'Message saved.';
+  if (!modelReady) {
+    setStatus(`${saveStatus} Load a model to generate a new response.`);
+    return;
+  }
+  setStatus(`${saveStatus} Generating updated response...`);
+  startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
+    parentMessageId: userMessage.id,
+    updateLastSpokenOnComplete: true,
+  });
 }
 
 function branchFromUserMessage(messageId) {
