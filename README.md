@@ -8,6 +8,8 @@ Student-facing browser chat UI with local model inference.
 - On initial load, the app shows only a welcome/setup screen where users select a model and click `Load model`.
 - During model load, setup shows overall progress plus a file-by-file list to make multi-file downloads explicit.
 - After model load completes, the UI switches from setup to the conversation view.
+- If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
+- If no saved conversations exist, a blank conversation is created and shown after load.
 - Backend selection supports:
   - `Auto (WebGPU then CPU)`
   - `WebGPU only`

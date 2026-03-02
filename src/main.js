@@ -776,11 +776,7 @@ function applyStoredConversationState(rawState) {
   conversations.length = 0;
   conversations.push(...restoredConversations);
 
-  const requestedActiveId =
-    typeof rawState.activeConversationId === 'string' ? rawState.activeConversationId : '';
-  activeConversationId = conversations.some((conversation) => conversation.id === requestedActiveId)
-    ? requestedActiveId
-    : conversations[0].id;
+  activeConversationId = null;
 
   const maxCounterFromIds = conversations.reduce(
     (maxCounter, conversation) => Math.max(maxCounter, parseConversationCounterFromId(conversation.id)),
@@ -1233,6 +1229,12 @@ function renderTranscript() {
   chatTranscript.replaceChildren();
   const conversation = getActiveConversation();
   if (!conversation) {
+    if (modelReady && conversations.length) {
+      const emptyItem = document.createElement('li');
+      emptyItem.className = 'transcript-empty-state text-body-secondary';
+      emptyItem.textContent = 'Select a conversation from the left panel, or start a new conversation.';
+      chatTranscript.appendChild(emptyItem);
+    }
     return;
   }
   getConversationPathMessages(conversation).forEach((message) => {
@@ -1269,6 +1271,10 @@ function updateChatTitle() {
     return;
   }
   const activeConversation = getActiveConversation();
+  if (modelReady && !activeConversation && conversations.length) {
+    chatTitle.textContent = 'Select a Conversation';
+    return;
+  }
   if (activeConversation?.hasGeneratedName) {
     chatTitle.textContent = activeConversation.name;
     return;
@@ -2129,6 +2135,8 @@ if (chatForm && messageInput && chatTranscript) {
 
     const activeConversation = getActiveConversation();
     if (!activeConversation) {
+      setStatus('Select a conversation or start a new conversation before sending a message.');
+      appendDebug('Send blocked: no active conversation selected.');
       return;
     }
 

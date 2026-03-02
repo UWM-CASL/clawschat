@@ -241,6 +241,12 @@
   padding: 0;
 }
 
+.transcript-empty-state {
+  margin: 0;
+  padding: 1rem 0.25rem;
+  font-size: 0.95rem;
+}
+
 .message-row {
   display: flex;
   flex-direction: column;
