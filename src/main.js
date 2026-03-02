@@ -215,6 +215,7 @@ let activeGenerationConfig = normalizeGenerationLimits(null);
 let pendingGenerationConfig = null;
 let conversationSaveTimerId = null;
 let showThinkingByDefault = false;
+let isSwitchingVariant = false;
 
 function initializeTooltips(root = document) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
@@ -1296,7 +1297,7 @@ function updateRegenerateButtons() {
   if (!chatTranscript) {
     return;
   }
-  const disabled = isLoadingModel || isGenerating || !modelReady;
+  const disabled = isLoadingModel || isGenerating || isSwitchingVariant || !modelReady;
   chatTranscript.querySelectorAll('.regenerate-response-btn').forEach((button) => {
     if (button instanceof HTMLButtonElement) {
       const item = button.closest('.message-row');
@@ -1738,21 +1739,39 @@ function startModelGeneration(activeConversation, prompt, options = {}) {
   }
 }
 
-function animateTranscriptSlide(direction = 'next') {
+function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction) {
   if (!chatTranscript) {
     return;
   }
-  chatTranscript.classList.remove('transcript-slide-next', 'transcript-slide-prev');
-  // Force reflow so repeated clicks retrigger the animation.
-  void chatTranscript.offsetWidth;
-  chatTranscript.classList.add(direction === 'prev' ? 'transcript-slide-prev' : 'transcript-slide-next');
+  const outgoingItem = chatTranscript.querySelector(`[data-message-id="${outgoingMessageId}"]`);
+  const outgoingBubble = outgoingItem?.querySelector('.message-bubble');
+  const outgoingClass = direction < 0 ? 'variant-switch-out-right' : 'variant-switch-out-left';
+  if (outgoingBubble) {
+    outgoingBubble.classList.add(outgoingClass);
+  }
+
   window.setTimeout(() => {
-    chatTranscript.classList.remove('transcript-slide-next', 'transcript-slide-prev');
-  }, 280);
+    if (outgoingBubble) {
+      outgoingBubble.classList.remove(outgoingClass);
+    }
+    renderTranscript();
+    const incomingItem = chatTranscript.querySelector(`[data-message-id="${incomingMessageId}"]`);
+    const incomingBubble = incomingItem?.querySelector('.message-bubble');
+    const incomingClass = direction < 0 ? 'variant-switch-in-left' : 'variant-switch-in-right';
+    if (incomingBubble) {
+      incomingBubble.classList.add(incomingClass);
+      window.setTimeout(() => {
+        incomingBubble.classList.remove(incomingClass);
+      }, 280);
+    }
+    isSwitchingVariant = false;
+    updateActionButtons();
+    queueConversationStateSave();
+  }, 170);
 }
 
 function switchModelVariant(messageId, direction) {
-  if (!messageId || isGenerating || isLoadingModel) {
+  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -1775,11 +1794,10 @@ function switchModelVariant(messageId, direction) {
   if (!targetMessage) {
     return;
   }
+  isSwitchingVariant = true;
   activeConversation.activeLeafMessageId = targetMessage.id;
-  animateTranscriptSlide(direction < 0 ? 'prev' : 'next');
-  renderTranscript();
   updateActionButtons();
-  queueConversationStateSave();
+  animateVariantSwitch(modelMessage.id, targetMessage.id, direction);
 }
 
 function regenerateFromMessage(messageId) {
@@ -1815,7 +1833,6 @@ function regenerateFromMessage(messageId) {
   }
 
   activeConversation.activeLeafMessageId = parentUserMessage.id;
-  animateTranscriptSlide('next');
   renderTranscript();
   queueConversationStateSave();
   startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
