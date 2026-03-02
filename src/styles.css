@@ -52,16 +52,17 @@
   --composer-border: #4a6084;
   --ink-strong: #eaf0ff;
   --ink-muted: #b7c6e7;
-  --message-user: #2c8eff;
+  --message-user: #2578cf;
   --message-model: #213456;
+  --model-response-ink: #f3f8ff;
   --action-icon-color: #eaf0ff;
   --action-icon-bg: #1d2e4d;
   --action-icon-border: #607ba7;
   --action-icon-hover-bg: #2a3f66;
-  --action-btn-text: #b6caeb;
-  --action-btn-border: #5e7ca8;
-  --action-btn-hover-bg: #314a72;
-  --action-btn-hover-text: #eaf0ff;
+  --action-btn-text: #d6e5ff;
+  --action-btn-border: #88a7d1;
+  --action-btn-hover-bg: #426292;
+  --action-btn-hover-text: #f6faff;
   --primary-btn-bg: #2a68af;
   --primary-btn-border: #2a68af;
   --primary-btn-hover-bg: #245995;
@@ -338,7 +339,7 @@
 
 .model-message .message-bubble {
   background: var(--message-model);
-  color: var(--ink-strong);
+  color: var(--model-response-ink, var(--ink-strong));
   border-top-left-radius: 0.35rem;
   position: relative;
   overflow: visible;
