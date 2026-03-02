@@ -258,6 +258,58 @@ function setIconButtonContent(button, iconClass, label) {
   `;
 }
 
+async function copyTextToClipboard(text) {
+  const normalizedText = String(text || '');
+  if (!normalizedText) {
+    return false;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(normalizedText);
+      return true;
+    }
+  } catch (_error) {
+    // Fall through to legacy fallback.
+  }
+  const fallbackTextArea = document.createElement('textarea');
+  fallbackTextArea.value = normalizedText;
+  fallbackTextArea.setAttribute('readonly', '');
+  fallbackTextArea.style.position = 'fixed';
+  fallbackTextArea.style.opacity = '0';
+  fallbackTextArea.style.pointerEvents = 'none';
+  document.body.appendChild(fallbackTextArea);
+  fallbackTextArea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (_error) {
+    copied = false;
+  }
+  document.body.removeChild(fallbackTextArea);
+  return copied;
+}
+
+async function handleMessageCopyAction(messageId, copyType) {
+  const activeConversation = getActiveConversation();
+  if (!activeConversation || !messageId) {
+    return;
+  }
+  const message = getMessageNodeById(activeConversation, messageId);
+  if (!message) {
+    return;
+  }
+  let textToCopy = '';
+  if (copyType === 'thoughts') {
+    textToCopy = message.role === 'model' ? String(message.thoughts || '') : '';
+  } else if (copyType === 'response') {
+    textToCopy = message.role === 'model' ? String(message.response || message.text || '') : '';
+  } else {
+    textToCopy = String(message.text || '');
+  }
+  const didCopy = await copyTextToClipboard(textToCopy);
+  setStatus(didCopy ? 'Copied to clipboard.' : 'Copy failed.');
+}
+
 function formatInteger(value) {
   return new Intl.NumberFormat('en-US').format(value);
 }
@@ -1116,6 +1168,7 @@ function setModelBubbleContent(message, refs) {
   refs.thinkingRegion.classList.toggle('d-none', !hasThinking);
   refs.thinkingToggle.textContent = thinkingLabel;
   refs.thinkingToggle.setAttribute('aria-expanded', String(isExpanded));
+  refs.thinkingCopyButton.disabled = !hasThinking || !message.thoughts?.trim();
   refs.thinkingBody.hidden = !hasThinking || !isExpanded;
   refs.thoughtsText.textContent = message.thoughts || '';
   refs.responseText.textContent = message.response || message.text || '';
@@ -1154,7 +1207,21 @@ function addMessageElement(message, options = {}) {
       <div class="message-bubble">
         <section class="thoughts-region d-none">
           <h3 class="visually-hidden">Thoughts</h3>
-          <a href="#" class="thinking-toggle" aria-expanded="false">Thinking</a>
+          <div class="thoughts-toolbar">
+            <a href="#" class="thinking-toggle" aria-expanded="false">Thinking</a>
+            <button
+              type="button"
+              class="btn btn-sm btn-link thoughts-copy-btn"
+              data-message-id="${message.id}"
+              aria-label="Copy thoughts"
+              data-copy-type="thoughts"
+              data-bs-toggle="tooltip"
+              data-bs-title="Copy thoughts"
+            >
+              <i class="bi bi-copy" aria-hidden="true"></i>
+              <span class="visually-hidden">Copy thoughts</span>
+            </button>
+          </div>
           <p class="thoughts-content" hidden></p>
         </section>
         <section class="response-region">
@@ -1172,6 +1239,18 @@ function addMessageElement(message, options = {}) {
           >
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
             <span class="visually-hidden">Regenerate response</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary copy-message-btn"
+            data-message-id="${message.id}"
+            aria-label="Copy response"
+            data-copy-type="response"
+            data-bs-toggle="tooltip"
+            data-bs-title="Copy response"
+          >
+            <i class="bi bi-copy" aria-hidden="true"></i>
+            <span class="visually-hidden">Copy response</span>
           </button>
           <div class="response-variant-nav${variantState.hasVariants ? '' : ' d-none'}">
             <button
@@ -1209,11 +1288,12 @@ function addMessageElement(message, options = {}) {
     }
     const thinkingRegion = item.querySelector('.thoughts-region');
     const thinkingToggle = item.querySelector('.thinking-toggle');
+    const thinkingCopyButton = item.querySelector('.thoughts-copy-btn');
     const thinkingBody = item.querySelector('.thoughts-content');
     const thoughtsText = item.querySelector('.thoughts-content');
     const responseText = item.querySelector('.response-content');
-    if (thinkingRegion && thinkingToggle && thinkingBody && thoughtsText && responseText) {
-      const refs = { thinkingRegion, thinkingToggle, thinkingBody, thoughtsText, responseText };
+    if (thinkingRegion && thinkingToggle && thinkingCopyButton && thinkingBody && thoughtsText && responseText) {
+      const refs = { thinkingRegion, thinkingToggle, thinkingCopyButton, thinkingBody, thoughtsText, responseText };
       thinkingToggle.setAttribute('aria-expanded', String(showThinkingByDefault));
       thinkingBody.hidden = !showThinkingByDefault;
       thinkingToggle.addEventListener('click', (event) => {
@@ -1231,7 +1311,21 @@ function addMessageElement(message, options = {}) {
   } else {
     item.innerHTML = `
       <p class="message-speaker">${message.speaker}</p>
-      <p class="message-bubble"></p>
+      <p class="message-bubble mb-0"></p>
+      <section class="message-actions">
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary copy-message-btn"
+          data-message-id="${message.id}"
+          aria-label="Copy message"
+          data-copy-type="message"
+          data-bs-toggle="tooltip"
+          data-bs-title="Copy message"
+        >
+          <i class="bi bi-copy" aria-hidden="true"></i>
+          <span class="visually-hidden">Copy message</span>
+        </button>
+      </section>
     `;
     const bubble = item.querySelector('.message-bubble');
     if (bubble) {
@@ -2294,7 +2388,7 @@ if (chatForm && messageInput && chatTranscript) {
 }
 
 if (chatTranscript) {
-  chatTranscript.addEventListener('click', (event) => {
+  chatTranscript.addEventListener('click', async (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
@@ -2312,6 +2406,11 @@ if (chatTranscript) {
     const regenerateButton = target.closest('.regenerate-response-btn');
     if (regenerateButton instanceof HTMLButtonElement) {
       regenerateFromMessage(regenerateButton.dataset.messageId || '');
+      return;
+    }
+    const copyButton = target.closest('.copy-message-btn, .thoughts-copy-btn');
+    if (copyButton instanceof HTMLButtonElement) {
+      await handleMessageCopyAction(copyButton.dataset.messageId || '', copyButton.dataset.copyType || 'message');
     }
   });
 }

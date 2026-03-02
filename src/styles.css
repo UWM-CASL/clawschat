@@ -415,6 +415,23 @@
   text-underline-offset: 2px;
 }
 
+.thoughts-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.thoughts-copy-btn {
+  padding: 0.1rem 0.25rem;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.thoughts-copy-btn:hover,
+.thoughts-copy-btn:focus-visible {
+  color: var(--ink);
+}
+
 .thinking-toggle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -456,6 +473,29 @@
 
 .response-actions .btn .bi,
 .conversation-delete .bi {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.message-actions {
+  margin-top: 0.55rem;
+}
+
+.message-actions .btn {
+  font-size: 0.8rem;
+  color: var(--regenerate-accent);
+  border-color: var(--regenerate-accent);
+  font-weight: 600;
+}
+
+.message-actions .btn:hover,
+.message-actions .btn:focus-visible {
+  color: #fff;
+  background-color: var(--regenerate-accent);
+  border-color: var(--regenerate-accent);
+}
+
+.message-actions .btn .bi {
   font-size: 0.95rem;
   line-height: 1;
 }
