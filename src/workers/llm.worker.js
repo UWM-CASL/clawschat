@@ -39,13 +39,15 @@ function postStatus(message) {
   self.postMessage({ type: 'status', payload: { message } });
 }
 
-function postProgress({ percent = 0, message = 'Loading model files...' }) {
+function postProgress({ percent = 0, message = 'Loading model files...', file = '', status = '' }) {
   const boundedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
   self.postMessage({
     type: 'progress',
     payload: {
       percent: boundedPercent,
       message,
+      file: typeof file === 'string' ? file : '',
+      status: typeof status === 'string' ? status : '',
     },
   });
 }
@@ -118,8 +120,15 @@ async function initialize(payload) {
                 ? rawProgress * 100
                 : rawProgress
               : 0;
-          const label = progress?.status || progress?.file || 'Loading model files...';
-          postProgress({ percent: normalizedProgress, message: String(label) });
+          const rawStatus = typeof progress?.status === 'string' ? progress.status : '';
+          const rawFile = typeof progress?.file === 'string' ? progress.file : '';
+          const label = rawStatus || rawFile || 'Loading model files...';
+          postProgress({
+            percent: normalizedProgress,
+            message: String(label),
+            file: rawFile,
+            status: rawStatus,
+          });
         },
       });
       tokenizer = model.tokenizer;

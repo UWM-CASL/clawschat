@@ -43,7 +43,7 @@
       </aside>
 
       <div class="main-column">
-        <header class="top-bar">
+        <header id="topBar" class="top-bar">
           <div class="d-flex align-items-center gap-2">
             <button
               type="button"
@@ -73,11 +73,22 @@
         </header>
 
         <main class="chat-main">
-          <section class="welcome-panel card shadow-sm mb-3" aria-labelledby="welcomeTitle">
+          <section
+            id="onboardingPanel"
+            class="welcome-panel card shadow-sm mb-3"
+            aria-labelledby="welcomeTitle"
+          >
             <div class="card-body">
               <h2 id="welcomeTitle" class="h5">Welcome</h2>
               <p class="mb-3">
-                Choose a model, then select <strong>Load model</strong> before sending messages.
+                Students are using this local AI chat to practice prompting, compare responses, and
+                explore model behavior while keeping message content on-device.
+              </p>
+              <p class="mb-3">
+                Choose a model, then select <strong>Load model</strong> to prepare files before chat.
+              </p>
+              <p id="onboardingStatusRegion" class="status-pill mb-3" role="status" aria-live="polite">
+                Ready
               </p>
               <div class="row g-3 align-items-end">
                 <div class="col-sm-8">
@@ -110,6 +121,10 @@
                       style="width: 0%"
                     ></div>
                   </div>
+                  <p id="modelLoadProgressSummary" class="small text-body-secondary mt-2 mb-1">
+                    Waiting for download details...
+                  </p>
+                  <ul id="modelLoadFileList" class="small ps-3 mb-0"></ul>
                 </div>
                 <div id="modelLoadError" class="alert alert-danger d-none mt-3 mb-0" role="alert">
                   <h3 class="h6 mb-2">Model loading failed</h3>
@@ -119,7 +134,7 @@
               </div>
             </div>
           </section>
-          <section class="chat-transcript-wrap" aria-label="Chat transcript">
+          <section id="chatTranscriptWrap" class="chat-transcript-wrap" aria-label="Chat transcript">
             <ol id="chatTranscript" class="chat-transcript"></ol>
           </section>
         </main>

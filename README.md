@@ -5,7 +5,9 @@ Student-facing browser chat UI with local model inference.
 ## Runtime behavior
 
 - Inference runs in-browser via Transformers.js inside a Web Worker.
-- On initial load, the app shows a welcome/setup panel where users select a model and explicitly click `Load model` before chat.
+- On initial load, the app shows only a welcome/setup screen where users select a model and click `Load model`.
+- During model load, setup shows overall progress plus a file-by-file list to make multi-file downloads explicit.
+- After model load completes, the UI switches from setup to the conversation view.
 - Backend selection supports:
   - `Auto (WebGPU then CPU)`
   - `WebGPU only`

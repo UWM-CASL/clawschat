@@ -219,6 +219,15 @@
   background: var(--surface);
 }
 
+#modelLoadFileList {
+  max-height: 10rem;
+  overflow: auto;
+}
+
+#modelLoadFileList li {
+  word-break: break-word;
+}
+
 .chat-transcript-wrap {
   flex: 1;
   max-width: 900px;

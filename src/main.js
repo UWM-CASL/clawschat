@@ -187,6 +187,8 @@ const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
 const modelLoadProgressLabel = document.getElementById('modelLoadProgressLabel');
 const modelLoadProgressValue = document.getElementById('modelLoadProgressValue');
 const modelLoadProgressBar = document.getElementById('modelLoadProgressBar');
+const modelLoadProgressSummary = document.getElementById('modelLoadProgressSummary');
+const modelLoadFileList = document.getElementById('modelLoadFileList');
 const modelLoadError = document.getElementById('modelLoadError');
 const modelLoadErrorSummary = document.getElementById('modelLoadErrorSummary');
 const modelLoadErrorDetails = document.getElementById('modelLoadErrorDetails');
@@ -196,8 +198,12 @@ const newConversationBtn = document.getElementById('newConversationBtn');
 const chatForm = document.querySelector('.composer');
 const messageInput = document.getElementById('messageInput');
 const chatTranscript = document.getElementById('chatTranscript');
+const chatTranscriptWrap = document.getElementById('chatTranscriptWrap');
 const chatMain = document.querySelector('.chat-main');
 const welcomePanel = document.querySelector('.welcome-panel');
+const topBar = document.getElementById('topBar');
+const conversationPanel = document.getElementById('conversationPanel');
+const onboardingStatusRegion = document.getElementById('onboardingStatusRegion');
 const chatTitle = document.getElementById('chatTitle');
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -216,6 +222,7 @@ let pendingGenerationConfig = null;
 let conversationSaveTimerId = null;
 let showThinkingByDefault = false;
 let isSwitchingVariant = false;
+const loadProgressFiles = new Map();
 
 function initializeTooltips(root = document) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
@@ -477,6 +484,9 @@ function appendDebug(message) {
 function setStatus(message) {
   if (statusRegion) {
     statusRegion.textContent = message;
+  }
+  if (onboardingStatusRegion) {
+    onboardingStatusRegion.textContent = message;
   }
   appendDebug(`Status: ${message}`);
 }
@@ -1231,11 +1241,27 @@ function renderTranscript() {
   scrollTranscriptToBottom();
 }
 
-function updateWelcomePanelVisibility() {
-  if (!welcomePanel) {
+function setRegionVisibility(region, visible) {
+  if (!(region instanceof HTMLElement)) {
     return;
   }
-  welcomePanel.classList.toggle('d-none', modelReady);
+  region.classList.toggle('d-none', !visible);
+  if (visible) {
+    region.removeAttribute('aria-hidden');
+    region.inert = false;
+    return;
+  }
+  region.setAttribute('aria-hidden', 'true');
+  region.inert = true;
+}
+
+function updateWelcomePanelVisibility() {
+  const showConversation = modelReady;
+  setRegionVisibility(welcomePanel, !showConversation);
+  setRegionVisibility(topBar, showConversation);
+  setRegionVisibility(conversationPanel, showConversation);
+  setRegionVisibility(chatTranscriptWrap, showConversation);
+  setRegionVisibility(chatForm, showConversation);
 }
 
 function updateChatTitle() {
@@ -1387,6 +1413,68 @@ function showProgressRegion(show) {
   modelLoadProgressWrap.classList.toggle('d-none', !show);
 }
 
+function formatLoadFileLabel(fileName) {
+  if (typeof fileName !== 'string' || !fileName.trim()) {
+    return '';
+  }
+  const normalized = fileName.replace(/\\/g, '/');
+  const segments = normalized.split('/').filter(Boolean);
+  return segments[segments.length - 1] || normalized;
+}
+
+function resetLoadProgressFiles() {
+  loadProgressFiles.clear();
+  renderLoadProgressFiles();
+}
+
+function renderLoadProgressFiles() {
+  if (!modelLoadProgressSummary && !modelLoadFileList) {
+    return;
+  }
+  const entries = [...loadProgressFiles.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  const completeCount = entries.filter((entry) => entry.isComplete).length;
+  if (modelLoadProgressSummary) {
+    if (!entries.length) {
+      modelLoadProgressSummary.textContent = 'Waiting for download details...';
+    } else {
+      modelLoadProgressSummary.textContent = `${completeCount}/${entries.length} files loaded`;
+    }
+  }
+  if (modelLoadFileList) {
+    modelLoadFileList.replaceChildren();
+    entries.slice(0, 10).forEach((entry) => {
+      const item = document.createElement('li');
+      const statusSuffix = entry.status ? ` (${entry.status})` : '';
+      item.textContent = `${entry.label}: ${Math.round(entry.percent)}%${statusSuffix}`;
+      modelLoadFileList.appendChild(item);
+    });
+    if (entries.length > 10) {
+      const overflowItem = document.createElement('li');
+      overflowItem.textContent = `...and ${entries.length - 10} more files`;
+      modelLoadFileList.appendChild(overflowItem);
+    }
+  }
+}
+
+function trackLoadFileProgress(file, percent, status) {
+  if (typeof file !== 'string' || !file.trim()) {
+    return;
+  }
+  const key = file.trim();
+  const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  const statusText = typeof status === 'string' ? status.trim() : '';
+  const previous = loadProgressFiles.get(key);
+  const isComplete = numericPercent >= 100 || /complete|ready|loaded|done|cached/i.test(statusText);
+  loadProgressFiles.set(key, {
+    label: formatLoadFileLabel(key),
+    percent: previous ? Math.max(previous.percent, numericPercent) : numericPercent,
+    status: statusText || previous?.status || '',
+    isComplete: Boolean(previous?.isComplete || isComplete),
+    updatedAt: Date.now(),
+  });
+  renderLoadProgressFiles();
+}
+
 function clearLoadError() {
   if (modelLoadError) {
     modelLoadError.classList.add('d-none');
@@ -1399,7 +1487,7 @@ function clearLoadError() {
   }
 }
 
-function setLoadProgress({ percent = 0, message = 'Preparing model...' }) {
+function setLoadProgress({ percent = 0, message = 'Preparing model...', file = '', status = '' }) {
   const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   if (modelLoadProgressLabel) {
     modelLoadProgressLabel.textContent = message;
@@ -1411,6 +1499,7 @@ function setLoadProgress({ percent = 0, message = 'Preparing model...' }) {
     modelLoadProgressBar.style.width = `${numericPercent}%`;
     modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(numericPercent)}`);
   }
+  trackLoadFileProgress(file, numericPercent, status || message);
 }
 
 function showLoadError(errorMessage) {
@@ -1590,6 +1679,7 @@ async function initializeEngine() {
   );
   isLoadingModel = true;
   clearLoadError();
+  resetLoadProgressFiles();
   showProgressRegion(true);
   setLoadProgress({ percent: 0, message: 'Starting model load...' });
   updateActionButtons();
@@ -1599,11 +1689,7 @@ async function initializeEngine() {
     modelReady = true;
     isLoadingModel = false;
     setLoadProgress({ percent: 100, message: 'Model ready.' });
-    window.setTimeout(() => {
-      if (modelReady && !isLoadingModel) {
-        showProgressRegion(false);
-      }
-    }, 300);
+    showProgressRegion(false);
     appendDebug('Model initialization succeeded.');
     updateActionButtons();
     updateWelcomePanelVisibility();
@@ -1851,7 +1937,9 @@ engine.onBackendResolved = (backend) => {
 engine.onProgress = (progress) => {
   const message = progress?.message || 'Loading model files...';
   const percent = Number.isFinite(progress?.percent) ? progress.percent : 0;
-  setLoadProgress({ percent, message });
+  const file = typeof progress?.file === 'string' ? progress.file : '';
+  const status = typeof progress?.status === 'string' ? progress.status : '';
+  setLoadProgress({ percent, message, file, status });
 };
 
 const themePreference = getStoredThemePreference();
