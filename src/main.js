@@ -1900,25 +1900,35 @@ function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction) {
   }
   const outgoingItem = chatTranscript.querySelector(`[data-message-id="${outgoingMessageId}"]`);
   const outgoingBubble = outgoingItem?.querySelector('.message-bubble');
+  const outgoingOffsetWithinChat =
+    chatMain && outgoingItem instanceof HTMLElement
+      ? outgoingItem.getBoundingClientRect().top - chatMain.getBoundingClientRect().top
+      : null;
   const outgoingClass = direction < 0 ? 'variant-switch-out-right' : 'variant-switch-out-left';
   if (outgoingBubble) {
     outgoingBubble.classList.add(outgoingClass);
   }
 
   window.setTimeout(() => {
-    const outgoingTop = outgoingItem instanceof HTMLElement ? outgoingItem.getBoundingClientRect().top : null;
     if (outgoingBubble) {
       outgoingBubble.classList.remove(outgoingClass);
     }
     renderTranscript({ scrollToBottom: false });
     const incomingItem = chatTranscript.querySelector(`[data-message-id="${incomingMessageId}"]`);
-    if (
-      chatMain &&
-      Number.isFinite(outgoingTop) &&
-      incomingItem instanceof HTMLElement
-    ) {
-      const incomingTop = incomingItem.getBoundingClientRect().top;
-      chatMain.scrollTop += incomingTop - outgoingTop;
+    if (chatMain && incomingItem instanceof HTMLElement) {
+      if (Number.isFinite(outgoingOffsetWithinChat)) {
+        const incomingOffsetWithinChat =
+          incomingItem.getBoundingClientRect().top - chatMain.getBoundingClientRect().top;
+        const boundedAdjustment = clamp(
+          incomingOffsetWithinChat - outgoingOffsetWithinChat,
+          -chatMain.clientHeight,
+          chatMain.clientHeight,
+        );
+        if (Math.abs(boundedAdjustment) > 1) {
+          chatMain.scrollTop += boundedAdjustment;
+        }
+      }
+      incomingItem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     const incomingBubble = incomingItem?.querySelector('.message-bubble');
     const incomingClass = direction < 0 ? 'variant-switch-in-left' : 'variant-switch-in-right';
