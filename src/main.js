@@ -3131,7 +3131,7 @@ applyTheme(themePreference);
 applyShowThinkingPreference(getStoredShowThinkingPreference());
 populateModelSelect();
 restoreInferencePreferences();
-setStatus('Welcome. Choose a model, then load it to begin local chat.');
+setStatus('Choose a model, then select Load model.');
 showProgressRegion(false);
 updateActionButtons();
 setActiveSettingsTab(activeSettingsTab);
