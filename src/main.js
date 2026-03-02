@@ -8,6 +8,7 @@ import modelCatalog from './config/models.json';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
+const SHOW_THINKING_STORAGE_KEY = 'ui-show-thinking';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
@@ -170,6 +171,7 @@ const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collecti
 const CONVERSATION_SCHEMA_VERSION = 2;
 
 const themeSelect = document.getElementById('themeSelect');
+const showThinkingToggle = document.getElementById('showThinkingToggle');
 const modelSelect = document.getElementById('modelSelect');
 const backendSelect = document.getElementById('backendSelect');
 const maxOutputTokensInput = document.getElementById('maxOutputTokensInput');
@@ -212,6 +214,7 @@ const MAX_DEBUG_ENTRIES = 120;
 let activeGenerationConfig = normalizeGenerationLimits(null);
 let pendingGenerationConfig = null;
 let conversationSaveTimerId = null;
+let showThinkingByDefault = false;
 
 function initializeTooltips(root = document) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
@@ -864,6 +867,22 @@ function setModelBubbleContent(message, refs) {
   refs.responseText.textContent = message.response || message.text || '';
 }
 
+function refreshModelThinkingVisibility() {
+  if (!chatTranscript) {
+    return;
+  }
+  chatTranscript.querySelectorAll('.message-row.model-message').forEach((item) => {
+    const refs = item._modelBubbleRefs || null;
+    const message = item._modelMessage || null;
+    if (!refs || !message || message.role !== 'model') {
+      return;
+    }
+    refs.thinkingToggle.setAttribute('aria-expanded', String(showThinkingByDefault));
+    refs.thinkingBody.hidden = !showThinkingByDefault;
+    setModelBubbleContent(message, refs);
+  });
+}
+
 function addMessageElement(message) {
   if (!chatTranscript) {
     return null;
@@ -910,6 +929,8 @@ function addMessageElement(message) {
     const responseText = item.querySelector('.response-content');
     if (thinkingRegion && thinkingToggle && thinkingBody && thoughtsText && responseText) {
       const refs = { thinkingRegion, thinkingToggle, thinkingBody, thoughtsText, responseText };
+      thinkingToggle.setAttribute('aria-expanded', String(showThinkingByDefault));
+      thinkingBody.hidden = !showThinkingByDefault;
       thinkingToggle.addEventListener('click', (event) => {
         event.preventDefault();
         const expanded = thinkingToggle.getAttribute('aria-expanded') === 'true';
@@ -919,6 +940,7 @@ function addMessageElement(message) {
       });
       setModelBubbleContent(message, refs);
       item._modelBubbleRefs = refs;
+      item._modelMessage = message;
     }
   } else {
     item.innerHTML = `
@@ -940,6 +962,7 @@ function updateModelMessageElement(message, item) {
   if (!item || message.role !== 'model') {
     return;
   }
+  item._modelMessage = message;
   const responseActions = item.querySelector('.response-actions');
   if (responseActions) {
     responseActions.classList.toggle('d-none', !message.isResponseComplete);
@@ -1151,6 +1174,23 @@ function showLoadError(errorMessage) {
     });
   }
   modelLoadError.classList.remove('d-none');
+}
+
+function getStoredShowThinkingPreference() {
+  return localStorage.getItem(SHOW_THINKING_STORAGE_KEY) === 'true';
+}
+
+function applyShowThinkingPreference(value, { persist = false, refresh = false } = {}) {
+  showThinkingByDefault = Boolean(value);
+  if (showThinkingToggle) {
+    showThinkingToggle.checked = showThinkingByDefault;
+  }
+  if (persist) {
+    localStorage.setItem(SHOW_THINKING_STORAGE_KEY, String(showThinkingByDefault));
+  }
+  if (refresh) {
+    refreshModelThinkingVisibility();
+  }
 }
 
 function getStoredThemePreference() {
@@ -1475,6 +1515,7 @@ engine.onProgress = (progress) => {
 
 const themePreference = getStoredThemePreference();
 applyTheme(themePreference);
+applyShowThinkingPreference(getStoredShowThinkingPreference());
 populateModelSelect();
 restoreInferencePreferences();
 setStatus('Welcome. Choose a model, then select Load model.');
@@ -1491,6 +1532,13 @@ if (themeSelect) {
     }
     localStorage.setItem(THEME_STORAGE_KEY, value);
     applyTheme(value);
+  });
+}
+
+if (showThinkingToggle) {
+  showThinkingToggle.addEventListener('change', (event) => {
+    const value = event.target instanceof HTMLInputElement ? event.target.checked : false;
+    applyShowThinkingPreference(value, { persist: true, refresh: true });
   });
 }
 
