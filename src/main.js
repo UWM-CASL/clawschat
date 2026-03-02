@@ -117,7 +117,10 @@ const configuredModels = Array.isArray(modelCatalog?.models)
   : [];
 const configuredDefaultModel =
   typeof modelCatalog?.defaultModelId === 'string' ? modelCatalog.defaultModelId.trim() : '';
-const DEFAULT_MODEL = configuredDefaultModel || configuredModels[0]?.id || 'onnx-community/Qwen3-0.6B-ONNX';
+const DEFAULT_MODEL =
+  configuredDefaultModel ||
+  configuredModels[0]?.id ||
+  'onnx-community/Llama-3.2-3B-Instruct-ONNX';
 if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
   configuredModels.unshift({
     id: DEFAULT_MODEL,

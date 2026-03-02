@@ -53,8 +53,9 @@ Student-facing browser chat UI with local model inference.
   - `Branch` (terminal-split icon) creates a sibling user-message branch at that turn, then opens edit mode for the new branch.
   - If multiple user branches exist at the same turn, left/right controls and an `x/y` indicator let users switch between those branch variants.
 
-## Supported model
+## Supported models
 
+- `onnx-community/Llama-3.2-3B-Instruct-ONNX` (default)
 - `onnx-community/Qwen3-0.6B-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/gemma-3-1b-it-ONNX-GQA`

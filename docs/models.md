@@ -16,8 +16,9 @@ Model support is configured in `src/config/models.json`:
 - `defaultModelId`: default model used for first load and invalid selections
 - `legacyAliases`: map of old stored IDs to canonical supported IDs
 
-Current supported model in the settings drawer:
+Current supported models in the settings drawer:
 
+- `onnx-community/Llama-3.2-3B-Instruct-ONNX` (default)
 - `onnx-community/Qwen3-0.6B-ONNX`
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/Qwen3-0.6B-ONNX`
