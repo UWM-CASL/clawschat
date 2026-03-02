@@ -2,6 +2,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import Tooltip from 'bootstrap/js/dist/tooltip';
+import MarkdownIt from 'markdown-it';
 import './styles.css';
 import { LLMEngineClient } from './llm/engine-client.js';
 import modelCatalog from './config/models.json';
@@ -174,6 +175,7 @@ const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
 const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
 const CONVERSATION_SCHEMA_VERSION = 4;
 const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
+const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
 
 const themeSelect = document.getElementById('themeSelect');
 const showThinkingToggle = document.getElementById('showThinkingToggle');
@@ -219,6 +221,22 @@ const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 const engine = new LLMEngineClient();
+const markdown = new MarkdownIt({
+  html: false,
+  breaks: true,
+  linkify: true,
+});
+
+const defaultLinkRenderer =
+  markdown.renderer.rules.link_open ||
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
+markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  token.attrSet('target', '_blank');
+  token.attrSet('rel', MARKDOWN_LINK_REL);
+  return defaultLinkRenderer(tokens, idx, options, env, self);
+};
+
 let modelReady = false;
 let isGenerating = false;
 let isLoadingModel = false;
@@ -323,6 +341,14 @@ async function handleMessageCopyAction(messageId, copyType) {
 
 function formatInteger(value) {
   return new Intl.NumberFormat('en-US').format(value);
+}
+
+function renderModelMarkdown(content) {
+  const normalizedContent = String(content || '');
+  if (!normalizedContent) {
+    return '';
+  }
+  return markdown.render(normalizedContent);
 }
 
 function getModelGenerationLimits(modelId) {
@@ -1387,7 +1413,7 @@ function setModelBubbleContent(message, refs) {
   refs.thinkingCopyButton.disabled = !hasThinking || !message.thoughts?.trim();
   refs.thinkingBody.hidden = !hasThinking || !isExpanded;
   refs.thoughtsText.textContent = message.thoughts || '';
-  refs.responseText.textContent = message.response || message.text || '';
+  refs.responseText.innerHTML = renderModelMarkdown(message.response || message.text || '');
 }
 
 function refreshModelThinkingVisibility() {
@@ -1442,7 +1468,7 @@ function addMessageElement(message, options = {}) {
         </section>
         <section class="response-region">
           <h3 class="visually-hidden">Response</h3>
-          <p class="response-content mb-0"></p>
+          <div class="response-content"></div>
         </section>
       </div>
       <section class="response-actions">
