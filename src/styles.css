@@ -648,9 +648,35 @@
   white-space: pre-wrap;
 }
 
+.response-region {
+  position: relative;
+}
+
+.fix-wait-message {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  opacity: 0;
+  transform: translateY(0.3rem);
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
 .response-content {
   margin: 0;
   overflow-wrap: anywhere;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.model-message .message-bubble.is-fix-preparing .response-content {
+  opacity: 0;
+  transform: translateY(-0.3rem);
+}
+
+.model-message .message-bubble.is-fix-preparing .fix-wait-message {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .response-content > :first-child {
@@ -1056,5 +1082,11 @@
   .model-message .message-bubble.variant-switch-in-left,
   .model-message .message-bubble.variant-switch-in-right {
     animation: none;
+  }
+
+  .fix-wait-message,
+  .response-content {
+    transition: none;
+    transform: none;
   }
 }

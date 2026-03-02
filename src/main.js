@@ -1318,6 +1318,17 @@ function applyVariantCardSignals(item, variantState) {
   bubble.classList.toggle('has-variant-next', Boolean(variantState?.hasVariants && variantState.canGoNext));
 }
 
+function applyFixCardSignals(item, message) {
+  if (!item || message?.role !== 'model') {
+    return;
+  }
+  const bubble = item.querySelector('.message-bubble');
+  if (!bubble) {
+    return;
+  }
+  bubble.classList.toggle('is-fix-preparing', Boolean(message.isFixPreparing));
+}
+
 function buildPromptForConversationLeaf(conversation, leafMessageId = conversation?.activeLeafMessageId) {
   return buildConversationPrompt(getConversationPathMessages(conversation, leafMessageId));
 }
@@ -1483,6 +1494,7 @@ function addMessageElement(message, options = {}) {
         </section>
         <section class="response-region">
           <h3 class="visually-hidden">Response</h3>
+          <p class="fix-wait-message mb-0" aria-live="off">Please wait...</p>
           <div class="response-content"></div>
         </section>
       </div>
@@ -1576,6 +1588,7 @@ function addMessageElement(message, options = {}) {
       item._modelMessage = message;
     }
     applyVariantCardSignals(item, variantState);
+    applyFixCardSignals(item, message);
   } else {
     const activeConversation = getActiveConversation();
     const variantState = getUserVariantState(activeConversation, message);
@@ -1766,7 +1779,32 @@ function updateModelMessageElement(message, item) {
     nextButton.disabled = !variantState.canGoNext || !message.isResponseComplete;
   }
   applyVariantCardSignals(item, variantState);
+  applyFixCardSignals(item, message);
   setModelBubbleContent(message, item._modelBubbleRefs || null);
+}
+
+function removeLeafMessageFromConversation(conversation, messageId) {
+  if (!conversation || !messageId) {
+    return false;
+  }
+  const message = getMessageNodeById(conversation, messageId);
+  if (!message || !Array.isArray(message.childIds) || message.childIds.length) {
+    return false;
+  }
+  conversation.messageNodes = conversation.messageNodes.filter((candidate) => candidate.id !== messageId);
+  if (message.parentId) {
+    const parentMessage = getMessageNodeById(conversation, message.parentId);
+    if (parentMessage && Array.isArray(parentMessage.childIds)) {
+      parentMessage.childIds = parentMessage.childIds.filter((childId) => childId !== messageId);
+    }
+  }
+  if (conversation.activeLeafMessageId === messageId) {
+    conversation.activeLeafMessageId = message.parentId || null;
+  }
+  if (conversation.lastSpokenLeafMessageId === messageId) {
+    conversation.lastSpokenLeafMessageId = message.parentId || null;
+  }
+  return true;
 }
 
 function updateUserMessageElement(message, item) {
@@ -2665,11 +2703,38 @@ function startModelGeneration(activeConversation, prompt, options = {}) {
     typeof options.parentMessageId === 'string' && options.parentMessageId.trim()
       ? options.parentMessageId.trim()
       : activeConversation.activeLeafMessageId;
+  const existingModelMessageId =
+    typeof options.existingModelMessageId === 'string' && options.existingModelMessageId.trim()
+      ? options.existingModelMessageId.trim()
+      : '';
+  const clearExistingMessageBeforeStream = Boolean(options.clearExistingMessageBeforeStream);
   const updateLastSpokenOnComplete = Boolean(options.updateLastSpokenOnComplete);
-  const modelMessage = addMessageToConversation(activeConversation, 'model', '', {
-    parentId: parentMessageId,
-  });
-  const modelBubbleItem = addMessageElement(modelMessage);
+  const existingModelMessage = existingModelMessageId
+    ? getMessageNodeById(activeConversation, existingModelMessageId)
+    : null;
+  const canReuseExistingModelMessage =
+    existingModelMessage?.role === 'model' &&
+    !existingModelMessage.isResponseComplete &&
+    existingModelMessage.parentId === parentMessageId;
+  const modelMessage = canReuseExistingModelMessage
+    ? existingModelMessage
+    : addMessageToConversation(activeConversation, 'model', '', {
+      parentId: parentMessageId,
+    });
+  if (canReuseExistingModelMessage && clearExistingMessageBeforeStream) {
+    modelMessage.text = '';
+    modelMessage.response = '';
+    modelMessage.thoughts = '';
+    modelMessage.hasThinking = false;
+    modelMessage.isThinkingComplete = false;
+  }
+  modelMessage.isResponseComplete = false;
+  activeConversation.activeLeafMessageId = modelMessage.id;
+  const modelBubbleItem =
+    chatTranscript?.querySelector(`[data-message-id="${modelMessage.id}"]`) || addMessageElement(modelMessage);
+  if (modelBubbleItem) {
+    updateModelMessageElement(modelMessage, modelBubbleItem);
+  }
   let streamedText = '';
 
   isGenerating = true;
@@ -2679,6 +2744,9 @@ function startModelGeneration(activeConversation, prompt, options = {}) {
     engine.generate(prompt, {
       generationConfig: activeGenerationConfig,
       onToken: (chunk) => {
+        if (modelMessage.isFixPreparing) {
+          modelMessage.isFixPreparing = false;
+        }
         streamedText += chunk;
         const parsed = parseThinkingText(streamedText, thinkingTags);
         if (thinkingTags) {
@@ -3132,10 +3200,23 @@ async function fixResponseFromMessage(messageId) {
 
   const conversationId = activeConversation.id;
   const parentUserMessageId = parentUserMessage.id;
+  const previousActiveLeafMessageId = activeConversation.activeLeafMessageId;
   const orchestrationInputs = {
     userPrompt: parentUserMessage.text || '',
     assistantResponse: targetModelMessage.response || targetModelMessage.text || '',
   };
+  const pendingFixMessage = addMessageToConversation(activeConversation, 'model', '', {
+    parentId: parentUserMessage.id,
+  });
+  pendingFixMessage.thoughts = '';
+  pendingFixMessage.response = targetModelMessage.response || targetModelMessage.text || '';
+  pendingFixMessage.text = pendingFixMessage.response;
+  pendingFixMessage.hasThinking = false;
+  pendingFixMessage.isThinkingComplete = false;
+  pendingFixMessage.isResponseComplete = false;
+  pendingFixMessage.isFixPreparing = true;
+  renderTranscript({ scrollToBottom: false });
+  queueConversationStateSave();
 
   let fixPrompt = '';
   isRunningOrchestration = true;
@@ -3147,6 +3228,10 @@ async function fixResponseFromMessage(messageId) {
     });
     fixPrompt = finalPrompt;
   } catch (error) {
+    removeLeafMessageFromConversation(activeConversation, pendingFixMessage.id);
+    activeConversation.activeLeafMessageId = previousActiveLeafMessageId;
+    renderTranscript({ scrollToBottom: false });
+    queueConversationStateSave();
     setStatus('Fix orchestration failed.');
     appendDebug(`Fix orchestration error: ${error.message}`);
     return;
@@ -3166,12 +3251,11 @@ async function fixResponseFromMessage(messageId) {
     return;
   }
 
-  refreshedConversation.activeLeafMessageId = refreshedParentUserMessage.id;
-  renderTranscript();
-  queueConversationStateSave();
   setStatus('Fixing response...');
   startModelGeneration(refreshedConversation, fixPrompt, {
     parentMessageId: refreshedParentUserMessage.id,
+    existingModelMessageId: pendingFixMessage.id,
+    clearExistingMessageBeforeStream: true,
   });
 }
 
