@@ -39,7 +39,18 @@ function postStatus(message) {
   self.postMessage({ type: 'status', payload: { message } });
 }
 
-function postProgress({ percent = 0, message = 'Loading model files...', file = '', status = '' }) {
+function normalizeProgressBytes(value) {
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function postProgress({
+  percent = 0,
+  message = 'Loading model files...',
+  file = '',
+  status = '',
+  loadedBytes = 0,
+  totalBytes = 0,
+}) {
   const boundedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
   self.postMessage({
     type: 'progress',
@@ -48,6 +59,8 @@ function postProgress({ percent = 0, message = 'Loading model files...', file = 
       message,
       file: typeof file === 'string' ? file : '',
       status: typeof status === 'string' ? status : '',
+      loadedBytes: normalizeProgressBytes(loadedBytes),
+      totalBytes: normalizeProgressBytes(totalBytes),
     },
   });
 }
@@ -122,12 +135,26 @@ async function initialize(payload) {
               : 0;
           const rawStatus = typeof progress?.status === 'string' ? progress.status : '';
           const rawFile = typeof progress?.file === 'string' ? progress.file : '';
+          const rawLoadedBytes =
+            progress?.loaded ??
+            progress?.loadedBytes ??
+            progress?.bytes_loaded ??
+            progress?.bytesLoaded ??
+            0;
+          const rawTotalBytes =
+            progress?.total ??
+            progress?.totalBytes ??
+            progress?.bytes_total ??
+            progress?.bytesTotal ??
+            0;
           const label = rawStatus || rawFile || 'Loading model files...';
           postProgress({
             percent: normalizedProgress,
             message: String(label),
             file: rawFile,
             status: rawStatus,
+            loadedBytes: rawLoadedBytes,
+            totalBytes: rawTotalBytes,
           });
         },
       });

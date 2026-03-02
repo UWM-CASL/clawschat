@@ -198,7 +198,9 @@ const modelLoadProgressLabel = document.getElementById('modelLoadProgressLabel')
 const modelLoadProgressValue = document.getElementById('modelLoadProgressValue');
 const modelLoadProgressBar = document.getElementById('modelLoadProgressBar');
 const modelLoadProgressSummary = document.getElementById('modelLoadProgressSummary');
-const modelLoadFileList = document.getElementById('modelLoadFileList');
+const modelLoadCurrentFileLabel = document.getElementById('modelLoadCurrentFileLabel');
+const modelLoadCurrentFileValue = document.getElementById('modelLoadCurrentFileValue');
+const modelLoadCurrentFileBar = document.getElementById('modelLoadCurrentFileBar');
 const modelLoadError = document.getElementById('modelLoadError');
 const modelLoadErrorSummary = document.getElementById('modelLoadErrorSummary');
 const modelLoadErrorDetails = document.getElementById('modelLoadErrorDetails');
@@ -2295,53 +2297,109 @@ function formatLoadFileLabel(fileName) {
   return segments[segments.length - 1] || normalized;
 }
 
+function formatBytes(value) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const decimals = size >= 100 || unitIndex === 0 ? 0 : 1;
+  return `${size.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function setCurrentFileProgressBar({ percent = 0, indeterminate = false }) {
+  if (!modelLoadCurrentFileBar) {
+    return;
+  }
+  const boundedPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  modelLoadCurrentFileBar.classList.toggle('model-load-bar-indeterminate', indeterminate);
+  if (indeterminate) {
+    modelLoadCurrentFileBar.style.width = '35%';
+    modelLoadCurrentFileBar.removeAttribute('aria-valuenow');
+  } else {
+    modelLoadCurrentFileBar.style.width = `${boundedPercent}%`;
+    modelLoadCurrentFileBar.setAttribute('aria-valuenow', `${Math.round(boundedPercent)}`);
+  }
+}
+
 function resetLoadProgressFiles() {
   loadProgressFiles.clear();
   renderLoadProgressFiles();
 }
 
 function renderLoadProgressFiles() {
-  if (!modelLoadProgressSummary && !modelLoadFileList) {
+  if (!modelLoadProgressSummary && !modelLoadCurrentFileLabel && !modelLoadCurrentFileValue) {
     return;
   }
   const entries = [...loadProgressFiles.values()].sort((a, b) => b.updatedAt - a.updatedAt);
   const completeCount = entries.filter((entry) => entry.isComplete).length;
+  const latestEntry = entries[0] || null;
   if (modelLoadProgressSummary) {
     if (!entries.length) {
-      modelLoadProgressSummary.textContent = 'Waiting for download details...';
+      modelLoadProgressSummary.textContent = '0/0 stages complete';
     } else {
-      modelLoadProgressSummary.textContent = `${completeCount}/${entries.length} files loaded`;
+      modelLoadProgressSummary.textContent = `${completeCount}/${entries.length} stages complete`;
     }
   }
-  if (modelLoadFileList) {
-    modelLoadFileList.replaceChildren();
-    entries.slice(0, 10).forEach((entry) => {
-      const item = document.createElement('li');
-      const statusSuffix = entry.status ? ` (${entry.status})` : '';
-      item.textContent = `${entry.label}: ${Math.round(entry.percent)}%${statusSuffix}`;
-      modelLoadFileList.appendChild(item);
-    });
-    if (entries.length > 10) {
-      const overflowItem = document.createElement('li');
-      overflowItem.textContent = `...and ${entries.length - 10} more files`;
-      modelLoadFileList.appendChild(overflowItem);
+  if (!latestEntry) {
+    if (modelLoadCurrentFileLabel) {
+      modelLoadCurrentFileLabel.textContent = 'Current file';
+    }
+    if (modelLoadCurrentFileValue) {
+      modelLoadCurrentFileValue.textContent = 'Waiting...';
+    }
+    setCurrentFileProgressBar({ percent: 0, indeterminate: false });
+    return;
+  }
+
+  if (modelLoadCurrentFileLabel) {
+    modelLoadCurrentFileLabel.textContent = latestEntry.label || 'Current file';
+  }
+  if (modelLoadCurrentFileValue) {
+    if (latestEntry.hasKnownTotal && latestEntry.totalBytes > 0) {
+      modelLoadCurrentFileValue.textContent = `${formatBytes(latestEntry.loadedBytes)} / ${formatBytes(latestEntry.totalBytes)}`;
+    } else if (latestEntry.loadedBytes > 0) {
+      modelLoadCurrentFileValue.textContent = `${formatBytes(latestEntry.loadedBytes)} downloaded`;
+    } else {
+      modelLoadCurrentFileValue.textContent = 'Downloading...';
     }
   }
+  setCurrentFileProgressBar({
+    percent: latestEntry.percent,
+    indeterminate: latestEntry.isIndeterminate,
+  });
 }
 
-function trackLoadFileProgress(file, percent, status) {
+function trackLoadFileProgress(file, percent, status, loadedBytes, totalBytes) {
   if (typeof file !== 'string' || !file.trim()) {
     return;
   }
   const key = file.trim();
   const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   const statusText = typeof status === 'string' ? status.trim() : '';
+  const numericLoadedBytes = Number.isFinite(loadedBytes) && loadedBytes > 0 ? loadedBytes : 0;
+  const numericTotalBytes = Number.isFinite(totalBytes) && totalBytes > 0 ? totalBytes : 0;
+  const hasKnownTotal = numericTotalBytes > 0;
+  const percentFromBytes = hasKnownTotal ? (numericLoadedBytes / numericTotalBytes) * 100 : null;
+  const effectivePercent = Number.isFinite(percentFromBytes) ? percentFromBytes : numericPercent;
   const previous = loadProgressFiles.get(key);
-  const isComplete = numericPercent >= 100 || /complete|ready|loaded|done|cached/i.test(statusText);
+  const isComplete =
+    effectivePercent >= 100 ||
+    (hasKnownTotal && numericLoadedBytes >= numericTotalBytes) ||
+    /complete|ready|loaded|done|cached/i.test(statusText);
   loadProgressFiles.set(key, {
     label: formatLoadFileLabel(key),
-    percent: previous ? Math.max(previous.percent, numericPercent) : numericPercent,
+    percent: previous ? Math.max(previous.percent, effectivePercent) : effectivePercent,
     status: statusText || previous?.status || '',
+    loadedBytes: previous ? Math.max(previous.loadedBytes || 0, numericLoadedBytes) : numericLoadedBytes,
+    totalBytes: hasKnownTotal ? numericTotalBytes : previous?.totalBytes || 0,
+    hasKnownTotal: hasKnownTotal || Boolean(previous?.hasKnownTotal),
+    isIndeterminate: !hasKnownTotal && !isComplete,
     isComplete: Boolean(previous?.isComplete || isComplete),
     updatedAt: Date.now(),
   });
@@ -2360,7 +2418,14 @@ function clearLoadError() {
   }
 }
 
-function setLoadProgress({ percent = 0, message = 'Preparing model...', file = '', status = '' }) {
+function setLoadProgress({
+  percent = 0,
+  message = 'Preparing model...',
+  file = '',
+  status = '',
+  loadedBytes = 0,
+  totalBytes = 0,
+}) {
   const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   if (modelLoadProgressLabel) {
     modelLoadProgressLabel.textContent = message;
@@ -2372,7 +2437,7 @@ function setLoadProgress({ percent = 0, message = 'Preparing model...', file = '
     modelLoadProgressBar.style.width = `${numericPercent}%`;
     modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(numericPercent)}`);
   }
-  trackLoadFileProgress(file, numericPercent, status || message);
+  trackLoadFileProgress(file, numericPercent, status || message, loadedBytes, totalBytes);
 }
 
 function showLoadError(errorMessage) {
@@ -3123,7 +3188,9 @@ engine.onProgress = (progress) => {
   const percent = Number.isFinite(progress?.percent) ? progress.percent : 0;
   const file = typeof progress?.file === 'string' ? progress.file : '';
   const status = typeof progress?.status === 'string' ? progress.status : '';
-  setLoadProgress({ percent, message, file, status });
+  const loadedBytes = Number.isFinite(progress?.loadedBytes) ? progress.loadedBytes : 0;
+  const totalBytes = Number.isFinite(progress?.totalBytes) ? progress.totalBytes : 0;
+  setLoadProgress({ percent, message, file, status, loadedBytes, totalBytes });
 };
 
 const themePreference = getStoredThemePreference();
@@ -3131,7 +3198,7 @@ applyTheme(themePreference);
 applyShowThinkingPreference(getStoredShowThinkingPreference());
 populateModelSelect();
 restoreInferencePreferences();
-setStatus('Choose a model, then select Load model.');
+setStatus('Ready.');
 showProgressRegion(false);
 updateActionButtons();
 setActiveSettingsTab(activeSettingsTab);

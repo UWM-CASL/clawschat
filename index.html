@@ -196,7 +196,22 @@
                     <p id="modelLoadProgressSummary" class="small text-body-secondary mt-2 mb-1">
                       Waiting for download details...
                     </p>
-                    <ul id="modelLoadFileList" class="small ps-3 mb-0"></ul>
+                    <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
+                      <p id="modelLoadCurrentFileLabel" class="mb-0 small text-body-secondary">Current file</p>
+                      <p id="modelLoadCurrentFileValue" class="mb-0 small text-body-secondary">Waiting...</p>
+                    </div>
+                    <div class="progress" role="presentation">
+                      <div
+                        id="modelLoadCurrentFileBar"
+                        class="progress-bar"
+                        role="progressbar"
+                        aria-label="Current file loading progress"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="0"
+                        style="width: 0%"
+                      ></div>
+                    </div>
                   </div>
                   <div id="modelLoadError" class="alert alert-danger d-none mt-3 mb-0" role="alert">
                     <h3 class="h6 mb-2">Model loading failed</h3>
