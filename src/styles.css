@@ -243,14 +243,15 @@
 }
 
 .jump-to-latest-btn {
-  position: sticky;
-  bottom: 0.75rem;
-  margin: 0 0 0 auto;
+  position: fixed;
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: clamp(5.5rem, 11vh, 7rem);
+  margin: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   box-shadow: var(--shadow-ambient);
-  z-index: 1;
+  z-index: 1030;
 }
 
 .transcript-empty-state {
