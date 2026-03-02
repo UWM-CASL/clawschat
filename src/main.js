@@ -221,6 +221,14 @@ const chatTitleInput = document.getElementById('chatTitleInput');
 const editChatTitleBtn = document.getElementById('editChatTitleBtn');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
+const openSettingsButton = document.getElementById('openSettingsButton');
+const closeSettingsButton = document.getElementById('closeSettingsButton');
+const settingsPage = document.getElementById('settingsPage');
+const settingsTabContainer = document.querySelector('.settings-tabs');
+const settingsTabButtons = settingsTabContainer
+  ? settingsTabContainer.querySelectorAll('[data-settings-tab]')
+  : [];
+const settingsTabPanels = settingsPage ? settingsPage.querySelectorAll('[data-settings-tab-panel]') : [];
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 const engine = new LLMEngineClient();
@@ -257,6 +265,8 @@ let isSwitchingVariant = false;
 let activeUserEditMessageId = null;
 let isChatTitleEditing = false;
 let isRunningOrchestration = false;
+let isSettingsPageOpen = false;
+let activeSettingsTab = 'system';
 const loadProgressFiles = new Map();
 
 function initializeTooltips(root = document) {
@@ -1978,7 +1988,84 @@ function setRegionVisibility(region, visible) {
   region.inert = true;
 }
 
+function setActiveSettingsTab(targetTabName, { focus = false } = {}) {
+  const tabName = typeof targetTabName === 'string' ? targetTabName.trim() : '';
+  if (!tabName || !settingsTabButtons.length || !settingsTabPanels.length) {
+    return;
+  }
+  activeSettingsTab = tabName;
+  settingsTabButtons.forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const isActive = button.dataset.settingsTab === activeSettingsTab;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
+  });
+
+  settingsTabPanels.forEach((panel) => {
+    if (!(panel instanceof HTMLElement)) {
+      return;
+    }
+    const isActive = panel.dataset.settingsTabPanel === activeSettingsTab;
+    panel.classList.toggle('d-none', !isActive);
+    if (isActive) {
+      panel.removeAttribute('aria-hidden');
+      panel.inert = false;
+    } else {
+      panel.setAttribute('aria-hidden', 'true');
+      panel.inert = true;
+    }
+  });
+
+  if (focus) {
+    const activeButton = Array.from(settingsTabButtons).find(
+      (button) => button instanceof HTMLButtonElement && button.dataset.settingsTab === activeSettingsTab,
+    );
+    if (activeButton instanceof HTMLButtonElement) {
+      activeButton.focus();
+    }
+  }
+}
+
+function setSettingsPageVisibility(visible) {
+  if (!settingsPage || !topBar) {
+    return;
+  }
+  isSettingsPageOpen = Boolean(visible);
+  setRegionVisibility(settingsPage, isSettingsPageOpen);
+  const conversationPanelToggle = topBar.querySelector('[data-bs-target="#conversationPanel"]');
+  if (openSettingsButton) {
+    openSettingsButton.classList.toggle('d-none', isSettingsPageOpen);
+    openSettingsButton.setAttribute('aria-expanded', String(isSettingsPageOpen));
+  }
+  if (conversationPanelToggle) {
+    conversationPanelToggle.classList.toggle('d-none', isSettingsPageOpen);
+  }
+  if (isSettingsPageOpen) {
+    setRegionVisibility(welcomePanel, false);
+    setRegionVisibility(conversationPanel, false);
+    setRegionVisibility(chatTranscriptWrap, false);
+    setRegionVisibility(chatForm, false);
+    setRegionVisibility(topBar, true);
+    setActiveSettingsTab(activeSettingsTab);
+    if (topBar instanceof HTMLElement) {
+      topBar.setAttribute('aria-label', 'Settings');
+    }
+    return;
+  }
+
+  if (topBar) {
+    topBar.removeAttribute('aria-label');
+  }
+  updateWelcomePanelVisibility();
+}
+
 function updateWelcomePanelVisibility() {
+  if (isSettingsPageOpen) {
+    return;
+  }
   const showConversation = modelReady;
   setRegionVisibility(welcomePanel, !showConversation);
   setRegionVisibility(topBar, showConversation);
@@ -3044,8 +3131,85 @@ restoreInferencePreferences();
 setStatus('Welcome. Choose a model, then select Load model.');
 showProgressRegion(false);
 updateActionButtons();
+setActiveSettingsTab(activeSettingsTab);
 updateWelcomePanelVisibility();
 void restoreConversationStateFromStorage();
+
+if (settingsTabContainer) {
+  settingsTabContainer.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) {
+      return;
+    }
+    const tab = target.dataset.settingsTab;
+    if (tab && tab === activeSettingsTab) {
+      return;
+    }
+    setActiveSettingsTab(tab, { focus: true });
+  });
+
+  settingsTabContainer.addEventListener('keydown', (event) => {
+    if (!(event.target instanceof HTMLButtonElement)) {
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') {
+      if (event.key === 'Enter' || event.key === ' ') {
+        setActiveSettingsTab(event.target.dataset.settingsTab, { focus: false });
+      }
+      return;
+    }
+    const buttons = Array.from(settingsTabButtons).filter((button) => button instanceof HTMLButtonElement);
+    const currentIndex = buttons.indexOf(event.target);
+    if (currentIndex < 0) {
+      return;
+    }
+    event.preventDefault();
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      nextIndex = (currentIndex + direction + buttons.length) % buttons.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = buttons.length - 1;
+    }
+    const nextTab = buttons[nextIndex];
+    const nextTabName = nextTab?.dataset?.settingsTab;
+    if (typeof nextTabName === 'string') {
+      setActiveSettingsTab(nextTabName, { focus: false });
+      nextTab.focus();
+    }
+  });
+}
+
+if (openSettingsButton) {
+  openSettingsButton.addEventListener('click', () => {
+    setSettingsPageVisibility(true);
+    if (settingsTabButtons[0] instanceof HTMLButtonElement) {
+      settingsTabButtons[0].focus();
+    }
+  });
+}
+
+if (closeSettingsButton) {
+  closeSettingsButton.addEventListener('click', () => {
+    setSettingsPageVisibility(false);
+    if (openSettingsButton instanceof HTMLButtonElement) {
+      openSettingsButton.focus();
+    }
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !isSettingsPageOpen) {
+    return;
+  }
+  event.preventDefault();
+  setSettingsPageVisibility(false);
+  if (openSettingsButton instanceof HTMLButtonElement) {
+    openSettingsButton.focus();
+  }
+});
 
 if (themeSelect) {
   themeSelect.addEventListener('change', (event) => {

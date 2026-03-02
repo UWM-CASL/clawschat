@@ -99,10 +99,8 @@
           <p id="statusRegion" class="status-pill mb-0" role="status" aria-live="polite">Ready</p>
           <button
             type="button"
+            id="openSettingsButton"
             class="btn icon-button"
-            data-bs-toggle="offcanvas"
-            data-bs-target="#settingsDrawer"
-            aria-controls="settingsDrawer"
             aria-label="Open settings"
             data-icon-tooltip="true"
             data-bs-title="Open settings"
@@ -213,123 +211,201 @@
             </button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <aside
-      class="offcanvas offcanvas-end settings-drawer"
-      tabindex="-1"
-      id="settingsDrawer"
-      aria-labelledby="settingsDrawerLabel"
-    >
-      <div class="offcanvas-header">
-        <h2 class="offcanvas-title h5 mb-0" id="settingsDrawerLabel">Settings</h2>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        <form class="d-flex flex-column gap-3">
-          <section class="d-flex flex-column gap-3" aria-labelledby="settingsSystemHeading">
-            <h3 class="h6 mb-0" id="settingsSystemHeading">System</h3>
-            <div>
-              <label class="form-label" for="backendSelect">Backend</label>
-              <select id="backendSelect" class="form-select">
-                <option value="auto" selected>Auto (WebGPU then CPU)</option>
-                <option value="webgpu">WebGPU only</option>
-                <option value="cpu">CPU only</option>
-              </select>
-            </div>
-            <div>
-              <label class="form-label" for="themeSelect">Theme</label>
-              <select id="themeSelect" class="form-select">
-                <option value="light" selected>Light</option>
-                <option value="dark">Dark</option>
-                <option value="system">System</option>
-              </select>
-            </div>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" role="switch" id="streamToggle" checked />
-              <label class="form-check-label" for="streamToggle">Stream responses</label>
-            </div>
-            <div class="accordion" id="debugAccordion">
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="debugAccordionHeading">
-                  <button
-                    class="accordion-button collapsed"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#debugAccordionBody"
-                    aria-expanded="false"
-                    aria-controls="debugAccordionBody"
-                  >
-                    Debug info
-                  </button>
-                </h2>
-                <div
-                  id="debugAccordionBody"
-                  class="accordion-collapse collapse"
-                  aria-labelledby="debugAccordionHeading"
-                  data-bs-parent="#debugAccordion"
+        <section id="settingsPage" class="settings-page d-none" aria-labelledby="settingsPageTitle">
+          <div class="settings-page-inner card shadow-sm">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h2 id="settingsPageTitle" class="h4 mb-1">Settings</h2>
+                  <p class="small text-body-secondary mb-0">Saving is automatic.</p>
+                </div>
+                <button
+                  type="button"
+                  id="closeSettingsButton"
+                  class="btn btn-outline-secondary btn-sm"
+                  aria-label="Back to chat"
                 >
-                  <div class="accordion-body">
-                    <pre id="debugInfo" class="debug-info mb-0" aria-live="off"></pre>
-                  </div>
+                  <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                  <span>Back to chat</span>
+                </button>
+              </div>
+
+              <div class="row g-4">
+                <div class="col-lg-3">
+                  <nav aria-label="Settings sections">
+                    <div class="settings-tabs nav flex-column" role="tablist" aria-orientation="vertical">
+                      <button
+                        type="button"
+                        class="nav-link active"
+                        id="settingsTabSystem"
+                        role="tab"
+                        data-settings-tab="system"
+                        aria-controls="settingsSystemPanel"
+                        aria-selected="true"
+                      >
+                        System
+                      </button>
+                      <button
+                        type="button"
+                        class="nav-link"
+                        id="settingsTabModel"
+                        role="tab"
+                        data-settings-tab="model"
+                        aria-controls="settingsModelPanel"
+                        aria-selected="false"
+                      >
+                        Model
+                      </button>
+                      <button
+                        type="button"
+                        class="nav-link"
+                        id="settingsTabConversation"
+                        role="tab"
+                        data-settings-tab="conversation"
+                        aria-controls="settingsConversationPanel"
+                        aria-selected="false"
+                      >
+                        Conversation
+                      </button>
+                    </div>
+                  </nav>
+                </div>
+
+                <div class="col-lg-9">
+                  <form class="d-flex flex-column gap-3">
+                    <section
+                      id="settingsSystemPanel"
+                      class="settings-tab-panel"
+                      role="tabpanel"
+                      data-settings-tab-panel="system"
+                      aria-labelledby="settingsTabSystem"
+                    >
+                      <h3 class="h6 mb-0" id="settingsSystemHeading">System</h3>
+                      <div>
+                        <label class="form-label" for="backendSelect">Backend</label>
+                        <select id="backendSelect" class="form-select">
+                          <option value="auto" selected>Auto (WebGPU then CPU)</option>
+                          <option value="webgpu">WebGPU only</option>
+                          <option value="cpu">CPU only</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="form-label" for="themeSelect">Theme</label>
+                        <select id="themeSelect" class="form-select">
+                          <option value="light" selected>Light</option>
+                          <option value="dark">Dark</option>
+                          <option value="system">System</option>
+                        </select>
+                      </div>
+                      <div class="form-check form-switch">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          id="streamToggle"
+                          checked
+                        />
+                        <label class="form-check-label" for="streamToggle">Stream responses</label>
+                      </div>
+                      <div class="accordion" id="debugAccordion">
+                        <div class="accordion-item">
+                          <h2 class="accordion-header" id="debugAccordionHeading">
+                            <button
+                              class="accordion-button collapsed"
+                              type="button"
+                              data-bs-toggle="collapse"
+                              data-bs-target="#debugAccordionBody"
+                              aria-expanded="false"
+                              aria-controls="debugAccordionBody"
+                            >
+                              Debug info
+                            </button>
+                          </h2>
+                          <div
+                            id="debugAccordionBody"
+                            class="accordion-collapse collapse"
+                            aria-labelledby="debugAccordionHeading"
+                            data-bs-parent="#debugAccordion"
+                          >
+                            <div class="accordion-body">
+                              <pre id="debugInfo" class="debug-info mb-0" aria-live="off"></pre>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section
+                      id="settingsModelPanel"
+                      class="settings-tab-panel d-none"
+                      role="tabpanel"
+                      data-settings-tab-panel="model"
+                      aria-labelledby="settingsTabModel"
+                    >
+                      <h3 class="h6 mb-0" id="settingsModelHeading">Model</h3>
+                      <div>
+                        <label class="form-label" for="maxOutputTokensInput">Max output tokens</label>
+                        <input
+                          id="maxOutputTokensInput"
+                          class="form-control"
+                          type="number"
+                          inputmode="numeric"
+                          min="8"
+                          step="8"
+                          disabled
+                        />
+                        <p id="maxOutputTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
+                      </div>
+                      <div>
+                        <label class="form-label" for="maxContextTokensInput">Max context tokens</label>
+                        <input
+                          id="maxContextTokensInput"
+                          class="form-control"
+                          type="number"
+                          inputmode="numeric"
+                          min="8"
+                          step="8"
+                          disabled
+                        />
+                        <p id="maxContextTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
+                      </div>
+                      <div>
+                        <label class="form-label" for="temperatureInput">Temperature</label>
+                        <input
+                          id="temperatureInput"
+                          class="form-control"
+                          type="number"
+                          inputmode="decimal"
+                          min="0.1"
+                          max="2.0"
+                          step="0.1"
+                          disabled
+                        />
+                        <p id="temperatureHelp" class="form-text mb-0">Load a model to edit this setting.</p>
+                      </div>
+                    </section>
+
+                    <section
+                      id="settingsConversationPanel"
+                      class="settings-tab-panel d-none"
+                      role="tabpanel"
+                      data-settings-tab-panel="conversation"
+                      aria-labelledby="settingsTabConversation"
+                    >
+                      <h3 class="h6 mb-0" id="settingsConversationHeading">Conversation</h3>
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="showThinkingToggle" />
+                        <label class="form-check-label" for="showThinkingToggle">Show thinking</label>
+                      </div>
+                    </section>
+                  </form>
                 </div>
               </div>
             </div>
-          </section>
-          <section class="d-flex flex-column gap-3" aria-labelledby="settingsModelHeading">
-            <h3 class="h6 mb-0" id="settingsModelHeading">Model</h3>
-            <div>
-              <label class="form-label" for="maxOutputTokensInput">Max output tokens</label>
-              <input
-                id="maxOutputTokensInput"
-                class="form-control"
-                type="number"
-                inputmode="numeric"
-                min="8"
-                step="8"
-                disabled
-              />
-              <p id="maxOutputTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
-            </div>
-            <div>
-              <label class="form-label" for="maxContextTokensInput">Max context tokens</label>
-              <input
-                id="maxContextTokensInput"
-                class="form-control"
-                type="number"
-                inputmode="numeric"
-                min="8"
-                step="8"
-                disabled
-              />
-              <p id="maxContextTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
-            </div>
-            <div>
-              <label class="form-label" for="temperatureInput">Temperature</label>
-              <input
-                id="temperatureInput"
-                class="form-control"
-                type="number"
-                inputmode="decimal"
-                min="0.1"
-                max="2.0"
-                step="0.1"
-                disabled
-              />
-              <p id="temperatureHelp" class="form-text mb-0">Load a model to edit this setting.</p>
-            </div>
-          </section>
-          <section class="d-flex flex-column gap-3" aria-labelledby="settingsConversationHeading">
-            <h3 class="h6 mb-0" id="settingsConversationHeading">Conversation</h3>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" role="switch" id="showThinkingToggle" />
-              <label class="form-check-label" for="showThinkingToggle">Show thinking</label>
-            </div>
-          </section>
-        </form>
+          </div>
+        </section>
       </div>
-    </aside>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
