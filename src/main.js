@@ -910,6 +910,63 @@ function getConversationPathMessages(conversation, leafMessageId = conversation?
   return path.reverse();
 }
 
+function isMessageDescendantOf(conversation, messageId, ancestorId) {
+  if (!conversation || !messageId || !ancestorId) {
+    return false;
+  }
+  let cursor = getMessageNodeById(conversation, messageId);
+  while (cursor) {
+    if (cursor.id === ancestorId) {
+      return true;
+    }
+    cursor = cursor.parentId ? getMessageNodeById(conversation, cursor.parentId) : null;
+  }
+  return false;
+}
+
+function parseMessageSequenceFromNodeId(nodeId) {
+  const sequence = parseMessageNodeCounterFromId(nodeId);
+  return Number.isInteger(sequence) && sequence > 0 ? sequence : 0;
+}
+
+function findPreferredLeafForVariant(conversation, variantMessage) {
+  if (!conversation || !variantMessage) {
+    return null;
+  }
+  const activeLeafId = conversation.activeLeafMessageId;
+  if (activeLeafId && isMessageDescendantOf(conversation, activeLeafId, variantMessage.id)) {
+    return activeLeafId;
+  }
+  const lastSpokenLeafId = conversation.lastSpokenLeafMessageId;
+  if (lastSpokenLeafId && isMessageDescendantOf(conversation, lastSpokenLeafId, variantMessage.id)) {
+    return lastSpokenLeafId;
+  }
+
+  const stack = [variantMessage.id];
+  let preferredLeafId = variantMessage.id;
+  let preferredLeafSequence = parseMessageSequenceFromNodeId(preferredLeafId);
+  while (stack.length) {
+    const currentId = stack.pop();
+    const currentMessage = getMessageNodeById(conversation, currentId);
+    if (!currentMessage) {
+      continue;
+    }
+    const childIds = Array.isArray(currentMessage.childIds) ? currentMessage.childIds : [];
+    if (!childIds.length) {
+      const currentSequence = parseMessageSequenceFromNodeId(currentMessage.id);
+      if (currentSequence >= preferredLeafSequence) {
+        preferredLeafId = currentMessage.id;
+        preferredLeafSequence = currentSequence;
+      }
+      continue;
+    }
+    childIds.forEach((childId) => {
+      stack.push(childId);
+    });
+  }
+  return preferredLeafId;
+}
+
 function getModelSiblingMessages(conversation, modelMessage) {
   if (!conversation || !modelMessage || modelMessage.role !== 'model' || !modelMessage.parentId) {
     return [];
@@ -1886,8 +1943,9 @@ function switchModelVariant(messageId, direction) {
   if (!targetMessage) {
     return;
   }
+  const targetLeafId = findPreferredLeafForVariant(activeConversation, targetMessage);
   isSwitchingVariant = true;
-  activeConversation.activeLeafMessageId = targetMessage.id;
+  activeConversation.activeLeafMessageId = targetLeafId || targetMessage.id;
   updateActionButtons();
   animateVariantSwitch(modelMessage.id, targetMessage.id, direction);
 }
