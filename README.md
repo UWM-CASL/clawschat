@@ -37,6 +37,7 @@ Student-facing browser chat UI with local model inference.
   - per-message `artifactRefs` placeholders
   - collection-level `artifacts` placeholders for future text/binary artifacts (binary intended as base64 + hash metadata)
 - New conversations start untitled and are automatically renamed after the first model response based on conversation content.
+- Automatic conversation renaming now runs through a one-step orchestration loaded from `src/config/orchestrations/rename-chat.json`.
 - Conversation title editing is disabled until that automatic model-generated title is available.
 - Model load progress UI collapses after successful initialization.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in a collapsible "Thinking" section during streaming.
@@ -44,6 +45,7 @@ Student-facing browser chat UI with local model inference.
 - Each user message and model response includes a copy action; model response copy excludes thought text.
 - The Thinking section includes a dedicated copy action to copy thoughts only.
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.
+- Each model response includes a `Fix` button (wrench icon). `Fix` runs a one-step orchestration from `src/config/orchestrations/fix-response.json` to revise the response against the originating user prompt and generate a corrected variant.
 - Each user message now supports branch-aware editing controls:
   - `Edit` opens inline editing for that user message.
   - `Save` (floppy icon) commits the edit and removes all later turns on that branch from that point forward.
@@ -62,6 +64,9 @@ Student-facing browser chat UI with local model inference.
   - `models[].generation`: per-model defaults and limits for output/context tokens and temperature
   - `defaultModelId`: fallback/default selection
   - `legacyAliases`: stored legacy IDs remapped at runtime
+- Orchestration definitions are JSON files for transparency:
+  - `src/config/orchestrations/rename-chat.json`
+  - `src/config/orchestrations/fix-response.json`
 
 ## Scripts
 

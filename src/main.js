@@ -5,6 +5,8 @@ import Tooltip from 'bootstrap/js/dist/tooltip';
 import './styles.css';
 import { LLMEngineClient } from './llm/engine-client.js';
 import modelCatalog from './config/models.json';
+import renameChatOrchestration from './config/orchestrations/rename-chat.json';
+import fixResponseOrchestration from './config/orchestrations/fix-response.json';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
@@ -134,6 +136,8 @@ const LEGACY_MODEL_ALIASES = Object.fromEntries(
     .filter(([alias, canonical]) => alias && canonical),
 );
 const SUPPORTED_MODELS = new Set(MODEL_OPTIONS.map((model) => model.id));
+const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
+const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const TITLE_STOP_WORDS = new Set([
   'a',
   'an',
@@ -231,6 +235,7 @@ let showThinkingByDefault = false;
 let isSwitchingVariant = false;
 let activeUserEditMessageId = null;
 let isChatTitleEditing = false;
+let isRunningOrchestration = false;
 const loadProgressFiles = new Map();
 
 function initializeTooltips(root = document) {
@@ -938,6 +943,55 @@ function deriveConversationName(conversation) {
   return normalizeConversationName(topTokens.join(' '));
 }
 
+function buildOrchestrationPrompt(orchestration, variables = {}) {
+  const firstStep = Array.isArray(orchestration?.steps) ? orchestration.steps[0] : null;
+  if (!firstStep || typeof firstStep.prompt !== 'string' || !firstStep.prompt.trim()) {
+    throw new Error('Invalid orchestration definition.');
+  }
+  const renderedPrompt = firstStep.prompt.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key) =>
+    String(variables[key] ?? ''),
+  );
+  const responseInstructions =
+    typeof firstStep?.responseFormat?.instructions === 'string'
+      ? firstStep.responseFormat.instructions.trim()
+      : '';
+  if (!responseInstructions) {
+    return renderedPrompt.trim();
+  }
+  return `${renderedPrompt.trim()}\n\nResponse format:\n${responseInstructions}`;
+}
+
+function requestSingleGeneration(prompt) {
+  return new Promise((resolve, reject) => {
+    let streamedText = '';
+    try {
+      engine.generate(prompt, {
+        generationConfig: activeGenerationConfig,
+        onToken: (chunk) => {
+          streamedText += String(chunk || '');
+        },
+        onComplete: (finalText) => {
+          resolve(String(finalText || streamedText).trim());
+        },
+        onError: (message) => {
+          reject(new Error(String(message || 'Generation failed.')));
+        },
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function runSingleStepOrchestration(orchestration, variables = {}) {
+  const orchestrationId = typeof orchestration?.id === 'string' ? orchestration.id : 'unnamed-orchestration';
+  const prompt = buildOrchestrationPrompt(orchestration, variables);
+  appendDebug(`Orchestration started: ${orchestrationId}`);
+  const output = await requestSingleGeneration(prompt);
+  appendDebug(`Orchestration completed: ${orchestrationId}`);
+  return output;
+}
+
 function parseMessageNodeCounterFromId(nodeId) {
   if (typeof nodeId !== 'string') {
     return 0;
@@ -1329,6 +1383,17 @@ function addMessageElement(message, options = {}) {
         </button>
         <button
           type="button"
+          class="btn btn-sm btn-outline-primary fix-response-btn"
+          data-message-id="${message.id}"
+          aria-label="Fix response"
+          data-bs-toggle="tooltip"
+          data-bs-title="Fix"
+        >
+          <i class="bi bi-wrench" aria-hidden="true"></i>
+          <span class="visually-hidden">Fix</span>
+        </button>
+        <button
+          type="button"
           class="btn btn-sm btn-outline-primary copy-message-btn"
           data-message-id="${message.id}"
           aria-label="Copy response"
@@ -1603,6 +1668,7 @@ function updateUserMessageElement(message, item) {
   const controlsDisabled =
     isLoadingModel ||
     isGenerating ||
+    isRunningOrchestration ||
     isSwitchingVariant ||
     Boolean(activeUserEditMessageId && !isEditing);
   refs.bubble.classList.toggle('d-none', isEditing);
@@ -1726,7 +1792,7 @@ function updateChatTitleEditorVisibility() {
   }
   const activeConversation = getActiveConversation();
   const canEditTitle = modelReady && Boolean(activeConversation?.hasGeneratedName);
-  const controlsDisabled = isGenerating || isLoadingModel;
+  const controlsDisabled = isGenerating || isLoadingModel || isRunningOrchestration;
   const showEditor = canEditTitle && isChatTitleEditing;
   chatTitle.classList.toggle('d-none', showEditor);
   chatTitleInput.classList.toggle('d-none', !showEditor);
@@ -1740,7 +1806,7 @@ function updateChatTitleEditorVisibility() {
 }
 
 function beginChatTitleEdit() {
-  if (isGenerating || isLoadingModel) {
+  if (isGenerating || isLoadingModel || isRunningOrchestration) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -1883,13 +1949,17 @@ function updateActionButtons() {
   updateGenerationSettingsEnabledState();
   updateChatTitleEditorVisibility();
   if (sendButton) {
-    sendButton.disabled = isLoadingModel || (!isGenerating && !modelReady) || Boolean(activeUserEditMessageId);
+    sendButton.disabled =
+      isLoadingModel ||
+      isRunningOrchestration ||
+      (!isGenerating && !modelReady) ||
+      Boolean(activeUserEditMessageId);
   }
   if (loadModelButton) {
-    loadModelButton.disabled = isGenerating || isLoadingModel;
+    loadModelButton.disabled = isGenerating || isLoadingModel || isRunningOrchestration;
   }
   if (newConversationBtn) {
-    newConversationBtn.disabled = isGenerating;
+    newConversationBtn.disabled = isGenerating || isRunningOrchestration;
   }
   updateRegenerateButtons();
   updateUserMessageButtons();
@@ -1899,25 +1969,37 @@ function updateRegenerateButtons() {
   if (!chatTranscript) {
     return;
   }
-  const disabled = isLoadingModel || isGenerating || isSwitchingVariant || !modelReady || Boolean(activeUserEditMessageId);
-  chatTranscript.querySelectorAll('.regenerate-response-btn').forEach((button) => {
-    if (button instanceof HTMLButtonElement) {
-      const item = button.closest('.message-row');
-      const messageId = item?.dataset.messageId;
-      const activeConversation = getActiveConversation();
-      const modelMessage = activeConversation?.messageNodes.find(
-        (message) => message.id === messageId && message.role === 'model',
-      );
-      const hideActions = !modelMessage?.isResponseComplete;
-      const responseActions = button.closest('.response-actions');
-      if (responseActions) {
-        responseActions.classList.toggle('d-none', hideActions);
-      }
-      button.disabled = disabled || hideActions;
-      const prevButton = responseActions?.querySelector('.response-variant-prev');
-      const nextButton = responseActions?.querySelector('.response-variant-next');
-      const variantNav = responseActions?.querySelector('.response-variant-nav');
-      const variantLabel = responseActions?.querySelector('.response-variant-status');
+  const disabled =
+    isLoadingModel ||
+    isGenerating ||
+    isRunningOrchestration ||
+    isSwitchingVariant ||
+    !modelReady ||
+    Boolean(activeUserEditMessageId);
+  chatTranscript.querySelectorAll('.message-row.model-message').forEach((item) => {
+    if (!(item instanceof HTMLElement)) {
+      return;
+    }
+    const messageId = item.dataset.messageId;
+    const activeConversation = getActiveConversation();
+    const modelMessage = activeConversation?.messageNodes.find(
+      (message) => message.id === messageId && message.role === 'model',
+    );
+    const hideActions = !modelMessage?.isResponseComplete;
+    const responseActions = item.querySelector('.response-actions');
+    if (responseActions) {
+      responseActions.classList.toggle('d-none', hideActions);
+      responseActions
+        .querySelectorAll('.regenerate-response-btn, .fix-response-btn')
+        .forEach((button) => {
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = disabled || hideActions;
+          }
+        });
+      const prevButton = responseActions.querySelector('.response-variant-prev');
+      const nextButton = responseActions.querySelector('.response-variant-next');
+      const variantNav = responseActions.querySelector('.response-variant-nav');
+      const variantLabel = responseActions.querySelector('.response-variant-status');
       const variantState = getModelVariantState(activeConversation, modelMessage);
       if (variantNav) {
         variantNav.classList.toggle('d-none', !variantState.hasVariants || hideActions);
@@ -2368,10 +2450,16 @@ function startModelGeneration(activeConversation, prompt, options = {}) {
         }
 
         if (!activeConversation.hasGeneratedName && modelMessage.text !== '[No output]') {
-          activeConversation.name = deriveConversationName(activeConversation);
-          activeConversation.hasGeneratedName = true;
-          renderConversationList();
-          updateChatTitle();
+          const parentUserMessage = modelMessage.parentId
+            ? getMessageNodeById(activeConversation, modelMessage.parentId)
+            : null;
+          const renameInputs = {
+            userPrompt: parentUserMessage?.text || '',
+            assistantResponse: modelMessage.response || modelMessage.text || '',
+          };
+          window.setTimeout(() => {
+            void runRenameChatOrchestration(activeConversation.id, renameInputs);
+          }, 0);
         }
 
         appendDebug('Generation completed.');
@@ -2472,7 +2560,14 @@ function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction) {
 }
 
 function switchModelVariant(messageId, direction) {
-  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId) {
+  if (
+    !messageId ||
+    isGenerating ||
+    isLoadingModel ||
+    isRunningOrchestration ||
+    isSwitchingVariant ||
+    activeUserEditMessageId
+  ) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2503,7 +2598,14 @@ function switchModelVariant(messageId, direction) {
 }
 
 function switchUserVariant(messageId, direction) {
-  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId) {
+  if (
+    !messageId ||
+    isGenerating ||
+    isLoadingModel ||
+    isRunningOrchestration ||
+    isSwitchingVariant ||
+    activeUserEditMessageId
+  ) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2534,7 +2636,7 @@ function switchUserVariant(messageId, direction) {
 }
 
 function beginUserMessageEdit(messageId) {
-  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant) {
+  if (!messageId || isGenerating || isLoadingModel || isRunningOrchestration || isSwitchingVariant) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2567,7 +2669,14 @@ function cancelUserMessageEdit(messageId) {
 }
 
 function saveUserMessageEdit(messageId) {
-  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId !== messageId) {
+  if (
+    !messageId ||
+    isGenerating ||
+    isLoadingModel ||
+    isRunningOrchestration ||
+    isSwitchingVariant ||
+    activeUserEditMessageId !== messageId
+  ) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2612,7 +2721,14 @@ function saveUserMessageEdit(messageId) {
 }
 
 function branchFromUserMessage(messageId) {
-  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId) {
+  if (
+    !messageId ||
+    isGenerating ||
+    isLoadingModel ||
+    isRunningOrchestration ||
+    isSwitchingVariant ||
+    activeUserEditMessageId
+  ) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2640,7 +2756,7 @@ function branchFromUserMessage(messageId) {
 }
 
 function regenerateFromMessage(messageId) {
-  if (!messageId || isGenerating || isLoadingModel || activeUserEditMessageId) {
+  if (!messageId || isGenerating || isLoadingModel || isRunningOrchestration || activeUserEditMessageId) {
     return;
   }
   if (!modelReady) {
@@ -2675,6 +2791,101 @@ function regenerateFromMessage(messageId) {
   renderTranscript();
   queueConversationStateSave();
   startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
+    parentMessageId: parentUserMessage.id,
+  });
+}
+
+async function runRenameChatOrchestration(conversationId, inputs) {
+  if (
+    !conversationId ||
+    isGenerating ||
+    isLoadingModel ||
+    isRunningOrchestration ||
+    !modelReady
+  ) {
+    return;
+  }
+  const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
+  if (!activeConversation || activeConversation.hasGeneratedName) {
+    return;
+  }
+  isRunningOrchestration = true;
+  updateActionButtons();
+  setStatus('Generating conversation title...');
+  try {
+    const nextName = normalizeConversationName(
+      await runSingleStepOrchestration(RENAME_CHAT_ORCHESTRATION, inputs),
+    );
+    activeConversation.name = nextName || deriveConversationName(activeConversation);
+    activeConversation.hasGeneratedName = true;
+    renderConversationList();
+    updateChatTitle();
+    queueConversationStateSave();
+    setStatus('Conversation title generated.');
+  } catch (error) {
+    activeConversation.name = deriveConversationName(activeConversation);
+    activeConversation.hasGeneratedName = true;
+    renderConversationList();
+    updateChatTitle();
+    queueConversationStateSave();
+    appendDebug(`Rename orchestration failed: ${error.message}`);
+    setStatus('Conversation title generated.');
+  } finally {
+    isRunningOrchestration = false;
+    updateActionButtons();
+  }
+}
+
+function fixResponseFromMessage(messageId) {
+  if (!messageId || isGenerating || isLoadingModel || isRunningOrchestration || activeUserEditMessageId) {
+    return;
+  }
+  if (!modelReady) {
+    setStatus('Please load a model before using Fix.');
+    appendDebug('Fix blocked: model not ready.');
+    if (loadModelButton) {
+      loadModelButton.focus();
+    }
+    return;
+  }
+
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  const targetModelMessage = getMessageNodeById(activeConversation, messageId);
+  if (!targetModelMessage || targetModelMessage.role !== 'model') {
+    return;
+  }
+  if (!targetModelMessage.isResponseComplete) {
+    return;
+  }
+  const parentUserMessage = targetModelMessage.parentId
+    ? getMessageNodeById(activeConversation, targetModelMessage.parentId)
+    : null;
+  if (!parentUserMessage || parentUserMessage.role !== 'user') {
+    setStatus('Unable to fix response: no user message found.');
+    appendDebug('Fix failed: target model message has no preceding user message.');
+    return;
+  }
+
+  let fixPrompt = '';
+  try {
+    fixPrompt = buildOrchestrationPrompt(FIX_RESPONSE_ORCHESTRATION, {
+      userPrompt: parentUserMessage.text || '',
+      assistantResponse: targetModelMessage.response || targetModelMessage.text || '',
+    });
+  } catch (error) {
+    setStatus('Fix orchestration is invalid.');
+    appendDebug(`Fix orchestration error: ${error.message}`);
+    return;
+  }
+
+  activeConversation.activeLeafMessageId = parentUserMessage.id;
+  renderTranscript();
+  queueConversationStateSave();
+  setStatus('Fixing response...');
+  startModelGeneration(activeConversation, fixPrompt, {
     parentMessageId: parentUserMessage.id,
   });
 }
@@ -2871,9 +3082,11 @@ if (chatForm && messageInput && chatTranscript) {
   chatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const value = messageInput.value.trim();
-    if (!value || isGenerating || activeUserEditMessageId) {
+    if (!value || isGenerating || isRunningOrchestration || activeUserEditMessageId) {
       if (activeUserEditMessageId) {
         setStatus('Save or cancel the current message edit before sending a new message.');
+      } else if (isRunningOrchestration) {
+        setStatus('Please wait for the current orchestration step to finish.');
       }
       return;
     }
@@ -2924,6 +3137,11 @@ if (chatTranscript) {
     const regenerateButton = target.closest('.regenerate-response-btn');
     if (regenerateButton instanceof HTMLButtonElement) {
       regenerateFromMessage(regenerateButton.dataset.messageId || '');
+      return;
+    }
+    const fixButton = target.closest('.fix-response-btn');
+    if (fixButton instanceof HTMLButtonElement) {
+      fixResponseFromMessage(fixButton.dataset.messageId || '');
       return;
     }
     const userVariantPrevButton = target.closest('.user-variant-prev');

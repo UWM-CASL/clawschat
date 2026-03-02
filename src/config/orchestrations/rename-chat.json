@@ -1,0 +1,19 @@
+{
+  "id": "rename-chat",
+  "description": "Generate a concise conversation title from the first user/model exchange.",
+  "steps": [
+    {
+      "stepName": "Rename the chat",
+      "prompt": "You create concise chat titles.\nUse the user prompt and model response below.\nReturn a title with 2 to 5 words.\n\nUser prompt:\n{{userPrompt}}\n\nModel response:\n{{assistantResponse}}",
+      "parameters": {
+        "minWords": 2,
+        "maxWords": 5,
+        "maxChars": 64
+      },
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return only the title text. No quotes. No explanation."
+      }
+    }
+  ]
+}

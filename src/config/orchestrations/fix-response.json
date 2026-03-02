@@ -1,0 +1,18 @@
+{
+  "id": "fix-response",
+  "description": "Revise a model response to correct obvious errors while preserving valid content.",
+  "steps": [
+    {
+      "stepName": "Fix the response",
+      "prompt": "You are revising an assistant response.\nCorrect clear factual mistakes, contradictions, or missed constraints from the user prompt.\nKeep what is already correct. Improve clarity only where needed.\nReturn a corrected response only.\n\nUser prompt:\n{{userPrompt}}\n\nCurrent assistant response:\n{{assistantResponse}}",
+      "parameters": {
+        "preserveTone": true,
+        "preserveScope": true
+      },
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return only the revised assistant response. No notes about edits."
+      }
+    }
+  ]
+}
