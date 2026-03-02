@@ -5,10 +5,13 @@
   --surface: #ffffff;
   --surface-elevated: #ffffff;
   --surface-muted: #eef3ff;
-  --border-soft: #d6e0f0;
+  --border-soft: #b9c9e2;
+  --control-bg: #f4f8ff;
+  --control-border: #97abd0;
+  --composer-border: #9fb3d4;
   --ink-muted: #4f5f7e;
   --message-user: #0b84ff;
-  --message-model: #ffffff;
+  --message-model: #edf4ff;
   --ink-strong: #1f2940;
   --focus-ring: #0b84ff;
   --shadow-ambient: 0 10px 24px rgba(31, 41, 64, 0.18);
@@ -24,11 +27,14 @@
   --surface: #111b2f;
   --surface-elevated: #16223b;
   --surface-muted: #243553;
-  --border-soft: #314261;
+  --border-soft: #3d5172;
+  --control-bg: #1a2945;
+  --control-border: #5a7299;
+  --composer-border: #4a6084;
   --ink-strong: #eaf0ff;
   --ink-muted: #b7c6e7;
   --message-user: #2c8eff;
-  --message-model: #1a2945;
+  --message-model: #213456;
   --focus-ring: #7ab2ff;
   --shadow-ambient: 0 14px 30px rgba(3, 9, 20, 0.45);
   --chat-border: #2f4363;
@@ -249,7 +255,7 @@
 
 .composer {
   flex: 0 0 auto;
-  border-top: 1px solid var(--border-soft);
+  border-top: 2px solid var(--composer-border);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
   padding: 0.85rem 1rem 1rem;
 }
@@ -263,9 +269,9 @@
 .composer textarea {
   flex: 1 1 auto;
   resize: none;
-  background: var(--surface-elevated);
+  background: var(--control-bg);
   color: var(--ink-strong);
-  border-color: var(--border-soft);
+  border-color: var(--control-border);
 }
 
 .composer #sendButton {
@@ -300,9 +306,39 @@
 
 .settings-drawer .form-select,
 .settings-drawer .form-check-input {
-  background-color: var(--surface-elevated);
-  border-color: var(--border-soft);
+  background-color: var(--control-bg);
+  border-color: var(--control-border);
   color: var(--ink-strong);
+}
+
+.form-control,
+.form-select,
+.form-check-input,
+.btn-outline-secondary {
+  border-color: var(--control-border);
+}
+
+.form-control,
+.form-select {
+  background-color: var(--control-bg);
+}
+
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--focus-ring) 35%, transparent);
+}
+
+.dropdown-menu {
+  background-color: var(--surface-elevated);
+  border: 1px solid var(--control-border);
+  box-shadow: 0 12px 28px rgba(10, 22, 45, 0.22);
+}
+
+.dropdown-item:focus,
+.dropdown-item:hover {
+  background-color: color-mix(in srgb, var(--surface-muted) 70%, var(--surface-elevated));
 }
 
 .settings-drawer .form-check-input:checked {
