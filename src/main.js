@@ -269,6 +269,10 @@ let isChatTitleEditing = false;
 let isRunningOrchestration = false;
 let isSettingsPageOpen = false;
 let activeSettingsTab = 'system';
+const ROUTE_HOME = 'home';
+const ROUTE_CHAT = 'chat';
+const ROUTE_SETTINGS = 'settings';
+let ignoreNextHashChange = false;
 const loadProgressFiles = new Map();
 
 function initializeTooltips(root = document) {
@@ -2028,6 +2032,70 @@ function setRegionVisibility(region, visible) {
   region.inert = true;
 }
 
+function getRouteFromHash(hashValue = window.location.hash) {
+  const normalized = String(hashValue || '')
+    .replace(/^#\/?/, '')
+    .trim()
+    .toLowerCase();
+  if (normalized === ROUTE_SETTINGS) {
+    return ROUTE_SETTINGS;
+  }
+  if (normalized === ROUTE_CHAT) {
+    return ROUTE_CHAT;
+  }
+  return ROUTE_HOME;
+}
+
+function getCurrentViewRoute() {
+  if (isSettingsPageOpen) {
+    return ROUTE_SETTINGS;
+  }
+  if (modelReady) {
+    return ROUTE_CHAT;
+  }
+  return ROUTE_HOME;
+}
+
+function setRouteHash(targetRoute, { replace = true } = {}) {
+  const route = targetRoute === ROUTE_SETTINGS || targetRoute === ROUTE_CHAT ? targetRoute : ROUTE_HOME;
+  const targetHash = route === ROUTE_HOME ? '#/' : `#/${route}`;
+  if (window.location.hash === targetHash) {
+    return;
+  }
+  if (replace) {
+    window.history.replaceState(null, '', targetHash);
+    return;
+  }
+  ignoreNextHashChange = true;
+  window.location.hash = targetHash;
+}
+
+function syncRouteToCurrentView({ replace = true } = {}) {
+  setRouteHash(getCurrentViewRoute(), { replace });
+}
+
+function applyRouteFromHash() {
+  const requestedRoute = getRouteFromHash();
+  if (requestedRoute === ROUTE_SETTINGS) {
+    if (!modelReady) {
+      setSettingsPageVisibility(false, { syncRoute: false });
+      syncRouteToCurrentView({ replace: true });
+      return;
+    }
+    setSettingsPageVisibility(true, { syncRoute: false });
+    return;
+  }
+
+  setSettingsPageVisibility(false, { syncRoute: false });
+  if (requestedRoute === ROUTE_CHAT && !modelReady) {
+    syncRouteToCurrentView({ replace: true });
+    return;
+  }
+  if (requestedRoute === ROUTE_HOME && modelReady) {
+    syncRouteToCurrentView({ replace: true });
+  }
+}
+
 function setActiveSettingsTab(targetTabName, { focus = false } = {}) {
   const tabName = typeof targetTabName === 'string' ? targetTabName.trim() : '';
   if (!tabName || !settingsTabButtons.length || !settingsTabPanels.length) {
@@ -2069,7 +2137,7 @@ function setActiveSettingsTab(targetTabName, { focus = false } = {}) {
   }
 }
 
-function setSettingsPageVisibility(visible) {
+function setSettingsPageVisibility(visible, { syncRoute = true, replaceRoute = true } = {}) {
   if (!settingsPage || !topBar) {
     return;
   }
@@ -2093,16 +2161,22 @@ function setSettingsPageVisibility(visible) {
     if (topBar instanceof HTMLElement) {
       topBar.setAttribute('aria-label', 'Settings');
     }
+    if (syncRoute) {
+      syncRouteToCurrentView({ replace: replaceRoute });
+    }
     return;
   }
 
   if (topBar) {
     topBar.removeAttribute('aria-label');
   }
-  updateWelcomePanelVisibility();
+  updateWelcomePanelVisibility({ syncRoute: false });
+  if (syncRoute) {
+    syncRouteToCurrentView({ replace: replaceRoute });
+  }
 }
 
-function updateWelcomePanelVisibility() {
+function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } = {}) {
   if (isSettingsPageOpen) {
     return;
   }
@@ -2120,6 +2194,9 @@ function updateWelcomePanelVisibility() {
   }
   updateChatTitleEditorVisibility();
   updateTranscriptNavigationButtonVisibility();
+  if (syncRoute) {
+    syncRouteToCurrentView({ replace: replaceRoute });
+  }
 }
 
 function updateChatTitle() {
@@ -3287,6 +3364,7 @@ showProgressRegion(false);
 updateActionButtons();
 setActiveSettingsTab(activeSettingsTab);
 updateWelcomePanelVisibility();
+applyRouteFromHash();
 void restoreConversationStateFromStorage();
 
 if (settingsTabContainer) {
@@ -3338,7 +3416,7 @@ if (settingsTabContainer) {
 
 if (openSettingsButton) {
   openSettingsButton.addEventListener('click', () => {
-    setSettingsPageVisibility(true);
+    setSettingsPageVisibility(true, { replaceRoute: false });
     if (settingsTabButtons[0] instanceof HTMLButtonElement) {
       settingsTabButtons[0].focus();
     }
@@ -3347,7 +3425,7 @@ if (openSettingsButton) {
 
 if (closeSettingsButton) {
   closeSettingsButton.addEventListener('click', () => {
-    setSettingsPageVisibility(false);
+    setSettingsPageVisibility(false, { replaceRoute: false });
     if (openSettingsButton instanceof HTMLButtonElement) {
       openSettingsButton.focus();
     }
@@ -3359,10 +3437,18 @@ document.addEventListener('keydown', (event) => {
     return;
   }
   event.preventDefault();
-  setSettingsPageVisibility(false);
+  setSettingsPageVisibility(false, { replaceRoute: false });
   if (openSettingsButton instanceof HTMLButtonElement) {
     openSettingsButton.focus();
   }
+});
+
+window.addEventListener('hashchange', () => {
+  if (ignoreNextHashChange) {
+    ignoreNextHashChange = false;
+    return;
+  }
+  applyRouteFromHash();
 });
 
 if (themeSelect) {

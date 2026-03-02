@@ -317,7 +317,7 @@
                   </button>
                 </div>
               </nav>
-              <form class="settings-panels d-flex flex-column gap-3">
+              <form class="settings-panels">
                 <section
                   id="settingsSystemPanel"
                   class="settings-tab-panel"
@@ -326,7 +326,7 @@
                   aria-labelledby="settingsTabSystem"
                 >
                   <h3 class="h6 mb-0" id="settingsSystemHeading">System</h3>
-                  <div>
+                  <div class="settings-control-group">
                     <label class="form-label" for="backendSelect">Backend</label>
                     <select id="backendSelect" class="form-select">
                       <option value="auto" selected>Auto (WebGPU then CPU)</option>
@@ -334,7 +334,7 @@
                       <option value="cpu">CPU only</option>
                     </select>
                   </div>
-                  <div>
+                  <div class="settings-control-group">
                     <label class="form-label" for="themeSelect">Theme</label>
                     <select id="themeSelect" class="form-select">
                       <option value="light" selected>Light</option>
@@ -352,7 +352,7 @@
                     />
                     <label class="form-check-label" for="streamToggle">Stream responses</label>
                   </div>
-                  <div class="accordion" id="debugAccordion">
+                  <div class="accordion settings-accordion" id="debugAccordion">
                     <div class="accordion-item">
                       <h2 class="accordion-header" id="debugAccordionHeading">
                         <button
@@ -388,7 +388,7 @@
                   aria-labelledby="settingsTabModel"
                 >
                   <h3 class="h6 mb-0" id="settingsModelHeading">Model</h3>
-                  <div>
+                  <div class="settings-control-group">
                     <label class="form-label" for="maxOutputTokensInput">Max output tokens</label>
                     <input
                       id="maxOutputTokensInput"
@@ -401,7 +401,7 @@
                     />
                     <p id="maxOutputTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
                   </div>
-                  <div>
+                  <div class="settings-control-group">
                     <label class="form-label" for="maxContextTokensInput">Max context tokens</label>
                     <input
                       id="maxContextTokensInput"
@@ -414,7 +414,7 @@
                     />
                     <p id="maxContextTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
                   </div>
-                  <div>
+                  <div class="settings-control-group">
                     <label class="form-label" for="temperatureInput">Temperature</label>
                     <input
                       id="temperatureInput"

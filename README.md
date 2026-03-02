@@ -7,6 +7,11 @@ Student-facing browser chat UI with local model inference.
 - Inference runs in-browser via Transformers.js inside a Web Worker.
 - On initial load, the app shows only a welcome/setup screen where users select a model and click `Load model`.
 - During model load, setup shows overall progress plus a file-by-file list to make multi-file downloads explicit.
+- The URL hash reflects the visible screen:
+  - `#/` for setup/home
+  - `#/chat` for the chat experience after model load
+  - `#/settings` when Settings is open
+  - Browser back/forward navigation follows those screen transitions.
 - After model load completes, the UI switches from setup to the conversation view.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - If no saved conversations exist, a blank conversation is created and shown after load.
