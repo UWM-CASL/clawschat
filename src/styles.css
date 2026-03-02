@@ -1,18 +1,25 @@
 :root {
   --app-bg: linear-gradient(145deg, #edf4ff 0%, #f8fbff 42%, #ffffff 100%);
-  --panel-bg: rgba(241, 247, 255, 0.95);
+  --panel-bg: linear-gradient(180deg, rgba(226, 237, 255, 0.98) 0%, rgba(236, 244, 255, 0.96) 100%);
   --panel-border: #d3def3;
   --surface: #ffffff;
   --surface-elevated: #ffffff;
+  --main-bg: rgba(255, 255, 255, 0.88);
   --surface-muted: #eef3ff;
   --border-soft: #b9c9e2;
   --control-bg: #f4f8ff;
+  --composer-input-bg: #eaf2ff;
   --control-border: #97abd0;
   --composer-border: #9fb3d4;
   --ink-muted: #4f5f7e;
   --message-user: #0b84ff;
   --message-model: #edf4ff;
   --ink-strong: #1f2940;
+  --action-icon-color: #1b2e56;
+  --action-icon-bg: #ffffff;
+  --action-icon-border: #89a2cd;
+  --action-icon-hover-bg: #dfeaff;
+  --regenerate-accent: #0c67d8;
   --focus-ring: #0b84ff;
   --shadow-ambient: 0 10px 24px rgba(31, 41, 64, 0.18);
   --chat-border: #cfdbef;
@@ -26,15 +33,22 @@
   --panel-border: #2b3854;
   --surface: #111b2f;
   --surface-elevated: #16223b;
+  --main-bg: rgba(17, 27, 47, 0.72);
   --surface-muted: #243553;
   --border-soft: #3d5172;
   --control-bg: #1a2945;
+  --composer-input-bg: #243659;
   --control-border: #5a7299;
   --composer-border: #4a6084;
   --ink-strong: #eaf0ff;
   --ink-muted: #b7c6e7;
   --message-user: #2c8eff;
   --message-model: #213456;
+  --action-icon-color: #eaf0ff;
+  --action-icon-bg: #1d2e4d;
+  --action-icon-border: #607ba7;
+  --action-icon-hover-bg: #2a3f66;
+  --regenerate-accent: #84b7ff;
   --focus-ring: #7ab2ff;
   --shadow-ambient: 0 14px 30px rgba(3, 9, 20, 0.45);
   --chat-border: #2f4363;
@@ -92,9 +106,32 @@
 }
 
 .conversation-delete {
-  padding: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.42rem;
   line-height: 1;
   border-radius: 999px;
+  border: 1px solid var(--action-icon-border);
+  background: var(--action-icon-bg);
+  color: var(--action-icon-color);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.conversation-delete:hover {
+  background: var(--action-icon-hover-bg);
+  border-color: var(--focus-ring);
+}
+
+.conversation-delete:active {
+  transform: scale(0.96);
+}
+
+.conversation-delete:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .main-column {
@@ -104,6 +141,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--main-bg);
 }
 
 .top-bar {
@@ -268,6 +306,16 @@
 
 .response-actions .btn {
   font-size: 0.8rem;
+  color: var(--regenerate-accent);
+  border-color: var(--regenerate-accent);
+  font-weight: 600;
+}
+
+.response-actions .btn:hover,
+.response-actions .btn:focus-visible {
+  color: #fff;
+  background-color: var(--regenerate-accent);
+  border-color: var(--regenerate-accent);
 }
 
 .response-actions .btn .bi,
@@ -298,7 +346,7 @@
 .composer textarea {
   flex: 1 1 auto;
   resize: none;
-  background: var(--control-bg);
+  background: var(--composer-input-bg);
   color: var(--ink-strong);
   border-color: var(--control-border);
 }

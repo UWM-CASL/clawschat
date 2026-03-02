@@ -600,6 +600,9 @@ function coerceStoredMessage(rawMessage, fallbackMessageId) {
     );
     message.hasThinking = Boolean(rawMessage.hasThinking || message.thoughts.trim());
     message.isThinkingComplete = Boolean(rawMessage.isThinkingComplete);
+    message.isResponseComplete = Boolean(
+      rawMessage.isResponseComplete ?? rawMessage.inference?.status?.complete ?? true,
+    );
     message.text = message.response;
   } else {
     message.text = String(rawMessage.inference?.input?.verbatimText || rawMessage.content?.llmRepresentation?.text || message.text);
@@ -774,6 +777,7 @@ function addMessageToConversation(conversation, role, text) {
     message.response = normalizedText;
     message.hasThinking = false;
     message.isThinkingComplete = false;
+    message.isResponseComplete = false;
   }
   conversation.messages.push(message);
   return message;
@@ -827,7 +831,7 @@ function renderConversationList() {
 
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
-    deleteButton.className = 'btn btn-sm btn-link text-danger conversation-delete';
+    deleteButton.className = 'btn btn-sm conversation-delete';
     deleteButton.setAttribute('aria-label', `Delete ${conversation.name} conversation`);
     deleteButton.setAttribute('data-bs-toggle', 'tooltip');
     deleteButton.setAttribute('data-bs-title', 'Delete conversation');
@@ -883,7 +887,7 @@ function addMessageElement(message) {
         <section class="response-actions">
           <button
             type="button"
-            class="btn btn-sm btn-outline-secondary regenerate-response-btn"
+            class="btn btn-sm btn-outline-primary regenerate-response-btn"
             data-message-id="${message.id}"
             aria-label="Regenerate response"
             data-bs-toggle="tooltip"
@@ -895,6 +899,10 @@ function addMessageElement(message) {
         </section>
       </div>
     `;
+    const responseActions = item.querySelector('.response-actions');
+    if (responseActions) {
+      responseActions.classList.toggle('d-none', !message.isResponseComplete);
+    }
     const thinkingRegion = item.querySelector('.thoughts-region');
     const thinkingToggle = item.querySelector('.thinking-toggle');
     const thinkingBody = item.querySelector('.thoughts-content');
@@ -931,6 +939,10 @@ function addMessageElement(message) {
 function updateModelMessageElement(message, item) {
   if (!item || message.role !== 'model') {
     return;
+  }
+  const responseActions = item.querySelector('.response-actions');
+  if (responseActions) {
+    responseActions.classList.toggle('d-none', !message.isResponseComplete);
   }
   setModelBubbleContent(message, item._modelBubbleRefs || null);
 }
@@ -1020,9 +1032,39 @@ function updateRegenerateButtons() {
   const disabled = isLoadingModel || isGenerating || !modelReady;
   chatTranscript.querySelectorAll('.regenerate-response-btn').forEach((button) => {
     if (button instanceof HTMLButtonElement) {
-      button.disabled = disabled;
+      const item = button.closest('.message-row');
+      const messageId = item?.dataset.messageId;
+      const activeConversation = getActiveConversation();
+      const modelMessage = activeConversation?.messages.find(
+        (message) => message.id === messageId && message.role === 'model',
+      );
+      const hideActions = !modelMessage?.isResponseComplete;
+      const responseActions = button.closest('.response-actions');
+      if (responseActions) {
+        responseActions.classList.toggle('d-none', hideActions);
+      }
+      button.disabled = disabled || hideActions;
     }
   });
+}
+
+function markActiveIncompleteModelMessageComplete() {
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  const pendingModelMessage = [...activeConversation.messages]
+    .reverse()
+    .find((message) => message.role === 'model' && !message.isResponseComplete);
+  if (!pendingModelMessage) {
+    return;
+  }
+  pendingModelMessage.isResponseComplete = true;
+  const pendingItem = chatTranscript?.querySelector(`[data-message-id="${pendingModelMessage.id}"]`);
+  if (pendingItem instanceof HTMLElement) {
+    updateModelMessageElement(pendingModelMessage, pendingItem);
+  }
+  queueConversationStateSave();
 }
 
 function updateSendButtonMode() {
@@ -1327,6 +1369,7 @@ function startModelGeneration(activeConversation, prompt) {
         modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
         modelMessage.isThinkingComplete = parsed.isThinkingComplete || (modelMessage.hasThinking && !thinkingTags);
         modelMessage.text = modelMessage.response || '[No output]';
+        modelMessage.isResponseComplete = true;
         updateModelMessageElement(modelMessage, modelBubbleItem);
         scrollTranscriptToBottom();
 
@@ -1349,6 +1392,7 @@ function startModelGeneration(activeConversation, prompt) {
         modelMessage.thoughts = '';
         modelMessage.hasThinking = false;
         modelMessage.isThinkingComplete = false;
+        modelMessage.isResponseComplete = true;
         updateModelMessageElement(modelMessage, modelBubbleItem);
         scrollTranscriptToBottom();
         isGenerating = false;
@@ -1365,6 +1409,7 @@ function startModelGeneration(activeConversation, prompt) {
     modelMessage.thoughts = '';
     modelMessage.hasThinking = false;
     modelMessage.isThinkingComplete = false;
+    modelMessage.isResponseComplete = true;
     updateModelMessageElement(modelMessage, modelBubbleItem);
     scrollTranscriptToBottom();
     isGenerating = false;
@@ -1580,6 +1625,7 @@ if (sendButton) {
       setStatus(`Error: ${error.message}`);
       appendDebug(`Cancel failed: ${error.message}`);
     } finally {
+      markActiveIncompleteModelMessageComplete();
       isGenerating = false;
       updateActionButtons();
       applyPendingGenerationSettingsIfReady();
