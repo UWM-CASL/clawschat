@@ -43,6 +43,11 @@ Student-facing browser chat UI with local model inference.
 - Each user message and model response includes a copy action; model response copy excludes thought text.
 - The Thinking section includes a dedicated copy action to copy thoughts only.
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.
+- Each user message now supports branch-aware editing controls:
+  - `Edit` opens inline editing for that user message.
+  - `Save` (floppy icon) commits the edit and removes all later turns on that branch from that point forward.
+  - `Branch` (terminal-split icon) creates a sibling user-message branch at that turn, then opens edit mode for the new branch.
+  - If multiple user branches exist at the same turn, left/right controls and an `x/y` indicator let users switch between those branch variants.
 
 ## Supported model
 

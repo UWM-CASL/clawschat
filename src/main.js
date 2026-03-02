@@ -225,6 +225,7 @@ let pendingGenerationConfig = null;
 let conversationSaveTimerId = null;
 let showThinkingByDefault = false;
 let isSwitchingVariant = false;
+let activeUserEditMessageId = null;
 const loadProgressFiles = new Map();
 
 function initializeTooltips(root = document) {
@@ -979,6 +980,54 @@ function isMessageDescendantOf(conversation, messageId, ancestorId) {
   return false;
 }
 
+function pruneDescendantsFromMessage(conversation, messageId) {
+  if (!conversation || !messageId) {
+    return 0;
+  }
+  const rootMessage = getMessageNodeById(conversation, messageId);
+  if (!rootMessage) {
+    return 0;
+  }
+  const idsToRemove = new Set();
+  const stack = Array.isArray(rootMessage.childIds) ? [...rootMessage.childIds] : [];
+  while (stack.length) {
+    const candidateId = stack.pop();
+    if (!candidateId || idsToRemove.has(candidateId)) {
+      continue;
+    }
+    const candidateMessage = getMessageNodeById(conversation, candidateId);
+    if (!candidateMessage) {
+      continue;
+    }
+    idsToRemove.add(candidateId);
+    (candidateMessage.childIds || []).forEach((childId) => {
+      if (!idsToRemove.has(childId)) {
+        stack.push(childId);
+      }
+    });
+  }
+  if (!idsToRemove.size) {
+    return 0;
+  }
+  conversation.messageNodes = conversation.messageNodes.filter((message) => !idsToRemove.has(message.id));
+  conversation.messageNodes.forEach((message) => {
+    message.childIds = Array.isArray(message.childIds)
+      ? message.childIds.filter((childId) => !idsToRemove.has(childId))
+      : [];
+  });
+  rootMessage.childIds = [];
+  if (idsToRemove.has(conversation.activeLeafMessageId)) {
+    conversation.activeLeafMessageId = rootMessage.id;
+  }
+  if (idsToRemove.has(conversation.lastSpokenLeafMessageId)) {
+    conversation.lastSpokenLeafMessageId = rootMessage.id;
+  }
+  if (activeUserEditMessageId && idsToRemove.has(activeUserEditMessageId)) {
+    activeUserEditMessageId = null;
+  }
+  return idsToRemove.size;
+}
+
 function parseMessageSequenceFromNodeId(nodeId) {
   const sequence = parseMessageNodeCounterFromId(nodeId);
   return Number.isInteger(sequence) && sequence > 0 ? sequence : 0;
@@ -1035,9 +1084,41 @@ function getModelSiblingMessages(conversation, modelMessage) {
     .filter((child) => child?.role === 'model');
 }
 
+function getUserSiblingMessages(conversation, userMessage) {
+  if (!conversation || !userMessage || userMessage.role !== 'user') {
+    return [];
+  }
+  if (!userMessage.parentId) {
+    return conversation.messageNodes.filter(
+      (candidate) => candidate?.role === 'user' && !candidate.parentId,
+    );
+  }
+  const parentMessage = getMessageNodeById(conversation, userMessage.parentId);
+  if (!parentMessage || parentMessage.role !== 'model') {
+    return [];
+  }
+  return (parentMessage.childIds || [])
+    .map((childId) => getMessageNodeById(conversation, childId))
+    .filter((child) => child?.role === 'user');
+}
+
 function getModelVariantState(conversation, modelMessage) {
   const siblings = getModelSiblingMessages(conversation, modelMessage);
   const index = siblings.findIndex((candidate) => candidate.id === modelMessage.id);
+  const total = siblings.length;
+  return {
+    siblings,
+    index,
+    total,
+    hasVariants: total > 1,
+    canGoPrev: index > 0,
+    canGoNext: index >= 0 && index < total - 1,
+  };
+}
+
+function getUserVariantState(conversation, userMessage) {
+  const siblings = getUserSiblingMessages(conversation, userMessage);
+  const index = siblings.findIndex((candidate) => candidate.id === userMessage.id);
   const total = siblings.length;
   return {
     siblings,
@@ -1309,13 +1390,66 @@ function addMessageElement(message, options = {}) {
     }
     applyVariantCardSignals(item, variantState);
   } else {
+    const activeConversation = getActiveConversation();
+    const variantState = getUserVariantState(activeConversation, message);
+    const variantLabel = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
+    const isEditing = activeUserEditMessageId === message.id;
     item.innerHTML = `
       <p class="message-speaker">${message.speaker}</p>
       <p class="message-bubble mb-0"></p>
+      <textarea
+        class="form-control user-message-editor${isEditing ? '' : ' d-none'}"
+        rows="3"
+        aria-label="Edit user message"
+      ></textarea>
       <section class="message-actions">
         <button
           type="button"
-          class="btn btn-sm btn-outline-primary copy-message-btn"
+          class="btn btn-sm btn-outline-primary edit-user-message-btn${isEditing ? ' d-none' : ''}"
+          data-message-id="${message.id}"
+          aria-label="Edit message"
+          data-bs-toggle="tooltip"
+          data-bs-title="Edit message"
+        >
+          <i class="bi bi-pencil-fill" aria-hidden="true"></i>
+          <span class="visually-hidden">Edit message</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary save-user-message-btn${isEditing ? '' : ' d-none'}"
+          data-message-id="${message.id}"
+          aria-label="Save edited message"
+          data-bs-toggle="tooltip"
+          data-bs-title="Save edited message"
+        >
+          <i class="bi bi-floppy-fill" aria-hidden="true"></i>
+          <span class="visually-hidden">Save edited message</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary cancel-user-edit-btn${isEditing ? '' : ' d-none'}"
+          data-message-id="${message.id}"
+          aria-label="Cancel editing message"
+          data-bs-toggle="tooltip"
+          data-bs-title="Cancel editing"
+        >
+          <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
+          <span class="visually-hidden">Cancel editing</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary branch-user-message-btn${isEditing ? ' d-none' : ''}"
+          data-message-id="${message.id}"
+          aria-label="Branch from this user message"
+          data-bs-toggle="tooltip"
+          data-bs-title="Branch conversation"
+        >
+          <i class="bi bi-terminal-split" aria-hidden="true"></i>
+          <span class="visually-hidden">Branch conversation</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary copy-message-btn${isEditing ? ' d-none' : ''}"
           data-message-id="${message.id}"
           aria-label="Copy message"
           data-copy-type="message"
@@ -1325,11 +1459,88 @@ function addMessageElement(message, options = {}) {
           <i class="bi bi-copy" aria-hidden="true"></i>
           <span class="visually-hidden">Copy message</span>
         </button>
+        <div class="response-variant-nav user-variant-nav${variantState.hasVariants && !isEditing ? '' : ' d-none'}">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary user-variant-prev"
+            data-message-id="${message.id}"
+            aria-label="Previous user branch"
+            data-bs-toggle="tooltip"
+            data-bs-title="Previous user branch"
+            ${variantState.canGoPrev ? '' : 'disabled'}
+          >
+            <i class="bi bi-arrow-bar-left" aria-hidden="true"></i>
+            <span class="visually-hidden">Previous user branch</span>
+          </button>
+          <p class="response-variant-status user-variant-status mb-0" aria-live="off">${variantLabel}</p>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary user-variant-next"
+            data-message-id="${message.id}"
+            aria-label="Next user branch"
+            data-bs-toggle="tooltip"
+            data-bs-title="Next user branch"
+            ${variantState.canGoNext ? '' : 'disabled'}
+          >
+            <i class="bi bi-arrow-bar-right" aria-hidden="true"></i>
+            <span class="visually-hidden">Next user branch</span>
+          </button>
+        </div>
       </section>
     `;
     const bubble = item.querySelector('.message-bubble');
-    if (bubble) {
-      bubble.textContent = message.text;
+    const editor = item.querySelector('.user-message-editor');
+    const editButton = item.querySelector('.edit-user-message-btn');
+    const saveButton = item.querySelector('.save-user-message-btn');
+    const cancelButton = item.querySelector('.cancel-user-edit-btn');
+    const branchButton = item.querySelector('.branch-user-message-btn');
+    const copyButton = item.querySelector('.copy-message-btn');
+    const variantNav = item.querySelector('.user-variant-nav');
+    const variantLabelElement = item.querySelector('.user-variant-status');
+    const variantPrev = item.querySelector('.user-variant-prev');
+    const variantNext = item.querySelector('.user-variant-next');
+    if (
+      bubble &&
+      editor instanceof HTMLTextAreaElement &&
+      editButton instanceof HTMLButtonElement &&
+      saveButton instanceof HTMLButtonElement &&
+      cancelButton instanceof HTMLButtonElement &&
+      branchButton instanceof HTMLButtonElement &&
+      copyButton instanceof HTMLButtonElement
+    ) {
+      editor.value = message.text || '';
+      editor.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          cancelUserMessageEdit(message.id);
+          return;
+        }
+        if (
+          (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) ||
+          (event.key === 'Enter' && event.altKey)
+        ) {
+          event.preventDefault();
+          saveUserMessageEdit(message.id);
+        }
+      });
+      editor.addEventListener('input', () => {
+        const isCurrentEdit = activeUserEditMessageId === message.id;
+        saveButton.disabled = !isCurrentEdit || !editor.value.trim();
+      });
+      item._userBubbleRefs = {
+        bubble,
+        editor,
+        editButton,
+        saveButton,
+        cancelButton,
+        branchButton,
+        copyButton,
+        variantNav,
+        variantLabel: variantLabelElement,
+        variantPrev,
+        variantNext,
+      };
+      updateUserMessageElement(message, item);
     }
   }
   chatTranscript.appendChild(item);
@@ -1369,6 +1580,52 @@ function updateModelMessageElement(message, item) {
   }
   applyVariantCardSignals(item, variantState);
   setModelBubbleContent(message, item._modelBubbleRefs || null);
+}
+
+function updateUserMessageElement(message, item) {
+  if (!item || message.role !== 'user') {
+    return;
+  }
+  item._userMessage = message;
+  const refs = item._userBubbleRefs || null;
+  if (!refs) {
+    return;
+  }
+  refs.bubble.textContent = message.text || '';
+  const activeConversation = getActiveConversation();
+  const variantState = getUserVariantState(activeConversation, message);
+  const isEditing = activeUserEditMessageId === message.id;
+  const controlsDisabled =
+    isLoadingModel ||
+    isGenerating ||
+    isSwitchingVariant ||
+    Boolean(activeUserEditMessageId && !isEditing);
+  refs.bubble.classList.toggle('d-none', isEditing);
+  refs.editor.classList.toggle('d-none', !isEditing);
+  refs.editor.disabled = controlsDisabled;
+  refs.editButton.classList.toggle('d-none', isEditing);
+  refs.branchButton.classList.toggle('d-none', isEditing);
+  refs.copyButton.classList.toggle('d-none', isEditing);
+  refs.saveButton.classList.toggle('d-none', !isEditing);
+  refs.cancelButton.classList.toggle('d-none', !isEditing);
+  refs.editButton.disabled = controlsDisabled;
+  refs.branchButton.disabled = controlsDisabled;
+  refs.copyButton.disabled = controlsDisabled;
+  refs.saveButton.disabled = controlsDisabled || !refs.editor.value.trim();
+  refs.cancelButton.disabled = controlsDisabled;
+  if (refs.variantNav) {
+    refs.variantNav.classList.toggle('d-none', !variantState.hasVariants || isEditing);
+  }
+  if (refs.variantLabel) {
+    refs.variantLabel.textContent = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
+  }
+  if (refs.variantPrev instanceof HTMLButtonElement) {
+    refs.variantPrev.disabled = controlsDisabled || !variantState.canGoPrev || isEditing;
+  }
+  if (refs.variantNext instanceof HTMLButtonElement) {
+    refs.variantNext.disabled = controlsDisabled || !variantState.canGoNext || isEditing;
+  }
+  applyVariantCardSignals(item, variantState);
 }
 
 function scrollTranscriptToBottom() {
@@ -1510,6 +1767,7 @@ function setActiveConversationById(conversationId) {
   ) {
     activeConversation.activeLeafMessageId = activeConversation.lastSpokenLeafMessageId;
   }
+  activeUserEditMessageId = null;
   renderConversationList();
   renderTranscript();
   updateChatTitle();
@@ -1530,7 +1788,7 @@ function updateActionButtons() {
   updateSendButtonMode();
   updateGenerationSettingsEnabledState();
   if (sendButton) {
-    sendButton.disabled = isLoadingModel || (!isGenerating && !modelReady);
+    sendButton.disabled = isLoadingModel || (!isGenerating && !modelReady) || Boolean(activeUserEditMessageId);
   }
   if (loadModelButton) {
     loadModelButton.disabled = isGenerating || isLoadingModel;
@@ -1539,13 +1797,14 @@ function updateActionButtons() {
     newConversationBtn.disabled = isGenerating;
   }
   updateRegenerateButtons();
+  updateUserMessageButtons();
 }
 
 function updateRegenerateButtons() {
   if (!chatTranscript) {
     return;
   }
-  const disabled = isLoadingModel || isGenerating || isSwitchingVariant || !modelReady;
+  const disabled = isLoadingModel || isGenerating || isSwitchingVariant || !modelReady || Boolean(activeUserEditMessageId);
   chatTranscript.querySelectorAll('.regenerate-response-btn').forEach((button) => {
     if (button instanceof HTMLButtonElement) {
       const item = button.closest('.message-row');
@@ -1578,6 +1837,26 @@ function updateRegenerateButtons() {
         nextButton.disabled = disabled || hideActions || !variantState.canGoNext;
       }
     }
+  });
+}
+
+function updateUserMessageButtons() {
+  if (!chatTranscript) {
+    return;
+  }
+  chatTranscript.querySelectorAll('.message-row.user-message').forEach((item) => {
+    if (!(item instanceof HTMLElement)) {
+      return;
+    }
+    const messageId = item.dataset.messageId;
+    const activeConversation = getActiveConversation();
+    const userMessage = activeConversation?.messageNodes.find(
+      (message) => message.id === messageId && message.role === 'user',
+    );
+    if (!userMessage) {
+      return;
+    }
+    updateUserMessageElement(userMessage, item);
   });
 }
 
@@ -2098,7 +2377,7 @@ function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction) {
 }
 
 function switchModelVariant(messageId, direction) {
-  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant) {
+  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2128,8 +2407,137 @@ function switchModelVariant(messageId, direction) {
   animateVariantSwitch(modelMessage.id, targetMessage.id, direction);
 }
 
+function switchUserVariant(messageId, direction) {
+  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  const userMessage = getMessageNodeById(activeConversation, messageId);
+  if (!userMessage || userMessage.role !== 'user') {
+    return;
+  }
+  const variantState = getUserVariantState(activeConversation, userMessage);
+  if (!variantState.hasVariants) {
+    return;
+  }
+  const targetIndex = variantState.index + direction;
+  if (targetIndex < 0 || targetIndex >= variantState.total) {
+    return;
+  }
+  const targetMessage = variantState.siblings[targetIndex];
+  if (!targetMessage) {
+    return;
+  }
+  const targetLeafId = findPreferredLeafForVariant(activeConversation, targetMessage);
+  isSwitchingVariant = true;
+  activeConversation.activeLeafMessageId = targetLeafId || targetMessage.id;
+  updateActionButtons();
+  animateVariantSwitch(userMessage.id, targetMessage.id, direction);
+}
+
+function beginUserMessageEdit(messageId) {
+  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  const userMessage = getMessageNodeById(activeConversation, messageId);
+  if (!userMessage || userMessage.role !== 'user') {
+    return;
+  }
+  activeConversation.activeLeafMessageId = findPreferredLeafForVariant(activeConversation, userMessage) || userMessage.id;
+  activeUserEditMessageId = messageId;
+  renderTranscript({ scrollToBottom: false });
+  updateActionButtons();
+  const editor = chatTranscript?.querySelector(`[data-message-id="${messageId}"] .user-message-editor`);
+  if (editor instanceof HTMLTextAreaElement) {
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+  }
+}
+
+function cancelUserMessageEdit(messageId) {
+  if (!activeUserEditMessageId || (messageId && activeUserEditMessageId !== messageId)) {
+    return;
+  }
+  activeUserEditMessageId = null;
+  renderTranscript({ scrollToBottom: false });
+  updateActionButtons();
+  setStatus('Edit canceled.');
+}
+
+function saveUserMessageEdit(messageId) {
+  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId !== messageId) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  const userMessage = getMessageNodeById(activeConversation, messageId);
+  if (!userMessage || userMessage.role !== 'user') {
+    return;
+  }
+  const editor = chatTranscript?.querySelector(`[data-message-id="${messageId}"] .user-message-editor`);
+  if (!(editor instanceof HTMLTextAreaElement)) {
+    return;
+  }
+  const nextText = editor.value.trim();
+  if (!nextText) {
+    setStatus('Message text cannot be empty.');
+    editor.focus();
+    return;
+  }
+  userMessage.text = nextText;
+  const removedCount = pruneDescendantsFromMessage(activeConversation, userMessage.id);
+  activeConversation.activeLeafMessageId = userMessage.id;
+  activeConversation.lastSpokenLeafMessageId = userMessage.id;
+  activeUserEditMessageId = null;
+  renderTranscript();
+  updateActionButtons();
+  queueConversationStateSave();
+  setStatus(
+    removedCount > 0
+      ? 'Message saved. Later turns were removed from this branch.'
+      : 'Message saved.',
+  );
+}
+
+function branchFromUserMessage(messageId) {
+  if (!messageId || isGenerating || isLoadingModel || isSwitchingVariant || activeUserEditMessageId) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  const userMessage = getMessageNodeById(activeConversation, messageId);
+  if (!userMessage || userMessage.role !== 'user') {
+    return;
+  }
+  const branchMessage = addMessageToConversation(activeConversation, 'user', userMessage.text, {
+    parentId: userMessage.parentId || null,
+  });
+  activeConversation.lastSpokenLeafMessageId = branchMessage.id;
+  activeUserEditMessageId = branchMessage.id;
+  renderTranscript({ scrollToBottom: false });
+  updateActionButtons();
+  queueConversationStateSave();
+  const editor = chatTranscript?.querySelector(`[data-message-id="${branchMessage.id}"] .user-message-editor`);
+  if (editor instanceof HTMLTextAreaElement) {
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+  }
+  setStatus('User branch created. Edit and save to define this timeline.');
+}
+
 function regenerateFromMessage(messageId) {
-  if (!messageId || isGenerating || isLoadingModel) {
+  if (!messageId || isGenerating || isLoadingModel || activeUserEditMessageId) {
     return;
   }
   if (!modelReady) {
@@ -2267,6 +2675,7 @@ if (newConversationBtn) {
     const conversation = createConversation();
     conversations.unshift(conversation);
     activeConversationId = conversation.id;
+    activeUserEditMessageId = null;
     renderConversationList();
     renderTranscript();
     updateChatTitle();
@@ -2308,6 +2717,7 @@ if (conversationList) {
 
       if (wasActive) {
         activeConversationId = conversations[0].id;
+        activeUserEditMessageId = null;
       }
       renderConversationList();
       renderTranscript();
@@ -2356,7 +2766,10 @@ if (chatForm && messageInput && chatTranscript) {
   chatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const value = messageInput.value.trim();
-    if (!value || isGenerating) {
+    if (!value || isGenerating || activeUserEditMessageId) {
+      if (activeUserEditMessageId) {
+        setStatus('Save or cancel the current message edit before sending a new message.');
+      }
       return;
     }
 
@@ -2406,6 +2819,36 @@ if (chatTranscript) {
     const regenerateButton = target.closest('.regenerate-response-btn');
     if (regenerateButton instanceof HTMLButtonElement) {
       regenerateFromMessage(regenerateButton.dataset.messageId || '');
+      return;
+    }
+    const userVariantPrevButton = target.closest('.user-variant-prev');
+    if (userVariantPrevButton instanceof HTMLButtonElement) {
+      switchUserVariant(userVariantPrevButton.dataset.messageId || '', -1);
+      return;
+    }
+    const userVariantNextButton = target.closest('.user-variant-next');
+    if (userVariantNextButton instanceof HTMLButtonElement) {
+      switchUserVariant(userVariantNextButton.dataset.messageId || '', 1);
+      return;
+    }
+    const editUserButton = target.closest('.edit-user-message-btn');
+    if (editUserButton instanceof HTMLButtonElement) {
+      beginUserMessageEdit(editUserButton.dataset.messageId || '');
+      return;
+    }
+    const saveUserButton = target.closest('.save-user-message-btn');
+    if (saveUserButton instanceof HTMLButtonElement) {
+      saveUserMessageEdit(saveUserButton.dataset.messageId || '');
+      return;
+    }
+    const cancelUserEditButton = target.closest('.cancel-user-edit-btn');
+    if (cancelUserEditButton instanceof HTMLButtonElement) {
+      cancelUserMessageEdit(cancelUserEditButton.dataset.messageId || '');
+      return;
+    }
+    const branchUserButton = target.closest('.branch-user-message-btn');
+    if (branchUserButton instanceof HTMLButtonElement) {
+      branchFromUserMessage(branchUserButton.dataset.messageId || '');
       return;
     }
     const copyButton = target.closest('.copy-message-btn, .thoughts-copy-btn');

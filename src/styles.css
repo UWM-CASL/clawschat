@@ -481,6 +481,13 @@
   margin-top: 0.55rem;
 }
 
+.user-message-editor {
+  margin-top: 0.55rem;
+  background: var(--surface);
+  color: var(--ink-strong);
+  border-color: var(--control-border);
+}
+
 .message-actions .btn {
   font-size: 0.8rem;
   color: var(--regenerate-accent);
