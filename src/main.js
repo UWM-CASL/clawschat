@@ -181,6 +181,9 @@ const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
 const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
 const MATHJAX_TYPESET_DEBOUNCE_MS = 150;
 const MATH_DELIMITER_PATTERN = /(^|[^\\])(\$\$|\$|\\\(|\\\[|\\begin\{)/;
+const MATH_BLOCK_LINE_PATTERN = /(^|\n)\[\s*\n([\s\S]*?)\n\](?=\n|$)/g;
+const MATH_DISPLAY_DELIMITER_PATTERN = /\\\[([\s\S]*?)\\\]/g;
+const MATH_INLINE_DELIMITER_PATTERN = /\\\(([\s\S]*?)\\\)/g;
 
 window.MathJax = window.MathJax || {};
 window.MathJax.tex = {
@@ -386,11 +389,21 @@ function formatInteger(value) {
 }
 
 function renderModelMarkdown(content) {
-  const normalizedContent = String(content || '');
+  const normalizedContent = normalizeMathDelimitersForMarkdown(String(content || ''));
   if (!normalizedContent) {
     return '';
   }
   return markdown.render(normalizedContent);
+}
+
+function normalizeMathDelimitersForMarkdown(content) {
+  if (!content) {
+    return '';
+  }
+  return content
+    .replace(MATH_DISPLAY_DELIMITER_PATTERN, (_match, expression) => `\n$$\n${expression}\n$$\n`)
+    .replace(MATH_INLINE_DELIMITER_PATTERN, (_match, expression) => `$${expression}$`)
+    .replace(MATH_BLOCK_LINE_PATTERN, (_match, leading, expression) => `${leading}$$\n${expression}\n$$`);
 }
 
 function containsMathDelimiters(text) {
