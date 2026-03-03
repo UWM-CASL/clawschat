@@ -56,6 +56,11 @@ Student-facing browser chat UI with local model inference.
 - `Settings -> Conversation -> Default system prompt` sets an optional system prompt for newly created conversations only.
   - Existing conversations are not retroactively changed.
   - New generations in a conversation use that conversation's captured system prompt.
+- Conversation header includes `Edit conversation system prompt` (card-checklist icon, before download):
+  - Set optional per-conversation instructions.
+  - `Append after default prompt` is enabled by default; when enabled, the conversation prompt is appended after the conversation's captured default prompt.
+  - When `Append after default prompt` is disabled, the conversation prompt replaces the conversation's captured default prompt.
+  - The captured default prompt for a conversation does not change after that conversation is created.
 - Each user message and model response includes a copy action; model response copy excludes thought text.
 - The Thinking section includes a dedicated copy action to copy thoughts only.
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.

@@ -1,6 +1,7 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
+import Modal from 'bootstrap/js/dist/modal';
 import Tooltip from 'bootstrap/js/dist/tooltip';
 import MarkdownIt from 'markdown-it';
 import './styles.css';
@@ -290,12 +291,19 @@ const onboardingStatusRegion = document.getElementById('onboardingStatusRegion')
 const chatTitle = document.getElementById('chatTitle');
 const chatTitleInput = document.getElementById('chatTitleInput');
 const editChatTitleBtn = document.getElementById('editChatTitleBtn');
+const editConversationSystemPromptBtn = document.getElementById('editConversationSystemPromptBtn');
 const downloadConversationMenu = document.getElementById('downloadConversationMenu');
 const downloadConversationBtn = document.getElementById('downloadConversationBtn');
 const downloadConversationJsonBtn = document.getElementById('downloadConversationJsonBtn');
 const downloadConversationMarkdownBtn = document.getElementById('downloadConversationMarkdownBtn');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
+const conversationSystemPromptModal = document.getElementById('conversationSystemPromptModal');
+const conversationSystemPromptInput = document.getElementById('conversationSystemPromptInput');
+const conversationSystemPromptAppendToggle = document.getElementById(
+  'conversationSystemPromptAppendToggle',
+);
+const saveConversationSystemPromptBtn = document.getElementById('saveConversationSystemPromptBtn');
 const openSettingsButton = document.getElementById('openSettingsButton');
 const closeSettingsButton = document.getElementById('closeSettingsButton');
 const settingsPage = document.getElementById('settingsPage');
@@ -344,6 +352,7 @@ let isChatTitleEditing = false;
 let isRunningOrchestration = false;
 let isSettingsPageOpen = false;
 let activeSettingsTab = 'system';
+let conversationSystemPromptModalInstance = null;
 const ROUTE_HOME = 'home';
 const ROUTE_CHAT = 'chat';
 const ROUTE_SETTINGS = 'settings';
@@ -834,6 +843,13 @@ function buildConversationStateSnapshot() {
           typeof conversation.systemPrompt === 'string' && conversation.systemPrompt.trim()
             ? conversation.systemPrompt
             : undefined,
+        conversationSystemPrompt:
+          typeof conversation.conversationSystemPrompt === 'string' &&
+          conversation.conversationSystemPrompt.trim()
+            ? conversation.conversationSystemPrompt
+            : undefined,
+        appendConversationSystemPrompt:
+          conversation.appendConversationSystemPrompt === false ? false : undefined,
         startedAt: normalizeTimestamp(conversation.startedAt),
         hasGeneratedName: Boolean(conversation.hasGeneratedName),
         artifacts: [],
@@ -961,6 +977,10 @@ function applyStoredConversationState(rawState) {
           : `conversation-${conversationIndex + 1}`;
       const name = normalizeConversationName(rawConversation.name) || `${UNTITLED_CONVERSATION_PREFIX} ${conversationIndex + 1}`;
       const systemPrompt = normalizeSystemPrompt(rawConversation.systemPrompt);
+      const conversationSystemPrompt = normalizeSystemPrompt(rawConversation.conversationSystemPrompt);
+      const appendConversationSystemPrompt = normalizeConversationPromptMode(
+        rawConversation.appendConversationSystemPrompt,
+      );
       const rawMessageNodes = Array.isArray(rawConversation.messageNodes) ? rawConversation.messageNodes : [];
       const hasNodeSchema = rawMessageNodes.length > 0;
       const rawMessages = hasNodeSchema
@@ -1046,6 +1066,8 @@ function applyStoredConversationState(rawState) {
         id,
         name,
         systemPrompt,
+        conversationSystemPrompt,
+        appendConversationSystemPrompt,
         startedAt,
         messageNodes,
         messageNodeCounter,
@@ -1110,6 +1132,8 @@ function createConversation(name) {
     id: `conversation-${++conversationIdCounter}`,
     name: name || `${UNTITLED_CONVERSATION_PREFIX} ${conversationCount}`,
     systemPrompt: defaultSystemPrompt,
+    conversationSystemPrompt: '',
+    appendConversationSystemPrompt: true,
     startedAt: Date.now(),
     messageNodes: [],
     messageNodeCounter: 0,
@@ -1554,7 +1578,7 @@ function applyFixCardSignals(item, message) {
 function buildPromptForConversationLeaf(conversation, leafMessageId = conversation?.activeLeafMessageId) {
   return buildConversationPrompt(
     getConversationPathMessages(conversation, leafMessageId),
-    conversation?.systemPrompt,
+    getEffectiveConversationSystemPrompt(conversation),
   );
 }
 
@@ -2206,6 +2230,7 @@ function updateChatTitleEditorVisibility() {
     !chatTitle ||
     !chatTitleInput ||
     !editChatTitleBtn ||
+    !editConversationSystemPromptBtn ||
     !downloadConversationMenu ||
     !downloadConversationBtn ||
     !downloadConversationJsonBtn ||
@@ -2221,17 +2246,20 @@ function updateChatTitleEditorVisibility() {
     (message) => message?.role === 'model' && Boolean(message.isResponseComplete),
   );
   const canEditTitle = modelReady && Boolean(activeConversation?.hasGeneratedName);
+  const canEditConversationSystemPrompt = modelReady && Boolean(activeConversation);
   const canDownloadConversation = modelReady && hasCompletedGeneration;
   const controlsDisabled = isGenerating || isLoadingModel || isRunningOrchestration;
   const showEditor = canEditTitle && isChatTitleEditing;
   chatTitle.classList.toggle('d-none', showEditor);
   chatTitleInput.classList.toggle('d-none', !showEditor);
   editChatTitleBtn.classList.toggle('d-none', !canEditTitle || showEditor);
+  editConversationSystemPromptBtn.classList.toggle('d-none', !canEditConversationSystemPrompt);
   downloadConversationMenu.classList.toggle('d-none', !canDownloadConversation);
   saveChatTitleBtn.classList.toggle('d-none', !showEditor);
   cancelChatTitleBtn.classList.toggle('d-none', !showEditor);
   chatTitleInput.disabled = !showEditor || controlsDisabled;
   editChatTitleBtn.disabled = controlsDisabled;
+  editConversationSystemPromptBtn.disabled = controlsDisabled || !canEditConversationSystemPrompt;
   downloadConversationBtn.disabled = controlsDisabled || !canDownloadConversation;
   downloadConversationJsonBtn.disabled = controlsDisabled || !canDownloadConversation;
   downloadConversationMarkdownBtn.disabled = controlsDisabled || !canDownloadConversation;
@@ -2272,7 +2300,7 @@ function buildConversationDownloadPayload(conversation) {
     temperature,
     exchanges,
   };
-  const systemPrompt = normalizeSystemPrompt(conversation?.systemPrompt);
+  const systemPrompt = normalizeSystemPrompt(getEffectiveConversationSystemPrompt(conversation));
   if (systemPrompt) {
     payload.systemPrompt = systemPrompt;
   }
@@ -2368,6 +2396,63 @@ function downloadActiveConversationBranchAsMarkdown() {
   document.body.removeChild(anchor);
   window.URL.revokeObjectURL(url);
   setStatus('Conversation downloaded as Markdown.');
+}
+
+function getConversationSystemPromptModalInstance() {
+  if (!(conversationSystemPromptModal instanceof HTMLElement)) {
+    return null;
+  }
+  if (!conversationSystemPromptModalInstance) {
+    conversationSystemPromptModalInstance = Modal.getOrCreateInstance(conversationSystemPromptModal);
+  }
+  return conversationSystemPromptModalInstance;
+}
+
+function beginConversationSystemPromptEdit() {
+  if (
+    isGenerating ||
+    isLoadingModel ||
+    isRunningOrchestration ||
+    !(conversationSystemPromptInput instanceof HTMLTextAreaElement) ||
+    !(conversationSystemPromptAppendToggle instanceof HTMLInputElement)
+  ) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  conversationSystemPromptInput.value = normalizeSystemPrompt(
+    activeConversation.conversationSystemPrompt,
+  );
+  conversationSystemPromptAppendToggle.checked = normalizeConversationPromptMode(
+    activeConversation.appendConversationSystemPrompt,
+  );
+  const modalInstance = getConversationSystemPromptModalInstance();
+  if (modalInstance) {
+    modalInstance.show();
+  }
+}
+
+function saveConversationSystemPromptEdit() {
+  if (
+    !(conversationSystemPromptInput instanceof HTMLTextAreaElement) ||
+    !(conversationSystemPromptAppendToggle instanceof HTMLInputElement)
+  ) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return;
+  }
+  activeConversation.conversationSystemPrompt = normalizeSystemPrompt(conversationSystemPromptInput.value);
+  activeConversation.appendConversationSystemPrompt = Boolean(conversationSystemPromptAppendToggle.checked);
+  queueConversationStateSave();
+  setStatus('Conversation system prompt saved.');
+  const modalInstance = getConversationSystemPromptModalInstance();
+  if (modalInstance) {
+    modalInstance.hide();
+  }
 }
 
 function beginChatTitleEdit() {
@@ -2993,6 +3078,26 @@ function getStoredShowThinkingPreference() {
 function normalizeSystemPrompt(value) {
   const text = String(value ?? '').trim();
   return text ? text.replace(/\r\n?/g, '\n') : '';
+}
+
+function normalizeConversationPromptMode(value) {
+  return value !== false;
+}
+
+function getEffectiveConversationSystemPrompt(conversation) {
+  const capturedDefaultPrompt = normalizeSystemPrompt(conversation?.systemPrompt);
+  const conversationPrompt = normalizeSystemPrompt(conversation?.conversationSystemPrompt);
+  const shouldAppendPrompt = normalizeConversationPromptMode(conversation?.appendConversationSystemPrompt);
+  if (!conversationPrompt) {
+    return capturedDefaultPrompt;
+  }
+  if (!shouldAppendPrompt) {
+    return conversationPrompt;
+  }
+  if (!capturedDefaultPrompt) {
+    return conversationPrompt;
+  }
+  return `${capturedDefaultPrompt}\n\n${conversationPrompt}`;
 }
 
 function getStoredDefaultSystemPrompt() {
@@ -4204,6 +4309,12 @@ if (editChatTitleBtn instanceof HTMLButtonElement) {
   });
 }
 
+if (editConversationSystemPromptBtn instanceof HTMLButtonElement) {
+  editConversationSystemPromptBtn.addEventListener('click', () => {
+    beginConversationSystemPromptEdit();
+  });
+}
+
 if (downloadConversationJsonBtn instanceof HTMLButtonElement) {
   downloadConversationJsonBtn.addEventListener('click', () => {
     if (isGenerating) {
@@ -4231,6 +4342,29 @@ if (saveChatTitleBtn instanceof HTMLButtonElement) {
 if (cancelChatTitleBtn instanceof HTMLButtonElement) {
   cancelChatTitleBtn.addEventListener('click', () => {
     cancelChatTitleEdit();
+  });
+}
+
+if (conversationSystemPromptModal instanceof HTMLElement) {
+  conversationSystemPromptModal.addEventListener('shown.bs.modal', () => {
+    if (conversationSystemPromptInput instanceof HTMLTextAreaElement) {
+      conversationSystemPromptInput.focus();
+      conversationSystemPromptInput.setSelectionRange(
+        conversationSystemPromptInput.value.length,
+        conversationSystemPromptInput.value.length,
+      );
+    }
+  });
+  conversationSystemPromptModal.addEventListener('hidden.bs.modal', () => {
+    if (editConversationSystemPromptBtn instanceof HTMLButtonElement) {
+      editConversationSystemPromptBtn.focus();
+    }
+  });
+}
+
+if (saveConversationSystemPromptBtn instanceof HTMLButtonElement) {
+  saveConversationSystemPromptBtn.addEventListener('click', () => {
+    saveConversationSystemPromptEdit();
   });
 }
 
