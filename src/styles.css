@@ -412,6 +412,11 @@
   transition: width 180ms ease-out;
 }
 
+#modelLoadCurrentFileBar.model-load-bar-no-transition {
+  transition: none;
+  animation: none;
+}
+
 #modelLoadCurrentFileBar.model-load-bar-indeterminate {
   width: 35%;
   animation: model-load-indeterminate 1.2s ease-in-out infinite;

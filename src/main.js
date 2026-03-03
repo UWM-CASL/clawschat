@@ -359,6 +359,7 @@ const ROUTE_CHAT = 'chat';
 const ROUTE_SETTINGS = 'settings';
 let ignoreNextHashChange = false;
 const loadProgressFiles = new Map();
+let maxObservedLoadPercent = 0;
 const mathTypesetTimers = new WeakMap();
 let hasLoggedMathJaxError = false;
 let mathJaxLoadPromise = null;
@@ -2932,11 +2933,14 @@ function formatBytes(value) {
   return `${size.toFixed(decimals)} ${units[unitIndex]}`;
 }
 
-function setCurrentFileProgressBar({ percent = 0, indeterminate = false }) {
+function setCurrentFileProgressBar({ percent = 0, indeterminate = false, animate = true }) {
   if (!modelLoadCurrentFileBar) {
     return;
   }
   const boundedPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  if (!animate) {
+    modelLoadCurrentFileBar.classList.add('model-load-bar-no-transition');
+  }
   modelLoadCurrentFileBar.classList.toggle('model-load-bar-indeterminate', indeterminate);
   if (indeterminate) {
     modelLoadCurrentFileBar.style.width = '35%';
@@ -2945,9 +2949,15 @@ function setCurrentFileProgressBar({ percent = 0, indeterminate = false }) {
     modelLoadCurrentFileBar.style.width = `${boundedPercent}%`;
     modelLoadCurrentFileBar.setAttribute('aria-valuenow', `${Math.round(boundedPercent)}`);
   }
+  if (!animate) {
+    requestAnimationFrame(() => {
+      modelLoadCurrentFileBar.classList.remove('model-load-bar-no-transition');
+    });
+  }
 }
 
 function resetLoadProgressFiles() {
+  maxObservedLoadPercent = 0;
   loadProgressFiles.clear();
   renderLoadProgressFiles();
 }
@@ -2973,7 +2983,7 @@ function renderLoadProgressFiles() {
     if (modelLoadCurrentFileValue) {
       modelLoadCurrentFileValue.textContent = 'Waiting...';
     }
-    setCurrentFileProgressBar({ percent: 0, indeterminate: false });
+    setCurrentFileProgressBar({ percent: 0, indeterminate: false, animate: false });
     return;
   }
 
@@ -3047,17 +3057,24 @@ function setLoadProgress({
   totalBytes = 0,
 }) {
   const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  const isCompletedMessage =
+    /^model ready\.$/i.test(String(message || '').trim()) ||
+    /^loaded .+ \((webgpu|cpu)\)\.$/i.test(String(message || '').trim());
+  const normalizedPercent = isCompletedMessage ? 100 : numericPercent;
+  const displayPercent = Math.max(maxObservedLoadPercent, normalizedPercent);
+  maxObservedLoadPercent = displayPercent;
   if (modelLoadProgressLabel) {
     modelLoadProgressLabel.textContent = message;
   }
   if (modelLoadProgressValue) {
-    modelLoadProgressValue.textContent = `${Math.round(numericPercent)}%`;
+    modelLoadProgressValue.textContent = `${Math.round(displayPercent)}%`;
   }
   if (modelLoadProgressBar) {
-    modelLoadProgressBar.style.width = `${numericPercent}%`;
-    modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(numericPercent)}`);
+    modelLoadProgressBar.style.width = `${displayPercent}%`;
+    modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(displayPercent)}`);
+    modelLoadProgressBar.classList.toggle('progress-bar-animated', displayPercent < 100);
   }
-  trackLoadFileProgress(file, numericPercent, status || message, loadedBytes, totalBytes);
+  trackLoadFileProgress(file, normalizedPercent, status || message, loadedBytes, totalBytes);
 }
 
 function showLoadError(errorMessage) {
