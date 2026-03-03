@@ -242,6 +242,7 @@ const onboardingStatusRegion = document.getElementById('onboardingStatusRegion')
 const chatTitle = document.getElementById('chatTitle');
 const chatTitleInput = document.getElementById('chatTitleInput');
 const editChatTitleBtn = document.getElementById('editChatTitleBtn');
+const downloadConversationBtn = document.getElementById('downloadConversationBtn');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
 const openSettingsButton = document.getElementById('openSettingsButton');
@@ -2073,22 +2074,89 @@ function renderTranscript(options = {}) {
 }
 
 function updateChatTitleEditorVisibility() {
-  if (!chatTitle || !chatTitleInput || !editChatTitleBtn || !saveChatTitleBtn || !cancelChatTitleBtn) {
+  if (
+    !chatTitle ||
+    !chatTitleInput ||
+    !editChatTitleBtn ||
+    !downloadConversationBtn ||
+    !saveChatTitleBtn ||
+    !cancelChatTitleBtn
+  ) {
     return;
   }
   const activeConversation = getActiveConversation();
+  const pathMessages = activeConversation ? getConversationPathMessages(activeConversation) : [];
+  const hasCompletedGeneration = pathMessages.some(
+    (message) => message?.role === 'model' && Boolean(message.isResponseComplete),
+  );
   const canEditTitle = modelReady && Boolean(activeConversation?.hasGeneratedName);
+  const canDownloadConversation = modelReady && hasCompletedGeneration;
   const controlsDisabled = isGenerating || isLoadingModel || isRunningOrchestration;
   const showEditor = canEditTitle && isChatTitleEditing;
   chatTitle.classList.toggle('d-none', showEditor);
   chatTitleInput.classList.toggle('d-none', !showEditor);
   editChatTitleBtn.classList.toggle('d-none', !canEditTitle || showEditor);
+  downloadConversationBtn.classList.toggle('d-none', !canDownloadConversation);
   saveChatTitleBtn.classList.toggle('d-none', !showEditor);
   cancelChatTitleBtn.classList.toggle('d-none', !showEditor);
   chatTitleInput.disabled = !showEditor || controlsDisabled;
   editChatTitleBtn.disabled = controlsDisabled;
+  downloadConversationBtn.disabled = controlsDisabled || !canDownloadConversation;
   saveChatTitleBtn.disabled = controlsDisabled || !chatTitleInput.value.trim();
   cancelChatTitleBtn.disabled = controlsDisabled;
+}
+
+function buildConversationDownloadPayload(conversation) {
+  const selectedModelId = typeof engine?.config?.modelId === 'string' && engine.config.modelId.trim()
+    ? engine.config.modelId.trim()
+    : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const temperature = Number.isFinite(engine?.config?.generationConfig?.temperature)
+    ? Number(engine.config.generationConfig.temperature)
+    : Number(activeGenerationConfig?.temperature ?? DEFAULT_GENERATION_LIMITS.defaultTemperature);
+  const exchanges = getConversationPathMessages(conversation)
+    .filter((message) => message?.role === 'user' || message?.role === 'model')
+    .map((message) => ({
+      role: message.role,
+      text: message.role === 'model' ? String(message.response || message.text || '') : String(message.text || ''),
+    }));
+  return {
+    model: selectedModelId,
+    temperature,
+    exchanges,
+  };
+}
+
+function buildConversationDownloadFileName(conversationName) {
+  const normalizedName = String(conversationName || 'conversation').trim() || 'conversation';
+  const safeName = normalizedName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'conversation';
+  return `${safeName}.llm.json`;
+}
+
+function downloadActiveConversationBranch() {
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    setStatus('No active conversation to download.');
+    return;
+  }
+  const payload = buildConversationDownloadPayload(activeConversation);
+  if (!payload.exchanges.length) {
+    setStatus('No messages to download on this branch.');
+    return;
+  }
+  const serialized = JSON.stringify(payload, null, 2);
+  const blob = new Blob([serialized], { type: 'application/json' });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = buildConversationDownloadFileName(activeConversation.name);
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
+  setStatus('Conversation downloaded.');
 }
 
 function beginChatTitleEdit() {
@@ -3895,6 +3963,15 @@ window.addEventListener('beforeunload', () => {
 if (editChatTitleBtn instanceof HTMLButtonElement) {
   editChatTitleBtn.addEventListener('click', () => {
     beginChatTitleEdit();
+  });
+}
+
+if (downloadConversationBtn instanceof HTMLButtonElement) {
+  downloadConversationBtn.addEventListener('click', () => {
+    if (isGenerating) {
+      return;
+    }
+    downloadActiveConversationBranch();
   });
 }
 
