@@ -68,7 +68,7 @@ Student-facing browser chat UI with local model inference.
 - Each user message now supports branch-aware editing controls:
   - `Edit` opens inline editing for that user message.
   - `Save` (floppy icon) commits the edit and removes all later turns on that branch from that point forward.
-  - `Branch` (terminal-split icon) creates a sibling user-message branch at that turn, then opens edit mode for the new branch.
+  - `Branch` (terminal-split icon) opens branch-edit mode at that turn. A sibling user-message branch is only created when `Save` is used with changed text; canceling or saving unchanged text creates no branch.
   - If multiple user branches exist at the same turn, left/right controls and an `x/y` indicator let users switch between those branch variants.
 
 ## Supported models

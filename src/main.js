@@ -348,6 +348,7 @@ let showThinkingByDefault = false;
 let defaultSystemPrompt = '';
 let isSwitchingVariant = false;
 let activeUserEditMessageId = null;
+let activeUserBranchSourceMessageId = null;
 let isChatTitleEditing = false;
 let isRunningOrchestration = false;
 let isSettingsPageOpen = false;
@@ -370,6 +371,16 @@ function initializeTooltips(root = document) {
   root.querySelectorAll('[data-bs-toggle="tooltip"], [data-icon-tooltip]').forEach((element) => {
     Tooltip.getOrCreateInstance(element);
   });
+}
+
+function startUserMessageEditSession(messageId, { branchSourceMessageId = null } = {}) {
+  activeUserEditMessageId = messageId;
+  activeUserBranchSourceMessageId = branchSourceMessageId;
+}
+
+function clearUserMessageEditSession() {
+  activeUserEditMessageId = null;
+  activeUserBranchSourceMessageId = null;
 }
 
 function disposeTooltips(root) {
@@ -1445,7 +1456,7 @@ function pruneDescendantsFromMessage(conversation, messageId) {
     conversation.lastSpokenLeafMessageId = rootMessage.id;
   }
   if (activeUserEditMessageId && idsToRemove.has(activeUserEditMessageId)) {
-    activeUserEditMessageId = null;
+    clearUserMessageEditSession();
   }
   return idsToRemove.size;
 }
@@ -2730,7 +2741,7 @@ function setActiveConversationById(conversationId) {
   ) {
     activeConversation.activeLeafMessageId = activeConversation.lastSpokenLeafMessageId;
   }
-  activeUserEditMessageId = null;
+  clearUserMessageEditSession();
   renderConversationList();
   renderTranscript();
   updateChatTitle();
@@ -3589,7 +3600,7 @@ function beginUserMessageEdit(messageId) {
     return;
   }
   activeConversation.activeLeafMessageId = findPreferredLeafForVariant(activeConversation, userMessage) || userMessage.id;
-  activeUserEditMessageId = messageId;
+  startUserMessageEditSession(messageId);
   renderTranscript({ scrollToBottom: false });
   updateActionButtons();
   const editor = chatTranscript?.querySelector(`[data-message-id="${messageId}"] .user-message-editor`);
@@ -3603,7 +3614,7 @@ function cancelUserMessageEdit(messageId) {
   if (!activeUserEditMessageId || (messageId && activeUserEditMessageId !== messageId)) {
     return;
   }
-  activeUserEditMessageId = null;
+  clearUserMessageEditSession();
   renderTranscript({ scrollToBottom: false });
   updateActionButtons();
   setStatus('Edit canceled.');
@@ -3638,11 +3649,41 @@ function saveUserMessageEdit(messageId) {
     editor.focus();
     return;
   }
+  const isBranchEdit = activeUserBranchSourceMessageId === messageId;
+  if (isBranchEdit) {
+    const currentText = (userMessage.text || '').trim();
+    if (nextText === currentText) {
+      clearUserMessageEditSession();
+      renderTranscript({ scrollToBottom: false });
+      updateActionButtons();
+      setStatus('Branch not created. Change the message and save to create a branch.');
+      return;
+    }
+    const branchMessage = addMessageToConversation(activeConversation, 'user', nextText, {
+      parentId: userMessage.parentId || null,
+    });
+    activeConversation.activeLeafMessageId = branchMessage.id;
+    activeConversation.lastSpokenLeafMessageId = branchMessage.id;
+    clearUserMessageEditSession();
+    renderTranscript();
+    updateActionButtons();
+    queueConversationStateSave();
+    if (!modelReady) {
+      setStatus('Branch saved. Load a model to generate a new response.');
+      return;
+    }
+    setStatus('Branch saved. Generating response...');
+    startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
+      parentMessageId: branchMessage.id,
+      updateLastSpokenOnComplete: true,
+    });
+    return;
+  }
   userMessage.text = nextText;
   const removedCount = pruneDescendantsFromMessage(activeConversation, userMessage.id);
   activeConversation.activeLeafMessageId = userMessage.id;
   activeConversation.lastSpokenLeafMessageId = userMessage.id;
-  activeUserEditMessageId = null;
+  clearUserMessageEditSession();
   renderTranscript();
   updateActionButtons();
   queueConversationStateSave();
@@ -3680,20 +3721,16 @@ function branchFromUserMessage(messageId) {
   if (!userMessage || userMessage.role !== 'user') {
     return;
   }
-  const branchMessage = addMessageToConversation(activeConversation, 'user', userMessage.text, {
-    parentId: userMessage.parentId || null,
-  });
-  activeConversation.lastSpokenLeafMessageId = branchMessage.id;
-  activeUserEditMessageId = branchMessage.id;
+  activeConversation.activeLeafMessageId = findPreferredLeafForVariant(activeConversation, userMessage) || userMessage.id;
+  startUserMessageEditSession(messageId, { branchSourceMessageId: messageId });
   renderTranscript({ scrollToBottom: false });
   updateActionButtons();
-  queueConversationStateSave();
-  const editor = chatTranscript?.querySelector(`[data-message-id="${branchMessage.id}"] .user-message-editor`);
+  const editor = chatTranscript?.querySelector(`[data-message-id="${messageId}"] .user-message-editor`);
   if (editor instanceof HTMLTextAreaElement) {
     editor.focus();
     editor.setSelectionRange(editor.value.length, editor.value.length);
   }
-  setStatus('User branch created. Edit and save to define this timeline.');
+  setStatus('Branch mode enabled. Edit and save to create a branch.');
 }
 
 function regenerateFromMessage(messageId) {
@@ -4067,7 +4104,7 @@ if (newConversationBtn) {
     const conversation = createConversation();
     conversations.unshift(conversation);
     activeConversationId = conversation.id;
-    activeUserEditMessageId = null;
+    clearUserMessageEditSession();
     isChatTitleEditing = false;
     renderConversationList();
     renderTranscript();
@@ -4110,7 +4147,7 @@ if (conversationList) {
 
       if (wasActive) {
         activeConversationId = conversations[0].id;
-        activeUserEditMessageId = null;
+        clearUserMessageEditSession();
         isChatTitleEditing = false;
       }
       renderConversationList();
