@@ -236,6 +236,12 @@
   white-space: nowrap;
 }
 
+.top-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;

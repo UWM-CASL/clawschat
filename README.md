@@ -12,6 +12,7 @@ Student-facing browser chat UI with local model inference.
   - `#/chat` for the chat experience after model load
   - `#/settings` when Settings is open
   - Browser back/forward navigation follows those screen transitions.
+- Header actions include a `Help` button that opens `help.html` in a new tab with feature and basic usage guidance.
 - After model load completes, the UI switches from setup to the conversation view.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - If no saved conversations exist, a blank conversation is created and shown after load.
