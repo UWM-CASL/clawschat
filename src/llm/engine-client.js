@@ -8,7 +8,7 @@ export class LLMEngineClient {
     this.pendingInit = null;
     this.pendingGeneration = null;
     this.config = {
-      modelId: 'onnx-community/Qwen3-0.6B-ONNX',
+      modelId: 'onnx-community/Llama-3.2-3B-Instruct-ONNX',
       backendPreference: 'auto',
       generationConfig: {
         maxOutputTokens: 1024,
@@ -22,13 +22,7 @@ export class LLMEngineClient {
   }
 
   async initialize(config = {}) {
-    const requestedModel = config.modelId || this.config.modelId;
-    const modelId =
-      requestedModel === 'onnx-community/gemma-3-1b-it-ONNX-GQA' ||
-      requestedModel === 'onnx-community/gemma-3-1b-ONNX-GQA' ||
-      requestedModel === 'Xenova/distilgpt2'
-        ? 'onnx-community/Qwen3-0.6B-ONNX'
-        : requestedModel;
+    const modelId = config.modelId || this.config.modelId;
     this.config = { ...this.config, ...config, modelId };
     this.#ensureWorker();
     this.pendingInit = this.#sendAndWait({

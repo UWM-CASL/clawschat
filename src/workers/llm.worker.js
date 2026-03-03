@@ -93,13 +93,7 @@ function resolvePrompt(rawPrompt) {
 }
 
 async function initialize(payload) {
-  const requestedModelId = payload.modelId || 'onnx-community/Qwen3-0.6B-ONNX';
-  const modelId =
-    requestedModelId === 'onnx-community/gemma-3-1b-it-ONNX-GQA' ||
-    requestedModelId === 'onnx-community/gemma-3-1b-ONNX-GQA' ||
-    requestedModelId === 'Xenova/distilgpt2'
-      ? 'onnx-community/Qwen3-0.6B-ONNX'
-      : requestedModelId;
+  const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-ONNX';
   const backendPreference = payload.backendPreference || 'auto';
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
   const attempts = getBackendAttemptOrder(backendPreference);
@@ -117,9 +111,6 @@ async function initialize(payload) {
     }
 
     try {
-      if (requestedModelId !== modelId) {
-        postStatus(`Model ${requestedModelId} is unavailable. Falling back to ${modelId}.`);
-      }
       postStatus(`Loading ${modelId} with ${backend.toUpperCase()}...`);
       postProgress({ percent: 5, message: `Preparing ${backend.toUpperCase()} backend...` });
       model = await pipeline('text-generation', modelId, {
@@ -173,7 +164,7 @@ async function initialize(payload) {
       const isUnauthorized = /unauthorized|401|403/i.test(rawMessage);
       if (isUnauthorized) {
         errors.push(
-          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Qwen3-0.6B-ONNX, or self-host pinned model files for static delivery.)`,
+          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-ONNX, or self-host pinned model files for static delivery.)`,
         );
       } else {
         errors.push(`${backend.toUpperCase()}: ${rawMessage}`);
