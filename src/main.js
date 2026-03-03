@@ -2690,7 +2690,7 @@ function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } 
   setRegionVisibility(topBar, showConversation);
   setRegionVisibility(conversationPanel, showConversation);
   setRegionVisibility(chatTranscriptWrap, showConversation);
-  setRegionVisibility(chatForm, showConversation);
+  updateComposerVisibility();
   if (!showConversation && isChatTitleEditing) {
     isChatTitleEditing = false;
   }
@@ -2701,6 +2701,15 @@ function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } 
   }
 }
 
+function isStartYourChatNowStage() {
+  return modelReady && !getActiveConversation() && conversations.length === 0;
+}
+
+function updateComposerVisibility() {
+  const showComposer = modelReady && !isSettingsPageOpen && !isStartYourChatNowStage();
+  setRegionVisibility(chatForm, showComposer);
+}
+
 function updateChatTitle() {
   if (!chatTitle) {
     return;
@@ -2708,6 +2717,7 @@ function updateChatTitle() {
   const activeConversation = getActiveConversation();
   if (modelReady && !activeConversation && conversations.length) {
     chatTitle.textContent = 'Select a Conversation';
+    updateComposerVisibility();
     updateChatTitleEditorVisibility();
     return;
   }
@@ -2716,6 +2726,7 @@ function updateChatTitle() {
     if (!isChatTitleEditing && chatTitleInput) {
       chatTitleInput.value = activeConversation.name;
     }
+    updateComposerVisibility();
     updateChatTitleEditorVisibility();
     return;
   }
@@ -2723,6 +2734,7 @@ function updateChatTitle() {
   if (!isChatTitleEditing && chatTitleInput && activeConversation) {
     chatTitleInput.value = activeConversation.name;
   }
+  updateComposerVisibility();
   updateChatTitleEditorVisibility();
 }
 
