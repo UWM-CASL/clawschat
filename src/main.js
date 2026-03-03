@@ -986,7 +986,7 @@ function applyStoredConversationState(rawState) {
         typeof rawConversation.id === 'string' && rawConversation.id.trim()
           ? rawConversation.id.trim()
           : `conversation-${conversationIndex + 1}`;
-      const name = normalizeConversationName(rawConversation.name) || `${UNTITLED_CONVERSATION_PREFIX} ${conversationIndex + 1}`;
+      const name = normalizeConversationName(rawConversation.name) || UNTITLED_CONVERSATION_PREFIX;
       const systemPrompt = normalizeSystemPrompt(rawConversation.systemPrompt);
       const conversationSystemPrompt = normalizeSystemPrompt(rawConversation.conversationSystemPrompt);
       const appendConversationSystemPrompt = normalizeConversationPromptMode(
@@ -1120,12 +1120,13 @@ async function restoreConversationStateFromStorage() {
   try {
     const storedState = await loadConversationState();
     if (!applyStoredConversationState(storedState)) {
-      ensureConversation();
-      queueConversationStateSave();
+      conversations.length = 0;
+      activeConversationId = null;
     }
   } catch (error) {
     appendDebug(`Conversation restore failed: ${error.message}`);
-    ensureConversation();
+    conversations.length = 0;
+    activeConversationId = null;
   }
 
   renderConversationList();
@@ -1141,7 +1142,7 @@ function createConversation(name) {
   conversationCount += 1;
   return {
     id: `conversation-${++conversationIdCounter}`,
-    name: name || `${UNTITLED_CONVERSATION_PREFIX} ${conversationCount}`,
+    name: name || UNTITLED_CONVERSATION_PREFIX,
     systemPrompt: defaultSystemPrompt,
     conversationSystemPrompt: '',
     appendConversationSystemPrompt: true,
@@ -2760,16 +2761,6 @@ function setActiveConversationById(conversationId) {
   queueConversationStateSave();
 }
 
-function ensureConversation() {
-  if (getActiveConversation()) {
-    return;
-  }
-  const conversation = createConversation();
-  conversations.unshift(conversation);
-  activeConversationId = conversation.id;
-  queueConversationStateSave();
-}
-
 function updateActionButtons() {
   updateSendButtonMode();
   updateGenerationSettingsEnabledState();
@@ -4152,13 +4143,8 @@ if (conversationList) {
       const wasActive = activeConversationId === conversationId;
       conversations.splice(index, 1);
 
-      if (!conversations.length) {
-        const replacement = createConversation();
-        conversations.push(replacement);
-      }
-
       if (wasActive) {
-        activeConversationId = conversations[0].id;
+        activeConversationId = conversations[0]?.id || null;
         clearUserMessageEditSession();
         isChatTitleEditing = false;
       }
