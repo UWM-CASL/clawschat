@@ -1263,6 +1263,46 @@ function isMessageDescendantOf(conversation, messageId, ancestorId) {
   return false;
 }
 
+function getVisibleMessageRoleSequence(conversation, message) {
+  if (!conversation || !message?.id) {
+    return 0;
+  }
+  let userPromptCount = 0;
+  let modelResponseCount = 0;
+  const visiblePath = getConversationPathMessages(conversation);
+  for (const pathMessage of visiblePath) {
+    if (pathMessage.role === 'user') {
+      userPromptCount += 1;
+      if (pathMessage.id === message.id) {
+        return userPromptCount;
+      }
+    } else if (pathMessage.role === 'model') {
+      modelResponseCount += 1;
+      if (pathMessage.id === message.id) {
+        return modelResponseCount;
+      }
+    }
+  }
+  return 0;
+}
+
+function getConversationCardHeading(conversation, message) {
+  if (!conversation || !message) {
+    return '';
+  }
+  const baseLabel = message.role === 'user' ? 'User Prompt' : 'Model Response';
+  const sequence = Math.max(getVisibleMessageRoleSequence(conversation, message), 1);
+  const variantState =
+    message.role === 'user'
+      ? getUserVariantState(conversation, message)
+      : getModelVariantState(conversation, message);
+  const hasBranch = variantState.total > 1;
+  const branchIndex = Math.max(variantState.index + 1, 1);
+  return hasBranch
+    ? `${baseLabel} ${sequence}, Branch ${branchIndex}`
+    : `${baseLabel} ${sequence}`;
+}
+
 function pruneDescendantsFromMessage(conversation, messageId) {
   if (!conversation || !messageId) {
     return 0;
@@ -1571,14 +1611,16 @@ function addMessageElement(message, options = {}) {
     return null;
   }
   const shouldScroll = options.scroll !== false;
+  const activeConversation = getActiveConversation();
+  const cardHeading = getConversationCardHeading(activeConversation, message);
   const item = document.createElement('li');
   item.className = `message-row ${message.role === 'user' ? 'user-message' : 'model-message'}`;
   item.dataset.messageId = message.id;
   if (message.role === 'model') {
-    const activeConversation = getActiveConversation();
     const variantState = getModelVariantState(activeConversation, message);
     const variantLabel = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
     item.innerHTML = `
+      <h3 class="visually-hidden">${cardHeading}</h3>
       <p class="message-speaker">${message.speaker}</p>
       <div class="message-bubble">
         <section class="thoughts-region d-none">
@@ -1698,11 +1740,11 @@ function addMessageElement(message, options = {}) {
     applyVariantCardSignals(item, variantState);
     applyFixCardSignals(item, message);
   } else {
-    const activeConversation = getActiveConversation();
     const variantState = getUserVariantState(activeConversation, message);
     const variantLabel = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
     const isEditing = activeUserEditMessageId === message.id;
     item.innerHTML = `
+      <h3 class="visually-hidden">${cardHeading}</h3>
       <p class="message-speaker">${message.speaker}</p>
       <p class="message-bubble mb-0"></p>
       <textarea
