@@ -881,11 +881,14 @@
 }
 
 .settings-page {
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   padding: 1.25rem 1rem;
   display: flex;
   align-items: stretch;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .settings-page-inner {
