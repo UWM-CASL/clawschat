@@ -402,7 +402,7 @@ function ensureMathJaxLoaded() {
     return Promise.resolve();
   }
   if (!mathJaxLoadPromise) {
-    mathJaxLoadPromise = import('mathjax/es5/tex-mml-chtml.js').catch((error) => {
+    mathJaxLoadPromise = import('mathjax/es5/tex-mml-svg.js').catch((error) => {
       if (!hasLoggedMathJaxError) {
         appendDebug(`MathJax failed to load: ${error instanceof Error ? error.message : String(error)}`);
         hasLoggedMathJaxError = true;
