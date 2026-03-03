@@ -1548,10 +1548,12 @@ function buildPromptForConversationLeaf(conversation, leafMessageId = conversati
 function addMessageToConversation(conversation, role, text, options = {}) {
   const normalizedRole = role === 'user' ? 'user' : 'model';
   const normalizedText = String(text || '');
-  const requestedParentId =
-    typeof options.parentId === 'string' && options.parentId.trim()
+  const hasExplicitParentId = Object.prototype.hasOwnProperty.call(options, 'parentId');
+  const requestedParentId = hasExplicitParentId
+    ? typeof options.parentId === 'string' && options.parentId.trim()
       ? options.parentId.trim()
-      : conversation.activeLeafMessageId;
+      : null
+    : conversation.activeLeafMessageId;
   const parentId = requestedParentId && getMessageNodeById(conversation, requestedParentId)
     ? requestedParentId
     : null;
