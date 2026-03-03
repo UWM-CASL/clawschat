@@ -42,6 +42,15 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeTimestamp(value) {
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+}
+
+function toIsoTimestamp(value) {
+  const normalized = normalizeTimestamp(value);
+  return normalized ? new Date(normalized).toISOString() : null;
+}
+
 function quantizeTemperature(value, min, max) {
   const parsed = Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) {
@@ -176,7 +185,7 @@ const TITLE_STOP_WORDS = new Set([
 ]);
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
 const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
-const CONVERSATION_SCHEMA_VERSION = 4;
+const CONVERSATION_SCHEMA_VERSION = 5;
 const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
 const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
 const MATHJAX_TYPESET_DEBOUNCE_MS = 150;
@@ -739,6 +748,7 @@ function buildConversationStateSnapshot() {
         role: message.role,
         speaker: message.speaker,
         text: String(message.text || ''),
+        createdAt: normalizeTimestamp(message.createdAt),
         thoughts: typeof message.thoughts === 'string' ? message.thoughts : '',
         response:
           typeof message.response === 'string'
@@ -777,6 +787,7 @@ function buildConversationStateSnapshot() {
       return {
         id: conversation.id,
         name: conversation.name,
+        startedAt: normalizeTimestamp(conversation.startedAt),
         hasGeneratedName: Boolean(conversation.hasGeneratedName),
         artifacts: [],
         activeLeafMessageId:
@@ -837,6 +848,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId) {
     role,
     speaker: role === 'user' ? 'User' : 'Model',
     text,
+    createdAt: normalizeTimestamp(rawMessage.createdAt ?? rawMessage.timestamp),
   };
 
   if (role === 'model') {
@@ -970,10 +982,22 @@ function applyStoredConversationState(rawState) {
       const lastSpokenLeafMessageId = messageNodes.some((message) => message.id === requestedLastSpokenLeaf)
         ? requestedLastSpokenLeaf
         : activeLeafMessageId;
+      const earliestMessageTimestamp = messageNodes.reduce((earliest, message) => {
+        const candidate = normalizeTimestamp(message.createdAt);
+        if (!candidate) {
+          return earliest;
+        }
+        return earliest ? Math.min(earliest, candidate) : candidate;
+      }, null);
+      const startedAt =
+        normalizeTimestamp(rawConversation.startedAt ?? rawConversation.createdAt) ||
+        earliestMessageTimestamp ||
+        Date.now();
 
       return {
         id,
         name,
+        startedAt,
         messageNodes,
         messageNodeCounter,
         activeLeafMessageId,
@@ -1036,6 +1060,7 @@ function createConversation(name) {
   return {
     id: `conversation-${++conversationIdCounter}`,
     name: name || `${UNTITLED_CONVERSATION_PREFIX} ${conversationCount}`,
+    startedAt: Date.now(),
     messageNodes: [],
     messageNodeCounter: 0,
     activeLeafMessageId: null,
@@ -1495,6 +1520,7 @@ function addMessageToConversation(conversation, role, text, options = {}) {
     role: normalizedRole,
     speaker: normalizedRole === 'user' ? 'User' : 'Model',
     text: normalizedText,
+    createdAt: normalizeTimestamp(options.createdAt) || Date.now(),
     parentId: parentId || null,
     childIds: [],
   };
@@ -2155,13 +2181,28 @@ function buildConversationDownloadPayload(conversation) {
   const temperature = Number.isFinite(engine?.config?.generationConfig?.temperature)
     ? Number(engine.config.generationConfig.temperature)
     : Number(activeGenerationConfig?.temperature ?? DEFAULT_GENERATION_LIMITS.defaultTemperature);
+  const startedAt = normalizeTimestamp(conversation?.startedAt);
   const exchanges = getConversationPathMessages(conversation)
     .filter((message) => message?.role === 'user' || message?.role === 'model')
-    .map((message) => ({
-      role: message.role,
-      text: message.role === 'model' ? String(message.response || message.text || '') : String(message.text || ''),
-    }));
+    .map((message, index) => {
+      const exchangeNumber = Math.floor(index / 2) + 1;
+      const isUserMessage = message.role === 'user';
+      return {
+        heading: `${isUserMessage ? 'User prompt' : 'Model response'} ${exchangeNumber}`,
+        role: message.role,
+        event: isUserMessage ? 'entered' : 'generated',
+        timestamp: toIsoTimestamp(message.createdAt),
+        timestampMs: normalizeTimestamp(message.createdAt),
+        text: isUserMessage ? String(message.text || '') : String(message.response || message.text || ''),
+      };
+    });
   return {
+    conversation: {
+      name: String(conversation?.name || ''),
+      startedAt: toIsoTimestamp(startedAt),
+      startedAtMs: startedAt,
+      exportedAt: new Date().toISOString(),
+    },
     model: selectedModelId,
     temperature,
     exchanges,
