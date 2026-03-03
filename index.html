@@ -73,17 +73,42 @@
               <i class="bi bi-pencil-fill" aria-hidden="true"></i>
               <span class="visually-hidden">Edit conversation title</span>
             </button>
-            <button
-              type="button"
-              id="downloadConversationBtn"
-              class="btn icon-button d-none"
-              aria-label="Download conversation"
-              data-bs-toggle="tooltip"
-              data-bs-title="Download conversation"
-            >
-              <i class="bi bi-download" aria-hidden="true"></i>
-              <span class="visually-hidden">Download conversation</span>
-            </button>
+            <div id="downloadConversationMenu" class="dropdown d-none">
+              <button
+                type="button"
+                id="downloadConversationBtn"
+                class="btn icon-button dropdown-toggle dropdown-toggle-no-caret"
+                aria-label="Download conversation"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="true"
+                data-icon-tooltip="true"
+                data-bs-title="Download conversation"
+                aria-expanded="false"
+              >
+                <i class="bi bi-download" aria-hidden="true"></i>
+                <span class="visually-hidden">Download conversation</span>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                  <button
+                    id="downloadConversationJsonBtn"
+                    type="button"
+                    class="dropdown-item"
+                  >
+                    JSON (.llm.json) File
+                  </button>
+                </li>
+                <li>
+                  <button
+                    id="downloadConversationMarkdownBtn"
+                    type="button"
+                    class="dropdown-item"
+                  >
+                    Markdown (.md) File
+                  </button>
+                </li>
+              </ul>
+            </div>
             <button
               type="button"
               id="saveChatTitleBtn"

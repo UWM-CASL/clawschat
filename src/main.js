@@ -51,6 +51,43 @@ function toIsoTimestamp(value) {
   return normalized ? new Date(normalized).toISOString() : null;
 }
 
+function formatUtcTimestamp(value) {
+  const dateFromString = typeof value === 'string' && value ? new Date(value) : null;
+  const normalizedTimestamp = normalizeTimestamp(value);
+  const dateFromTimestamp = normalizedTimestamp ? new Date(normalizedTimestamp) : null;
+  const candidateDate =
+    dateFromString instanceof Date && Number.isFinite(dateFromString.valueOf())
+      ? dateFromString
+      : dateFromTimestamp instanceof Date && Number.isFinite(dateFromTimestamp.valueOf())
+        ? dateFromTimestamp
+        : null;
+  if (!candidateDate) {
+    return 'Unknown';
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  }).format(candidateDate);
+}
+
+function toMarkdownBlockquote(text) {
+  const normalizedText = String(text || '');
+  if (!normalizedText) {
+    return '> ';
+  }
+  return normalizedText
+    .split(/\r?\n/)
+    .map((line) => `> ${line}`)
+    .join('\n');
+}
+
 function quantizeTemperature(value, min, max) {
   const parsed = Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) {
@@ -251,7 +288,10 @@ const onboardingStatusRegion = document.getElementById('onboardingStatusRegion')
 const chatTitle = document.getElementById('chatTitle');
 const chatTitleInput = document.getElementById('chatTitleInput');
 const editChatTitleBtn = document.getElementById('editChatTitleBtn');
+const downloadConversationMenu = document.getElementById('downloadConversationMenu');
 const downloadConversationBtn = document.getElementById('downloadConversationBtn');
+const downloadConversationJsonBtn = document.getElementById('downloadConversationJsonBtn');
+const downloadConversationMarkdownBtn = document.getElementById('downloadConversationMarkdownBtn');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
 const openSettingsButton = document.getElementById('openSettingsButton');
@@ -2146,7 +2186,10 @@ function updateChatTitleEditorVisibility() {
     !chatTitle ||
     !chatTitleInput ||
     !editChatTitleBtn ||
+    !downloadConversationMenu ||
     !downloadConversationBtn ||
+    !downloadConversationJsonBtn ||
+    !downloadConversationMarkdownBtn ||
     !saveChatTitleBtn ||
     !cancelChatTitleBtn
   ) {
@@ -2164,12 +2207,14 @@ function updateChatTitleEditorVisibility() {
   chatTitle.classList.toggle('d-none', showEditor);
   chatTitleInput.classList.toggle('d-none', !showEditor);
   editChatTitleBtn.classList.toggle('d-none', !canEditTitle || showEditor);
-  downloadConversationBtn.classList.toggle('d-none', !canDownloadConversation);
+  downloadConversationMenu.classList.toggle('d-none', !canDownloadConversation);
   saveChatTitleBtn.classList.toggle('d-none', !showEditor);
   cancelChatTitleBtn.classList.toggle('d-none', !showEditor);
   chatTitleInput.disabled = !showEditor || controlsDisabled;
   editChatTitleBtn.disabled = controlsDisabled;
   downloadConversationBtn.disabled = controlsDisabled || !canDownloadConversation;
+  downloadConversationJsonBtn.disabled = controlsDisabled || !canDownloadConversation;
+  downloadConversationMarkdownBtn.disabled = controlsDisabled || !canDownloadConversation;
   saveChatTitleBtn.disabled = controlsDisabled || !chatTitleInput.value.trim();
   cancelChatTitleBtn.disabled = controlsDisabled;
 }
@@ -2211,14 +2256,41 @@ function buildConversationDownloadPayload(conversation) {
 
 function buildConversationDownloadFileName(conversationName) {
   const normalizedName = String(conversationName || 'conversation').trim() || 'conversation';
-  const safeName = normalizedName
+  return normalizedName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'conversation';
-  return `${safeName}.llm.json`;
 }
 
-function downloadActiveConversationBranch() {
+function buildConversationJsonDownloadFileName(conversationName) {
+  return `${buildConversationDownloadFileName(conversationName)}.llm.json`;
+}
+
+function buildConversationMarkdownDownloadFileName(conversationName) {
+  return `${buildConversationDownloadFileName(conversationName)}.md`;
+}
+
+function buildConversationDownloadMarkdown(payload) {
+  const lines = [];
+  lines.push(`# ${String(payload?.conversation?.name || 'Conversation')}`);
+  lines.push('');
+  lines.push(`- Started At: ${formatUtcTimestamp(payload?.conversation?.startedAt)}`);
+  lines.push(`- Exported At: ${formatUtcTimestamp(payload?.conversation?.exportedAt)}`);
+  lines.push(`- Model: ${String(payload?.model || 'Unknown')}`);
+  lines.push(`- Temperature: ${Number.isFinite(payload?.temperature) ? payload.temperature : 'Unknown'}`);
+  lines.push('');
+  const exchanges = Array.isArray(payload?.exchanges) ? payload.exchanges : [];
+  exchanges.forEach((exchange) => {
+    lines.push(`## ${String(exchange?.heading || 'Exchange')}`);
+    lines.push(formatUtcTimestamp(exchange?.timestamp));
+    lines.push('');
+    lines.push(toMarkdownBlockquote(exchange?.text || ''));
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+
+function downloadActiveConversationBranchAsJson() {
   const activeConversation = getActiveConversation();
   if (!activeConversation) {
     setStatus('No active conversation to download.');
@@ -2234,12 +2306,36 @@ function downloadActiveConversationBranch() {
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = buildConversationDownloadFileName(activeConversation.name);
+  anchor.download = buildConversationJsonDownloadFileName(activeConversation.name);
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   window.URL.revokeObjectURL(url);
-  setStatus('Conversation downloaded.');
+  setStatus('Conversation downloaded as JSON.');
+}
+
+function downloadActiveConversationBranchAsMarkdown() {
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    setStatus('No active conversation to download.');
+    return;
+  }
+  const payload = buildConversationDownloadPayload(activeConversation);
+  if (!payload.exchanges.length) {
+    setStatus('No messages to download on this branch.');
+    return;
+  }
+  const markdownDocument = buildConversationDownloadMarkdown(payload);
+  const blob = new Blob([markdownDocument], { type: 'text/markdown;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = buildConversationMarkdownDownloadFileName(activeConversation.name);
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
+  setStatus('Conversation downloaded as Markdown.');
 }
 
 function beginChatTitleEdit() {
@@ -4049,12 +4145,21 @@ if (editChatTitleBtn instanceof HTMLButtonElement) {
   });
 }
 
-if (downloadConversationBtn instanceof HTMLButtonElement) {
-  downloadConversationBtn.addEventListener('click', () => {
+if (downloadConversationJsonBtn instanceof HTMLButtonElement) {
+  downloadConversationJsonBtn.addEventListener('click', () => {
     if (isGenerating) {
       return;
     }
-    downloadActiveConversationBranch();
+    downloadActiveConversationBranchAsJson();
+  });
+}
+
+if (downloadConversationMarkdownBtn instanceof HTMLButtonElement) {
+  downloadConversationMarkdownBtn.addEventListener('click', () => {
+    if (isGenerating) {
+      return;
+    }
+    downloadActiveConversationBranchAsMarkdown();
   });
 }
 

@@ -1035,6 +1035,10 @@
   background-color: color-mix(in srgb, var(--surface-muted) 70%, var(--surface-elevated));
 }
 
+.dropdown-toggle-no-caret::after {
+  display: none;
+}
+
 .settings-page .form-check-input:checked {
   background-color: #0b84ff;
   border-color: #0b84ff;

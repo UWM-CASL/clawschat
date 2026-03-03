@@ -44,8 +44,10 @@ Student-facing browser chat UI with local model inference.
 - New conversations start untitled and are automatically renamed after the first model response based on conversation content.
 - Automatic conversation renaming now runs through a one-step orchestration loaded from `src/config/orchestrations/rename-chat.json`.
 - Conversation title editing is disabled until that automatic model-generated title is available.
-- After the first completed model response on the visible branch, a header `Download conversation` (download icon) action appears next to title-edit controls.
-- Download exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), `model`, `temperature`, and an `exchanges` array containing per-exchange `heading` plus entered/generated timestamps.
+- After the first completed model response on the visible branch, a header `Download conversation` (download icon) menu appears next to title-edit controls.
+- Download menu options:
+  - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), `model`, `temperature`, and an `exchanges` array containing per-exchange `heading` plus entered/generated timestamps.
+  - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, model, temperature) and one section per exchange.
 - Model load progress UI collapses after successful initialization.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in a collapsible "Thinking" section during streaming.
 - Model responses are rendered as Markdown (via `markdown-it`) in the transcript.
