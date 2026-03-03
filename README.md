@@ -47,6 +47,7 @@ Student-facing browser chat UI with local model inference.
 - Model load progress UI collapses after successful initialization.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in a collapsible "Thinking" section during streaming.
 - Model responses are rendered as Markdown (via `markdown-it`) in the transcript.
+- LaTeX math in model responses is rendered in the transcript with MathJax (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`).
 - `Settings -> Conversation -> Show thinking` controls whether thought sections are expanded by default (`off` by default).
 - Each user message and model response includes a copy action; model response copy excludes thought text.
 - The Thinking section includes a dedicated copy action to copy thoughts only.

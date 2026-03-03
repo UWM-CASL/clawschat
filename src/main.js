@@ -179,6 +179,24 @@ const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collecti
 const CONVERSATION_SCHEMA_VERSION = 4;
 const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
 const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
+const MATHJAX_TYPESET_DEBOUNCE_MS = 150;
+const MATH_DELIMITER_PATTERN = /(^|[^\\])(\$\$|\$|\\\(|\\\[|\\begin\{)/;
+
+window.MathJax = window.MathJax || {};
+window.MathJax.tex = {
+  ...(window.MathJax.tex || {}),
+  inlineMath: [['$', '$'], ['\\(', '\\)']],
+  displayMath: [['$$', '$$'], ['\\[', '\\]']],
+  processEscapes: true,
+};
+window.MathJax.options = {
+  ...(window.MathJax.options || {}),
+  skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+};
+window.MathJax.startup = {
+  ...(window.MathJax.startup || {}),
+  typeset: false,
+};
 
 const themeSelect = document.getElementById('themeSelect');
 const showThinkingToggle = document.getElementById('showThinkingToggle');
@@ -240,6 +258,7 @@ const markdown = new MarkdownIt({
   breaks: true,
   linkify: true,
 });
+void ensureMathJaxLoaded();
 
 const defaultLinkRenderer =
   markdown.renderer.rules.link_open ||
@@ -275,6 +294,9 @@ const ROUTE_CHAT = 'chat';
 const ROUTE_SETTINGS = 'settings';
 let ignoreNextHashChange = false;
 const loadProgressFiles = new Map();
+const mathTypesetTimers = new WeakMap();
+let hasLoggedMathJaxError = false;
+let mathJaxLoadPromise = null;
 
 function initializeTooltips(root = document) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
@@ -369,6 +391,72 @@ function renderModelMarkdown(content) {
     return '';
   }
   return markdown.render(normalizedContent);
+}
+
+function containsMathDelimiters(text) {
+  return MATH_DELIMITER_PATTERN.test(String(text || ''));
+}
+
+function ensureMathJaxLoaded() {
+  if (window.MathJax?.typesetPromise && window.MathJax?.startup?.promise) {
+    return Promise.resolve();
+  }
+  if (!mathJaxLoadPromise) {
+    mathJaxLoadPromise = import('mathjax/es5/tex-mml-chtml.js').catch((error) => {
+      if (!hasLoggedMathJaxError) {
+        appendDebug(`MathJax failed to load: ${error instanceof Error ? error.message : String(error)}`);
+        hasLoggedMathJaxError = true;
+      }
+    });
+  }
+  return mathJaxLoadPromise;
+}
+
+async function typesetMathInElement(element) {
+  if (!(element instanceof HTMLElement) || !containsMathDelimiters(element.textContent)) {
+    return;
+  }
+  await ensureMathJaxLoaded();
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise || !mathJax.startup?.promise) {
+    return;
+  }
+  try {
+    await mathJax.startup.promise;
+    await mathJax.typesetPromise([element]);
+  } catch (error) {
+    if (!hasLoggedMathJaxError) {
+      appendDebug(`MathJax render failed: ${error instanceof Error ? error.message : String(error)}`);
+      hasLoggedMathJaxError = true;
+    }
+  }
+}
+
+function scheduleMathTypeset(element, options = {}) {
+  if (!(element instanceof HTMLElement) || !containsMathDelimiters(element.textContent)) {
+    if (element instanceof HTMLElement) {
+      const timerId = mathTypesetTimers.get(element);
+      if (timerId !== undefined) {
+        window.clearTimeout(timerId);
+        mathTypesetTimers.delete(element);
+      }
+    }
+    return;
+  }
+  const timerId = mathTypesetTimers.get(element);
+  if (timerId !== undefined) {
+    window.clearTimeout(timerId);
+    mathTypesetTimers.delete(element);
+  }
+  if (options.immediate) {
+    void typesetMathInElement(element);
+    return;
+  }
+  const nextTimerId = window.setTimeout(() => {
+    mathTypesetTimers.delete(element);
+    void typesetMathInElement(element);
+  }, MATHJAX_TYPESET_DEBOUNCE_MS);
+  mathTypesetTimers.set(element, nextTimerId);
 }
 
 function getModelGenerationLimits(modelId) {
@@ -1445,6 +1533,7 @@ function setModelBubbleContent(message, refs) {
   refs.thinkingBody.hidden = !hasThinking || !isExpanded;
   refs.thoughtsText.textContent = message.thoughts || '';
   refs.responseText.innerHTML = renderModelMarkdown(message.response || message.text || '');
+  scheduleMathTypeset(refs.responseText, { immediate: Boolean(message.isResponseComplete) });
 }
 
 function refreshModelThinkingVisibility() {

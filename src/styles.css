@@ -733,6 +733,16 @@
   font-size: 0.9rem;
 }
 
+.response-content .mjx-container {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.response-content .mjx-container[display='true'] {
+  margin: 0.55rem 0;
+}
+
 .response-actions {
   margin-top: 0.55rem;
   display: flex;
