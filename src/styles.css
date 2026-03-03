@@ -1015,6 +1015,11 @@
   --bs-btn-disabled-border-color: var(--primary-btn-border);
 }
 
+.tooltip-inner {
+  background-color: #1f2328;
+  color: #ffffff;
+}
+
 .conversation-delete {
   border-radius: var(--button-radius-rest);
 }

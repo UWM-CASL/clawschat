@@ -6,9 +6,32 @@ import Tooltip from 'bootstrap/js/dist/tooltip';
 import MarkdownIt from 'markdown-it';
 import './styles.css';
 import { LLMEngineClient } from './llm/engine-client.js';
-import modelCatalog from './config/models.json';
 import renameChatOrchestration from './config/orchestrations/rename-chat.json';
 import fixResponseOrchestration from './config/orchestrations/fix-response.json';
+import {
+  DEFAULT_GENERATION_LIMITS,
+  DEFAULT_MODEL,
+  DEFAULT_TOP_K,
+  DEFAULT_TOP_P,
+  LEGACY_MODEL_ALIASES,
+  MAX_TOP_K,
+  MAX_TOP_P,
+  MIN_TOKEN_LIMIT,
+  MIN_TOP_K,
+  MIN_TOP_P,
+  MODEL_OPTIONS,
+  MODEL_OPTIONS_BY_ID,
+  SUPPORTED_MODELS,
+  TEMPERATURE_STEP,
+  TOKEN_STEP,
+  TOP_K_STEP,
+  TOP_P_STEP,
+  clamp,
+  normalizeGenerationLimits,
+  quantizeTemperature,
+  quantizeTopKInput,
+  quantizeTopPInput,
+} from './config/model-settings.js';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
@@ -19,41 +42,6 @@ const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
 const GLOBAL_SAMPLING_SETTINGS_STORAGE_KEY = 'llm-global-sampling-settings';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
-const TOKEN_STEP = 8;
-const MIN_TOKEN_LIMIT = 8;
-const TEMPERATURE_STEP = 0.1;
-const TOP_K_STEP = 5;
-const MIN_TOP_K = 5;
-const MAX_TOP_K = 500;
-const DEFAULT_TOP_K = 50;
-const TOP_P_STEP = 0.05;
-const MIN_TOP_P = 0;
-const MAX_TOP_P = 1;
-const DEFAULT_TOP_P = 0.9;
-const DEFAULT_GENERATION_LIMITS = Object.freeze({
-  defaultMaxOutputTokens: 1024,
-  maxOutputTokens: 32768,
-  defaultMaxContextTokens: 32768,
-  maxContextTokens: 32768,
-  minTemperature: 0.1,
-  maxTemperature: 2.0,
-  defaultTemperature: 0.6,
-  defaultTopK: DEFAULT_TOP_K,
-  defaultTopP: DEFAULT_TOP_P,
-});
-
-function toPositiveInt(value, fallback) {
-  return Number.isInteger(value) && value > 0 ? value : fallback;
-}
-
-function toFiniteNumber(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -101,125 +89,6 @@ function toMarkdownBlockquote(text) {
     .join('\n');
 }
 
-function quantizeTemperature(value, min, max) {
-  const parsed = Number.parseFloat(String(value ?? ''));
-  if (!Number.isFinite(parsed)) {
-    return Number(min.toFixed(1));
-  }
-  const bounded = clamp(parsed, min, max);
-  const steps = Math.round((bounded - min) / TEMPERATURE_STEP);
-  const quantized = min + steps * TEMPERATURE_STEP;
-  return Number(clamp(quantized, min, max).toFixed(1));
-}
-
-function quantizeTopKInput(value) {
-  const parsed = Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_TOP_K;
-  }
-  const bounded = clamp(parsed, MIN_TOP_K, MAX_TOP_K);
-  const steps = Math.round((bounded - MIN_TOP_K) / TOP_K_STEP);
-  return clamp(MIN_TOP_K + steps * TOP_K_STEP, MIN_TOP_K, MAX_TOP_K);
-}
-
-function quantizeTopPInput(value) {
-  const parsed = Number.parseFloat(String(value ?? ''));
-  if (!Number.isFinite(parsed)) {
-    return Number(DEFAULT_TOP_P.toFixed(2));
-  }
-  const bounded = clamp(parsed, MIN_TOP_P, MAX_TOP_P);
-  const steps = Math.round((bounded - MIN_TOP_P) / TOP_P_STEP);
-  const quantized = MIN_TOP_P + steps * TOP_P_STEP;
-  return Number(clamp(quantized, MIN_TOP_P, MAX_TOP_P).toFixed(2));
-}
-
-function normalizeGenerationLimits(rawLimits) {
-  const maxContextTokens = toPositiveInt(rawLimits?.maxContextTokens, DEFAULT_GENERATION_LIMITS.maxContextTokens);
-  const maxOutputTokens = toPositiveInt(rawLimits?.maxOutputTokens, maxContextTokens);
-  const minTemperature = toFiniteNumber(
-    rawLimits?.minTemperature,
-    DEFAULT_GENERATION_LIMITS.minTemperature,
-  );
-  const maxTemperature = toFiniteNumber(
-    rawLimits?.maxTemperature,
-    DEFAULT_GENERATION_LIMITS.maxTemperature,
-  );
-  const boundedMinTemperature = Number(Math.min(minTemperature, maxTemperature).toFixed(1));
-  const boundedMaxTemperature = Number(Math.max(minTemperature, maxTemperature).toFixed(1));
-  const defaultTemperature = quantizeTemperature(
-    toFiniteNumber(rawLimits?.defaultTemperature, DEFAULT_GENERATION_LIMITS.defaultTemperature),
-    boundedMinTemperature,
-    boundedMaxTemperature,
-  );
-  const defaultMaxContextTokens = clamp(
-    toPositiveInt(rawLimits?.defaultMaxContextTokens, maxContextTokens),
-    MIN_TOKEN_LIMIT,
-    maxContextTokens,
-  );
-  const defaultMaxOutputTokens = clamp(
-    toPositiveInt(rawLimits?.defaultMaxOutputTokens, DEFAULT_GENERATION_LIMITS.defaultMaxOutputTokens),
-    MIN_TOKEN_LIMIT,
-    maxOutputTokens,
-  );
-  return {
-    defaultMaxOutputTokens: Math.min(defaultMaxOutputTokens, defaultMaxContextTokens),
-    maxOutputTokens,
-    defaultMaxContextTokens,
-    maxContextTokens,
-    minTemperature: boundedMinTemperature,
-    maxTemperature: boundedMaxTemperature,
-    defaultTemperature,
-  };
-}
-const configuredModels = Array.isArray(modelCatalog?.models)
-  ? modelCatalog.models
-      .map((model) => {
-        const id = typeof model?.id === 'string' ? model.id.trim() : '';
-        if (!id) {
-          return null;
-        }
-        const label =
-          typeof model?.label === 'string' && model.label.trim() ? model.label.trim() : id;
-        const openThinkingTag = model?.thinkingTags?.open;
-        const closeThinkingTag = model?.thinkingTags?.close;
-        const thinkingTags =
-          typeof openThinkingTag === 'string' &&
-          openThinkingTag &&
-          typeof closeThinkingTag === 'string' &&
-          closeThinkingTag &&
-          openThinkingTag !== closeThinkingTag
-            ? { open: openThinkingTag, close: closeThinkingTag }
-            : null;
-        const generation = normalizeGenerationLimits(model?.generation);
-        return { id, label, features: model?.features || {}, thinkingTags, generation };
-      })
-      .filter(Boolean)
-  : [];
-const configuredDefaultModel =
-  typeof modelCatalog?.defaultModelId === 'string' ? modelCatalog.defaultModelId.trim() : '';
-const DEFAULT_MODEL =
-  configuredDefaultModel ||
-  configuredModels[0]?.id ||
-  'onnx-community/Llama-3.2-3B-Instruct-ONNX';
-if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
-  configuredModels.unshift({
-    id: DEFAULT_MODEL,
-    label: DEFAULT_MODEL,
-    features: {},
-    generation: normalizeGenerationLimits(null),
-  });
-}
-const MODEL_OPTIONS = Object.freeze(configuredModels);
-const MODEL_OPTIONS_BY_ID = new Map(MODEL_OPTIONS.map((model) => [model.id, model]));
-const LEGACY_MODEL_ALIASES = Object.fromEntries(
-  Object.entries(modelCatalog?.legacyAliases || {})
-    .map(([alias, canonical]) => [
-      typeof alias === 'string' ? alias.trim() : '',
-      typeof canonical === 'string' ? canonical.trim() : '',
-    ])
-    .filter(([alias, canonical]) => alias && canonical),
-);
-const SUPPORTED_MODELS = new Set(MODEL_OPTIONS.map((model) => model.id));
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const TITLE_STOP_WORDS = new Set([
