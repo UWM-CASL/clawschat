@@ -2753,8 +2753,12 @@ function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } 
   }
   setRegionVisibility(homePanel, showHome);
   setRegionVisibility(preChatPanel, showPreChat);
-  setRegionVisibility(topBar, showChat);
+  setRegionVisibility(topBar, true);
   setRegionVisibility(conversationPanel, hasStartedChatWorkspace);
+  const conversationPanelToggle = topBar?.querySelector('[data-bs-target="#conversationPanel"]');
+  if (conversationPanelToggle instanceof HTMLElement) {
+    conversationPanelToggle.classList.toggle('d-none', !hasStartedChatWorkspace);
+  }
   setRegionVisibility(chatTranscriptWrap, showChat);
   updateComposerVisibility();
   if (!showChat && isChatTitleEditing) {
