@@ -147,6 +147,19 @@ function normalizeRuntimeConfig(rawRuntime) {
   return dtype ? { dtype } : {};
 }
 
+function getDTypeAttempts(runtime) {
+  const configuredDType = typeof runtime?.dtype === 'string' ? runtime.dtype.trim() : '';
+  if (!configuredDType) {
+    return [null];
+  }
+  // Treat configured dtype as a preference, then retry with runtime default.
+  return [configuredDType, null];
+}
+
+function formatBackendLabel(backend, dtype) {
+  return dtype ? `${backend.toUpperCase()} (${dtype.toUpperCase()})` : backend.toUpperCase();
+}
+
 function resolvePrompt(rawPrompt) {
   return [
     {
@@ -162,6 +175,7 @@ async function initialize(payload) {
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
   const runtime = normalizeRuntimeConfig(payload.runtime);
   const attempts = getBackendAttemptOrder(backendPreference);
+  const dtypeAttempts = getDTypeAttempts(runtime);
   const errors = [];
 
   const { env, pipeline, TextStreamer: StreamerClass } = await loadTransformers();
@@ -175,67 +189,74 @@ async function initialize(payload) {
       continue;
     }
 
-    try {
-      postStatus(`Loading ${modelId} with ${backend.toUpperCase()}...`);
-      postProgress({ percent: 5, message: `Preparing ${backend.toUpperCase()} backend...` });
-      const pipelineOptions = {
-        device: backend,
-        ...runtime,
-        progress_callback: (progress) => {
-          const rawProgress = progress?.progress;
-          const normalizedProgress =
-            typeof rawProgress === 'number'
-              ? rawProgress <= 1
-                ? rawProgress * 100
-                : rawProgress
-              : 0;
-          const rawStatus = typeof progress?.status === 'string' ? progress.status : '';
-          const rawFile = typeof progress?.file === 'string' ? progress.file : '';
-          const rawLoadedBytes =
-            progress?.loaded ??
-            progress?.loadedBytes ??
-            progress?.bytes_loaded ??
-            progress?.bytesLoaded ??
-            0;
-          const rawTotalBytes =
-            progress?.total ??
-            progress?.totalBytes ??
-            progress?.bytes_total ??
-            progress?.bytesTotal ??
-            0;
-          const label = rawStatus || rawFile || 'Loading model files...';
-          postProgress({
-            percent: normalizedProgress,
-            message: String(label),
-            file: rawFile,
-            status: rawStatus,
-            loadedBytes: rawLoadedBytes,
-            totalBytes: rawTotalBytes,
-          });
-        },
-      };
-      model = await pipeline('text-generation', modelId, {
-        ...pipelineOptions,
-      });
-      tokenizer = model.tokenizer;
-      backendInUse = backend;
-      loadedModelId = modelId;
-      postProgress({ percent: 100, message: `Loaded ${modelId} (${backend.toUpperCase()}).` });
-      self.postMessage({
-        type: 'init-success',
-        payload: { backend, modelId },
-      });
-      postStatus(`Ready (${backend.toUpperCase()})`);
-      return;
-    } catch (error) {
-      const rawMessage = extractErrorMessage(error);
-      const isUnauthorized = /unauthorized|401|403/i.test(rawMessage);
-      if (isUnauthorized) {
-        errors.push(
-          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-onnx-web, or self-host pinned model files for static delivery.)`,
-        );
-      } else {
-        errors.push(`${backend.toUpperCase()}: ${rawMessage}`);
+    for (const dtype of dtypeAttempts) {
+      const backendLabel = formatBackendLabel(backend, dtype);
+      try {
+        postStatus(`Loading ${modelId} with ${backendLabel}...`);
+        postProgress({ percent: 5, message: `Preparing ${backendLabel} backend...` });
+        const pipelineOptions = {
+          device: backend,
+          ...(dtype ? { dtype } : {}),
+          progress_callback: (progress) => {
+            const rawProgress = progress?.progress;
+            const normalizedProgress =
+              typeof rawProgress === 'number'
+                ? rawProgress <= 1
+                  ? rawProgress * 100
+                  : rawProgress
+                : 0;
+            const rawStatus = typeof progress?.status === 'string' ? progress.status : '';
+            const rawFile = typeof progress?.file === 'string' ? progress.file : '';
+            const rawLoadedBytes =
+              progress?.loaded ??
+              progress?.loadedBytes ??
+              progress?.bytes_loaded ??
+              progress?.bytesLoaded ??
+              0;
+            const rawTotalBytes =
+              progress?.total ??
+              progress?.totalBytes ??
+              progress?.bytes_total ??
+              progress?.bytesTotal ??
+              0;
+            const label = rawStatus || rawFile || 'Loading model files...';
+            postProgress({
+              percent: normalizedProgress,
+              message: String(label),
+              file: rawFile,
+              status: rawStatus,
+              loadedBytes: rawLoadedBytes,
+              totalBytes: rawTotalBytes,
+            });
+          },
+        };
+        model = await pipeline('text-generation', modelId, {
+          ...pipelineOptions,
+        });
+        tokenizer = model.tokenizer;
+        backendInUse = backend;
+        loadedModelId = modelId;
+        postProgress({ percent: 100, message: `Loaded ${modelId} (${backend.toUpperCase()}).` });
+        self.postMessage({
+          type: 'init-success',
+          payload: { backend, modelId },
+        });
+        postStatus(`Ready (${backend.toUpperCase()})`);
+        return;
+      } catch (error) {
+        const rawMessage = extractErrorMessage(error);
+        const formattedMessage =
+          typeof error === 'number'
+            ? `${rawMessage} (numeric runtime error code 0x${error.toString(16)})`
+            : rawMessage;
+        const isUnauthorized = /unauthorized|401|403/i.test(formattedMessage);
+        if (isUnauthorized) {
+          errors.push(
+            `${backendLabel}: ${formattedMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-onnx-web, or self-host pinned model files for static delivery.)`,
+          );
+        } else {
+          errors.push(`${backendLabel}: ${formattedMessage}`);
+        }
       }
     }
   }
