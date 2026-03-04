@@ -20,7 +20,7 @@ Student-facing browser chat UI with local model inference.
 - If an existing conversation is selected before model load, the pre-chat panel prompts the user to load a model first and provides a `Load model` action.
 - If no active conversation exists, a new untitled conversation is created when the first message is sent.
 - Backend selection supports:
-  - `Auto (WebGPU then WASM)`
+  - `Auto (WebGPU then WASM then CPU)`
   - `WebGPU only`
   - `WASM only`
 - Token controls in Settings:
@@ -42,7 +42,7 @@ Student-facing browser chat UI with local model inference.
   - `Top K (Predictability)` uses `step=5` (default `50`) and explains that lower values are more predictable because sampling is limited to the K most likely options.
   - `Top P (Strangeness)` (nucleus sampling) uses min `0.00`, max `1.00`, and `step=0.05` (default `0.90`); higher values can produce more varied responses.
   - `Top K` and `Top P` are global settings and persist across sessions.
-- `Auto` attempts WebGPU first and falls back to WASM if unavailable or initialization fails.
+- `Auto` attempts WebGPU first, then WASM, then CPU if earlier backends are unavailable or initialization fails.
 - The selected backend and model are stored in `localStorage`.
 - Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
 - Debug status history is available in `Settings -> Debug info` (accordion).

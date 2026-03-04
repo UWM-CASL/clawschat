@@ -42,7 +42,7 @@ const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
 const GLOBAL_SAMPLING_SETTINGS_STORAGE_KEY = 'llm-global-sampling-settings';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
-const SUPPORTED_BACKEND_PREFERENCES = new Set(['auto', 'webgpu', 'wasm']);
+const SUPPORTED_BACKEND_PREFERENCES = new Set(['auto', 'webgpu', 'wasm', 'cpu']);
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -3164,7 +3164,7 @@ function setLoadProgress({
   const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   const isCompletedMessage =
     /^model ready\.$/i.test(String(message || '').trim()) ||
-    /^loaded .+ \((webgpu|wasm)\)\.$/i.test(String(message || '').trim());
+    /^loaded .+ \((webgpu|wasm|cpu)\)\.$/i.test(String(message || '').trim());
   const normalizedPercent = isCompletedMessage ? 100 : numericPercent;
   const displayPercent = Math.max(maxObservedLoadPercent, normalizedPercent);
   maxObservedLoadPercent = displayPercent;
@@ -3302,9 +3302,6 @@ function populateModelSelect() {
 }
 
 function normalizeBackendPreference(value) {
-  if (value === 'cpu') {
-    return 'wasm';
-  }
   if (SUPPORTED_BACKEND_PREFERENCES.has(value)) {
     return value;
   }

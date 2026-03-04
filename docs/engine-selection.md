@@ -4,7 +4,7 @@ Inference is executed in a dedicated Web Worker (`src/workers/llm.worker.js`).
 
 ## Backends
 
-- `auto`: tries `webgpu`, then falls back to `wasm`
+- `auto`: tries `webgpu`, then falls back to `wasm`, then `cpu`
 - `webgpu`: WebGPU only
 - `wasm`: WASM only
 

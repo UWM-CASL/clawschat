@@ -1,4 +1,4 @@
-const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2';
+const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
 
 let model = null;
 let tokenizer = null;
@@ -99,18 +99,21 @@ function getBackendAttemptOrder(preference) {
   if (normalizedPreference === 'wasm') {
     return ['wasm'];
   }
-  return ['webgpu', 'wasm'];
+  if (normalizedPreference === 'cpu') {
+    return ['cpu'];
+  }
+  return ['webgpu', 'wasm', 'cpu'];
 }
 
 function normalizeBackendPreference(preference) {
-  if (preference === 'cpu') {
-    return 'wasm';
-  }
   if (preference === 'webgpu') {
     return 'webgpu';
   }
   if (preference === 'wasm') {
     return 'wasm';
+  }
+  if (preference === 'cpu') {
+    return 'cpu';
   }
   return 'auto';
 }
