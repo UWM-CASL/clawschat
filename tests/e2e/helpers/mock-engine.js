@@ -1,4 +1,16 @@
 function installMockWorker() {
+  window.__mockWorkerGeneratePayloads = [];
+
+  function extractPromptText(prompt) {
+    if (Array.isArray(prompt)) {
+      return prompt
+        .map((message) => (typeof message?.content === 'string' ? message.content : ''))
+        .filter((content) => content.trim())
+        .join('\n');
+    }
+    return String(prompt || '');
+  }
+
   class MockWorker {
     constructor() {
       this.listeners = new Map();
@@ -57,7 +69,9 @@ function installMockWorker() {
 
       if (message.type === 'generate') {
         const requestId = message.payload?.requestId;
-        const promptText = String(message.payload?.prompt || '');
+        const promptPayload = message.payload?.prompt;
+        window.__mockWorkerGeneratePayloads.push(promptPayload);
+        const promptText = extractPromptText(promptPayload);
         const isLong = /long answer/i.test(promptText);
         const chunks = isLong
           ? ['Mock ', 'streamed ', 'response ', 'that ', 'keeps ', 'going ', 'to ', 'allow ', 'cancellation.']

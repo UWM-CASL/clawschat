@@ -30,6 +30,21 @@ test('chat flow: start, send message, load model, stream response', async ({ pag
   await expect(page.locator('.message-row.user-message')).toHaveCount(1);
   await expect(page.locator('.message-row.model-message .response-content')).toContainText('Mock streamed response.');
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
+
+  const promptShape = await page.evaluate(() => {
+    const payloads = Array.isArray(window.__mockWorkerGeneratePayloads)
+      ? window.__mockWorkerGeneratePayloads
+      : [];
+    const firstPrompt = payloads[0];
+    return {
+      isArray: Array.isArray(firstPrompt),
+      roles: Array.isArray(firstPrompt) ? firstPrompt.map((entry) => entry?.role) : [],
+      contents: Array.isArray(firstPrompt) ? firstPrompt.map((entry) => entry?.content) : [],
+    };
+  });
+  expect(promptShape.isArray).toBe(true);
+  expect(promptShape.roles).toEqual(['user']);
+  expect(promptShape.contents).toEqual(['Say hello']);
 });
 
 test('stop generating cancels in-flight stream and resets UI', async ({ page }) => {

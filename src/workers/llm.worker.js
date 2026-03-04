@@ -195,6 +195,8 @@ function resolvePrompt(rawPrompt) {
   ];
 }
 
+export { resolvePrompt };
+
 async function initialize(payload) {
   const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
   const backendPreference = normalizeBackendPreference(payload.backendPreference || 'auto');
