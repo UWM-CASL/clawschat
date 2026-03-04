@@ -115,6 +115,33 @@ function normalizeBackendPreference(preference) {
   return 'auto';
 }
 
+function extractErrorMessage(error) {
+  if (!error) {
+    return 'Unknown initialization error';
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (typeof error.message === 'string' && error.message.trim()) {
+    return error.message.trim();
+  }
+  if (typeof error.toString === 'function') {
+    const rendered = error.toString();
+    if (typeof rendered === 'string' && rendered && rendered !== '[object Object]') {
+      return rendered;
+    }
+  }
+  try {
+    const serialized = JSON.stringify(error);
+    if (serialized && serialized !== '{}') {
+      return serialized;
+    }
+  } catch {
+    // ignore serialization failures and use fallback below
+  }
+  return 'Unknown initialization error';
+}
+
 function resolvePrompt(rawPrompt) {
   return [
     {
@@ -147,7 +174,6 @@ async function initialize(payload) {
       postProgress({ percent: 5, message: `Preparing ${backend.toUpperCase()} backend...` });
       model = await pipeline('text-generation', modelId, {
         device: backend,
-        dtype: 'q4f16',
         progress_callback: (progress) => {
           const rawProgress = progress?.progress;
           const normalizedProgress =
@@ -192,7 +218,7 @@ async function initialize(payload) {
       postStatus(`Ready (${backend.toUpperCase()})`);
       return;
     } catch (error) {
-      const rawMessage = error?.message || 'Unknown initialization error';
+      const rawMessage = extractErrorMessage(error);
       const isUnauthorized = /unauthorized|401|403/i.test(rawMessage);
       if (isUnauthorized) {
         errors.push(
