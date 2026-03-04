@@ -6,6 +6,7 @@ Model support is configured in `src/config/models.json`:
 - `models[].runtime`: optional runtime hints per model:
   - `dtype` (example: `q4f16`)
   - `enableThinking` (`true` to pass `enable_thinking` during generation)
+  - `useExternalDataFormat` (`true`/number to enable loading `.onnx_data` sidecar files)
 - `models[].generation`: per-model integer token limits:
   - `defaultMaxOutputTokens`
   - `maxOutputTokens`
@@ -47,3 +48,4 @@ Per-model limits and defaults:
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype auto-selected by Transformers.js, max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtype auto-selected by Transformers.js, max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
+  - Both Llama entries enable `useExternalDataFormat: true` for `.onnx_data` loading.

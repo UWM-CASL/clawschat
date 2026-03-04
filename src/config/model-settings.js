@@ -114,9 +114,15 @@ function normalizeRuntime(rawRuntime) {
       ? rawRuntime.dtype.trim()
       : null;
   const enableThinking = rawRuntime?.enableThinking === true;
+  const useExternalDataFormat =
+    rawRuntime?.useExternalDataFormat === true ||
+    (Number.isInteger(rawRuntime?.useExternalDataFormat) && rawRuntime.useExternalDataFormat > 0)
+      ? rawRuntime.useExternalDataFormat
+      : false;
   return {
     ...(dtype ? { dtype } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
+    ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
   };
 }
 

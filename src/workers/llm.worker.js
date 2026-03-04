@@ -148,9 +148,15 @@ function extractErrorMessage(error) {
 function normalizeRuntimeConfig(rawRuntime) {
   const dtype = typeof rawRuntime?.dtype === 'string' ? rawRuntime.dtype.trim() : '';
   const enableThinking = rawRuntime?.enableThinking === true;
+  const useExternalDataFormat =
+    rawRuntime?.useExternalDataFormat === true ||
+    (Number.isInteger(rawRuntime?.useExternalDataFormat) && rawRuntime.useExternalDataFormat > 0)
+      ? rawRuntime.useExternalDataFormat
+      : false;
   return {
     ...(dtype ? { dtype } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
+    ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
   };
 }
 
@@ -181,13 +187,22 @@ async function initialize(payload) {
       errors.push('WebGPU unavailable in this browser.');
       continue;
     }
+    if (backend === 'cpu' && typeof navigator !== 'undefined') {
+      errors.push('CPU backend unavailable in this browser runtime (supported: webgpu, wasm).');
+      continue;
+    }
 
     try {
       postStatus(`Loading ${modelId} with ${backend.toUpperCase()}...`);
       postProgress({ percent: 5, message: `Preparing ${backend.toUpperCase()} backend...` });
       const pipelineOptions = {
         device: backend,
-        ...runtime,
+        ...(runtime.dtype ? { dtype: runtime.dtype } : {}),
+        ...(runtime.useExternalDataFormat
+          ? {
+              use_external_data_format: runtime.useExternalDataFormat,
+            }
+          : {}),
         progress_callback: (progress) => {
           const rawProgress = progress?.progress;
           const normalizedProgress =
