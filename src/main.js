@@ -158,6 +158,8 @@ const backendSelect = document.getElementById('backendSelect');
 const maxOutputTokensInput = document.getElementById('maxOutputTokensInput');
 const maxContextTokensInput = document.getElementById('maxContextTokensInput');
 const temperatureInput = document.getElementById('temperatureInput');
+const resetContextTokensButton = document.getElementById('resetContextTokensButton');
+const resetTemperatureButton = document.getElementById('resetTemperatureButton');
 const topKInput = document.getElementById('topKInput');
 const topPInput = document.getElementById('topPInput');
 const maxOutputTokensHelp = document.getElementById('maxOutputTokensHelp');
@@ -695,6 +697,12 @@ function updateGenerationSettingsEnabledState() {
   }
   if (temperatureInput) {
     temperatureInput.disabled = disabled;
+  }
+  if (resetContextTokensButton instanceof HTMLButtonElement) {
+    resetContextTokensButton.disabled = disabled;
+  }
+  if (resetTemperatureButton instanceof HTMLButtonElement) {
+    resetTemperatureButton.disabled = disabled;
   }
   if (topKInput) {
     topKInput.disabled = disabled;
@@ -4207,6 +4215,30 @@ if (maxContextTokensInput) {
 
 if (temperatureInput) {
   temperatureInput.addEventListener('change', onGenerationSettingInputChanged);
+}
+
+if (resetContextTokensButton instanceof HTMLButtonElement) {
+  resetContextTokensButton.addEventListener('click', () => {
+    if (!modelReady || !maxContextTokensInput) {
+      return;
+    }
+    const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+    const limits = getModelGenerationLimits(selectedModel);
+    maxContextTokensInput.value = String(limits.defaultMaxContextTokens);
+    onGenerationSettingInputChanged();
+  });
+}
+
+if (resetTemperatureButton instanceof HTMLButtonElement) {
+  resetTemperatureButton.addEventListener('click', () => {
+    if (!modelReady || !temperatureInput) {
+      return;
+    }
+    const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+    const limits = getModelGenerationLimits(selectedModel);
+    temperatureInput.value = limits.defaultTemperature.toFixed(1);
+    onGenerationSettingInputChanged();
+  });
 }
 
 if (topKInput) {

@@ -24,17 +24,19 @@ Student-facing browser chat UI with local model inference.
   - `WebGPU only`
   - `CPU only`
 - Token controls in Settings:
-  - `Maximum output tokens` and `Maximum context size (short-term memory)` are model-aware integer fields.
+  - `Maximum output tokens` and `Context size (short-term memory)` are model-aware integer fields.
   - Values are constrained by per-model limits from `src/config/models.json` and use `step=8`.
   - Each token field shows an estimated word count (`tokens * 0.75`).
   - User overrides are saved per model in browser storage and restored when that model is selected again.
   - Fields are disabled until a model is loaded.
+  - `Context size (short-term memory)` includes a `Reset to model default` link that applies the selected model default when clicked.
   - If changed during generation, updates are queued and applied after the current response finishes.
 - Temperature control in Settings:
   - `Temperature (Creativity)` is model-aware and constrained by per-model `minTemperature`, `maxTemperature`, and `defaultTemperature`.
   - Values use `step=0.1`.
   - User overrides are saved per model in browser storage and restored when that model is selected again.
   - The field is disabled until a model is loaded.
+  - `Temperature (Creativity)` includes a `Reset to model default` link that applies the selected model default when clicked.
   - If changed during generation, updates are queued and applied after the current response finishes.
 - Sampling controls in Settings:
   - `Top K (Predictability)` uses `step=5` (default `50`) and explains that lower values are more predictable because sampling is limited to the K most likely options.

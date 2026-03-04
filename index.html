@@ -421,7 +421,17 @@
                     <p id="maxOutputTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
                   </div>
                   <div class="settings-control-group">
-                    <label class="form-label" for="maxContextTokensInput">Maximum context size (short-term memory)</label>
+                    <div class="d-flex align-items-baseline justify-content-between gap-2">
+                      <label class="form-label mb-0" for="maxContextTokensInput">Context size (short-term memory)</label>
+                      <button
+                        id="resetContextTokensButton"
+                        type="button"
+                        class="btn btn-link btn-sm p-0"
+                        disabled
+                      >
+                        Reset to model default
+                      </button>
+                    </div>
                     <input
                       id="maxContextTokensInput"
                       class="form-control"
@@ -434,7 +444,17 @@
                     <p id="maxContextTokensHelp" class="form-text mb-0">Load a model to edit this setting.</p>
                   </div>
                   <div class="settings-control-group">
-                    <label class="form-label" for="temperatureInput">Temperature (Creativity)</label>
+                    <div class="d-flex align-items-baseline justify-content-between gap-2">
+                      <label class="form-label mb-0" for="temperatureInput">Temperature (Creativity)</label>
+                      <button
+                        id="resetTemperatureButton"
+                        type="button"
+                        class="btn btn-link btn-sm p-0"
+                        disabled
+                      >
+                        Reset to model default
+                      </button>
+                    </div>
                     <input
                       id="temperatureInput"
                       class="form-control"
