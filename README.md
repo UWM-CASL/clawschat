@@ -5,6 +5,7 @@ Student-facing browser chat UI with local model inference.
 ## Runtime behavior
 
 - Inference runs in-browser via Transformers.js inside a Web Worker.
+- Conversation turns are sent to the model as structured chat messages (`system`/`user`/`assistant`) rather than a flattened transcript string.
 - On initial load, the app shows a home screen with a `Start a conversation` action.
 - Clicking `Start a conversation` opens the chat workspace with model selection, an empty composer, and no model load yet.
 - The selected model starts loading only after the first message is sent.

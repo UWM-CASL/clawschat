@@ -161,10 +161,36 @@ function normalizeRuntimeConfig(rawRuntime) {
 }
 
 function resolvePrompt(rawPrompt) {
+  if (Array.isArray(rawPrompt)) {
+    const structuredMessages = rawPrompt
+      .map((message) => {
+        if (!message || typeof message !== 'object') {
+          return null;
+        }
+        const roleCandidate = typeof message.role === 'string' ? message.role.trim().toLowerCase() : '';
+        const content = typeof message.content === 'string' ? message.content : '';
+        if (!content.trim()) {
+          return null;
+        }
+        let role = 'user';
+        if (roleCandidate === 'assistant' || roleCandidate === 'model') {
+          role = 'assistant';
+        } else if (roleCandidate === 'system') {
+          role = 'system';
+        }
+        return { role, content };
+      })
+      .filter(Boolean);
+    if (structuredMessages.length) {
+      return structuredMessages;
+    }
+  }
+
+  const flatPrompt = typeof rawPrompt === 'string' ? rawPrompt : String(rawPrompt || '');
   return [
     {
       role: 'user',
-      content: rawPrompt,
+      content: flatPrompt,
     },
   ];
 }

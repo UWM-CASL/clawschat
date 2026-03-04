@@ -1645,7 +1645,7 @@ function applyFixCardSignals(item, message) {
 }
 
 function buildPromptForConversationLeaf(conversation, leafMessageId = conversation?.activeLeafMessageId) {
-  return buildConversationPrompt(
+  return buildConversationMessages(
     getConversationPathMessages(conversation, leafMessageId),
     getEffectiveConversationSystemPrompt(conversation),
   );
@@ -1690,12 +1690,14 @@ function addMessageToConversation(conversation, role, text, options = {}) {
   return message;
 }
 
-function buildConversationPrompt(messages, systemPrompt = '') {
-  const lines = ['Continue this conversation and answer as the Model:'];
+function buildConversationMessages(messages, systemPrompt = '') {
+  const structuredMessages = [];
   const normalizedSystemPrompt = normalizeSystemPrompt(systemPrompt);
   if (normalizedSystemPrompt) {
-    lines.push('System instructions:');
-    lines.push(normalizedSystemPrompt);
+    structuredMessages.push({
+      role: 'system',
+      content: normalizedSystemPrompt,
+    });
   }
   messages.forEach((message) => {
     if (!message || (message.role !== 'user' && message.role !== 'model')) {
@@ -1705,11 +1707,12 @@ function buildConversationPrompt(messages, systemPrompt = '') {
     if (!content) {
       return;
     }
-    const speaker = message.role === 'user' ? 'User' : 'Model';
-    lines.push(`${speaker}: ${content}`);
+    structuredMessages.push({
+      role: message.role === 'user' ? 'user' : 'assistant',
+      content,
+    });
   });
-  lines.push('Model:');
-  return lines.join('\n');
+  return structuredMessages;
 }
 
 function renderConversationList() {
