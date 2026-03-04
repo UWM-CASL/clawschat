@@ -8,7 +8,7 @@ let loadedModelId = null;
 let cachedModule = null;
 let generationConfig = {
   maxOutputTokens: 1024,
-  maxContextTokens: 32768,
+  maxContextTokens: 8192,
   temperature: 0.6,
   topK: 50,
   topP: 0.9,
@@ -20,7 +20,7 @@ function normalizeGenerationConfig(rawConfig) {
   const parsedTemperature = Number.parseFloat(String(rawConfig?.temperature ?? ''));
   const parsedTopK = Number.parseInt(String(rawConfig?.topK ?? ''), 10);
   const parsedTopP = Number.parseFloat(String(rawConfig?.topP ?? ''));
-  const maxContextTokens = Number.isInteger(parsedMaxContext) && parsedMaxContext > 0 ? parsedMaxContext : 32768;
+  const maxContextTokens = Number.isInteger(parsedMaxContext) && parsedMaxContext > 0 ? parsedMaxContext : 8192;
   const maxOutputCap = maxContextTokens;
   const maxOutputTokens =
     Number.isInteger(parsedMaxOutput) && parsedMaxOutput > 0
@@ -111,7 +111,7 @@ function resolvePrompt(rawPrompt) {
 }
 
 async function initialize(payload) {
-  const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-ONNX';
+  const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
   const backendPreference = payload.backendPreference || 'auto';
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
   const attempts = getBackendAttemptOrder(backendPreference);
@@ -182,7 +182,7 @@ async function initialize(payload) {
       const isUnauthorized = /unauthorized|401|403/i.test(rawMessage);
       if (isUnauthorized) {
         errors.push(
-          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-ONNX, or self-host pinned model files for static delivery.)`,
+          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-onnx-web, or self-host pinned model files for static delivery.)`,
         );
       } else {
         errors.push(`${backend.toUpperCase()}: ${rawMessage}`);

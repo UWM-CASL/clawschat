@@ -8,11 +8,11 @@ export class LLMEngineClient {
     this.pendingInit = null;
     this.pendingGeneration = null;
     this.config = {
-      modelId: 'onnx-community/Llama-3.2-3B-Instruct-ONNX',
+      modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       backendPreference: 'auto',
       generationConfig: {
         maxOutputTokens: 1024,
-        maxContextTokens: 32768,
+        maxContextTokens: 8192,
         temperature: 0.6,
         topK: 50,
         topP: 0.9,

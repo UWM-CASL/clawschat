@@ -18,13 +18,15 @@ Model support is configured in `src/config/models.json`:
 
 Current supported models in Settings:
 
-- `onnx-community/Llama-3.2-3B-Instruct-ONNX` (default)
-- `onnx-community/Qwen3.5-2B-ONNX`
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
 - Legacy aliases remapped automatically at runtime:
-  - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-ONNX`
-  - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-ONNX`
-  - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-ONNX`
-  - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-ONNX`
+  - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 
 Notes:
 
@@ -41,5 +43,6 @@ Notes:
 
 Per-model limits and defaults:
 
-- `onnx-community/Llama-3.2-3B-Instruct-ONNX`: max context `131072`, default temperature `0.6`
-- `onnx-community/Qwen3.5-2B-ONNX`: max context `262144`, default temperature `0.6`
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
+- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: max context `32768`, default context `32768`, default temperature `0.3`, thinking tags `<think>...</think>`
