@@ -113,7 +113,11 @@ function normalizeRuntime(rawRuntime) {
     typeof rawRuntime?.dtype === 'string' && ALLOWED_RUNTIME_DTYPES.has(rawRuntime.dtype.trim())
       ? rawRuntime.dtype.trim()
       : null;
-  return dtype ? { dtype } : {};
+  const enableThinking = rawRuntime?.enableThinking === true;
+  return {
+    ...(dtype ? { dtype } : {}),
+    ...(enableThinking ? { enableThinking: true } : {}),
+  };
 }
 
 const configuredModels = Array.isArray(modelCatalog?.models)

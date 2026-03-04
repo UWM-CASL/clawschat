@@ -87,15 +87,16 @@ Student-facing browser chat UI with local model inference.
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+- `huggingworld/Qwen3.5-2B-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/Qwen3.5-2B-ONNX` -> `huggingworld/Qwen3.5-2B-ONNX`
   - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 - Model support configuration lives in `src/config/models.json`:
   - `models`: options shown in the model selector
-  - `models[].runtime`: per-model runtime hints (currently `dtype`)
+  - `models[].runtime`: per-model runtime hints (`dtype`, optional `enableThinking`)
   - `models[].generation`: per-model defaults and limits for output/context tokens and temperature
   - `defaultModelId`: fallback/default selection
   - `legacyAliases`: stored legacy IDs remapped at runtime

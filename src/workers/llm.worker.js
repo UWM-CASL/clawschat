@@ -144,7 +144,11 @@ function extractErrorMessage(error) {
 
 function normalizeRuntimeConfig(rawRuntime) {
   const dtype = typeof rawRuntime?.dtype === 'string' ? rawRuntime.dtype.trim() : '';
-  return dtype ? { dtype } : {};
+  const enableThinking = rawRuntime?.enableThinking === true;
+  return {
+    ...(dtype ? { dtype } : {}),
+    ...(enableThinking ? { enableThinking: true } : {}),
+  };
 }
 
 function resolvePrompt(rawPrompt) {
@@ -267,6 +271,17 @@ async function generate(payload) {
     const formattedPrompt = resolvePrompt(prompt);
     const requestGenerationConfig = normalizeGenerationConfig(payload.generationConfig || generationConfig);
     generationConfig = requestGenerationConfig;
+    const runtime = normalizeRuntimeConfig(payload.runtime);
+    const generationOptions = {
+      max_new_tokens: requestGenerationConfig.maxOutputTokens,
+      max_length: requestGenerationConfig.maxContextTokens,
+      temperature: requestGenerationConfig.temperature,
+      top_k: requestGenerationConfig.topK,
+      top_p: requestGenerationConfig.topP,
+      do_sample: true,
+      return_full_text: false,
+      ...(runtime.enableThinking ? { enable_thinking: true } : {}),
+    };
 
     if (TextStreamer) {
       const streamer = new TextStreamer(tokenizer, {
@@ -281,25 +296,11 @@ async function generate(payload) {
       });
 
       await model(formattedPrompt, {
-        max_new_tokens: requestGenerationConfig.maxOutputTokens,
-        max_length: requestGenerationConfig.maxContextTokens,
-        temperature: requestGenerationConfig.temperature,
-        top_k: requestGenerationConfig.topK,
-        top_p: requestGenerationConfig.topP,
-        do_sample: true,
+        ...generationOptions,
         streamer,
-        return_full_text: false,
       });
     } else {
-      const output = await model(formattedPrompt, {
-        max_new_tokens: requestGenerationConfig.maxOutputTokens,
-        max_length: requestGenerationConfig.maxContextTokens,
-        temperature: requestGenerationConfig.temperature,
-        top_k: requestGenerationConfig.topK,
-        top_p: requestGenerationConfig.topP,
-        do_sample: true,
-        return_full_text: false,
-      });
+      const output = await model(formattedPrompt, generationOptions);
       const generated = output?.[0]?.generated_text;
       if (Array.isArray(generated)) {
         streamedText = generated[generated.length - 1]?.content || '';

@@ -10,6 +10,7 @@ export class LLMEngineClient {
     this.config = {
       modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       backendPreference: 'auto',
+      runtime: {},
       generationConfig: {
         maxOutputTokens: 1024,
         maxContextTokens: 8192,
@@ -58,6 +59,7 @@ export class LLMEngineClient {
       payload: {
         requestId,
         prompt,
+        runtime: this.config.runtime,
         generationConfig: handlers.generationConfig || this.config.generationConfig,
       },
     });
