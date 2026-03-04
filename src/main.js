@@ -42,6 +42,7 @@ const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
 const GLOBAL_SAMPLING_SETTINGS_STORAGE_KEY = 'llm-global-sampling-settings';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
+const SUPPORTED_BACKEND_PREFERENCES = new Set(['auto', 'webgpu', 'wasm']);
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -3163,7 +3164,7 @@ function setLoadProgress({
   const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   const isCompletedMessage =
     /^model ready\.$/i.test(String(message || '').trim()) ||
-    /^loaded .+ \((webgpu|cpu)\)\.$/i.test(String(message || '').trim());
+    /^loaded .+ \((webgpu|wasm)\)\.$/i.test(String(message || '').trim());
   const normalizedPercent = isCompletedMessage ? 100 : numericPercent;
   const displayPercent = Math.max(maxObservedLoadPercent, normalizedPercent);
   maxObservedLoadPercent = displayPercent;
@@ -3300,6 +3301,16 @@ function populateModelSelect() {
   modelSelect.value = DEFAULT_MODEL;
 }
 
+function normalizeBackendPreference(value) {
+  if (value === 'cpu') {
+    return 'wasm';
+  }
+  if (SUPPORTED_BACKEND_PREFERENCES.has(value)) {
+    return value;
+  }
+  return 'auto';
+}
+
 function restoreInferencePreferences() {
   const storedModel = localStorage.getItem(MODEL_STORAGE_KEY);
   const storedBackend = localStorage.getItem(BACKEND_STORAGE_KEY);
@@ -3309,7 +3320,9 @@ function restoreInferencePreferences() {
     localStorage.setItem(MODEL_STORAGE_KEY, normalizedModel);
   }
   if (backendSelect && storedBackend) {
-    backendSelect.value = storedBackend;
+    const normalizedBackend = normalizeBackendPreference(storedBackend);
+    backendSelect.value = normalizedBackend;
+    localStorage.setItem(BACKEND_STORAGE_KEY, normalizedBackend);
   }
   const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
   syncGenerationSettingsFromModel(selectedModel, true);
@@ -3372,21 +3385,29 @@ function parseThinkingText(rawText, thinkingTags) {
 
 function readEngineConfigFromUI() {
   const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'auto');
   if (modelSelect && modelSelect.value !== selectedModel) {
     modelSelect.value = selectedModel;
+  }
+  if (backendSelect && backendSelect.value !== selectedBackend) {
+    backendSelect.value = selectedBackend;
   }
   syncGenerationSettingsFromModel(selectedModel, false);
   return {
     modelId: selectedModel,
-    backendPreference: backendSelect?.value || 'auto',
+    backendPreference: selectedBackend,
     generationConfig: activeGenerationConfig,
   };
 }
 
 function persistInferencePreferences() {
   const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'auto');
+  if (backendSelect && backendSelect.value !== selectedBackend) {
+    backendSelect.value = selectedBackend;
+  }
   localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
-  localStorage.setItem(BACKEND_STORAGE_KEY, backendSelect?.value || 'auto');
+  localStorage.setItem(BACKEND_STORAGE_KEY, selectedBackend);
   persistGenerationConfigForModel(selectedModel, activeGenerationConfig);
   persistGlobalSamplingSettings(activeGenerationConfig);
 }

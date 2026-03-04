@@ -92,13 +92,27 @@ async function loadTransformers() {
 }
 
 function getBackendAttemptOrder(preference) {
-  if (preference === 'webgpu') {
+  const normalizedPreference = normalizeBackendPreference(preference);
+  if (normalizedPreference === 'webgpu') {
     return ['webgpu'];
   }
-  if (preference === 'cpu') {
-    return ['cpu'];
+  if (normalizedPreference === 'wasm') {
+    return ['wasm'];
   }
-  return ['webgpu', 'cpu'];
+  return ['webgpu', 'wasm'];
+}
+
+function normalizeBackendPreference(preference) {
+  if (preference === 'cpu') {
+    return 'wasm';
+  }
+  if (preference === 'webgpu') {
+    return 'webgpu';
+  }
+  if (preference === 'wasm') {
+    return 'wasm';
+  }
+  return 'auto';
 }
 
 function resolvePrompt(rawPrompt) {
@@ -112,7 +126,7 @@ function resolvePrompt(rawPrompt) {
 
 async function initialize(payload) {
   const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
-  const backendPreference = payload.backendPreference || 'auto';
+  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'auto');
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
   const attempts = getBackendAttemptOrder(backendPreference);
   const errors = [];
@@ -283,11 +297,12 @@ async function generate(payload) {
 self.onmessage = async (event) => {
   const { type, payload } = event.data || {};
   if (type === 'init') {
+    const requestedBackendPreference = normalizeBackendPreference(payload?.backendPreference);
     const needsReinit =
       !model ||
       !tokenizer ||
       payload.modelId !== loadedModelId ||
-      (payload.backendPreference !== 'auto' && payload.backendPreference !== backendInUse);
+      (requestedBackendPreference !== 'auto' && requestedBackendPreference !== backendInUse);
 
     if (!needsReinit) {
       self.postMessage({

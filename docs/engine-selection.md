@@ -4,9 +4,9 @@ Inference is executed in a dedicated Web Worker (`src/workers/llm.worker.js`).
 
 ## Backends
 
-- `auto`: tries `webgpu`, then falls back to `cpu`
+- `auto`: tries `webgpu`, then falls back to `wasm`
 - `webgpu`: WebGPU only
-- `cpu`: CPU only
+- `wasm`: WASM only
 
 The resolved backend is shown in the status region in the main UI.
 Initialization is user-triggered on first message send in the chat workspace.

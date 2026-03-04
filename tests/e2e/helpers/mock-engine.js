@@ -44,13 +44,13 @@ function installMockWorker() {
         this.#emit('message', {
           type: 'init-success',
           payload: {
-            backend: 'cpu',
+            backend: 'wasm',
             modelId: message.payload?.modelId || 'mock/model',
           },
         });
         this.#emit('message', {
           type: 'status',
-          payload: { message: 'Ready (CPU)' },
+          payload: { message: 'Ready (WASM)' },
         });
         return;
       }
@@ -85,7 +85,7 @@ function installMockWorker() {
           });
           this.#emit('message', {
             type: 'status',
-            payload: { message: 'Complete (CPU)' },
+            payload: { message: 'Complete (WASM)' },
           });
         }, isLong ? 180 : 60);
       }
