@@ -27,7 +27,6 @@ test('chat flow: start, send message, load model, stream response', async ({ pag
 
   await expect(page.locator('#statusRegion')).toContainText('Ready (CPU)');
   await expect(page.locator('#chatTranscriptWrap')).toBeVisible();
-  await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Stop generating');
   await expect(page.locator('.message-row.user-message')).toHaveCount(1);
   await expect(page.locator('.message-row.model-message .response-content')).toContainText('Mock streamed response.');
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');

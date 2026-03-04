@@ -210,6 +210,10 @@
   backdrop-filter: blur(8px);
 }
 
+.top-bar.animate-in {
+  animation: surface-enter 320ms cubic-bezier(0.2, 0.85, 0.24, 1);
+}
+
 .chat-title-wrap {
   min-width: 0;
 }
@@ -329,6 +333,10 @@
   margin: 0 auto;
 }
 
+.pre-chat-panel.animate-in .pre-chat-inner {
+  animation: surface-enter 360ms cubic-bezier(0.2, 0.85, 0.24, 1);
+}
+
 .pre-chat-inner {
   border: 1px solid var(--border-soft);
   border-radius: 1rem;
@@ -363,6 +371,10 @@
   margin: 0 auto;
   width: 100%;
   position: relative;
+}
+
+.chat-transcript-wrap.animate-in {
+  animation: surface-enter 320ms cubic-bezier(0.2, 0.85, 0.24, 1);
 }
 
 .chat-transcript {
@@ -765,7 +777,15 @@
   border-top: 2px solid var(--composer-border);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
   padding: 0.85rem 1rem 1rem;
-  transition: padding 220ms ease, border-radius 220ms ease, box-shadow 220ms ease, margin 220ms ease;
+  width: 100%;
+  margin: 0;
+  transition:
+    width 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
+    padding 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
+    border-radius 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
+    box-shadow 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
+    margin 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
+    transform 280ms cubic-bezier(0.2, 0.85, 0.24, 1);
 }
 
 .composer.is-prechat {
@@ -775,6 +795,33 @@
   border-radius: 1.35rem;
   box-shadow: 0 14px 30px rgba(31, 41, 64, 0.16);
   padding: 1rem;
+  transform: translateY(-0.2rem);
+}
+
+.composer.animate-dock {
+  animation: composer-dock 360ms cubic-bezier(0.2, 0.85, 0.24, 1);
+}
+
+@keyframes surface-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes composer-dock {
+  0% {
+    opacity: 0.85;
+    transform: translateY(0.7rem) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .composer-row {
@@ -1117,5 +1164,12 @@
   .composer {
     transition: none;
     transform: none;
+  }
+
+  .top-bar.animate-in,
+  .pre-chat-panel.animate-in .pre-chat-inner,
+  .chat-transcript-wrap.animate-in,
+  .composer.animate-dock {
+    animation: none;
   }
 }

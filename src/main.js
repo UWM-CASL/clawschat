@@ -265,6 +265,7 @@ let isRunningOrchestration = false;
 let isSettingsPageOpen = false;
 let activeSettingsTab = 'system';
 let conversationSystemPromptModalInstance = null;
+let currentWorkspaceView = 'home';
 const ROUTE_HOME = 'home';
 const ROUTE_CHAT = 'chat';
 const ROUTE_SETTINGS = 'settings';
@@ -274,6 +275,7 @@ let maxObservedLoadPercent = 0;
 const mathTypesetTimers = new WeakMap();
 let hasLoggedMathJaxError = false;
 let mathJaxLoadPromise = null;
+const PRE_CHAT_STATUS_HINT = 'Send your first message to load the selected model.';
 void ensureMathJaxLoaded();
 
 function initializeTooltips(root = document) {
@@ -315,6 +317,18 @@ function setIconButtonContent(button, iconClass, label) {
     <i class="bi ${iconClass}" aria-hidden="true"></i>
     <span class="visually-hidden">${label}</span>
   `;
+}
+
+function playEntranceAnimation(element, className = 'animate-in') {
+  if (!(element instanceof HTMLElement) || reducedMotionQuery.matches) {
+    return;
+  }
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+  window.setTimeout(() => {
+    element.classList.remove(className);
+  }, 450);
 }
 
 async function copyTextToClipboard(text) {
@@ -757,6 +771,15 @@ function setStatus(message) {
     onboardingStatusRegion.textContent = message;
   }
   appendDebug(`Status: ${message}`);
+}
+
+function updatePreChatStatusHint() {
+  if (!(onboardingStatusRegion instanceof HTMLElement)) {
+    return;
+  }
+  if (hasStartedChatWorkspace && !modelReady && !isLoadingModel) {
+    onboardingStatusRegion.textContent = PRE_CHAT_STATUS_HINT;
+  }
 }
 
 function buildConversationStateSnapshot() {
@@ -2676,9 +2699,11 @@ function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } 
   if (isSettingsPageOpen) {
     return;
   }
+  const previousView = currentWorkspaceView;
   const showHome = !hasStartedChatWorkspace;
   const showPreChat = hasStartedChatWorkspace && !modelReady;
   const showChat = hasStartedChatWorkspace && modelReady;
+  currentWorkspaceView = showHome ? ROUTE_HOME : showPreChat ? 'prechat' : ROUTE_CHAT;
   if (chatMain instanceof HTMLElement) {
     chatMain.classList.toggle('is-home', showHome);
     chatMain.classList.toggle('is-prechat', showPreChat);
@@ -2696,6 +2721,19 @@ function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } 
   updateChatTitleEditorVisibility();
   updateTranscriptNavigationButtonVisibility();
   updateActionButtons();
+  updatePreChatStatusHint();
+  if (currentWorkspaceView !== previousView) {
+    if (showPreChat) {
+      playEntranceAnimation(preChatPanel);
+      playEntranceAnimation(chatForm, 'animate-dock');
+    } else if (showChat) {
+      playEntranceAnimation(topBar);
+      playEntranceAnimation(chatTranscriptWrap);
+      playEntranceAnimation(chatForm, 'animate-dock');
+    } else if (showHome) {
+      playEntranceAnimation(homePanel);
+    }
+  }
   if (syncRoute) {
     syncRouteToCurrentView({ replace: replaceRoute });
   }
