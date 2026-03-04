@@ -21,7 +21,6 @@ Current supported models in Settings:
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
-- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
@@ -46,4 +45,3 @@ Per-model limits and defaults:
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
-- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: dtype `q8`, max context `32768`, default context `32768`, default temperature `0.3`, thinking tags `<think>...</think>`
