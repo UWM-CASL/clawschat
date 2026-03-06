@@ -708,7 +708,7 @@ function onGenerationSettingInputChanged() {
 function appendDebug(message) {
   const timestamp = new Date().toLocaleTimeString();
   appState.debugEntries.push(`[${timestamp}] ${message}`);
-  if (appState.debugEntries.length > MAX_DEBUG_ENTRIES) {
+  if (appState.debugEntries.length > appState.maxDebugEntries) {
     appState.debugEntries.shift();
   }
   if (debugInfo) {
@@ -1387,6 +1387,24 @@ function renderTranscript(options = {}) {
   transcriptView.renderTranscript(options);
 }
 
+function isUiBusy() {
+  return appState.isGenerating || appState.isLoadingModel || appState.isRunningOrchestration;
+}
+
+function buildActiveConversationExportPayload(activeConversation) {
+  const selectedModelId =
+    typeof engine?.config?.modelId === 'string' && engine.config.modelId.trim()
+      ? engine.config.modelId.trim()
+      : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const temperature = Number.isFinite(engine?.config?.generationConfig?.temperature)
+    ? Number(engine.config.generationConfig.temperature)
+    : Number(appState.activeGenerationConfig?.temperature ?? DEFAULT_GENERATION_LIMITS.defaultTemperature);
+  return buildConversationDownloadPayload(activeConversation, {
+    modelId: selectedModelId,
+    temperature,
+  });
+}
+
 function updateChatTitleEditorVisibility() {
   if (
     !chatTitle ||
@@ -1410,7 +1428,7 @@ function updateChatTitleEditorVisibility() {
   const canEditTitle = appState.modelReady && Boolean(activeConversation?.hasGeneratedName);
   const canEditConversationSystemPrompt = Boolean(activeConversation);
   const canDownloadConversation = appState.modelReady && hasCompletedGeneration;
-  const controlsDisabled = appState.isGenerating || appState.isLoadingModel || appState.isRunningOrchestration;
+  const controlsDisabled = isUiBusy();
   const showEditor = canEditTitle && appState.isChatTitleEditing;
   chatTitle.classList.toggle('d-none', showEditor);
   chatTitleInput.classList.toggle('d-none', !showEditor);
@@ -1435,17 +1453,7 @@ function downloadActiveConversationBranchAsJson() {
     setStatus('No active conversation to download.');
     return;
   }
-  const selectedModelId =
-    typeof engine?.config?.modelId === 'string' && engine.config.modelId.trim()
-      ? engine.config.modelId.trim()
-      : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
-  const temperature = Number.isFinite(engine?.config?.generationConfig?.temperature)
-    ? Number(engine.config.generationConfig.temperature)
-    : Number(appState.activeGenerationConfig?.temperature ?? DEFAULT_GENERATION_LIMITS.defaultTemperature);
-  const payload = buildConversationDownloadPayload(activeConversation, {
-    modelId: selectedModelId,
-    temperature,
-  });
+  const payload = buildActiveConversationExportPayload(activeConversation);
   if (!payload.exchanges.length) {
     setStatus('No messages to download on this branch.');
     return;
@@ -1469,17 +1477,7 @@ function downloadActiveConversationBranchAsMarkdown() {
     setStatus('No active conversation to download.');
     return;
   }
-  const selectedModelId =
-    typeof engine?.config?.modelId === 'string' && engine.config.modelId.trim()
-      ? engine.config.modelId.trim()
-      : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
-  const temperature = Number.isFinite(engine?.config?.generationConfig?.temperature)
-    ? Number(engine.config.generationConfig.temperature)
-    : Number(appState.activeGenerationConfig?.temperature ?? DEFAULT_GENERATION_LIMITS.defaultTemperature);
-  const payload = buildConversationDownloadPayload(activeConversation, {
-    modelId: selectedModelId,
-    temperature,
-  });
+  const payload = buildActiveConversationExportPayload(activeConversation);
   if (!payload.exchanges.length) {
     setStatus('No messages to download on this branch.');
     return;
@@ -1509,9 +1507,7 @@ function getConversationSystemPromptModalInstance() {
 
 function beginConversationSystemPromptEdit({ trigger = null } = {}) {
   if (
-    appState.isGenerating ||
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
+    isUiBusy() ||
     !(conversationSystemPromptInput instanceof HTMLTextAreaElement) ||
     !(conversationSystemPromptAppendToggle instanceof HTMLInputElement)
   ) {
@@ -1558,7 +1554,7 @@ function saveConversationSystemPromptEdit() {
 }
 
 function beginChatTitleEdit() {
-  if (appState.isGenerating || appState.isLoadingModel || appState.isRunningOrchestration) {
+  if (isUiBusy()) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -1814,7 +1810,7 @@ function updatePreChatActionButtons() {
   const hasExistingConversation = hasConversationHistory(activeConversation);
   const canShowPreChatActions =
     appState.hasStartedChatWorkspace && !appState.modelReady && !appState.isSettingsPageOpen && Boolean(activeConversation);
-  const isBusy = appState.isGenerating || appState.isLoadingModel || appState.isRunningOrchestration;
+  const isBusy = isUiBusy();
 
   if (preChatActions instanceof HTMLElement) {
     preChatActions.classList.toggle('d-none', !canShowPreChatActions);
