@@ -47,6 +47,40 @@ test('chat flow: start, send message, load model, stream response', async ({ pag
   expect(promptShape.contents).toEqual(['Say hello']);
 });
 
+test('keyboard shortcuts open shortcut help, send, and open settings', async ({ page }) => {
+  await expect(page.getByRole('button', { name: 'Open keyboard shortcuts' })).toBeVisible();
+
+  await page.keyboard.down('Control');
+  await page.keyboard.press('/');
+  await page.keyboard.up('Control');
+  const shortcutsDialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(shortcutsDialog).toBeVisible();
+  await shortcutsDialog.getByRole('button', { name: 'Close keyboard shortcuts' }).click();
+  await expect(shortcutsDialog).toBeHidden();
+
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('n');
+  await page.keyboard.up('Alt');
+  await expect(page).toHaveURL(/#\/chat$/);
+  await ensureComposerVisible(page);
+  await expect(page.getByText('Press Ctrl+/ to view available actions.')).toBeVisible();
+
+  await page.locator('#messageInput').fill('Shortcut send');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.locator('.message-row.model-message .response-content')).toContainText('Mock streamed response.');
+
+  await page.evaluate(() => {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 's',
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+  });
+  await expect(page).toHaveURL(/#\/settings$/);
+});
+
 test('stop generating cancels in-flight stream and resets UI', async ({ page }) => {
   await page.getByRole('button', { name: 'Start a conversation' }).click();
   await expect(page).toHaveURL(/#\/chat$/);
@@ -56,7 +90,7 @@ test('stop generating cancels in-flight stream and resets UI', async ({ page }) 
   await page.locator('#sendButton').click();
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Stop generating');
 
-  await page.locator('#sendButton').click();
+  await page.keyboard.press('Alt+Period');
   await expect(page.locator('#debugInfo')).toContainText('Generation canceled by user.');
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
 });

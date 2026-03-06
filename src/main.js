@@ -172,6 +172,9 @@ const downloadConversationJsonBtn = document.getElementById('downloadConversatio
 const downloadConversationMarkdownBtn = document.getElementById('downloadConversationMarkdownBtn');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
+const openKeyboardShortcutsButton = document.getElementById('openKeyboardShortcutsButton');
+const composerShortcutsHintButton = document.getElementById('composerShortcutsHintButton');
+const keyboardShortcutsModal = document.getElementById('keyboardShortcutsModal');
 const conversationSystemPromptModal = document.getElementById('conversationSystemPromptModal');
 const conversationSystemPromptInput = document.getElementById('conversationSystemPromptInput');
 const conversationSystemPromptAppendToggle = document.getElementById(
@@ -210,6 +213,21 @@ const MAX_DEBUG_ENTRIES = 120;
 const ROUTE_HOME = 'home';
 const ROUTE_CHAT = 'chat';
 const ROUTE_SETTINGS = 'settings';
+const SHORTCUT_KEY = {
+  branch: 'b',
+  copy: 'c',
+  edit: 'e',
+  fix: 'f',
+  help: 'h',
+  jumpLatest: 'j',
+  jumpPrompt: 'k',
+  loadModel: 'l',
+  newConversation: 'n',
+  systemPrompt: 'p',
+  regenerate: 'r',
+  settings: 's',
+  title: 't',
+};
 const mathTypesetTimers = new WeakMap();
 const PRE_CHAT_STATUS_HINT_DEFAULT = 'Send your first message to load the selected model.';
 const PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION =
@@ -276,6 +294,288 @@ function playEntranceAnimation(element, className = 'animate-in') {
   window.setTimeout(() => {
     element.classList.remove(className);
   }, 450);
+}
+
+function isEditableElement(element) {
+  return (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement ||
+    Boolean(element instanceof HTMLElement && element.isContentEditable)
+  );
+}
+
+function isAnyModalOpen() {
+  return Boolean(document.querySelector('.modal.show'));
+}
+
+function isShortcutTriggerAllowed(element) {
+  return !isEditableElement(element) && !isAnyModalOpen();
+}
+
+function clickShortcutTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.classList.contains('d-none') || target.closest('.d-none')) {
+    return false;
+  }
+  if (target.hasAttribute('disabled') || target.getAttribute('aria-disabled') === 'true') {
+    return false;
+  }
+  if (target.tagName === 'A') {
+    target.click();
+    return true;
+  }
+  if (target instanceof HTMLButtonElement) {
+    target.click();
+    return true;
+  }
+  return false;
+}
+
+function getKeyboardShortcutsModalInstance() {
+  if (!(keyboardShortcutsModal instanceof HTMLElement)) {
+    return null;
+  }
+  if (!appState.keyboardShortcutsModalInstance) {
+    appState.keyboardShortcutsModalInstance = Modal.getOrCreateInstance(keyboardShortcutsModal);
+  }
+  return appState.keyboardShortcutsModalInstance;
+}
+
+function openKeyboardShortcuts(trigger = null) {
+  if (isAnyModalOpen() && !keyboardShortcutsModal?.classList.contains('show')) {
+    return;
+  }
+  if (trigger instanceof HTMLElement) {
+    appState.lastKeyboardShortcutsTrigger = trigger;
+  }
+  const modalInstance = getKeyboardShortcutsModalInstance();
+  if (modalInstance) {
+    modalInstance.show();
+  }
+}
+
+function closeKeyboardShortcuts() {
+  const modalInstance = getKeyboardShortcutsModalInstance();
+  if (modalInstance) {
+    modalInstance.hide();
+  }
+}
+
+function getFocusedMessageShortcutContext() {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof Element)) {
+    return null;
+  }
+  const messageRow = activeElement.closest('.message-row');
+  if (!(messageRow instanceof HTMLElement)) {
+    return null;
+  }
+  const messageId = messageRow.dataset.messageId;
+  if (!messageId) {
+    return null;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation) {
+    return null;
+  }
+  const message = getMessageNodeById(activeConversation, messageId);
+  if (!message) {
+    return null;
+  }
+  return { activeConversation, message, messageRow };
+}
+
+function handleFocusedMessageShortcut(event) {
+  if (!isShortcutTriggerAllowed(event.target)) {
+    return false;
+  }
+  const context = getFocusedMessageShortcutContext();
+  if (!context) {
+    return false;
+  }
+  const { message, messageRow } = context;
+  const normalizedKey = String(event.key || '').toLowerCase();
+  if (event.altKey || event.ctrlKey || event.metaKey) {
+    return false;
+  }
+  if (event.key === '[') {
+    event.preventDefault();
+    if (message.role === 'model') {
+      switchModelVariant(message.id, -1);
+      return true;
+    }
+    if (message.role === 'user') {
+      switchUserVariant(message.id, -1);
+      return true;
+    }
+    return false;
+  }
+  if (event.key === ']') {
+    event.preventDefault();
+    if (message.role === 'model') {
+      switchModelVariant(message.id, 1);
+      return true;
+    }
+    if (message.role === 'user') {
+      switchUserVariant(message.id, 1);
+      return true;
+    }
+    return false;
+  }
+  if (message.role === 'model') {
+    if (normalizedKey === SHORTCUT_KEY.regenerate) {
+      event.preventDefault();
+      appController.regenerateFromMessage(message.id);
+      return true;
+    }
+    if (normalizedKey === SHORTCUT_KEY.fix) {
+      event.preventDefault();
+      void appController.fixResponseFromMessage(message.id);
+      return true;
+    }
+    if (normalizedKey === SHORTCUT_KEY.copy) {
+      event.preventDefault();
+      void handleMessageCopyAction(message.id, event.shiftKey ? 'thoughts' : 'response');
+      return true;
+    }
+    return false;
+  }
+  if (message.role === 'user') {
+    if (normalizedKey === SHORTCUT_KEY.edit) {
+      event.preventDefault();
+      beginUserMessageEdit(message.id);
+      return true;
+    }
+    if (normalizedKey === SHORTCUT_KEY.branch) {
+      event.preventDefault();
+      branchFromUserMessage(message.id);
+      return true;
+    }
+    if (normalizedKey === SHORTCUT_KEY.copy) {
+      event.preventDefault();
+      void handleMessageCopyAction(message.id, 'message');
+      return true;
+    }
+    const editor = messageRow.querySelector('.user-message-editor');
+    if (
+      editor instanceof HTMLTextAreaElement &&
+      document.activeElement === editor &&
+      normalizedKey === SHORTCUT_KEY.edit
+    ) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function handleGlobalShortcut(event) {
+  const normalizedKey = String(event.key || '').toLowerCase();
+  const target = event.target;
+  const editableTarget = isEditableElement(target);
+
+  if (event.ctrlKey && !event.altKey && !event.metaKey && normalizedKey === '/') {
+    event.preventDefault();
+    if (isAnyModalOpen() && keyboardShortcutsModal?.classList.contains('show')) {
+      closeKeyboardShortcuts();
+      return true;
+    }
+    if (isAnyModalOpen()) {
+      return false;
+    }
+    openKeyboardShortcuts(target instanceof HTMLElement ? target : null);
+    return true;
+  }
+
+  if (event.ctrlKey && !event.altKey && !event.metaKey && normalizedKey === 'enter') {
+    if (document.activeElement === messageInput && sendButton instanceof HTMLButtonElement && !sendButton.disabled) {
+      event.preventDefault();
+      sendButton.click();
+      return true;
+    }
+    return false;
+  }
+
+  if (editableTarget || isAnyModalOpen()) {
+    return false;
+  }
+
+  if (!event.altKey || event.ctrlKey || event.metaKey) {
+    return false;
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.settings) {
+    event.preventDefault();
+    if (appState.isSettingsPageOpen) {
+      setSettingsPageVisibility(false, { replaceRoute: false });
+      if (openSettingsButton instanceof HTMLButtonElement) {
+        openSettingsButton.focus();
+      }
+    } else if (openSettingsButton instanceof HTMLButtonElement && !openSettingsButton.disabled) {
+      openSettingsButton.click();
+    }
+    return true;
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.help) {
+    event.preventDefault();
+    return clickShortcutTarget(document.getElementById('openHelpButton'));
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.newConversation) {
+    event.preventDefault();
+    if (!appState.hasStartedChatWorkspace) {
+      return clickShortcutTarget(startConversationButton);
+    }
+    return clickShortcutTarget(newConversationBtn);
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.loadModel) {
+    event.preventDefault();
+    return clickShortcutTarget(preChatLoadModelBtn);
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.jumpPrompt) {
+    event.preventDefault();
+    return clickShortcutTarget(jumpToLastPromptButton);
+  }
+
+  if (event.shiftKey && normalizedKey === SHORTCUT_KEY.jumpLatest) {
+    event.preventDefault();
+    return clickShortcutTarget(downloadConversationJsonBtn);
+  }
+
+  if (event.shiftKey && normalizedKey === 'm') {
+    event.preventDefault();
+    return clickShortcutTarget(downloadConversationMarkdownBtn);
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.jumpLatest) {
+    event.preventDefault();
+    return clickShortcutTarget(jumpToLatestButton);
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.systemPrompt) {
+    event.preventDefault();
+    if (clickShortcutTarget(editConversationSystemPromptBtn)) {
+      return true;
+    }
+    return clickShortcutTarget(preChatEditConversationSystemPromptBtn);
+  }
+
+  if (normalizedKey === SHORTCUT_KEY.title) {
+    event.preventDefault();
+    return clickShortcutTarget(editChatTitleBtn);
+  }
+
+  if (normalizedKey === '.' && appState.isGenerating) {
+    event.preventDefault();
+    return clickShortcutTarget(sendButton);
+  }
+
+  return false;
 }
 
 async function copyTextToClipboard(text) {
@@ -2019,7 +2319,8 @@ function updateSendButtonMode() {
     sendButton.classList.remove('btn-primary');
     sendButton.classList.add('btn-outline-secondary');
     sendButton.setAttribute('aria-label', 'Stop generating');
-    sendButton.setAttribute('data-bs-title', 'Stop generating');
+    sendButton.setAttribute('aria-keyshortcuts', 'Alt+.');
+    sendButton.setAttribute('data-bs-title', 'Stop generating (Alt+.)');
     setIconButtonContent(sendButton, 'bi-sign-stop', 'Stop generating');
     initializeTooltips(document);
     return;
@@ -2028,7 +2329,8 @@ function updateSendButtonMode() {
   sendButton.classList.remove('btn-outline-secondary');
   sendButton.classList.add('btn-primary');
   sendButton.setAttribute('aria-label', 'Send message');
-  sendButton.setAttribute('data-bs-title', 'Send message');
+  sendButton.setAttribute('aria-keyshortcuts', 'Control+Enter');
+  sendButton.setAttribute('data-bs-title', 'Send message (Ctrl+Enter)');
   setIconButtonContent(sendButton, 'bi-send', 'Send message');
   initializeTooltips(document);
 }
@@ -2841,8 +3143,25 @@ if (closeSettingsButton) {
   });
 }
 
+if (openKeyboardShortcutsButton instanceof HTMLButtonElement) {
+  openKeyboardShortcutsButton.addEventListener('click', (event) => {
+    openKeyboardShortcuts(event.currentTarget);
+  });
+}
+
+if (composerShortcutsHintButton instanceof HTMLButtonElement) {
+  composerShortcutsHintButton.addEventListener('click', (event) => {
+    openKeyboardShortcuts(event.currentTarget);
+  });
+}
+
 document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape' || !appState.isSettingsPageOpen) {
+  if (event.key === 'Escape' && keyboardShortcutsModal?.classList.contains('show')) {
+    event.preventDefault();
+    closeKeyboardShortcuts();
+    return;
+  }
+  if (event.key !== 'Escape' || !appState.isSettingsPageOpen || isAnyModalOpen()) {
     return;
   }
   event.preventDefault();
@@ -2851,6 +3170,25 @@ document.addEventListener('keydown', (event) => {
     openSettingsButton.focus();
   }
 });
+
+document.addEventListener('keydown', (event) => {
+  if (handleGlobalShortcut(event)) {
+    return;
+  }
+  void handleFocusedMessageShortcut(event);
+});
+
+window.addEventListener(
+  'keydown',
+  (event) => {
+    if (event.key !== 'Escape' || !keyboardShortcutsModal?.classList.contains('show')) {
+      return;
+    }
+    event.preventDefault();
+    closeKeyboardShortcuts();
+  },
+  { capture: true },
+);
 
 window.addEventListener('hashchange', () => {
   if (appState.ignoreNextHashChange) {
@@ -3282,6 +3620,33 @@ if (conversationSystemPromptModal instanceof HTMLElement) {
     }
     if (editConversationSystemPromptBtn instanceof HTMLButtonElement) {
       editConversationSystemPromptBtn.focus();
+    }
+  });
+}
+
+if (keyboardShortcutsModal instanceof HTMLElement) {
+  keyboardShortcutsModal.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    closeKeyboardShortcuts();
+  });
+  keyboardShortcutsModal.addEventListener('keyup', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    closeKeyboardShortcuts();
+  });
+  keyboardShortcutsModal.addEventListener('hidden.bs.modal', () => {
+    if (appState.lastKeyboardShortcutsTrigger instanceof HTMLElement) {
+      appState.lastKeyboardShortcutsTrigger.focus();
+      appState.lastKeyboardShortcutsTrigger = null;
+      return;
+    }
+    if (openKeyboardShortcutsButton instanceof HTMLButtonElement) {
+      openKeyboardShortcutsButton.focus();
     }
   });
 }

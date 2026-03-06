@@ -91,9 +91,10 @@ export function createTranscriptView(dependencies) {
                 class="btn btn-sm btn-link thoughts-copy-btn"
                 data-message-id="${message.id}"
                 aria-label="Copy thoughts"
+                aria-keyshortcuts="Shift+C"
                 data-copy-type="thoughts"
                 data-bs-toggle="tooltip"
-                data-bs-title="Copy thoughts"
+                data-bs-title="Copy thoughts (Shift+C)"
               >
                 <i class="bi bi-copy" aria-hidden="true"></i>
                 <span class="visually-hidden">Copy thoughts</span>
@@ -113,8 +114,9 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary regenerate-response-btn"
             data-message-id="${message.id}"
             aria-label="Regenerate response"
+            aria-keyshortcuts="R"
             data-bs-toggle="tooltip"
-            data-bs-title="Regenerate response"
+            data-bs-title="Regenerate response (R)"
           >
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
             <span class="visually-hidden">Regenerate response</span>
@@ -124,8 +126,9 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary fix-response-btn"
             data-message-id="${message.id}"
             aria-label="Fix response"
+            aria-keyshortcuts="F"
             data-bs-toggle="tooltip"
-            data-bs-title="Fix response"
+            data-bs-title="Fix response (F)"
           >
             <i class="bi bi-wrench-adjustable-circle" aria-hidden="true"></i>
             <span class="visually-hidden">Fix response</span>
@@ -135,9 +138,10 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary copy-message-btn"
             data-message-id="${message.id}"
             aria-label="Copy response"
+            aria-keyshortcuts="C"
             data-copy-type="response"
             data-bs-toggle="tooltip"
-            data-bs-title="Copy response"
+            data-bs-title="Copy response (C)"
           >
             <i class="bi bi-copy" aria-hidden="true"></i>
             <span class="visually-hidden">Copy response</span>
@@ -148,8 +152,9 @@ export function createTranscriptView(dependencies) {
               class="btn btn-sm btn-outline-primary response-variant-prev"
               data-message-id="${message.id}"
               aria-label="Previous regenerated response"
+              aria-keyshortcuts="["
               data-bs-toggle="tooltip"
-              data-bs-title="Previous regenerated response"
+              data-bs-title="Previous regenerated response ([)"
               ${variantState.canGoPrev ? '' : 'disabled'}
             >
               <i class="bi bi-arrow-bar-left" aria-hidden="true"></i>
@@ -161,8 +166,9 @@ export function createTranscriptView(dependencies) {
               class="btn btn-sm btn-outline-primary response-variant-next"
               data-message-id="${message.id}"
               aria-label="Next regenerated response"
+              aria-keyshortcuts="]"
               data-bs-toggle="tooltip"
-              data-bs-title="Next regenerated response"
+              data-bs-title="Next regenerated response (])"
               ${variantState.canGoNext ? '' : 'disabled'}
             >
               <i class="bi bi-arrow-bar-right" aria-hidden="true"></i>
@@ -232,8 +238,9 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary edit-user-message-btn${isEditing ? ' d-none' : ''}"
             data-message-id="${message.id}"
             aria-label="Edit message"
+            aria-keyshortcuts="E"
             data-bs-toggle="tooltip"
-            data-bs-title="Edit message"
+            data-bs-title="Edit message (E)"
           >
             <i class="bi bi-pencil-fill" aria-hidden="true"></i>
             <span class="visually-hidden">Edit message</span>
@@ -243,8 +250,9 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary save-user-message-btn${isEditing ? '' : ' d-none'}"
             data-message-id="${message.id}"
             aria-label="Save edited message"
+            aria-keyshortcuts="Control+Enter"
             data-bs-toggle="tooltip"
-            data-bs-title="Save edited message"
+            data-bs-title="Save edited message (Ctrl+Enter)"
           >
             <i class="bi bi-floppy-fill" aria-hidden="true"></i>
             <span class="visually-hidden">Save edited message</span>
@@ -254,8 +262,9 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary cancel-user-edit-btn${isEditing ? '' : ' d-none'}"
             data-message-id="${message.id}"
             aria-label="Cancel editing message"
+            aria-keyshortcuts="Escape"
             data-bs-toggle="tooltip"
-            data-bs-title="Cancel editing"
+            data-bs-title="Cancel editing (Esc)"
           >
             <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
             <span class="visually-hidden">Cancel editing</span>
@@ -265,8 +274,9 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary branch-user-message-btn${isEditing ? ' d-none' : ''}"
             data-message-id="${message.id}"
             aria-label="Branch from this user message"
+            aria-keyshortcuts="B"
             data-bs-toggle="tooltip"
-            data-bs-title="Branch conversation"
+            data-bs-title="Branch conversation (B)"
           >
             <i class="bi bi-terminal-split" aria-hidden="true"></i>
             <span class="visually-hidden">Branch conversation</span>
@@ -276,9 +286,10 @@ export function createTranscriptView(dependencies) {
             class="btn btn-sm btn-outline-primary copy-message-btn${isEditing ? ' d-none' : ''}"
             data-message-id="${message.id}"
             aria-label="Copy message"
+            aria-keyshortcuts="C"
             data-copy-type="message"
             data-bs-toggle="tooltip"
-            data-bs-title="Copy message"
+            data-bs-title="Copy message (C)"
           >
             <i class="bi bi-copy" aria-hidden="true"></i>
             <span class="visually-hidden">Copy message</span>
@@ -289,8 +300,9 @@ export function createTranscriptView(dependencies) {
               class="btn btn-sm btn-outline-primary user-variant-prev"
               data-message-id="${message.id}"
               aria-label="Previous user branch"
+              aria-keyshortcuts="["
               data-bs-toggle="tooltip"
-              data-bs-title="Previous user branch"
+              data-bs-title="Previous user branch ([)"
               ${variantState.canGoPrev ? '' : 'disabled'}
             >
               <i class="bi bi-arrow-bar-left" aria-hidden="true"></i>
@@ -302,8 +314,9 @@ export function createTranscriptView(dependencies) {
               class="btn btn-sm btn-outline-primary user-variant-next"
               data-message-id="${message.id}"
               aria-label="Next user branch"
+              aria-keyshortcuts="]"
               data-bs-toggle="tooltip"
-              data-bs-title="Next user branch"
+              data-bs-title="Next user branch (])"
               ${variantState.canGoNext ? '' : 'disabled'}
             >
               <i class="bi bi-arrow-bar-right" aria-hidden="true"></i>

@@ -16,6 +16,7 @@ Student-facing browser chat UI with local model inference.
   - `#/settings` when Settings is open
   - Browser back/forward navigation follows those screen transitions.
 - Header actions include a `Help` button that opens `help.html` in a new tab with feature and basic usage guidance.
+- Header actions include a `Keyboard shortcuts` button and the composer shows a visible shortcut hint (`Ctrl+/`) so users can discover available keyboard actions.
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - If an existing conversation is selected before model load, the pre-chat panel prompts the user to load a model first and provides a `Load model` action.
@@ -76,6 +77,7 @@ Student-facing browser chat UI with local model inference.
 - The pre-chat `Ready to Chat?` panel also exposes conversation prompt editing for the currently selected conversation.
 - Each user message and model response includes a copy action; model response copy excludes thought text.
 - The Thinking section includes a dedicated copy action to copy thoughts only.
+- Keyboard shortcuts cover the primary workspace actions (start/new conversation, help, settings, send/stop, load model, downloads, transcript jumps) plus focused transcript actions (edit, branch, regenerate, fix, copy, and branch/response variant navigation).
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.
 - Each model response includes a `Fix` button (wrench icon). `Fix` now runs a multi-step orchestration from `src/config/orchestrations/fix-response.json` (critique -> revise -> validate) before streaming a corrected variant at that turn.
 - Each user message now supports branch-aware editing controls:

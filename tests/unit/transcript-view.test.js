@@ -87,6 +87,10 @@ describe('transcript-view', () => {
     expect(harness.container.querySelectorAll('.message-row')).toHaveLength(2);
     expect(harness.container.querySelector('.user-message .message-bubble')?.textContent).toBe('Hello there');
     expect(harness.container.querySelector('.model-message .response-content')?.innerHTML).toContain('Hi back');
+    expect(harness.container.querySelector('.regenerate-response-btn')?.getAttribute('aria-keyshortcuts')).toBe('R');
+    expect(harness.container.querySelector('.copy-message-btn')?.getAttribute('data-bs-title')).toContain(
+      '(C)',
+    );
   });
 
   test('updates user message editing controls', () => {

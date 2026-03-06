@@ -29,8 +29,9 @@
             type="button"
             class="btn btn-primary square-icon-button"
             aria-label="New conversation"
+            aria-keyshortcuts="Alt+N"
             data-bs-toggle="tooltip"
-            data-bs-title="New conversation"
+            data-bs-title="New conversation (Alt+N)"
           >
             <i class="bi bi-pencil-square" aria-hidden="true"></i>
             <span class="visually-hidden">New conversation</span>
@@ -67,8 +68,9 @@
               id="editChatTitleBtn"
               class="btn icon-button d-none"
               aria-label="Edit conversation title"
+              aria-keyshortcuts="Alt+T"
               data-bs-toggle="tooltip"
-              data-bs-title="Edit conversation title"
+              data-bs-title="Edit conversation title (Alt+T)"
             >
               <i class="bi bi-pencil-fill" aria-hidden="true"></i>
               <span class="visually-hidden">Edit conversation title</span>
@@ -78,8 +80,9 @@
               id="editConversationSystemPromptBtn"
               class="btn icon-button d-none"
               aria-label="Edit conversation system prompt"
+              aria-keyshortcuts="Alt+P"
               data-icon-tooltip="true"
-              data-bs-title="Edit conversation system prompt"
+              data-bs-title="Edit conversation system prompt (Alt+P)"
             >
               <i class="bi bi-card-checklist" aria-hidden="true"></i>
               <span class="visually-hidden">Edit conversation system prompt</span>
@@ -105,6 +108,7 @@
                     id="downloadConversationJsonBtn"
                     type="button"
                     class="dropdown-item"
+                    aria-keyshortcuts="Alt+Shift+J"
                   >
                     JSON (.llm.json) File
                   </button>
@@ -114,6 +118,7 @@
                     id="downloadConversationMarkdownBtn"
                     type="button"
                     class="dropdown-item"
+                    aria-keyshortcuts="Alt+Shift+M"
                   >
                     Markdown (.md) File
                   </button>
@@ -145,6 +150,18 @@
           </div>
           <p id="statusRegion" class="status-pill mb-0" role="status" aria-live="polite">Ready</p>
           <div class="top-bar-actions">
+            <button
+              id="openKeyboardShortcutsButton"
+              type="button"
+              class="btn icon-button"
+              aria-label="Open keyboard shortcuts"
+              aria-keyshortcuts="Control+/"
+              data-icon-tooltip="true"
+              data-bs-title="Keyboard shortcuts (Ctrl+/)"
+            >
+              <i class="bi bi-keyboard-fill" aria-hidden="true"></i>
+              <span class="visually-hidden">Open keyboard shortcuts</span>
+            </button>
             <a
               id="openHelpButton"
               class="btn icon-button"
@@ -152,8 +169,9 @@
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open help in a new tab"
+              aria-keyshortcuts="Alt+H"
               data-icon-tooltip="true"
-              data-bs-title="Open help in a new tab"
+              data-bs-title="Open help in a new tab (Alt+H)"
             >
               <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
               <span class="visually-hidden">Open help in a new tab</span>
@@ -172,7 +190,12 @@
               <p class="home-lead mb-4">
                 Start a conversation first. Your selected model will load when you send your first message.
               </p>
-              <button id="startConversationButton" type="button" class="btn btn-primary btn-lg">
+              <button
+                id="startConversationButton"
+                type="button"
+                class="btn btn-primary btn-lg"
+                aria-keyshortcuts="Alt+N"
+              >
                 Start a conversation
               </button>
             </div>
@@ -194,6 +217,7 @@
                   type="button"
                   class="btn btn-primary"
                   aria-label="Load model"
+                  aria-keyshortcuts="Alt+L"
                 >
                   Load model
                 </button>
@@ -202,8 +226,9 @@
                   type="button"
                   class="btn icon-button"
                   aria-label="Edit conversation system prompt"
+                  aria-keyshortcuts="Alt+P"
                   data-icon-tooltip="true"
-                  data-bs-title="Edit conversation system prompt"
+                  data-bs-title="Edit conversation system prompt (Alt+P)"
                 >
                   <i class="bi bi-card-checklist" aria-hidden="true"></i>
                   <span class="visually-hidden">Edit conversation system prompt</span>
@@ -246,12 +271,18 @@
               id="jumpToLastPromptButton"
               type="button"
               class="btn btn-primary jump-to-last-prompt-btn d-none"
+              aria-keyshortcuts="Alt+K"
             >
               <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
               <span>Jump to last prompt</span>
             </button>
             <ol id="chatTranscript" class="chat-transcript"></ol>
-            <button id="jumpToLatestButton" type="button" class="btn btn-primary jump-to-latest-btn d-none">
+            <button
+              id="jumpToLatestButton"
+              type="button"
+              class="btn btn-primary jump-to-latest-btn d-none"
+              aria-keyshortcuts="Alt+J"
+            >
               <i class="bi bi-arrow-down-circle" aria-hidden="true"></i>
               <span>Jump to latest</span>
             </button>
@@ -260,6 +291,19 @@
 
         <form class="composer" aria-label="Message input">
           <label class="visually-hidden" for="messageInput">Message input</label>
+          <div class="composer-shortcuts-hint">
+            <button
+              id="composerShortcutsHintButton"
+              type="button"
+              class="btn btn-link btn-sm composer-shortcuts-link"
+              aria-describedby="composerShortcutsHintText"
+            >
+              Keyboard shortcuts
+            </button>
+            <span id="composerShortcutsHintText" class="small text-body-secondary">
+              Press <kbd>Ctrl</kbd>+<kbd>/</kbd> to view available actions.
+            </span>
+          </div>
           <div class="composer-row">
             <textarea
               id="messageInput"
@@ -272,8 +316,9 @@
               type="submit"
               class="btn btn-primary"
               aria-label="Send message"
+              aria-keyshortcuts="Control+Enter"
               data-bs-toggle="tooltip"
-              data-bs-title="Send message"
+              data-bs-title="Send message (Ctrl+Enter)"
             >
               <i class="bi bi-send" aria-hidden="true"></i>
               <span class="visually-hidden">Send message</span>
@@ -532,12 +577,79 @@
       id="openSettingsButton"
       class="btn icon-button global-settings-button"
       aria-label="Open settings"
+      aria-keyshortcuts="Alt+S"
       data-icon-tooltip="true"
-      data-bs-title="Open settings"
+      data-bs-title="Open settings (Alt+S)"
     >
       <i class="bi bi-gear-fill" aria-hidden="true"></i>
       <span class="visually-hidden">Open settings</span>
     </button>
+
+    <div
+      class="modal fade"
+      id="keyboardShortcutsModal"
+      tabindex="-1"
+      aria-labelledby="keyboardShortcutsModalLabel"
+      aria-describedby="keyboardShortcutsModalHelp"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5" id="keyboardShortcutsModalLabel">Keyboard shortcuts</h2>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close keyboard shortcuts"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <p id="keyboardShortcutsModalHelp" class="text-body-secondary">
+              Global shortcuts work anywhere unless a dialog is open. Message shortcuts work when focus is inside a
+              message card.
+            </p>
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <caption class="visually-hidden">Available keyboard shortcuts</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Action</th>
+                    <th scope="col">Shortcut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Show keyboard shortcuts</td><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td></tr>
+                  <tr><td>Start or create a conversation</td><td><kbd>Alt</kbd>+<kbd>N</kbd></td></tr>
+                  <tr><td>Open or close settings</td><td><kbd>Alt</kbd>+<kbd>S</kbd></td></tr>
+                  <tr><td>Open help</td><td><kbd>Alt</kbd>+<kbd>H</kbd></td></tr>
+                  <tr><td>Send message</td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td></tr>
+                  <tr><td>Stop generating</td><td><kbd>Alt</kbd>+<kbd>.</kbd></td></tr>
+                  <tr><td>Load model</td><td><kbd>Alt</kbd>+<kbd>L</kbd></td></tr>
+                  <tr><td>Edit conversation title</td><td><kbd>Alt</kbd>+<kbd>T</kbd></td></tr>
+                  <tr><td>Edit conversation system prompt</td><td><kbd>Alt</kbd>+<kbd>P</kbd></td></tr>
+                  <tr><td>Download JSON</td><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd></td></tr>
+                  <tr><td>Download Markdown</td><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td></tr>
+                  <tr><td>Jump to last prompt</td><td><kbd>Alt</kbd>+<kbd>K</kbd></td></tr>
+                  <tr><td>Jump to latest message</td><td><kbd>Alt</kbd>+<kbd>J</kbd></td></tr>
+                  <tr><td>Previous branch or response</td><td><kbd>[</kbd></td></tr>
+                  <tr><td>Next branch or response</td><td><kbd>]</kbd></td></tr>
+                  <tr><td>Edit focused user message</td><td><kbd>E</kbd></td></tr>
+                  <tr><td>Branch from focused user message</td><td><kbd>B</kbd></td></tr>
+                  <tr><td>Regenerate focused model response</td><td><kbd>R</kbd></td></tr>
+                  <tr><td>Fix focused model response</td><td><kbd>F</kbd></td></tr>
+                  <tr><td>Copy focused message or response</td><td><kbd>C</kbd></td></tr>
+                  <tr><td>Copy focused thoughts</td><td><kbd>Shift</kbd>+<kbd>C</kbd></td></tr>
+                  <tr><td>Save message edit</td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td></tr>
+                  <tr><td>Cancel message edit or close panels</td><td><kbd>Escape</kbd></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div
       class="modal fade"
