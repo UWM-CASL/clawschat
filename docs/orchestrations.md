@@ -11,6 +11,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
 
 ## Runtime behavior
 
+- Orchestration step execution lives in `src/llm/orchestration-runner.js`.
 - Orchestrations are step arrays (`steps`) where each step can define:
   - `stepName`
   - `prompt`
@@ -20,6 +21,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - `outputProcessing` (optional post-processing options)
 - `outputProcessing.stripThinking: true` removes model thinking sections (for example `<think>...</think>`) from that step output before it is stored in `finalOutput`, `previousStepOutput`, `stepNOutput`, and any `outputKey`.
 - The app renders prompt templates with `{{...}}` placeholders and sends each step through `LLMEngineClient` in order.
+- `src/state/app-controller.js` calls the orchestration runner for rename/fix flows and keeps transcript/UI state in sync around those runs.
 - Each completed step output is available to later steps via:
   - `{{previousStepOutput}}` and `{{lastStepOutput}}`
   - `{{step1Output}}`, `{{step2Output}}`, etc.

@@ -6,6 +6,7 @@ import Tooltip from 'bootstrap/js/dist/tooltip';
 import MarkdownIt from 'markdown-it';
 import './styles.css';
 import { LLMEngineClient } from './llm/engine-client.js';
+import { createOrchestrationRunner } from './llm/orchestration-runner.js';
 import renameChatOrchestration from './config/orchestrations/rename-chat.json';
 import fixResponseOrchestration from './config/orchestrations/fix-response.json';
 import {
@@ -53,6 +54,7 @@ import {
   parseMessageNodeCounterFromId,
   pruneDescendantsFromMessage,
 } from './state/conversation-model.js';
+import { createAppController } from './state/app-controller.js';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
@@ -234,6 +236,46 @@ const PRE_CHAT_STATUS_HINT_DEFAULT = 'Send your first message to load the select
 const PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION =
   'To see your conversation, load a model first.';
 let lastConversationSystemPromptTrigger = null;
+
+const appState = {};
+Object.defineProperties(appState, {
+  activeGenerationConfig: {
+    get: () => activeGenerationConfig,
+    set: (value) => {
+      activeGenerationConfig = value;
+    },
+  },
+  activeUserEditMessageId: {
+    get: () => activeUserEditMessageId,
+    set: (value) => {
+      activeUserEditMessageId = value;
+    },
+  },
+  isGenerating: {
+    get: () => isGenerating,
+    set: (value) => {
+      isGenerating = value;
+    },
+  },
+  isLoadingModel: {
+    get: () => isLoadingModel,
+    set: (value) => {
+      isLoadingModel = value;
+    },
+  },
+  isRunningOrchestration: {
+    get: () => isRunningOrchestration,
+    set: (value) => {
+      isRunningOrchestration = value;
+    },
+  },
+  modelReady: {
+    get: () => modelReady,
+    set: (value) => {
+      modelReady = value;
+    },
+  },
+});
 void ensureMathJaxLoaded();
 
 function initializeTooltips(root = document) {
@@ -1142,6 +1184,10 @@ function getActiveConversation() {
   return conversations.find((conversation) => conversation.id === activeConversationId) || null;
 }
 
+function findConversationById(conversationId) {
+  return conversations.find((conversation) => conversation.id === conversationId) || null;
+}
+
 function createConversation(name) {
   conversationCount += 1;
   return createConversationRecord({
@@ -1151,36 +1197,6 @@ function createConversation(name) {
     systemPrompt: defaultSystemPrompt,
     startedAt: Date.now(),
   });
-}
-
-function getOrchestrationSteps(orchestration) {
-  const steps = Array.isArray(orchestration?.steps) ? orchestration.steps : [];
-  if (!steps.length) {
-    throw new Error('Invalid orchestration definition.');
-  }
-  steps.forEach((step, index) => {
-    if (typeof step?.prompt !== 'string' || !step.prompt.trim()) {
-      throw new Error(`Invalid orchestration step at index ${index}.`);
-    }
-  });
-  return steps;
-}
-
-function buildOrchestrationPrompt(step, variables = {}) {
-  if (!step || typeof step.prompt !== 'string' || !step.prompt.trim()) {
-    throw new Error('Invalid orchestration definition.');
-  }
-  const renderedPrompt = step.prompt.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key) =>
-    String(variables[key] ?? ''),
-  );
-  const responseInstructions =
-    typeof step?.responseFormat?.instructions === 'string'
-      ? step.responseFormat.instructions.trim()
-      : '';
-  if (!responseInstructions) {
-    return renderedPrompt.trim();
-  }
-  return `${renderedPrompt.trim()}\n\nResponse format:\n${responseInstructions}`;
 }
 
 function requestSingleGeneration(prompt) {
@@ -1227,55 +1243,6 @@ function formatOrchestrationStepOutput(step, rawOutput, thinkingTags) {
   }
 
   return removeGenericThinkingSections(output).trim();
-}
-
-async function runOrchestration(orchestration, variables = {}, options = {}) {
-  const orchestrationId = typeof orchestration?.id === 'string' ? orchestration.id : 'unnamed-orchestration';
-  const runFinalStep = options?.runFinalStep !== false;
-  const steps = getOrchestrationSteps(orchestration);
-  const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
-  const thinkingTags = getThinkingTagsForModel(selectedModelId);
-  const promptVariables = { ...variables };
-  appendDebug(`Orchestration started: ${orchestrationId} (${steps.length} steps)`);
-
-  for (let index = 0; index < steps.length; index += 1) {
-    const step = steps[index];
-    const stepName =
-      typeof step?.stepName === 'string' && step.stepName.trim()
-        ? step.stepName.trim()
-        : `Step ${index + 1}`;
-    const stepPrompt = buildOrchestrationPrompt(step, promptVariables);
-    const isFinalStep = index === steps.length - 1;
-
-    if (isFinalStep && !runFinalStep) {
-      appendDebug(`Orchestration prepared final step: ${orchestrationId} [${stepName}]`);
-      appendDebug(`Orchestration completed: ${orchestrationId}`);
-      return {
-        finalPrompt: stepPrompt,
-        finalOutput: '',
-      };
-    }
-
-    appendDebug(`Orchestration step ${index + 1}/${steps.length}: ${orchestrationId} [${stepName}]`);
-    const rawStepOutput = await requestSingleGeneration(stepPrompt);
-    const stepOutput = formatOrchestrationStepOutput(step, rawStepOutput, thinkingTags);
-    promptVariables.previousStepOutput = stepOutput;
-    promptVariables.lastStepOutput = stepOutput;
-    promptVariables[`step${index + 1}Output`] = stepOutput;
-    const outputKey = typeof step?.outputKey === 'string' ? step.outputKey.trim() : '';
-    if (outputKey) {
-      promptVariables[outputKey] = stepOutput;
-    }
-    if (isFinalStep) {
-      appendDebug(`Orchestration completed: ${orchestrationId}`);
-      return {
-        finalPrompt: stepPrompt,
-        finalOutput: stepOutput,
-      };
-    }
-  }
-
-  throw new Error('Invalid orchestration definition.');
 }
 
 function applyVariantCardSignals(item, variantState) {
@@ -1335,6 +1302,10 @@ function renderConversationList() {
   initializeTooltips(conversationList);
   updatePreChatStatusHint();
   updatePreChatActionButtons();
+}
+
+function findMessageElement(messageId) {
+  return chatTranscript?.querySelector(`[data-message-id="${messageId}"]`) || null;
 }
 
 function setModelBubbleContent(message, refs) {
@@ -2919,210 +2890,56 @@ function persistInferencePreferences() {
   persistGlobalSamplingSettings(activeGenerationConfig);
 }
 
-async function initializeEngine() {
-  const config = readEngineConfigFromUI();
-  appendDebug(
-    `Initialize requested (model=${config.modelId}, backendPreference=${config.backendPreference})`,
-  );
-  isLoadingModel = true;
-  clearLoadError();
-  resetLoadProgressFiles();
-  showProgressRegion(true);
-  setLoadProgress({ percent: 0, message: 'Starting model load...' });
-  updateActionButtons();
-  setStatus('Loading model...');
-  try {
-    await engine.initialize(config);
-    modelReady = true;
-    isLoadingModel = false;
-    setLoadProgress({ percent: 100, message: 'Model ready.' });
-    showProgressRegion(false);
-    appendDebug('Model initialization succeeded.');
-    updateActionButtons();
-    updateWelcomePanelVisibility();
-    updateChatTitle();
-  } catch (error) {
-    modelReady = false;
-    isLoadingModel = false;
-    setStatus(`Error: ${error.message}`);
-    showLoadError(error.message);
-    appendDebug(`Model initialization failed: ${error.message}`);
-    updateActionButtons();
-    updateWelcomePanelVisibility();
-    updateChatTitle();
-    throw error;
-  }
-}
+const runOrchestration = createOrchestrationRunner({
+  generateText: requestSingleGeneration,
+  formatStepOutput: (step, rawOutput) => {
+    const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+    return formatOrchestrationStepOutput(step, rawOutput, getThinkingTagsForModel(selectedModelId));
+  },
+  onDebug: appendDebug,
+});
 
-async function reinitializeEngineFromSettings() {
-  persistInferencePreferences();
-  modelReady = false;
-  setStatus('Settings updated. Send a message to load the model with new settings.');
-  appendDebug('Inference settings changed; awaiting first message to load model.');
-  updateActionButtons();
-  updateWelcomePanelVisibility();
-  updateChatTitle();
-  if (isGenerating) {
-    return;
-  }
-}
-
-async function loadModelForSelectedConversation() {
-  if (modelReady || isLoadingModel || isGenerating || isRunningOrchestration) {
-    return;
-  }
-  if (!hasSelectedConversationWithHistory()) {
-    return;
-  }
-  persistInferencePreferences();
-  setStatus('Loading model for selected conversation...');
-  try {
-    await initializeEngine();
-  } catch (_error) {
-    // Error state is already handled in initializeEngine.
-  }
-}
-
-function startModelGeneration(activeConversation, prompt, options = {}) {
-  const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
-  const thinkingTags = getThinkingTagsForModel(selectedModelId);
-  const parentMessageId =
-    typeof options.parentMessageId === 'string' && options.parentMessageId.trim()
-      ? options.parentMessageId.trim()
-      : activeConversation.activeLeafMessageId;
-  const existingModelMessageId =
-    typeof options.existingModelMessageId === 'string' && options.existingModelMessageId.trim()
-      ? options.existingModelMessageId.trim()
-      : '';
-  const clearExistingMessageBeforeStream = Boolean(options.clearExistingMessageBeforeStream);
-  const updateLastSpokenOnComplete = Boolean(options.updateLastSpokenOnComplete);
-  const existingModelMessage = existingModelMessageId
-    ? getMessageNodeById(activeConversation, existingModelMessageId)
-    : null;
-  const canReuseExistingModelMessage =
-    existingModelMessage?.role === 'model' &&
-    !existingModelMessage.isResponseComplete &&
-    existingModelMessage.parentId === parentMessageId;
-  const modelMessage = canReuseExistingModelMessage
-    ? existingModelMessage
-    : addMessageToConversation(activeConversation, 'model', '', {
-      parentId: parentMessageId,
-    });
-  if (canReuseExistingModelMessage && clearExistingMessageBeforeStream) {
-    modelMessage.text = '';
-    modelMessage.response = '';
-    modelMessage.thoughts = '';
-    modelMessage.hasThinking = false;
-    modelMessage.isThinkingComplete = false;
-  }
-  modelMessage.isResponseComplete = false;
-  activeConversation.activeLeafMessageId = modelMessage.id;
-  const modelBubbleItem =
-    chatTranscript?.querySelector(`[data-message-id="${modelMessage.id}"]`) || addMessageElement(modelMessage);
-  if (modelBubbleItem) {
-    updateModelMessageElement(modelMessage, modelBubbleItem);
-  }
-  let streamedText = '';
-
-  isGenerating = true;
-  updateActionButtons();
-
-  try {
-    engine.generate(prompt, {
-      generationConfig: activeGenerationConfig,
-      onToken: (chunk) => {
-        if (modelMessage.isFixPreparing) {
-          modelMessage.isFixPreparing = false;
-        }
-        streamedText += chunk;
-        const parsed = parseThinkingText(streamedText, thinkingTags);
-        if (thinkingTags) {
-          modelMessage.thoughts = parsed.thoughts;
-          modelMessage.response = parsed.response.trimStart();
-          modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
-          modelMessage.isThinkingComplete = parsed.isThinkingComplete;
-          modelMessage.text = modelMessage.response;
-        } else {
-          modelMessage.response = streamedText.trimStart();
-          modelMessage.text = modelMessage.response;
-        }
-        updateModelMessageElement(modelMessage, modelBubbleItem);
-        scrollTranscriptToBottom();
-        queueConversationStateSave();
-      },
-      onComplete: (finalText) => {
-        const parsed = parseThinkingText(finalText || streamedText, thinkingTags);
-        modelMessage.thoughts = parsed.thoughts;
-        modelMessage.response = parsed.response.trimStart();
-        modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
-        modelMessage.isThinkingComplete = parsed.isThinkingComplete || (modelMessage.hasThinking && !thinkingTags);
-        modelMessage.text = modelMessage.response || '[No output]';
-        modelMessage.isResponseComplete = true;
-        updateModelMessageElement(modelMessage, modelBubbleItem);
-        scrollTranscriptToBottom();
-        if (updateLastSpokenOnComplete) {
-          activeConversation.lastSpokenLeafMessageId = modelMessage.id;
-        }
-
-        if (!activeConversation.hasGeneratedName && modelMessage.text !== '[No output]') {
-          const parentUserMessage = modelMessage.parentId
-            ? getMessageNodeById(activeConversation, modelMessage.parentId)
-            : null;
-          const renameInputs = {
-            userPrompt: parentUserMessage?.text || '',
-            assistantResponse: modelMessage.response || modelMessage.text || '',
-          };
-          window.setTimeout(() => {
-            void runRenameChatOrchestration(activeConversation.id, renameInputs);
-          }, 0);
-        }
-
-        appendDebug('Generation completed.');
-        queueConversationStateSave();
-        isGenerating = false;
-        updateActionButtons();
-        applyPendingGenerationSettingsIfReady();
-      },
-      onError: (message) => {
-        modelMessage.text = `Generation error: ${message}`;
-        modelMessage.response = modelMessage.text;
-        modelMessage.thoughts = '';
-        modelMessage.hasThinking = false;
-        modelMessage.isThinkingComplete = false;
-        modelMessage.isResponseComplete = true;
-        updateModelMessageElement(modelMessage, modelBubbleItem);
-        scrollTranscriptToBottom();
-        if (updateLastSpokenOnComplete) {
-          activeConversation.lastSpokenLeafMessageId = modelMessage.id;
-        }
-        isGenerating = false;
-        updateActionButtons();
-        applyPendingGenerationSettingsIfReady();
-        setStatus('Generation failed');
-        appendDebug(`Generation error: ${message}`);
-        queueConversationStateSave();
-      },
-    });
-  } catch (error) {
-    modelMessage.text = `Generation error: ${error.message}`;
-    modelMessage.response = modelMessage.text;
-    modelMessage.thoughts = '';
-    modelMessage.hasThinking = false;
-    modelMessage.isThinkingComplete = false;
-    modelMessage.isResponseComplete = true;
-    updateModelMessageElement(modelMessage, modelBubbleItem);
-    scrollTranscriptToBottom();
-    if (updateLastSpokenOnComplete) {
-      activeConversation.lastSpokenLeafMessageId = modelMessage.id;
-    }
-    isGenerating = false;
-    updateActionButtons();
-    applyPendingGenerationSettingsIfReady();
-    setStatus('Generation failed');
-    appendDebug(`Generation error: ${error.message}`);
-    queueConversationStateSave();
-  }
-}
+const appController = createAppController({
+  state: appState,
+  engine,
+  runOrchestration,
+  renameOrchestration: RENAME_CHAT_ORCHESTRATION,
+  fixOrchestration: FIX_RESPONSE_ORCHESTRATION,
+  readEngineConfig: readEngineConfigFromUI,
+  persistInferencePreferences,
+  getActiveConversation,
+  findConversationById,
+  hasSelectedConversationWithHistory,
+  normalizeModelId,
+  getThinkingTagsForModel,
+  getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
+  addMessageToConversation,
+  buildPromptForConversationLeaf,
+  getMessageNodeById,
+  deriveConversationName,
+  normalizeConversationName,
+  removeLeafMessageFromConversation,
+  parseThinkingText,
+  findMessageElement,
+  addMessageElement,
+  updateModelMessageElement,
+  renderTranscript,
+  renderConversationList,
+  updateChatTitle,
+  updateActionButtons,
+  updateWelcomePanelVisibility,
+  queueConversationStateSave,
+  scrollTranscriptToBottom,
+  setStatus,
+  appendDebug,
+  showProgressRegion,
+  clearLoadError,
+  resetLoadProgressFiles,
+  setLoadProgress,
+  showLoadError,
+  applyPendingGenerationSettingsIfReady,
+  markActiveIncompleteModelMessageComplete,
+});
 
 function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction, options = {}) {
   if (!chatTranscript) {
@@ -3342,7 +3159,7 @@ function saveUserMessageEdit(messageId) {
       return;
     }
     setStatus('Branch saved. Generating response...');
-    startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
+    appController.startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
       parentMessageId: branchMessage.id,
       updateLastSpokenOnComplete: true,
     });
@@ -3365,7 +3182,7 @@ function saveUserMessageEdit(messageId) {
     return;
   }
   setStatus(`${saveStatus} Generating updated response...`);
-  startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
+  appController.startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
     parentMessageId: userMessage.id,
     updateLastSpokenOnComplete: true,
   });
@@ -3400,176 +3217,6 @@ function branchFromUserMessage(messageId) {
     editor.setSelectionRange(editor.value.length, editor.value.length);
   }
   setStatus('Branch mode enabled. Edit and save to create a branch.');
-}
-
-function regenerateFromMessage(messageId) {
-  if (!messageId || isGenerating || isLoadingModel || isRunningOrchestration || activeUserEditMessageId) {
-    return;
-  }
-  if (!modelReady) {
-    setStatus('Send a message first to load the model before regenerating.');
-    appendDebug('Regenerate blocked: model not ready.');
-    return;
-  }
-
-  const activeConversation = getActiveConversation();
-  if (!activeConversation) {
-    return;
-  }
-
-  const targetModelMessage = getMessageNodeById(activeConversation, messageId);
-  if (!targetModelMessage || targetModelMessage.role !== 'model') {
-    return;
-  }
-
-  const parentUserMessage = targetModelMessage.parentId
-    ? getMessageNodeById(activeConversation, targetModelMessage.parentId)
-    : null;
-  if (!parentUserMessage || parentUserMessage.role !== 'user') {
-    setStatus('Unable to regenerate: no user message found.');
-    appendDebug('Regenerate failed: target model message has no preceding user message.');
-    return;
-  }
-
-  activeConversation.activeLeafMessageId = parentUserMessage.id;
-  renderTranscript();
-  queueConversationStateSave();
-  startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
-    parentMessageId: parentUserMessage.id,
-  });
-}
-
-async function runRenameChatOrchestration(conversationId, inputs) {
-  if (
-    !conversationId ||
-    isGenerating ||
-    isLoadingModel ||
-    isRunningOrchestration ||
-    !modelReady
-  ) {
-    return;
-  }
-  const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
-  if (!activeConversation || activeConversation.hasGeneratedName) {
-    return;
-  }
-  isRunningOrchestration = true;
-  updateActionButtons();
-  setStatus('Generating conversation title...');
-  try {
-    const { finalOutput } = await runOrchestration(RENAME_CHAT_ORCHESTRATION, inputs);
-    const nextName = normalizeConversationName(
-      finalOutput,
-    );
-    activeConversation.name = nextName || deriveConversationName(activeConversation);
-    activeConversation.hasGeneratedName = true;
-    renderConversationList();
-    updateChatTitle();
-    queueConversationStateSave();
-    setStatus('Conversation title generated.');
-  } catch (error) {
-    activeConversation.name = deriveConversationName(activeConversation);
-    activeConversation.hasGeneratedName = true;
-    renderConversationList();
-    updateChatTitle();
-    queueConversationStateSave();
-    appendDebug(`Rename orchestration failed: ${error.message}`);
-    setStatus('Conversation title generated.');
-  } finally {
-    isRunningOrchestration = false;
-    updateActionButtons();
-  }
-}
-
-async function fixResponseFromMessage(messageId) {
-  if (!messageId || isGenerating || isLoadingModel || isRunningOrchestration || activeUserEditMessageId) {
-    return;
-  }
-  if (!modelReady) {
-    setStatus('Send a message first to load the model before using Fix.');
-    appendDebug('Fix blocked: model not ready.');
-    return;
-  }
-
-  const activeConversation = getActiveConversation();
-  if (!activeConversation) {
-    return;
-  }
-  const targetModelMessage = getMessageNodeById(activeConversation, messageId);
-  if (!targetModelMessage || targetModelMessage.role !== 'model') {
-    return;
-  }
-  if (!targetModelMessage.isResponseComplete) {
-    return;
-  }
-  const parentUserMessage = targetModelMessage.parentId
-    ? getMessageNodeById(activeConversation, targetModelMessage.parentId)
-    : null;
-  if (!parentUserMessage || parentUserMessage.role !== 'user') {
-    setStatus('Unable to fix response: no user message found.');
-    appendDebug('Fix failed: target model message has no preceding user message.');
-    return;
-  }
-
-  const conversationId = activeConversation.id;
-  const parentUserMessageId = parentUserMessage.id;
-  const previousActiveLeafMessageId = activeConversation.activeLeafMessageId;
-  const orchestrationInputs = {
-    userPrompt: parentUserMessage.text || '',
-    assistantResponse: targetModelMessage.response || targetModelMessage.text || '',
-  };
-  const pendingFixMessage = addMessageToConversation(activeConversation, 'model', '', {
-    parentId: parentUserMessage.id,
-  });
-  pendingFixMessage.thoughts = '';
-  pendingFixMessage.response = targetModelMessage.response || targetModelMessage.text || '';
-  pendingFixMessage.text = pendingFixMessage.response;
-  pendingFixMessage.hasThinking = false;
-  pendingFixMessage.isThinkingComplete = false;
-  pendingFixMessage.isResponseComplete = false;
-  pendingFixMessage.isFixPreparing = true;
-  renderTranscript({ scrollToBottom: false });
-  queueConversationStateSave();
-
-  let fixPrompt = '';
-  isRunningOrchestration = true;
-  updateActionButtons();
-  setStatus('Preparing response fix...');
-  try {
-    const { finalPrompt } = await runOrchestration(FIX_RESPONSE_ORCHESTRATION, orchestrationInputs, {
-      runFinalStep: false,
-    });
-    fixPrompt = finalPrompt;
-  } catch (error) {
-    removeLeafMessageFromConversation(activeConversation, pendingFixMessage.id);
-    activeConversation.activeLeafMessageId = previousActiveLeafMessageId;
-    renderTranscript({ scrollToBottom: false });
-    queueConversationStateSave();
-    setStatus('Fix orchestration failed.');
-    appendDebug(`Fix orchestration error: ${error.message}`);
-    return;
-  } finally {
-    isRunningOrchestration = false;
-    updateActionButtons();
-  }
-
-  const refreshedConversation = conversations.find((conversation) => conversation.id === conversationId);
-  if (!refreshedConversation) {
-    return;
-  }
-  const refreshedParentUserMessage = getMessageNodeById(refreshedConversation, parentUserMessageId);
-  if (!refreshedParentUserMessage || refreshedParentUserMessage.role !== 'user') {
-    setStatus('Unable to fix response: no user message found.');
-    appendDebug('Fix aborted: parent user message no longer exists.');
-    return;
-  }
-
-  setStatus('Fixing response...');
-  startModelGeneration(refreshedConversation, fixPrompt, {
-    parentMessageId: refreshedParentUserMessage.id,
-    existingModelMessageId: pendingFixMessage.id,
-    clearExistingMessageBeforeStream: true,
-  });
 }
 
 engine.onStatus = (message) => {
@@ -3723,13 +3370,13 @@ if (modelSelect) {
   modelSelect.addEventListener('change', () => {
     const selectedModel = normalizeModelId(modelSelect.value || DEFAULT_MODEL);
     syncGenerationSettingsFromModel(selectedModel, true);
-    reinitializeEngineFromSettings();
+    void appController.reinitializeEngineFromSettings();
   });
 }
 
 if (backendSelect) {
   backendSelect.addEventListener('change', () => {
-    reinitializeEngineFromSettings();
+    void appController.reinitializeEngineFromSettings();
   });
 }
 
@@ -3861,22 +3508,7 @@ if (sendButton) {
       return;
     }
     event.preventDefault();
-    setStatus('Stopping generation...');
-    try {
-      await engine.cancelGeneration();
-      modelReady = true;
-      setStatus('Stopped');
-      appendDebug('Generation canceled by user.');
-    } catch (error) {
-      modelReady = false;
-      setStatus(`Error: ${error.message}`);
-      appendDebug(`Cancel failed: ${error.message}`);
-    } finally {
-      markActiveIncompleteModelMessageComplete();
-      isGenerating = false;
-      updateActionButtons();
-      applyPendingGenerationSettingsIfReady();
-    }
+    await appController.stopGeneration();
   });
 }
 
@@ -3916,7 +3548,7 @@ if (chatForm && messageInput && chatTranscript) {
       persistInferencePreferences();
       setStatus('Loading model for your first message...');
       try {
-        await initializeEngine();
+        await appController.initializeEngine();
       } catch (_error) {
         return;
       }
@@ -3933,7 +3565,7 @@ if (chatForm && messageInput && chatTranscript) {
     addMessageElement(userMessage);
     messageInput.value = '';
     queueConversationStateSave();
-    startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
+    appController.startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
       updateLastSpokenOnComplete: true,
     });
   });
@@ -3957,12 +3589,12 @@ if (chatTranscript) {
     }
     const regenerateButton = target.closest('.regenerate-response-btn');
     if (regenerateButton instanceof HTMLButtonElement) {
-      regenerateFromMessage(regenerateButton.dataset.messageId || '');
+      appController.regenerateFromMessage(regenerateButton.dataset.messageId || '');
       return;
     }
     const fixButton = target.closest('.fix-response-btn');
     if (fixButton instanceof HTMLButtonElement) {
-      void fixResponseFromMessage(fixButton.dataset.messageId || '');
+      void appController.fixResponseFromMessage(fixButton.dataset.messageId || '');
       return;
     }
     const userVariantPrevButton = target.closest('.user-variant-prev');
@@ -4066,7 +3698,7 @@ if (preChatEditConversationSystemPromptBtn instanceof HTMLButtonElement) {
 
 if (preChatLoadModelBtn instanceof HTMLButtonElement) {
   preChatLoadModelBtn.addEventListener('click', () => {
-    void loadModelForSelectedConversation();
+    void appController.loadModelForSelectedConversation();
   });
 }
 
