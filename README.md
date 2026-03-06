@@ -17,6 +17,9 @@ Student-facing browser chat UI with local model inference.
   - Browser back/forward navigation follows those screen transitions.
 - Header actions include a `Help` button that opens `help.html` in a new tab with feature and basic usage guidance.
 - Header actions include a `Keyboard shortcuts` button and the composer shows a visible shortcut hint (`Ctrl+/`) so users can discover available keyboard actions.
+- `Settings -> Conversation` includes:
+  - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`
+  - `Transcript view` with `Standard` and `Compact`
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - If an existing conversation is selected before model load, the pre-chat panel prompts the user to load a model first and provides a `Load model` action.
@@ -49,6 +52,9 @@ Student-facing browser chat UI with local model inference.
 - Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
 - Debug status history is available in `Settings -> Debug info` (accordion).
 - Conversation list and transcript are state-driven (no placeholder messages).
+- Chat and setup status notices use Bootstrap alert patterns with headings so updates are announced in context.
+- The transcript includes helper links at both the start and end to jump to the transcript start, transcript end, or message input.
+- The transcript includes a note that each exchange has a heading so assistive technologies can index the conversation structure.
 - Conversations are persisted locally in browser IndexedDB and restored on reload.
 - Saved conversation state includes stable IDs and forward-compatible metadata for future export/import:
   - message `content.parts` and `content.llmRepresentation` (verbatim LLM-facing text)

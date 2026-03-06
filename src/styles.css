@@ -240,6 +240,21 @@
   white-space: nowrap;
 }
 
+.status-alert {
+  min-width: min(24rem, 100%);
+  max-width: min(28rem, 100%);
+  padding: 0.6rem 0.75rem;
+  line-height: 1.3;
+}
+
+.status-alert .alert-heading {
+  font-size: 0.8rem;
+}
+
+.status-alert p {
+  font-size: 0.85rem;
+}
+
 .top-bar-actions {
   display: inline-flex;
   align-items: center;
@@ -351,9 +366,7 @@
 
 #onboardingStatusRegion {
   width: 100%;
-  white-space: normal;
-  line-height: 1.25;
-  border-radius: 0.7rem;
+  max-width: none;
 }
 
 .pre-chat-actions {
@@ -382,6 +395,23 @@
 
 .chat-transcript-wrap.animate-in {
   animation: surface-enter 320ms cubic-bezier(0.2, 0.85, 0.24, 1);
+}
+
+.transcript-boundary,
+.message-row {
+  scroll-margin-top: 7.5rem;
+  scroll-margin-bottom: 7rem;
+}
+
+.transcript-helper-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.transcript-note {
+  margin-bottom: 0.9rem;
 }
 
 .chat-transcript {
@@ -424,6 +454,19 @@
   display: flex;
   flex-direction: column;
   margin-bottom: 0.95rem;
+}
+
+.transcript-compact .message-row {
+  margin-bottom: 0.65rem;
+}
+
+.transcript-compact .message-bubble {
+  padding: 0.55rem 0.75rem;
+}
+
+.transcript-compact .message-actions,
+.transcript-compact .response-actions {
+  margin-top: 0.4rem;
 }
 
 .user-message {
@@ -1099,6 +1142,11 @@
     justify-self: start;
   }
 
+  .status-alert {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
   .chat-title-input {
     width: min(14rem, 55vw);
     min-width: 8.5rem;
@@ -1106,6 +1154,10 @@
 
   .composer-shortcuts-hint {
     justify-content: space-between;
+  }
+
+  .transcript-helper-links {
+    gap: 0.55rem 0.9rem;
   }
 
   .home-title {

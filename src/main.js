@@ -70,6 +70,8 @@ import { createTranscriptView } from './ui/transcript-view.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
 const SHOW_THINKING_STORAGE_KEY = 'ui-show-thinking';
+const SINGLE_KEY_SHORTCUTS_STORAGE_KEY = 'ui-enable-single-key-shortcuts';
+const TRANSCRIPT_VIEW_STORAGE_KEY = 'ui-transcript-view';
 const DEFAULT_SYSTEM_PROMPT_STORAGE_KEY = 'conversation-default-system-prompt';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
@@ -129,6 +131,8 @@ const temperatureHelp = document.getElementById('temperatureHelp');
 const topKHelp = document.getElementById('topKHelp');
 const topPHelp = document.getElementById('topPHelp');
 const statusRegion = document.getElementById('statusRegion');
+const statusRegionHeading = document.getElementById('statusRegionHeading');
+const statusRegionMessage = document.getElementById('statusRegionMessage');
 const startConversationButton = document.getElementById('startConversationButton');
 const debugInfo = document.getElementById('debugInfo');
 const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
@@ -149,6 +153,8 @@ const chatForm = document.querySelector('.composer');
 const messageInput = document.getElementById('messageInput');
 const chatTranscript = document.getElementById('chatTranscript');
 const chatTranscriptWrap = document.getElementById('chatTranscriptWrap');
+const chatTranscriptStart = document.getElementById('chatTranscriptStart');
+const chatTranscriptEnd = document.getElementById('chatTranscriptEnd');
 const jumpToLastPromptButton = document.getElementById('jumpToLastPromptButton');
 const jumpToLatestButton = document.getElementById('jumpToLatestButton');
 const chatMain = document.querySelector('.chat-main');
@@ -157,6 +163,8 @@ const preChatPanel = document.getElementById('preChatPanel');
 const topBar = document.getElementById('topBar');
 const conversationPanel = document.getElementById('conversationPanel');
 const onboardingStatusRegion = document.getElementById('onboardingStatusRegion');
+const onboardingStatusRegionHeading = document.getElementById('onboardingStatusRegionHeading');
+const onboardingStatusRegionMessage = document.getElementById('onboardingStatusRegionMessage');
 const preChatActions = document.getElementById('preChatActions');
 const preChatLoadModelBtn = document.getElementById('preChatLoadModelBtn');
 const preChatEditConversationSystemPromptBtn = document.getElementById(
@@ -183,6 +191,8 @@ const conversationSystemPromptAppendToggle = document.getElementById(
 const saveConversationSystemPromptBtn = document.getElementById('saveConversationSystemPromptBtn');
 const openSettingsButton = document.getElementById('openSettingsButton');
 const closeSettingsButton = document.getElementById('closeSettingsButton');
+const enableSingleKeyShortcutsToggle = document.getElementById('enableSingleKeyShortcutsToggle');
+const transcriptViewSelect = document.getElementById('transcriptViewSelect');
 const settingsPage = document.getElementById('settingsPage');
 const settingsTabContainer = document.querySelector('.settings-tabs');
 const settingsTabButtons = settingsTabContainer
@@ -390,6 +400,9 @@ function getFocusedMessageShortcutContext() {
 
 function handleFocusedMessageShortcut(event) {
   if (!isShortcutTriggerAllowed(event.target)) {
+    return false;
+  }
+  if (!appState.enableSingleKeyShortcuts) {
     return false;
   }
   const context = getFocusedMessageShortcutContext();
@@ -1016,12 +1029,50 @@ function appendDebug(message) {
   }
 }
 
-function setStatus(message) {
-  if (statusRegion) {
-    statusRegion.textContent = message;
+function getStatusTone(message) {
+  const normalized = String(message || '').trim();
+  if (!normalized) {
+    return { heading: 'Chat status', variant: 'secondary', role: 'status', live: 'polite' };
   }
-  if (onboardingStatusRegion) {
-    onboardingStatusRegion.textContent = message;
+  if (/error|failed|unable|cannot|no active|copy failed/i.test(normalized)) {
+    return { heading: 'Chat error', variant: 'danger', role: 'alert', live: 'assertive' };
+  }
+  if (/loading|preparing|stopping|please wait|apply after current response/i.test(normalized)) {
+    return { heading: 'Chat status', variant: 'warning', role: 'status', live: 'polite' };
+  }
+  if (/ready|saved|downloaded|copied|stopped|generated|updated|canceled|branch mode enabled/i.test(normalized)) {
+    return { heading: 'Chat status', variant: 'success', role: 'status', live: 'polite' };
+  }
+  return { heading: 'Chat status', variant: 'secondary', role: 'status', live: 'polite' };
+}
+
+function applyStatusRegion(region, headingElement, messageElement, message, headingOverride = '') {
+  if (!(region instanceof HTMLElement) || !(messageElement instanceof HTMLElement)) {
+    return;
+  }
+  const tone = getStatusTone(message);
+  region.classList.remove('alert-secondary', 'alert-success', 'alert-warning', 'alert-danger', 'alert-info');
+  region.classList.add(`alert-${tone.variant}`);
+  region.setAttribute('role', tone.role);
+  region.setAttribute('aria-live', tone.live);
+  if (headingElement instanceof HTMLElement) {
+    headingElement.textContent = headingOverride || tone.heading;
+  }
+  messageElement.textContent = String(message || '');
+}
+
+function setStatus(message) {
+  if (statusRegion instanceof HTMLElement) {
+    applyStatusRegion(statusRegion, statusRegionHeading, statusRegionMessage, message, 'Chat status');
+  }
+  if (onboardingStatusRegion instanceof HTMLElement) {
+    applyStatusRegion(
+      onboardingStatusRegion,
+      onboardingStatusRegionHeading,
+      onboardingStatusRegionMessage,
+      message,
+      'Setup status',
+    );
   }
   appendDebug(`Status: ${message}`);
 }
@@ -1031,9 +1082,15 @@ function updatePreChatStatusHint() {
     return;
   }
   if (appState.hasStartedChatWorkspace && !appState.modelReady && !appState.isLoadingModel) {
-    onboardingStatusRegion.textContent = hasSelectedConversationWithHistory()
-      ? PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION
-      : PRE_CHAT_STATUS_HINT_DEFAULT;
+    applyStatusRegion(
+      onboardingStatusRegion,
+      onboardingStatusRegionHeading,
+      onboardingStatusRegionMessage,
+      hasSelectedConversationWithHistory()
+        ? PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION
+        : PRE_CHAT_STATUS_HINT_DEFAULT,
+      'Setup status',
+    );
   }
 }
 
@@ -1664,6 +1721,81 @@ function isMessageInView(messageId) {
   const containerRect = chatMain.getBoundingClientRect();
   const messageRect = messageItem.getBoundingClientRect();
   return messageRect.bottom >= containerRect.top && messageRect.top <= containerRect.bottom;
+}
+
+function getElementClearanceFromTop(element, containerRect) {
+  if (!(element instanceof HTMLElement) || element.classList.contains('d-none')) {
+    return 0;
+  }
+  const rect = element.getBoundingClientRect();
+  return rect.bottom > containerRect.top ? Math.max(0, rect.bottom - containerRect.top) : 0;
+}
+
+function getElementClearanceFromBottom(element, containerRect) {
+  if (!(element instanceof HTMLElement) || element.classList.contains('d-none')) {
+    return 0;
+  }
+  const rect = element.getBoundingClientRect();
+  return rect.top < containerRect.bottom ? Math.max(0, containerRect.bottom - rect.top) : 0;
+}
+
+function scrollElementIntoAccessibleView(element, { align = 'start' } = {}) {
+  if (!(chatMain instanceof HTMLElement) || !(element instanceof HTMLElement)) {
+    return;
+  }
+  const containerRect = chatMain.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  const topClearance =
+    Math.max(
+      getElementClearanceFromTop(topBar, containerRect),
+      getElementClearanceFromTop(jumpToLastPromptButton, containerRect),
+    ) + 16;
+  const bottomClearance =
+    Math.max(
+      getElementClearanceFromBottom(jumpToLatestButton, containerRect),
+      getElementClearanceFromBottom(openSettingsButton, containerRect),
+    ) + 16;
+  let delta = 0;
+  if (align === 'end') {
+    delta = elementRect.bottom - (containerRect.bottom - bottomClearance);
+  } else if (align === 'center') {
+    const visibleHeight = Math.max(
+      0,
+      containerRect.height - topClearance - bottomClearance - elementRect.height,
+    );
+    delta =
+      elementRect.top -
+      (containerRect.top + topClearance + Math.max(0, visibleHeight / 2));
+  } else {
+    delta = elementRect.top - (containerRect.top + topClearance);
+  }
+  chatMain.scrollBy({
+    top: delta,
+    behavior: reducedMotionQuery.matches ? 'auto' : 'smooth',
+  });
+}
+
+function focusTranscriptBoundary(boundary, { align = 'start' } = {}) {
+  if (!(boundary instanceof HTMLElement)) {
+    return;
+  }
+  boundary.focus({ preventScroll: true });
+  scrollElementIntoAccessibleView(boundary, { align });
+}
+
+function handleTranscriptHelperNavigation(action) {
+  if (action === 'start') {
+    focusTranscriptBoundary(chatTranscriptStart, { align: 'start' });
+    return;
+  }
+  if (action === 'end') {
+    focusTranscriptBoundary(chatTranscriptEnd, { align: 'end' });
+    return;
+  }
+  if (action === 'input' && messageInput instanceof HTMLTextAreaElement) {
+    messageInput.focus({ preventScroll: true });
+    scrollElementIntoAccessibleView(messageInput, { align: 'end' });
+  }
 }
 
 function updateTranscriptNavigationButtonVisibility() {
@@ -2539,6 +2671,15 @@ function getStoredShowThinkingPreference() {
   return localStorage.getItem(SHOW_THINKING_STORAGE_KEY) === 'true';
 }
 
+function getStoredSingleKeyShortcutPreference() {
+  const stored = localStorage.getItem(SINGLE_KEY_SHORTCUTS_STORAGE_KEY);
+  return stored === null ? true : stored === 'true';
+}
+
+function getStoredTranscriptViewPreference() {
+  return localStorage.getItem(TRANSCRIPT_VIEW_STORAGE_KEY) === 'compact' ? 'compact' : 'standard';
+}
+
 function getStoredDefaultSystemPrompt() {
   return normalizeSystemPrompt(localStorage.getItem(DEFAULT_SYSTEM_PROMPT_STORAGE_KEY));
 }
@@ -2563,6 +2704,30 @@ function applyShowThinkingPreference(value, { persist = false, refresh = false }
   }
   if (refresh) {
     refreshModelThinkingVisibility();
+  }
+}
+
+function applySingleKeyShortcutPreference(value, { persist = false } = {}) {
+  appState.enableSingleKeyShortcuts = Boolean(value);
+  if (enableSingleKeyShortcutsToggle instanceof HTMLInputElement) {
+    enableSingleKeyShortcutsToggle.checked = appState.enableSingleKeyShortcuts;
+  }
+  if (persist) {
+    localStorage.setItem(
+      SINGLE_KEY_SHORTCUTS_STORAGE_KEY,
+      String(appState.enableSingleKeyShortcuts),
+    );
+  }
+}
+
+function applyTranscriptViewPreference(value, { persist = false } = {}) {
+  appState.transcriptView = value === 'compact' ? 'compact' : 'standard';
+  if (transcriptViewSelect instanceof HTMLSelectElement) {
+    transcriptViewSelect.value = appState.transcriptView;
+  }
+  document.body.classList.toggle('transcript-compact', appState.transcriptView === 'compact');
+  if (persist) {
+    localStorage.setItem(TRANSCRIPT_VIEW_STORAGE_KEY, appState.transcriptView);
   }
 }
 
@@ -3067,6 +3232,8 @@ engine.onProgress = (progress) => {
 const themePreference = getStoredThemePreference();
 applyTheme(themePreference);
 applyShowThinkingPreference(getStoredShowThinkingPreference());
+applySingleKeyShortcutPreference(getStoredSingleKeyShortcutPreference());
+applyTranscriptViewPreference(getStoredTranscriptViewPreference());
 applyDefaultSystemPrompt(getStoredDefaultSystemPrompt());
 populateModelSelect();
 restoreInferencePreferences();
@@ -3213,6 +3380,28 @@ if (showThinkingToggle) {
   showThinkingToggle.addEventListener('change', (event) => {
     const value = event.target instanceof HTMLInputElement ? event.target.checked : false;
     applyShowThinkingPreference(value, { persist: true, refresh: true });
+  });
+}
+
+if (enableSingleKeyShortcutsToggle instanceof HTMLInputElement) {
+  enableSingleKeyShortcutsToggle.addEventListener('change', (event) => {
+    const value = event.target instanceof HTMLInputElement ? event.target.checked : true;
+    applySingleKeyShortcutPreference(value, { persist: true });
+    setStatus(
+      value
+        ? 'Single-key transcript shortcuts enabled.'
+        : 'Single-key transcript shortcuts disabled.',
+    );
+  });
+}
+
+if (transcriptViewSelect instanceof HTMLSelectElement) {
+  transcriptViewSelect.addEventListener('change', (event) => {
+    const value = event.target instanceof HTMLSelectElement ? event.target.value : 'standard';
+    applyTranscriptViewPreference(value, { persist: true });
+    setStatus(
+      value === 'compact' ? 'Compact transcript view enabled.' : 'Standard transcript view enabled.',
+    );
   });
 }
 
@@ -3497,6 +3686,21 @@ if (chatTranscript) {
   });
 }
 
+if (chatTranscriptWrap instanceof HTMLElement) {
+  chatTranscriptWrap.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const helperButton = target.closest('[data-transcript-nav]');
+    if (!(helperButton instanceof HTMLButtonElement)) {
+      return;
+    }
+    event.preventDefault();
+    handleTranscriptHelperNavigation(helperButton.dataset.transcriptNav || '');
+  });
+}
+
 if (chatMain) {
   chatMain.addEventListener('scroll', () => {
     updateTranscriptNavigationButtonVisibility();
@@ -3506,7 +3710,7 @@ if (chatMain) {
 if (jumpToLatestButton instanceof HTMLButtonElement) {
   jumpToLatestButton.addEventListener('click', () => {
     const restoreComposerFocus = document.activeElement === jumpToLatestButton;
-    scrollTranscriptToBottom();
+    focusTranscriptBoundary(chatTranscriptEnd, { align: 'end' });
     if (restoreComposerFocus && messageInput instanceof HTMLTextAreaElement) {
       messageInput.focus();
     }
@@ -3524,7 +3728,7 @@ if (jumpToLastPromptButton instanceof HTMLButtonElement) {
       return;
     }
     const restoreComposerFocus = document.activeElement === jumpToLastPromptButton;
-    messageItem.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+    scrollElementIntoAccessibleView(messageItem, { align: 'start' });
     updateTranscriptNavigationButtonVisibility();
     if (restoreComposerFocus && messageInput instanceof HTMLTextAreaElement) {
       messageInput.focus();

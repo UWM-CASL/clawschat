@@ -25,6 +25,8 @@ export function createAppState({
     pendingGenerationConfig: null,
     conversationSaveTimerId: null,
     showThinkingByDefault: false,
+    enableSingleKeyShortcuts: true,
+    transcriptView: 'standard',
     defaultSystemPrompt,
     isSwitchingVariant: false,
     activeUserEditMessageId: null,
@@ -33,6 +35,7 @@ export function createAppState({
     isRunningOrchestration: false,
     isSettingsPageOpen: false,
     activeSettingsTab: 'system',
+    keyboardShortcutsModalInstance: null,
     conversationSystemPromptModalInstance: null,
     currentWorkspaceView: 'home',
     ignoreNextHashChange: false,
@@ -40,6 +43,7 @@ export function createAppState({
     maxObservedLoadPercent: 0,
     hasLoggedMathJaxError: false,
     mathJaxLoadPromise: null,
+    lastKeyboardShortcutsTrigger: null,
     lastConversationSystemPromptTrigger: null,
   };
 }

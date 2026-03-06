@@ -148,7 +148,16 @@
               <span class="visually-hidden">Cancel editing conversation title</span>
             </button>
           </div>
-          <p id="statusRegion" class="status-pill mb-0" role="status" aria-live="polite">Ready</p>
+          <div
+            id="statusRegion"
+            class="alert alert-secondary status-alert mb-0"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <h2 id="statusRegionHeading" class="alert-heading h6 mb-1">Chat status</h2>
+            <p id="statusRegionMessage" class="mb-0">Ready.</p>
+          </div>
           <div class="top-bar-actions">
             <button
               id="openKeyboardShortcutsButton"
@@ -208,9 +217,16 @@
                 <label class="form-label" for="modelSelect">Choose a model</label>
                 <select id="modelSelect" class="form-select"></select>
               </div>
-              <p id="onboardingStatusRegion" class="status-pill mb-3 mt-3" role="status" aria-live="polite">
-                Ready
-              </p>
+              <div
+                id="onboardingStatusRegion"
+                class="alert alert-secondary status-alert mb-3 mt-3"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <h3 id="onboardingStatusRegionHeading" class="alert-heading h6 mb-1">Setup status</h3>
+                <p id="onboardingStatusRegionMessage" class="mb-0">Ready.</p>
+              </div>
               <div id="preChatActions" class="pre-chat-actions d-none">
                 <button
                   id="preChatLoadModelBtn"
@@ -267,6 +283,25 @@
             </div>
           </section>
           <section id="chatTranscriptWrap" class="chat-transcript-wrap" aria-label="Chat transcript">
+            <div id="chatTranscriptStart" class="transcript-boundary" tabindex="-1"></div>
+            <nav class="transcript-helper-links mb-3" aria-label="Transcript navigation">
+              <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="start">
+                Jump to transcript start
+              </button>
+              <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="end">
+                Jump to transcript end
+              </button>
+              <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="input">
+                Jump to message input
+              </button>
+            </nav>
+            <div class="alert alert-info transcript-note" role="note" aria-labelledby="transcriptNoteHeading">
+              <h2 id="transcriptNoteHeading" class="alert-heading h6 mb-1">Transcript navigation</h2>
+              <p class="mb-0">
+                Each chat exchange has a heading that assistive technology can index. Use the transcript links to jump
+                to the start or end of the conversation.
+              </p>
+            </div>
             <button
               id="jumpToLastPromptButton"
               type="button"
@@ -277,6 +312,18 @@
               <span>Jump to last prompt</span>
             </button>
             <ol id="chatTranscript" class="chat-transcript"></ol>
+            <nav class="transcript-helper-links mt-3" aria-label="Transcript end navigation">
+              <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="start">
+                Jump to transcript start
+              </button>
+              <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="end">
+                Jump to transcript end
+              </button>
+              <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="input">
+                Jump to message input
+              </button>
+            </nav>
+            <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
             <button
               id="jumpToLatestButton"
               type="button"
@@ -564,6 +611,32 @@
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" role="switch" id="showThinkingToggle" />
                     <label class="form-check-label" for="showThinkingToggle">Show thinking</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="enableSingleKeyShortcutsToggle"
+                      checked
+                    />
+                    <label class="form-check-label" for="enableSingleKeyShortcutsToggle">
+                      Enable single-key transcript shortcuts
+                    </label>
+                    <p class="form-text mb-0">
+                      Keeps single-key message actions like edit, branch, regenerate, and copy active when focus is on
+                      a transcript card.
+                    </p>
+                  </div>
+                  <div class="settings-control-group">
+                    <label class="form-label" for="transcriptViewSelect">Transcript view</label>
+                    <select id="transcriptViewSelect" class="form-select">
+                      <option value="standard" selected>Standard</option>
+                      <option value="compact">Compact</option>
+                    </select>
+                    <p class="form-text mb-0">
+                      Compact view reduces transcript spacing while keeping every learning control visible.
+                    </p>
                   </div>
                 </section>
               </form>
