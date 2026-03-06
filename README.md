@@ -115,3 +115,9 @@ Student-facing browser chat UI with local model inference.
 - `npm run test`
 - `npm run test:e2e`
 - `npm run test:a11y`
+
+## Architecture notes
+
+- Conversation tree and export domain logic live in `src/state/conversation-model.js`.
+- `src/main.js` remains the app shell for DOM rendering, routing, persistence triggers, and engine orchestration.
+- See `docs/conversation-domain.md` for the intended boundary and follow-on refactor plan.

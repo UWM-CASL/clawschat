@@ -1,5 +1,6 @@
 function installMockWorker() {
-  window.__mockWorkerGeneratePayloads = [];
+  const mockWindow = /** @type {any} */ (window);
+  mockWindow.__mockWorkerGeneratePayloads = [];
 
   function extractPromptText(prompt) {
     if (Array.isArray(prompt)) {
@@ -70,7 +71,7 @@ function installMockWorker() {
       if (message.type === 'generate') {
         const requestId = message.payload?.requestId;
         const promptPayload = message.payload?.prompt;
-        window.__mockWorkerGeneratePayloads.push(promptPayload);
+        mockWindow.__mockWorkerGeneratePayloads.push(promptPayload);
         const promptText = extractPromptText(promptPayload);
         const isLong = /long answer/i.test(promptText);
         const chunks = isLong
@@ -124,7 +125,7 @@ function installMockWorker() {
     }
   }
 
-  window.Worker = /** @type {any} */ (MockWorker);
+  mockWindow.Worker = /** @type {any} */ (MockWorker);
 }
 
 module.exports = { installMockWorker };

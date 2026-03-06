@@ -32,8 +32,8 @@ test('chat flow: start, send message, load model, stream response', async ({ pag
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
 
   const promptShape = await page.evaluate(() => {
-    const payloads = Array.isArray(window.__mockWorkerGeneratePayloads)
-      ? window.__mockWorkerGeneratePayloads
+    const payloads = Array.isArray((/** @type {any} */ (window)).__mockWorkerGeneratePayloads)
+      ? (/** @type {any} */ (window)).__mockWorkerGeneratePayloads
       : [];
     const firstPrompt = payloads[0];
     return {
