@@ -2158,6 +2158,7 @@ function setSettingsPageVisibility(visible, { syncRoute = true, replaceRoute = t
   const conversationPanelToggle = topBar.querySelector('[data-bs-target="#conversationPanel"]');
   if (openSettingsButton) {
     openSettingsButton.setAttribute('aria-expanded', String(appState.isSettingsPageOpen));
+    openSettingsButton.classList.toggle('d-none', appState.isSettingsPageOpen);
   }
   if (conversationPanelToggle) {
     conversationPanelToggle.classList.toggle('d-none', appState.isSettingsPageOpen);
