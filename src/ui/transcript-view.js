@@ -24,6 +24,63 @@ export function createTranscriptView(dependencies) {
   const documentRef = container?.ownerDocument || document;
   const view = documentRef.defaultView || window;
 
+  function getUserImageParts(message) {
+    const rawParts = Array.isArray(message?.content?.parts) ? message.content.parts : [];
+    return rawParts.filter((part) => part?.type === 'image');
+  }
+
+  function renderUserBubbleContent(message, bubble) {
+    if (!bubble) {
+      return;
+    }
+    bubble.replaceChildren();
+    const content = documentRef.createElement('div');
+    content.className = 'message-bubble-content';
+
+    const imageParts = getUserImageParts(message);
+    if (imageParts.length) {
+      const gallery = documentRef.createElement('div');
+      gallery.className = 'message-image-gallery';
+      imageParts.forEach((part, index) => {
+        const figure = documentRef.createElement('figure');
+        figure.className = 'message-image-card';
+        const image = documentRef.createElement('img');
+        image.className = 'message-image-thumb';
+        image.src = part.url || part.image || '';
+        image.alt =
+          typeof part.alt === 'string' && part.alt.trim()
+            ? part.alt.trim()
+            : part.filename
+              ? `Attached image: ${part.filename}`
+              : `Attached image ${index + 1}`;
+        if (typeof part.width === 'number' && Number.isFinite(part.width)) {
+          image.width = part.width;
+        }
+        if (typeof part.height === 'number' && Number.isFinite(part.height)) {
+          image.height = part.height;
+        }
+        figure.appendChild(image);
+        if (typeof part.filename === 'string' && part.filename.trim()) {
+          const caption = documentRef.createElement('figcaption');
+          caption.className = 'message-image-caption';
+          caption.textContent = part.filename.trim();
+          figure.appendChild(caption);
+        }
+        gallery.appendChild(figure);
+      });
+      content.appendChild(gallery);
+    }
+
+    if (message.text) {
+      const text = documentRef.createElement('p');
+      text.className = 'message-bubble-text';
+      text.textContent = message.text;
+      content.appendChild(text);
+    }
+
+    bubble.appendChild(content);
+  }
+
   function setModelBubbleContent(message, refs) {
     if (!refs) {
       return;
@@ -362,7 +419,8 @@ export function createTranscriptView(dependencies) {
         });
         editor.addEventListener('input', () => {
           const isCurrentEdit = getActiveUserEditMessageId() === message.id;
-          saveButton.disabled = !isCurrentEdit || !editor.value.trim();
+          const hasImages = getUserImageParts(message).length > 0;
+          saveButton.disabled = !isCurrentEdit || (!editor.value.trim() && !hasImages);
         });
         /** @type {any} */ (item)._userBubbleRefs = {
           bubble,
@@ -429,7 +487,7 @@ export function createTranscriptView(dependencies) {
     if (!refs) {
       return;
     }
-    refs.bubble.textContent = message.text || '';
+    renderUserBubbleContent(message, refs.bubble);
     const activeConversation = getActiveConversation();
     const variantState = getUserVariantState(activeConversation, message);
     const isEditing = getActiveUserEditMessageId() === message.id;
@@ -451,7 +509,8 @@ export function createTranscriptView(dependencies) {
     refs.editButton.disabled = controlsDisabled;
     refs.branchButton.disabled = controlsDisabled;
     refs.copyButton.disabled = controlsDisabled;
-    refs.saveButton.disabled = controlsDisabled || !refs.editor.value.trim();
+    refs.saveButton.disabled =
+      controlsDisabled || (!refs.editor.value.trim() && getUserImageParts(message).length === 0);
     refs.cancelButton.disabled = controlsDisabled;
     if (refs.variantNav) {
       refs.variantNav.classList.toggle('d-none', !variantState.hasVariants || isEditing);

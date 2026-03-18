@@ -7,8 +7,10 @@ import {
   createConversation,
   findPreferredLeafForVariant,
   getModelVariantState,
+  getTextFromMessageContentParts,
   getUserVariantState,
   pruneDescendantsFromMessage,
+  setUserMessageText,
 } from '../../src/state/conversation-model.js';
 
 function completeModelMessage(message, text) {
@@ -52,6 +54,57 @@ describe('conversation-model', () => {
       { role: 'user', content: 'What is gravity?' },
       { role: 'assistant', content: 'Gravity pulls objects together.' },
     ]);
+  });
+
+  test('preserves image parts in user prompts and text edits', () => {
+    const conversation = createConversation({ id: 'conversation-1' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Describe this image.', {
+      contentParts: [
+        { type: 'text', text: 'Describe this image.' },
+        {
+          type: 'image',
+          artifactId: 'artifact-1',
+          mimeType: 'image/png',
+          base64: 'abc123',
+          url: 'data:image/png;base64,abc123',
+          filename: 'photo.png',
+        },
+      ],
+      artifactRefs: [
+        {
+          id: 'artifact-1',
+          kind: 'binary',
+          mimeType: 'image/png',
+          filename: 'photo.png',
+          hash: { algorithm: 'sha256', value: 'deadbeef' },
+        },
+      ],
+    });
+
+    expect(buildPromptForConversationLeaf(conversation)).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this image.' },
+          {
+            type: 'image',
+            artifactId: 'artifact-1',
+            mimeType: 'image/png',
+            base64: 'abc123',
+            url: 'data:image/png;base64,abc123',
+            filename: 'photo.png',
+          },
+        ],
+      },
+    ]);
+
+    setUserMessageText(userMessage, 'Focus on the background.');
+
+    expect(getTextFromMessageContentParts(userMessage.content.parts)).toBe('Focus on the background.');
+    expect(userMessage.content.parts.find((part) => part.type === 'image')).toMatchObject({
+      artifactId: 'artifact-1',
+      filename: 'photo.png',
+    });
   });
 
   test('tracks branch variants and prefers a descendant leaf for the selected variant', () => {

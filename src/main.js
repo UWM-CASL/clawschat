@@ -49,14 +49,17 @@ import {
   findPreferredLeafForVariant,
   getConversationCardHeading,
   getConversationPathMessages,
+  getTextFromMessageContentParts,
   getMessageNodeById,
   getModelVariantState,
   getUserVariantState,
   normalizeConversationName,
+  normalizeMessageContentParts,
   normalizeConversationPromptMode,
   normalizeSystemPrompt,
   parseMessageNodeCounterFromId,
   pruneDescendantsFromMessage,
+  setUserMessageText,
 } from './state/conversation-model.js';
 import { createAppController } from './state/app-controller.js';
 import {
@@ -86,6 +89,49 @@ const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+}
+
+function base64FromArrayBuffer(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 32768;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return window.btoa(binary);
+}
+
+async function computeSha256Hex(buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function loadImageDimensions(src) {
+  return new Promise((resolve) => {
+    const image = new window.Image();
+    image.onload = () => {
+      resolve({
+        width: Number.isFinite(image.naturalWidth) ? image.naturalWidth : null,
+        height: Number.isFinite(image.naturalHeight) ? image.naturalHeight : null,
+      });
+    };
+    image.onerror = () => resolve({ width: null, height: null });
+    image.src = src;
+  });
+}
+
+function formatAttachmentSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '';
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+  return `${Math.round(bytes)} B`;
 }
 
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
@@ -156,6 +202,9 @@ const sendButton = document.getElementById('sendButton');
 const conversationList = document.getElementById('conversationList');
 const newConversationBtn = document.getElementById('newConversationBtn');
 const chatForm = document.querySelector('.composer');
+const imageAttachmentInput = document.getElementById('imageAttachmentInput');
+const composerAttachmentTray = document.getElementById('composerAttachmentTray');
+const addImagesButton = document.getElementById('addImagesButton');
 const messageInput = document.getElementById('messageInput');
 const chatTranscript = document.getElementById('chatTranscript');
 const chatTranscriptWrap = document.getElementById('chatTranscriptWrap');
@@ -1094,8 +1143,156 @@ function shouldDisableComposerForPreChatConversationSelection() {
   return selectShouldDisableComposerForPreChatConversationSelection(appState);
 }
 
-function buildConversationStateSnapshot() {
+function getPendingComposerAttachments() {
+  return Array.isArray(appState.pendingComposerAttachments) ? appState.pendingComposerAttachments : [];
+}
+
+function clearPendingComposerAttachments({ resetInput = true } = {}) {
+  appState.pendingComposerAttachments = [];
+  if (resetInput && imageAttachmentInput instanceof HTMLInputElement) {
+    imageAttachmentInput.value = '';
+  }
+  renderComposerAttachments();
+}
+
+function renderComposerAttachments() {
+  if (!(composerAttachmentTray instanceof HTMLElement)) {
+    return;
+  }
+  const attachments = getPendingComposerAttachments();
+  composerAttachmentTray.replaceChildren();
+  composerAttachmentTray.classList.toggle('d-none', attachments.length === 0);
+  attachments.forEach((attachment, index) => {
+    const item = document.createElement('article');
+    item.className = 'composer-attachment-card';
+    item.dataset.attachmentId = attachment.id;
+    const image = document.createElement('img');
+    image.className = 'composer-attachment-thumb';
+    image.src = attachment.url;
+    image.alt = attachment.alt;
+    item.appendChild(image);
+
+    const meta = document.createElement('div');
+    meta.className = 'composer-attachment-meta';
+    const name = document.createElement('p');
+    name.className = 'composer-attachment-name';
+    name.textContent = attachment.filename;
+    meta.appendChild(name);
+    const size = document.createElement('p');
+    size.className = 'small text-body-secondary mb-0';
+    size.textContent = formatAttachmentSize(attachment.size);
+    meta.appendChild(size);
+    item.appendChild(meta);
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'btn btn-sm btn-light composer-attachment-remove';
+    removeButton.setAttribute('aria-label', `Remove ${attachment.filename}`);
+    removeButton.dataset.attachmentIndex = String(index);
+    setIconButtonContent(removeButton, 'bi-x-lg', `Remove ${attachment.filename}`);
+    item.appendChild(removeButton);
+    composerAttachmentTray.appendChild(item);
+  });
+}
+
+async function createComposerAttachmentFromFile(file) {
+  const buffer = await file.arrayBuffer();
+  const base64 = base64FromArrayBuffer(buffer);
+  const mimeType = file.type || 'application/octet-stream';
+  const url = `data:${mimeType};base64,${base64}`;
+  const hashValue = await computeSha256Hex(buffer);
+  const dimensions = await loadImageDimensions(url);
+  const id = crypto.randomUUID();
   return {
+    id,
+    kind: 'binary',
+    mimeType,
+    encoding: 'base64',
+    data: base64,
+    url,
+    filename: file.name || 'image',
+    size: Number.isFinite(file.size) ? file.size : buffer.byteLength,
+    width: dimensions.width,
+    height: dimensions.height,
+    alt: file.name ? `Selected image: ${file.name}` : 'Selected image',
+    hash: {
+      algorithm: 'sha256',
+      value: hashValue,
+    },
+  };
+}
+
+function buildUserMessageAttachmentPayload(attachments) {
+  const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
+  const contentParts = normalizedAttachments.map((attachment) => ({
+    type: 'image',
+    artifactId: attachment.id,
+    mimeType: attachment.mimeType,
+    base64: attachment.data,
+    url: attachment.url,
+    filename: attachment.filename,
+    width: attachment.width,
+    height: attachment.height,
+    alt: attachment.alt,
+  }));
+  const artifactRefs = normalizedAttachments.map((attachment) => ({
+    id: attachment.id,
+    kind: 'binary',
+    mimeType: attachment.mimeType,
+    filename: attachment.filename,
+    hash: attachment.hash,
+  }));
+  return { contentParts, artifactRefs };
+}
+
+function getMessageArtifacts(message, conversationId) {
+  const refs = Array.isArray(message?.artifactRefs) ? message.artifactRefs : [];
+  const imageParts = Array.isArray(message?.content?.parts)
+    ? message.content.parts.filter((part) => part?.type === 'image')
+    : [];
+  return imageParts
+    .map((part) => {
+      const ref = refs.find((candidate) => candidate?.id === part.artifactId) || null;
+      const artifactId = typeof part.artifactId === 'string' && part.artifactId.trim() ? part.artifactId.trim() : '';
+      const data = typeof part.base64 === 'string' && part.base64.trim() ? part.base64.trim() : '';
+      const mimeType =
+        typeof part.mimeType === 'string' && part.mimeType.trim()
+          ? part.mimeType.trim()
+          : typeof ref?.mimeType === 'string'
+            ? ref.mimeType
+            : '';
+      if (!artifactId || !data || !mimeType) {
+        return null;
+      }
+      return {
+        id: artifactId,
+        conversationId,
+        messageId: message.id,
+        kind: 'binary',
+        mimeType,
+        encoding: 'base64',
+        data,
+        hash:
+          ref?.hash && typeof ref.hash === 'object'
+            ? {
+                algorithm: ref.hash.algorithm,
+                value: ref.hash.value,
+              }
+            : undefined,
+        filename:
+          typeof part.filename === 'string' && part.filename.trim()
+            ? part.filename.trim()
+            : typeof ref?.filename === 'string' && ref.filename.trim()
+              ? ref.filename.trim()
+              : null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildConversationStateSnapshot() {
+  const artifactsById = new Map();
+  const snapshot = {
     format: CONVERSATION_COLLECTION_FORMAT,
     schemaVersion: CONVERSATION_SCHEMA_VERSION,
     savedAt: Date.now(),
@@ -1123,46 +1320,94 @@ function buildConversationStateSnapshot() {
     conversationIdCounter: appState.conversationIdCounter,
     conversations: appState.conversations.map((conversation) => {
       const pathMessages = getConversationPathMessages(conversation);
-      const serializeMessage = (message) => ({
-        id: message.id,
-        role: message.role,
-        speaker: message.speaker,
-        text: String(message.text || ''),
-        createdAt: normalizeTimestamp(message.createdAt),
-        thoughts: typeof message.thoughts === 'string' ? message.thoughts : '',
-        response:
-          typeof message.response === 'string'
-            ? message.response
-            : String(message.text || ''),
-        hasThinking: Boolean(message.hasThinking),
-        isThinkingComplete: Boolean(message.isThinkingComplete),
-        isResponseComplete: Boolean(message.isResponseComplete ?? true),
-        parentId: typeof message.parentId === 'string' ? message.parentId : null,
-        childIds: Array.isArray(message.childIds)
-          ? message.childIds.filter((childId) => typeof childId === 'string' && childId.trim())
-          : [],
-        // Future-ready structure:
-        // - `content.parts` can mix text and artifact references.
-        // - `content.llmRepresentation` stores exactly what is sent to/received from the model.
-        content: {
-          parts: [
-            {
-              type: 'text',
-              text: String(message.text || ''),
-            },
-          ],
-          llmRepresentation: {
-            type: 'text',
-            text:
+      const serializeMessage = (message) => {
+        const contentParts = normalizeMessageContentParts(message.content?.parts, message.text || '').map((part) =>
+          part.type === 'image'
+            ? {
+                type: 'image',
+                artifactId: typeof part.artifactId === 'string' ? part.artifactId : undefined,
+                mimeType: typeof part.mimeType === 'string' ? part.mimeType : undefined,
+                filename: typeof part.filename === 'string' ? part.filename : undefined,
+                width: Number.isFinite(part.width) ? part.width : undefined,
+                height: Number.isFinite(part.height) ? part.height : undefined,
+                alt: typeof part.alt === 'string' ? part.alt : undefined,
+                base64: typeof part.base64 === 'string' ? part.base64 : undefined,
+                url: typeof part.url === 'string' ? part.url : undefined,
+              }
+            : {
+                type: 'text',
+                text: String(part.text || ''),
+              },
+        );
+        const artifactRefs = Array.isArray(message.artifactRefs)
+          ? message.artifactRefs
+              .map((ref) => {
+                if (!ref || typeof ref !== 'object' || typeof ref.id !== 'string' || !ref.id.trim()) {
+                  return null;
+                }
+                return {
+                  id: ref.id.trim(),
+                  kind: typeof ref.kind === 'string' ? ref.kind : undefined,
+                  mimeType: typeof ref.mimeType === 'string' ? ref.mimeType : undefined,
+                  filename: typeof ref.filename === 'string' ? ref.filename : undefined,
+                  hash:
+                    ref.hash && typeof ref.hash === 'object'
+                      ? {
+                          algorithm: ref.hash.algorithm,
+                          value: ref.hash.value,
+                        }
+                      : undefined,
+                };
+              })
+              .filter(Boolean)
+          : [];
+        getMessageArtifacts(message, conversation.id).forEach((artifact) => {
+          if (!artifact || typeof artifact.id !== 'string' || !artifact.id.trim()) {
+            return;
+          }
+          artifactsById.set(artifact.id.trim(), artifact);
+        });
+        return {
+          id: message.id,
+          role: message.role,
+          speaker: message.speaker,
+          text: String(message.text || ''),
+          createdAt: normalizeTimestamp(message.createdAt),
+          thoughts: typeof message.thoughts === 'string' ? message.thoughts : '',
+          response:
+            typeof message.response === 'string'
+              ? message.response
+              : String(message.text || ''),
+          hasThinking: Boolean(message.hasThinking),
+          isThinkingComplete: Boolean(message.isThinkingComplete),
+          isResponseComplete: Boolean(message.isResponseComplete ?? true),
+          parentId: typeof message.parentId === 'string' ? message.parentId : null,
+          childIds: Array.isArray(message.childIds)
+            ? message.childIds.filter((childId) => typeof childId === 'string' && childId.trim())
+            : [],
+          content: {
+            parts: contentParts,
+            llmRepresentation:
               message.role === 'model'
-                ? typeof message.response === 'string'
-                  ? message.response
-                  : String(message.text || '')
-                : String(message.text || ''),
+                ? {
+                    type: 'text',
+                    text:
+                      typeof message.response === 'string'
+                        ? message.response
+                        : String(message.text || ''),
+                  }
+                : Array.isArray(message.content?.llmRepresentation)
+                  ? message.content.llmRepresentation
+                  : contentParts.some((part) => part.type === 'image')
+                    ? contentParts
+                    : {
+                        type: 'text',
+                        text: String(getTextFromMessageContentParts(contentParts, message.text || '') || ''),
+                      },
           },
-        },
-        artifactRefs: [],
-      });
+          artifactRefs,
+        };
+      };
 
       return {
         id: conversation.id,
@@ -1196,6 +1441,8 @@ function buildConversationStateSnapshot() {
       };
     }),
   };
+  snapshot.artifacts = [...artifactsById.values()];
+  return snapshot;
 }
 
 async function persistConversationStateNow() {
@@ -1216,7 +1463,56 @@ function queueConversationStateSave() {
   }, CONVERSATION_SAVE_DEBOUNCE_MS);
 }
 
-function coerceStoredMessage(rawMessage, fallbackMessageId) {
+function buildStoredArtifactLookup(rawState) {
+  const artifactMap = new Map();
+  const rawArtifacts = Array.isArray(rawState?.artifacts) ? rawState.artifacts : [];
+  rawArtifacts.forEach((artifact) => {
+    if (!artifact || typeof artifact !== 'object' || typeof artifact.id !== 'string' || !artifact.id.trim()) {
+      return;
+    }
+    artifactMap.set(artifact.id.trim(), artifact);
+  });
+  return artifactMap;
+}
+
+function coerceStoredMessageContentParts(rawMessage, artifactLookup) {
+  const rawParts = Array.isArray(rawMessage?.content?.parts) ? rawMessage.content.parts : [];
+  return normalizeMessageContentParts(rawParts).map((part) => {
+    if (part.type !== 'image') {
+      return part;
+    }
+    const artifact =
+      typeof part.artifactId === 'string' && part.artifactId.trim()
+        ? artifactLookup.get(part.artifactId.trim()) || null
+        : null;
+    const mimeType =
+      typeof part.mimeType === 'string' && part.mimeType.trim()
+        ? part.mimeType.trim()
+        : typeof artifact?.mimeType === 'string' && artifact.mimeType.trim()
+          ? artifact.mimeType.trim()
+          : '';
+    const base64 =
+      typeof part.base64 === 'string' && part.base64.trim()
+        ? part.base64.trim()
+        : typeof artifact?.data === 'string' && artifact.data.trim()
+          ? artifact.data.trim()
+          : '';
+    const url =
+      typeof part.url === 'string' && part.url.trim()
+        ? part.url.trim()
+        : mimeType && base64
+          ? `data:${mimeType};base64,${base64}`
+          : '';
+    return {
+      ...part,
+      ...(mimeType ? { mimeType } : {}),
+      ...(base64 ? { base64 } : {}),
+      ...(url ? { url } : {}),
+    };
+  });
+}
+
+function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new Map()) {
   if (!rawMessage || typeof rawMessage !== 'object') {
     return null;
   }
@@ -1227,7 +1523,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId) {
 
   const id =
     typeof rawMessage.id === 'string' && rawMessage.id.trim() ? rawMessage.id.trim() : fallbackMessageId;
-  const contentParts = Array.isArray(rawMessage.content?.parts) ? rawMessage.content.parts : [];
+  const contentParts = coerceStoredMessageContentParts(rawMessage, artifactLookup);
   const firstTextPart = contentParts.find((part) => part?.type === 'text' && typeof part.text === 'string');
   const llmText =
     typeof rawMessage.content?.llmRepresentation?.text === 'string'
@@ -1240,6 +1536,32 @@ function coerceStoredMessage(rawMessage, fallbackMessageId) {
     speaker: role === 'user' ? 'User' : 'Model',
     text,
     createdAt: normalizeTimestamp(rawMessage.createdAt ?? rawMessage.timestamp),
+    content: {
+      parts: contentParts,
+      llmRepresentation: rawMessage.content?.llmRepresentation || null,
+    },
+    artifactRefs: Array.isArray(rawMessage.artifactRefs)
+      ? rawMessage.artifactRefs
+          .map((ref) => {
+            if (!ref || typeof ref !== 'object' || typeof ref.id !== 'string' || !ref.id.trim()) {
+              return null;
+            }
+            return {
+              id: ref.id.trim(),
+              kind: typeof ref.kind === 'string' ? ref.kind : 'binary',
+              mimeType: typeof ref.mimeType === 'string' ? ref.mimeType : undefined,
+              filename: typeof ref.filename === 'string' ? ref.filename : undefined,
+              hash:
+                ref.hash && typeof ref.hash === 'object'
+                  ? {
+                      algorithm: ref.hash.algorithm,
+                      value: ref.hash.value,
+                    }
+                  : undefined,
+            };
+          })
+          .filter(Boolean)
+      : [],
   };
 
   if (role === 'model') {
@@ -1257,14 +1579,20 @@ function coerceStoredMessage(rawMessage, fallbackMessageId) {
     );
     message.text = message.response;
   } else {
-    message.text = String(rawMessage.inference?.input?.verbatimText || rawMessage.content?.llmRepresentation?.text || message.text);
+    message.text = String(
+      rawMessage.inference?.input?.verbatimText ||
+        rawMessage.content?.llmRepresentation?.text ||
+        getTextFromMessageContentParts(contentParts, message.text) ||
+        message.text,
+    );
+    setUserMessageText(message, message.text);
   }
 
   return message;
 }
 
-function coerceStoredMessageNode(rawMessage, fallbackMessageId) {
-  const message = coerceStoredMessage(rawMessage, fallbackMessageId);
+function coerceStoredMessageNode(rawMessage, fallbackMessageId, artifactLookup) {
+  const message = coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup);
   if (!message) {
     return null;
   }
@@ -1301,6 +1629,7 @@ function applyStoredConversationState(rawState) {
     return false;
   }
 
+  const artifactLookup = buildStoredArtifactLookup(rawState);
   const restoredConversations = rawState.conversations
     .map((rawConversation, conversationIndex) => {
       if (!rawConversation || typeof rawConversation !== 'object') {
@@ -1330,8 +1659,8 @@ function applyStoredConversationState(rawState) {
       const messageNodes = rawMessages
         .map((rawMessage, messageIndex) =>
           hasNodeSchema
-            ? coerceStoredMessageNode(rawMessage, `${id}-node-${messageIndex + 1}`)
-            : coerceStoredMessage(rawMessage, `${id}-node-${messageIndex + 1}`),
+            ? coerceStoredMessageNode(rawMessage, `${id}-node-${messageIndex + 1}`, artifactLookup)
+            : coerceStoredMessage(rawMessage, `${id}-node-${messageIndex + 1}`, artifactLookup),
         )
         .filter(Boolean);
 
@@ -2304,6 +2633,7 @@ function setActiveConversationById(conversationId) {
     activeConversation.activeLeafMessageId = activeConversation.lastSpokenLeafMessageId;
   }
   clearUserMessageEditSession();
+  clearPendingComposerAttachments();
   renderConversationList();
   renderTranscript();
   updateChatTitle();
@@ -2316,16 +2646,25 @@ function updateActionButtons() {
   updateChatTitleEditorVisibility();
   updatePreChatActionButtons();
   const disableComposerForPreChatSelection = shouldDisableComposerForPreChatConversationSelection();
+  const composerControlsDisabled =
+    appState.isLoadingModel ||
+    appState.isRunningOrchestration ||
+    Boolean(appState.activeUserEditMessageId) ||
+    disableComposerForPreChatSelection;
   if (messageInput instanceof HTMLTextAreaElement) {
     messageInput.disabled = disableComposerForPreChatSelection;
   }
+  if (addImagesButton instanceof HTMLButtonElement) {
+    addImagesButton.disabled = composerControlsDisabled || appState.isGenerating;
+  }
+  if (imageAttachmentInput instanceof HTMLInputElement) {
+    imageAttachmentInput.disabled = composerControlsDisabled || appState.isGenerating;
+  }
   if (sendButton) {
     sendButton.disabled =
-      appState.isLoadingModel ||
-      appState.isRunningOrchestration ||
+      composerControlsDisabled ||
       (!appState.isGenerating && !appState.hasStartedChatWorkspace) ||
-      Boolean(appState.activeUserEditMessageId) ||
-      disableComposerForPreChatSelection;
+      false;
   }
   if (newConversationBtn) {
     newConversationBtn.disabled =
@@ -3227,7 +3566,10 @@ function saveUserMessageEdit(messageId) {
     return;
   }
   const nextText = editor.value.trim();
-  if (!nextText) {
+  const hasAttachments = Array.isArray(userMessage.content?.parts)
+    ? userMessage.content.parts.some((part) => part?.type === 'image')
+    : false;
+  if (!nextText && !hasAttachments) {
     setStatus('Message text cannot be empty.');
     editor.focus();
     return;
@@ -3244,7 +3586,10 @@ function saveUserMessageEdit(messageId) {
     }
     const branchMessage = addMessageToConversation(activeConversation, 'user', nextText, {
       parentId: userMessage.parentId || null,
+      contentParts: normalizeMessageContentParts(userMessage.content?.parts, userMessage.text || ''),
+      artifactRefs: Array.isArray(userMessage.artifactRefs) ? userMessage.artifactRefs : [],
     });
+    setUserMessageText(branchMessage, nextText);
     activeConversation.activeLeafMessageId = branchMessage.id;
     activeConversation.lastSpokenLeafMessageId = branchMessage.id;
     clearUserMessageEditSession();
@@ -3262,7 +3607,7 @@ function saveUserMessageEdit(messageId) {
     });
     return;
   }
-  userMessage.text = nextText;
+  setUserMessageText(userMessage, nextText);
   const { removedCount } = pruneDescendantsFromMessage(activeConversation, userMessage.id);
   activeConversation.activeLeafMessageId = userMessage.id;
   activeConversation.lastSpokenLeafMessageId = userMessage.id;
@@ -3344,6 +3689,7 @@ populateModelSelect();
 restoreInferencePreferences();
 void probeWebGpuAvailability();
 showProgressRegion(false);
+renderComposerAttachments();
 updateActionButtons();
 setActiveSettingsTab(appState.activeSettingsTab);
 updateWelcomePanelVisibility();
@@ -3695,11 +4041,71 @@ if (sendButton) {
   });
 }
 
+if (addImagesButton instanceof HTMLButtonElement && imageAttachmentInput instanceof HTMLInputElement) {
+  addImagesButton.addEventListener('click', () => {
+    imageAttachmentInput.click();
+  });
+
+  imageAttachmentInput.addEventListener('change', async (event) => {
+    const files = event.target instanceof HTMLInputElement ? Array.from(event.target.files || []) : [];
+    if (!files.length) {
+      return;
+    }
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    if (!imageFiles.length) {
+      setStatus('Only image files can be attached.');
+      clearPendingComposerAttachments({ resetInput: true });
+      return;
+    }
+    try {
+      const nextAttachments = await Promise.all(imageFiles.map((file) => createComposerAttachmentFromFile(file)));
+      appState.pendingComposerAttachments = [...getPendingComposerAttachments(), ...nextAttachments];
+      renderComposerAttachments();
+      setStatus(`${nextAttachments.length} image${nextAttachments.length === 1 ? '' : 's'} attached.`);
+    } catch (error) {
+      setStatus(`Unable to read selected images. ${error instanceof Error ? error.message : 'Try again.'}`);
+    } finally {
+      imageAttachmentInput.value = '';
+    }
+  });
+}
+
+if (composerAttachmentTray instanceof HTMLElement) {
+  composerAttachmentTray.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const removeButton = target.closest('.composer-attachment-remove');
+    if (!(removeButton instanceof HTMLButtonElement)) {
+      return;
+    }
+    const index = Number.parseInt(removeButton.dataset.attachmentIndex || '', 10);
+    if (!Number.isInteger(index) || index < 0) {
+      return;
+    }
+    const attachments = getPendingComposerAttachments();
+    if (index >= attachments.length) {
+      return;
+    }
+    const [removedAttachment] = attachments.splice(index, 1);
+    appState.pendingComposerAttachments = [...attachments];
+    renderComposerAttachments();
+    setStatus(
+      removedAttachment?.filename
+        ? `Removed ${removedAttachment.filename}.`
+        : 'Removed attached image.',
+    );
+  });
+}
+
 if (chatForm && messageInput && chatTranscript) {
   chatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const value = messageInput.value.trim();
-    if (!value || appState.isGenerating || appState.isRunningOrchestration || appState.activeUserEditMessageId) {
+    const attachments = getPendingComposerAttachments();
+    const hasAttachments = attachments.length > 0;
+    if ((!value && !hasAttachments) || appState.isGenerating || appState.isRunningOrchestration || appState.activeUserEditMessageId) {
       if (appState.activeUserEditMessageId) {
         setStatus('Save or cancel the current message edit before sending a new message.');
       } else if (appState.isRunningOrchestration) {
@@ -3743,10 +4149,18 @@ if (chatForm && messageInput && chatTranscript) {
       }
     }
 
-    const userMessage = addMessageToConversation(activeConversation, 'user', value);
+    const attachmentPayload = buildUserMessageAttachmentPayload(attachments);
+    const userMessage = addMessageToConversation(activeConversation, 'user', value, {
+      contentParts: [
+        ...(value ? [{ type: 'text', text: value }] : []),
+        ...attachmentPayload.contentParts,
+      ],
+      artifactRefs: attachmentPayload.artifactRefs,
+    });
     activeConversation.lastSpokenLeafMessageId = userMessage.id;
     addMessageElement(userMessage);
     messageInput.value = '';
+    clearPendingComposerAttachments();
     queueConversationStateSave();
     appController.startModelGeneration(activeConversation, buildPromptForConversationLeaf(activeConversation), {
       updateLastSpokenOnComplete: true,

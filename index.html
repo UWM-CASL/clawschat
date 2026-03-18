@@ -350,6 +350,13 @@
 
         <form class="composer" aria-label="Message input">
           <label class="visually-hidden" for="messageInput">Message input</label>
+          <input
+            id="imageAttachmentInput"
+            class="visually-hidden"
+            type="file"
+            accept="image/*"
+            multiple
+          />
           <div class="composer-shortcuts-hint">
             <button
               id="composerShortcutsHintButton"
@@ -363,7 +370,21 @@
               Press <kbd>Ctrl</kbd>+<kbd>/</kbd> to view available actions.
             </span>
           </div>
+          <section
+            id="composerAttachmentTray"
+            class="composer-attachment-tray d-none"
+            aria-label="Attached images"
+          ></section>
           <div class="composer-row">
+            <button
+              id="addImagesButton"
+              type="button"
+              class="btn btn-outline-secondary composer-attach-button"
+              aria-label="Add images"
+            >
+              <i class="bi bi-plus-lg" aria-hidden="true"></i>
+              <span>Add images</span>
+            </button>
             <textarea
               id="messageInput"
               class="form-control"

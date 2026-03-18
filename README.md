@@ -58,8 +58,12 @@ Student-facing browser chat UI with local model inference.
 - Conversations are persisted locally in browser IndexedDB and restored on reload.
 - Saved conversation state includes stable IDs and forward-compatible metadata for future export/import:
   - message `content.parts` and `content.llmRepresentation` (verbatim LLM-facing text)
-  - per-message `artifactRefs` placeholders
-  - collection-level `artifacts` placeholders for future text/binary artifacts (binary intended as base64 + hash metadata)
+  - per-message `artifactRefs` for attachment metadata
+  - collection-level `artifacts` for text/binary artifacts (binary stored as base64 plus hash metadata)
+- The composer supports local image attachments:
+  - `Add images` opens a file picker for one or more images.
+  - Selected images appear as removable thumbnails above the composer before send.
+  - Sent images are restored with the conversation transcript on reload.
 - New conversations start untitled and are automatically renamed after the first model response based on conversation content.
 - Automatic conversation renaming now runs through a one-step orchestration loaded from `src/config/orchestrations/rename-chat.json`.
 - Conversation title editing is disabled until that automatic model-generated title is available.
@@ -105,7 +109,7 @@ Student-facing browser chat UI with local model inference.
   - Requires WebGPU for browser inference, so it is unavailable when WebGPU is unavailable or when `WASM only` is selected.
 - Backend-only runtime support also exists for `huggingworld/gemma-3-1b-it-ONNX-GQA`.
   - It is intentionally not exposed in the current selector yet.
-  - The worker preserves structured multimodal prompt parts for future image input support.
+  - The worker and saved conversation state preserve structured multimodal prompt parts for image input.
   - Current limitation: the published 1B ONNX package still loads through a text-generation path, so full vision inference is not available from that model package alone.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`

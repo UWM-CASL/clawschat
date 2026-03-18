@@ -35,6 +35,171 @@ function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
 }
 
+function normalizeArtifactRef(rawRef) {
+  if (!rawRef || typeof rawRef !== 'object') {
+    return null;
+  }
+  const id = typeof rawRef.id === 'string' ? rawRef.id.trim() : '';
+  if (!id) {
+    return null;
+  }
+  const normalizedRef = { id };
+  if (typeof rawRef.kind === 'string' && rawRef.kind.trim()) {
+    normalizedRef.kind = rawRef.kind.trim();
+  }
+  if (typeof rawRef.mimeType === 'string' && rawRef.mimeType.trim()) {
+    normalizedRef.mimeType = rawRef.mimeType.trim();
+  }
+  if (typeof rawRef.filename === 'string' && rawRef.filename.trim()) {
+    normalizedRef.filename = rawRef.filename.trim();
+  }
+  if (rawRef.hash && typeof rawRef.hash === 'object') {
+    const algorithm =
+      typeof rawRef.hash.algorithm === 'string' && rawRef.hash.algorithm.trim()
+        ? rawRef.hash.algorithm.trim()
+        : '';
+    const value =
+      typeof rawRef.hash.value === 'string' && rawRef.hash.value.trim() ? rawRef.hash.value.trim() : '';
+    if (algorithm && value) {
+      normalizedRef.hash = { algorithm, value };
+    }
+  }
+  return normalizedRef;
+}
+
+function normalizeMessageArtifactRefs(rawRefs) {
+  if (!Array.isArray(rawRefs)) {
+    return [];
+  }
+  return rawRefs.map(normalizeArtifactRef).filter(Boolean);
+}
+
+function normalizeImageContentPart(rawPart) {
+  const artifactId = typeof rawPart.artifactId === 'string' ? rawPart.artifactId.trim() : '';
+  const mimeType = typeof rawPart.mimeType === 'string' ? rawPart.mimeType.trim() : '';
+  const base64 = typeof rawPart.base64 === 'string' ? rawPart.base64.trim() : '';
+  const url = typeof rawPart.url === 'string' ? rawPart.url.trim() : '';
+  const image = typeof rawPart.image === 'string' ? rawPart.image.trim() : '';
+  if (!artifactId && !mimeType && !base64 && !url && !image) {
+    return null;
+  }
+  const normalizedPart = { type: 'image' };
+  if (artifactId) {
+    normalizedPart.artifactId = artifactId;
+  }
+  if (mimeType) {
+    normalizedPart.mimeType = mimeType;
+  }
+  if (base64) {
+    normalizedPart.base64 = base64;
+  }
+  if (url) {
+    normalizedPart.url = url;
+  }
+  if (image) {
+    normalizedPart.image = image;
+  }
+  if (typeof rawPart.filename === 'string' && rawPart.filename.trim()) {
+    normalizedPart.filename = rawPart.filename.trim();
+  }
+  if (typeof rawPart.width === 'number' && Number.isFinite(rawPart.width) && rawPart.width > 0) {
+    normalizedPart.width = Math.round(rawPart.width);
+  }
+  if (typeof rawPart.height === 'number' && Number.isFinite(rawPart.height) && rawPart.height > 0) {
+    normalizedPart.height = Math.round(rawPart.height);
+  }
+  if (typeof rawPart.alt === 'string') {
+    normalizedPart.alt = rawPart.alt;
+  }
+  return normalizedPart;
+}
+
+function normalizeMessageContentPart(rawPart) {
+  if (!rawPart || typeof rawPart !== 'object') {
+    return null;
+  }
+  if (rawPart.type === 'text') {
+    const text = typeof rawPart.text === 'string' ? rawPart.text : '';
+    if (!text.trim()) {
+      return null;
+    }
+    return {
+      type: 'text',
+      text,
+    };
+  }
+  if (rawPart.type === 'image') {
+    return normalizeImageContentPart(rawPart);
+  }
+  return null;
+}
+
+export function normalizeMessageContentParts(rawParts, fallbackText = '') {
+  const normalizedParts = Array.isArray(rawParts)
+    ? rawParts.map(normalizeMessageContentPart).filter(Boolean)
+    : [];
+  if (normalizedParts.length) {
+    return normalizedParts;
+  }
+  const text = String(fallbackText || '');
+  return text.trim()
+    ? [
+        {
+          type: 'text',
+          text,
+        },
+      ]
+    : [];
+}
+
+export function getTextFromMessageContentParts(parts, fallbackText = '') {
+  const normalizedParts = normalizeMessageContentParts(parts, fallbackText);
+  const textParts = normalizedParts
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text);
+  const joinedText = textParts.join('\n').trim();
+  return joinedText || String(fallbackText || '');
+}
+
+export function setUserMessageText(message, nextText) {
+  if (!message || message.role !== 'user') {
+    return message;
+  }
+  const normalizedText = String(nextText || '');
+  const normalizedParts = normalizeMessageContentParts(message.content?.parts, normalizedText);
+  const nextParts = normalizedParts.filter((part) => part.type !== 'text');
+  if (normalizedText.trim()) {
+    nextParts.unshift({
+      type: 'text',
+      text: normalizedText,
+    });
+  }
+  message.text = normalizedText;
+  message.content = {
+    parts: nextParts,
+    llmRepresentation:
+      nextParts.some((part) => part.type === 'image') || nextParts.filter((part) => part.type === 'text').length > 1
+        ? nextParts.map((part) => ({ ...part }))
+        : normalizedText,
+  };
+  return message;
+}
+
+function buildMessagePromptContent(message) {
+  if (!message || message.role !== 'user') {
+    return String(message?.response || message?.text || '').trim();
+  }
+  const normalizedParts = normalizeMessageContentParts(message.content?.parts, message.text || '');
+  if (!normalizedParts.length) {
+    return '';
+  }
+  const containsImage = normalizedParts.some((part) => part.type === 'image');
+  if (!containsImage) {
+    return getTextFromMessageContentParts(normalizedParts, message.text || '').trim();
+  }
+  return normalizedParts.map((part) => ({ ...part }));
+}
+
 function toIsoTimestamp(value) {
   const normalized = normalizeTimestamp(value);
   return normalized ? new Date(normalized).toISOString() : null;
@@ -358,12 +523,29 @@ export function addMessageToConversation(conversation, role, text, options = {})
     parentId: parentId || null,
     childIds: [],
   };
+  if (normalizedRole === 'user') {
+    message.content = {
+      parts: normalizeMessageContentParts(options.contentParts, normalizedText),
+      llmRepresentation: null,
+    };
+    message.artifactRefs = normalizeMessageArtifactRefs(options.artifactRefs);
+    setUserMessageText(message, normalizedText);
+  }
   if (normalizedRole === 'model') {
     message.thoughts = '';
     message.response = normalizedText;
     message.hasThinking = false;
     message.isThinkingComplete = false;
     message.isResponseComplete = false;
+    message.content = {
+      parts: normalizeMessageContentParts(
+        options.contentParts,
+        typeof options.response === 'string' ? options.response : normalizedText,
+      ),
+      llmRepresentation:
+        typeof options.response === 'string' ? options.response : normalizedText,
+    };
+    message.artifactRefs = normalizeMessageArtifactRefs(options.artifactRefs);
   }
   conversation.messageNodes.push(message);
   if (parentId) {
@@ -475,8 +657,9 @@ export function buildConversationMessages(messages, systemPrompt = '') {
     if (!message || (message.role !== 'user' && message.role !== 'model')) {
       return;
     }
-    const content = String(message.response || message.text || '').trim();
-    if (!content) {
+    const content = buildMessagePromptContent(message);
+    const isStructuredContent = Array.isArray(content);
+    if ((!isStructuredContent && !String(content || '').trim()) || (isStructuredContent && !content.length)) {
       return;
     }
     structuredMessages.push({

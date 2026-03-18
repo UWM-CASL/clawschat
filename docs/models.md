@@ -40,7 +40,7 @@ Current supported models in Settings:
   - `huggingworld/gemma-3-1b-it-ONNX-GQA`
   - This entry is intentionally hidden from the current selector so frontend behavior does not change yet.
   - Runtime defaults use ONNX `q4` weights and external data sidecar loading.
-  - The worker preserves structured multimodal prompt parts (`text` and `image`) so the backend path can carry image content once the frontend is ready.
+  - The worker and saved conversation state preserve structured multimodal prompt parts (`text` and `image`) so the backend path can carry image content end-to-end.
   - Current limitation: the published 1B ONNX package exposes a text-generation pipeline with tokenizer-only processor metadata, so loading works, but full image understanding is not available from this package alone.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`

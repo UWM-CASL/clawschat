@@ -23,6 +23,7 @@ export function createAppState({
     maxDebugEntries,
     activeGenerationConfig,
     pendingGenerationConfig: null,
+    pendingComposerAttachments: [],
     conversationSaveTimerId: null,
     showThinkingByDefault: false,
     enableSingleKeyShortcuts: true,

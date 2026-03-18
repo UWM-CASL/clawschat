@@ -16,6 +16,17 @@ function createViewHarness() {
         role: 'user',
         speaker: 'User',
         text: 'Hello there',
+        content: {
+          parts: [
+            { type: 'text', text: 'Hello there' },
+            {
+              type: 'image',
+              url: 'data:image/png;base64,abc123',
+              filename: 'hello.png',
+              alt: 'Attached image: hello.png',
+            },
+          ],
+        },
       },
       {
         id: 'model-1',
@@ -85,7 +96,10 @@ describe('transcript-view', () => {
     view.renderTranscript({ scrollToBottom: false });
 
     expect(harness.container.querySelectorAll('.message-row')).toHaveLength(2);
-    expect(harness.container.querySelector('.user-message .message-bubble')?.textContent).toBe('Hello there');
+    expect(harness.container.querySelector('.user-message .message-bubble')?.textContent).toContain('Hello there');
+    expect(harness.container.querySelector('.user-message .message-image-thumb')?.getAttribute('src')).toContain(
+      'data:image/png;base64,abc123',
+    );
     expect(harness.container.querySelector('.model-message .response-content')?.innerHTML).toContain('Hi back');
     expect(harness.container.querySelector('.regenerate-response-btn')?.getAttribute('aria-keyshortcuts')).toBe('R');
     expect(harness.container.querySelector('.copy-message-btn')?.getAttribute('data-bs-title')).toContain(
