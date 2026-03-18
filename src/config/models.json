@@ -98,7 +98,6 @@
     {
       "id": "huggingworld/gemma-3-1b-it-ONNX-GQA",
       "label": "huggingworld/gemma-3-1b-it-ONNX-GQA",
-      "hidden": true,
       "runtime": {
         "dtype": "q4",
         "useExternalDataFormat": true

@@ -9,7 +9,7 @@ import {
 } from '../../src/config/model-settings.js';
 
 const LIQUID_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX';
-const HIDDEN_GEMMA_MODEL_ID = 'huggingworld/gemma-3-1b-it-ONNX-GQA';
+const GEMMA_MODEL_ID = 'huggingworld/gemma-3-1b-it-ONNX-GQA';
 
 describe('model-settings availability', () => {
   test('marks the LiquidAI thinking model unavailable without WebGPU', () => {
@@ -89,19 +89,19 @@ describe('model-settings availability', () => {
       defaultTopK: 50,
       defaultTopP: 0.1,
     });
-    expect(MODEL_OPTIONS_BY_ID.get(HIDDEN_GEMMA_MODEL_ID)?.generation).toMatchObject({
+    expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.generation).toMatchObject({
       defaultTemperature: 0.6,
       defaultTopK: 65,
       defaultTopP: 0.95,
     });
   });
 
-  test('keeps the hidden Gemma backend model supported without exposing it in visible options', () => {
-    expect(MODEL_OPTIONS_BY_ID.get(HIDDEN_GEMMA_MODEL_ID)?.hidden).toBe(true);
-    expect(getModelAvailability(HIDDEN_GEMMA_MODEL_ID)).toEqual({
+  test('keeps the Gemma model available in the visible model catalog', () => {
+    expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.hidden).toBe(false);
+    expect(getModelAvailability(GEMMA_MODEL_ID)).toEqual({
       available: true,
       reason: '',
     });
-    expect(MODEL_OPTIONS.some((model) => model.id === HIDDEN_GEMMA_MODEL_ID)).toBe(false);
+    expect(MODEL_OPTIONS.some((model) => model.id === GEMMA_MODEL_ID)).toBe(true);
   });
 });

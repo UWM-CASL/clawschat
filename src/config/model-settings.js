@@ -185,7 +185,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           thinkingTags,
           generation,
           runtime,
-          hidden: normalizeHiddenFlag(model?.hidden),
+          hidden: normalizeHiddenFlag((/** @type {any} */ (model)).hidden),
         };
       })
       .filter(Boolean)
