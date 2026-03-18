@@ -1,4 +1,4 @@
-const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.0-next.7';
 
 let model = null;
 let tokenizer = null;

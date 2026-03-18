@@ -96,12 +96,15 @@ Student-facing browser chat UI with local model inference.
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+- `onnx-community/Qwen3-0.6B-ONNX`
+  - Uses the model card's WebGPU-recommended `q4f16` runtime.
+  - Supports Qwen thinking output via `<think>...</think>` tags.
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
   - Uses ONNX `q4` weights.
   - Requires WebGPU for browser inference, so it is unavailable when WebGPU is unavailable or when `WASM only` is selected.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Qwen3-0.6B-ONNX`
   - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`

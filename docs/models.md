@@ -25,13 +25,16 @@ Current supported models in Settings:
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+- `onnx-community/Qwen3-0.6B-ONNX`
+  - Uses runtime dtype `q4f16`, matching the model card's WebGPU example.
+  - Uses `<think>...</think>` tags for thought separation.
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
   - Uses ONNX `q4` weights.
   - Uses `<think>...</think>` tags for thought separation.
   - Requires WebGPU in-browser, so it is disabled when WebGPU is unavailable or when `WASM only` is selected.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Qwen3-0.6B-ONNX`
   - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
@@ -54,4 +57,5 @@ Per-model limits and defaults:
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype auto-selected by Transformers.js, max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtype auto-selected by Transformers.js, max context `131072`, default context `8192`, default temperature `0.6`, no thinking tags
   - Both Llama entries enable `useExternalDataFormat: true` for `.onnx_data` loading.
+- `onnx-community/Qwen3-0.6B-ONNX`: runtime dtype `q4f16`, `enableThinking: true`, max context `40960`, default context `8192`, default temperature `0.6`, thinking tags `<think>` / `</think>`
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.6`, thinking tags `<think>` / `</think>`
