@@ -13,6 +13,7 @@ Model support is configured in `src/config/models.json`:
   - `dtype` (example: `q4f16`)
   - `enableThinking` (`true` to pass `enable_thinking` during generation)
   - `requiresWebGpu` (`true` to disable the model unless WebGPU can be used)
+  - `multimodalGeneration` (`true` only when the worker has a real multimodal execution path for image/audio/video inputs)
   - `useExternalDataFormat` (`true`/number to enable loading `.onnx_data` sidecar files)
 - `models[].generation`: per-model integer token limits:
   - `defaultMaxOutputTokens`
@@ -45,6 +46,7 @@ Current supported models in Settings:
 - `onnx-community/gemma-3n-E2B-it-ONNX`
   - Supports text output with image, audio, and video inputs.
   - The current app UI exposes image attachments only; audio/video input UI is not implemented yet.
+  - The app uses a dedicated multimodal worker path for this model and requires WebGPU.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Qwen3-0.6B-ONNX`
@@ -57,6 +59,7 @@ Notes:
 
 - The model is downloaded at runtime by Transformers.js and cached in-browser for reuse.
 - Model assets are not committed to this repository.
+- Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
 - Settings fields for maximum output/context tokens are numeric, step in 8, and disabled until a model is loaded.
 - Token fields show an estimated words value based on `tokens * 0.75`.
 - Temperature is numeric, step in 0.1, and disabled until a model is loaded.
@@ -72,4 +75,4 @@ Per-model limits and defaults:
   - Both Llama entries enable `useExternalDataFormat: true` for `.onnx_data` loading.
 - `onnx-community/Qwen3-0.6B-ONNX`: runtime dtype `q4f16`, max context `40960`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, thinking tags `<think>` / `</think>`
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, thinking tags `<think>` / `</think>`
-- `onnx-community/gemma-3n-E2B-it-ONNX`: runtime defaults from Transformers.js, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `imageInput`, `audioInput`, and `videoInput`
+- `onnx-community/gemma-3n-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: fp32, vision_encoder: fp32, embed_tokens: q4, decoder_model_merged: q4 }`, `requiresWebGpu: true`, `multimodalGeneration: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `imageInput`, `audioInput`, and `videoInput`

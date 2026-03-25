@@ -98,11 +98,28 @@ describe('model-settings availability', () => {
 
   test('keeps the Gemma model available in the visible model catalog', () => {
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.hidden).toBe(false);
-    expect(getModelAvailability(GEMMA_MODEL_ID)).toEqual({
+    expect(
+      getModelAvailability(GEMMA_MODEL_ID, {
+        backendPreference: 'webgpu',
+        webGpuAvailable: true,
+      }),
+    ).toEqual({
       available: true,
       reason: '',
     });
     expect(MODEL_OPTIONS.some((model) => model.id === GEMMA_MODEL_ID)).toBe(true);
+  });
+
+  test('marks the Gemma multimodal model unavailable without WebGPU', () => {
+    expect(
+      getModelAvailability(GEMMA_MODEL_ID, {
+        backendPreference: 'auto',
+        webGpuAvailable: false,
+      }),
+    ).toEqual({
+      available: false,
+      reason: 'This model requires WebGPU, which is not available in this browser.',
+    });
   });
 
   test('exposes model feature flags from config', () => {
@@ -119,6 +136,16 @@ describe('model-settings availability', () => {
       imageInput: true,
       audioInput: true,
       videoInput: true,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.runtime).toMatchObject({
+      requiresWebGpu: true,
+      multimodalGeneration: true,
+      dtype: {
+        audio_encoder: 'fp32',
+        vision_encoder: 'fp32',
+        embed_tokens: 'q4',
+        decoder_model_merged: 'q4',
+      },
     });
   });
 });

@@ -109,7 +109,9 @@ Student-facing browser chat UI with local model inference.
   - Requires WebGPU for browser inference, so it is unavailable when WebGPU is unavailable or when `WASM only` is selected.
 - `onnx-community/gemma-3n-E2B-it-ONNX`
   - Supports text output with image, audio, and video inputs.
-  - The app currently exposes image attachments in the composer; audio/video UI is not wired yet.
+  - Image attachments are routed through a multimodal worker path.
+  - Audio/video UI is not wired yet.
+  - Requires WebGPU in this app.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Qwen3-0.6B-ONNX`
@@ -120,7 +122,7 @@ Student-facing browser chat UI with local model inference.
 - Model support configuration lives in `src/config/models.json`:
   - `models`: options shown in the model selector
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)
-  - `models[].runtime`: per-model runtime hints (`dtype`, optional `enableThinking`, optional `requiresWebGpu`, optional `useExternalDataFormat`)
+  - `models[].runtime`: per-model runtime hints (`dtype`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
   - `models[].generation`: per-model defaults and limits for output/context tokens, temperature, `defaultTopK`, and `defaultTopP`
   - `defaultModelId`: fallback/default selection
   - `legacyAliases`: stored legacy IDs remapped at runtime

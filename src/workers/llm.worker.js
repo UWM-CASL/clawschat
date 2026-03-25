@@ -2,9 +2,11 @@ const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers
 
 let model = null;
 let tokenizer = null;
+let processor = null;
 let TextStreamer = null;
 let backendInUse = null;
 let loadedModelId = null;
+let loadedExecutionMode = 'text';
 let cachedModule = null;
 let generationConfig = {
   maxOutputTokens: 1024,
@@ -161,9 +163,22 @@ function formatWebGpuInitializationError(error) {
 }
 
 function normalizeRuntimeConfig(rawRuntime) {
-  const dtype = typeof rawRuntime?.dtype === 'string' ? rawRuntime.dtype.trim() : '';
+  let dtype = '';
+  if (typeof rawRuntime?.dtype === 'string') {
+    dtype = rawRuntime.dtype.trim();
+  } else if (rawRuntime?.dtype && typeof rawRuntime.dtype === 'object' && !Array.isArray(rawRuntime.dtype)) {
+    const entries = Object.entries(rawRuntime.dtype)
+      .map(([key, value]) => {
+        const normalizedKey = typeof key === 'string' ? key.trim() : '';
+        const normalizedValue = typeof value === 'string' ? value.trim() : '';
+        return normalizedKey && normalizedValue ? [normalizedKey, normalizedValue] : null;
+      })
+      .filter(Boolean);
+    dtype = entries.length ? Object.fromEntries(entries) : '';
+  }
   const enableThinking = rawRuntime?.enableThinking === true;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
+  const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
   const imageInput = rawRuntime?.imageInput === true;
   const audioInput = rawRuntime?.audioInput === true;
   const videoInput = rawRuntime?.videoInput === true;
@@ -176,6 +191,7 @@ function normalizeRuntimeConfig(rawRuntime) {
     ...(dtype ? { dtype } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
+    ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
     ...(imageInput ? { imageInput: true } : {}),
     ...(audioInput ? { audioInput: true } : {}),
     ...(videoInput ? { videoInput: true } : {}),
@@ -223,6 +239,50 @@ function normalizePromptContentPart(rawPart) {
   }
 
   return null;
+}
+
+async function prepareImageInputsFromPrompt(messages, RawImage) {
+  const preparedMessages = [];
+  const images = [];
+
+  for (const message of messages) {
+    if (!message || typeof message !== 'object') {
+      continue;
+    }
+    if (!Array.isArray(message.content)) {
+      preparedMessages.push(message);
+      continue;
+    }
+
+    const preparedContent = [];
+    for (const part of message.content) {
+      if (!part || typeof part !== 'object') {
+        continue;
+      }
+      if (part.type === 'text') {
+        preparedContent.push({ type: 'text', text: String(part.text || '') });
+        continue;
+      }
+      if (part.type === 'image') {
+        const imageSource = typeof part.image === 'string' ? part.image.trim() : '';
+        if (!imageSource) {
+          continue;
+        }
+        images.push(await RawImage.read(imageSource));
+        preparedContent.push({ type: 'image' });
+      }
+    }
+
+    preparedMessages.push({
+      ...message,
+      content: preparedContent,
+    });
+  }
+
+  return {
+    messages: preparedMessages,
+    images,
+  };
 }
 
 function normalizePromptContent(rawContent) {
@@ -283,6 +343,7 @@ function promptContainsImageParts(prompt) {
 
 export { resolvePrompt };
 export { getBackendAttemptOrder };
+export { prepareImageInputsFromPrompt };
 
 async function initialize(payload) {
   const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
@@ -345,7 +406,13 @@ async function initialize(payload) {
     }
   }
 
-  const { env, pipeline, TextStreamer: StreamerClass } = await loadTransformers();
+  const {
+    env,
+    pipeline,
+    TextStreamer: StreamerClass,
+    AutoProcessor,
+    AutoModelForImageTextToText,
+  } = await loadTransformers();
   TextStreamer = StreamerClass;
   env.allowRemoteModels = true;
   env.useBrowserCache = true;
@@ -404,10 +471,32 @@ async function initialize(payload) {
           });
         },
       };
-      model = await pipeline('text-generation', modelId, {
-        ...pipelineOptions,
-      });
-      tokenizer = model.tokenizer;
+      if (runtime.multimodalGeneration) {
+        postProgress({ percent: 10, message: 'Loading multimodal processor...' });
+        processor = await AutoProcessor.from_pretrained(modelId, {
+          progress_callback: pipelineOptions.progress_callback,
+        });
+        postProgress({ percent: 25, message: `Loading ${modelId} multimodal model...` });
+        model = await AutoModelForImageTextToText.from_pretrained(modelId, {
+          device: backend,
+          ...(runtime.dtype ? { dtype: runtime.dtype } : {}),
+          ...(runtime.useExternalDataFormat
+            ? {
+                use_external_data_format: runtime.useExternalDataFormat,
+              }
+            : {}),
+          progress_callback: pipelineOptions.progress_callback,
+        });
+        tokenizer = processor?.tokenizer || model?.tokenizer || null;
+        loadedExecutionMode = 'multimodal';
+      } else {
+        processor = null;
+        model = await pipeline('text-generation', modelId, {
+          ...pipelineOptions,
+        });
+        tokenizer = model.tokenizer;
+        loadedExecutionMode = 'text';
+      }
       backendInUse = backend;
       loadedModelId = modelId;
       postProgress({ percent: 100, message: `Loaded ${modelId} (${backend.toUpperCase()}).` });
@@ -459,8 +548,14 @@ async function generate(payload) {
     const requestGenerationConfig = normalizeGenerationConfig(payload.generationConfig || generationConfig);
     generationConfig = requestGenerationConfig;
     const runtime = normalizeRuntimeConfig(payload.runtime);
+    if (promptContainsImageParts(formattedPrompt) && !runtime.multimodalGeneration) {
+      throw new Error('Image attachments are not yet wired to the selected model runtime in this app.');
+    }
     if (promptContainsImageParts(formattedPrompt) && !runtime.imageInput) {
       throw new Error('The selected model does not support image inputs in this app.');
+    }
+    if (runtime.multimodalGeneration && loadedExecutionMode !== 'multimodal') {
+      throw new Error('The selected model runtime was not initialized for multimodal generation.');
     }
     const generationOptions = {
       max_new_tokens: requestGenerationConfig.maxOutputTokens,
@@ -469,11 +564,54 @@ async function generate(payload) {
       top_k: requestGenerationConfig.topK,
       top_p: requestGenerationConfig.topP,
       do_sample: true,
-      return_full_text: false,
       ...(runtime.enableThinking ? { enable_thinking: true } : {}),
     };
 
-    if (TextStreamer) {
+    if (runtime.multimodalGeneration) {
+      const { RawImage } = await loadTransformers();
+      const { messages, images } = await prepareImageInputsFromPrompt(formattedPrompt, RawImage);
+      const promptText = processor.apply_chat_template(messages, {
+        add_generation_prompt: true,
+      });
+      const imageInputs = images.length > 1 ? images : images[0] || null;
+      const modelInputs = await processor(promptText, imageInputs, null, {
+        add_special_tokens: false,
+      });
+
+      if (TextStreamer) {
+        const streamer = new TextStreamer(tokenizer, {
+          skip_prompt: true,
+          skip_special_tokens: true,
+          callback_function: (text) => {
+            streamedText += text;
+            self.postMessage({
+              type: 'token',
+              payload: { requestId, text },
+            });
+          },
+        });
+
+        await model.generate({
+          ...modelInputs,
+          ...generationOptions,
+          streamer,
+        });
+      } else {
+        const output = await model.generate({
+          ...modelInputs,
+          ...generationOptions,
+        });
+        const decoded = processor.batch_decode(
+          output.slice(null, [modelInputs.input_ids.dims.at(-1), null]),
+          { skip_special_tokens: true },
+        );
+        streamedText = decoded?.[0] || '';
+        self.postMessage({
+          type: 'token',
+          payload: { requestId, text: streamedText },
+        });
+      }
+    } else if (TextStreamer) {
       const streamer = new TextStreamer(tokenizer, {
         skip_prompt: true,
         callback_function: (text) => {
@@ -487,10 +625,14 @@ async function generate(payload) {
 
       await model(formattedPrompt, {
         ...generationOptions,
+        return_full_text: false,
         streamer,
       });
     } else {
-      const output = await model(formattedPrompt, generationOptions);
+      const output = await model(formattedPrompt, {
+        ...generationOptions,
+        return_full_text: false,
+      });
       const generated = output?.[0]?.generated_text;
       if (Array.isArray(generated)) {
         streamedText = generated[generated.length - 1]?.content || '';
@@ -525,10 +667,14 @@ self.onmessage = async (event) => {
   const { type, payload } = event.data || {};
   if (type === 'init') {
     const requestedBackendPreference = normalizeBackendPreference(payload?.backendPreference);
+    const requestedRuntime = normalizeRuntimeConfig(payload?.runtime);
     const needsReinit =
       !model ||
       !tokenizer ||
+      (requestedRuntime.multimodalGeneration ? !processor : false) ||
       payload.modelId !== loadedModelId ||
+      (requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'multimodal') ||
+      (!requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'text') ||
       (requestedBackendPreference !== 'auto' && requestedBackendPreference !== backendInUse);
 
     if (!needsReinit) {

@@ -1149,7 +1149,8 @@ function getPendingComposerAttachments() {
 
 function selectedModelSupportsImageInput() {
   const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
-  return MODEL_OPTIONS_BY_ID.get(selectedModelId)?.features?.imageInput === true;
+  const model = MODEL_OPTIONS_BY_ID.get(selectedModelId);
+  return model?.features?.imageInput === true && model?.runtime?.multimodalGeneration === true;
 }
 
 function clearPendingComposerAttachments({ resetInput = true } = {}) {
@@ -3263,11 +3264,12 @@ function getRuntimeConfigForModel(modelId) {
   const model = MODEL_OPTIONS_BY_ID.get(normalizedModelId);
   const runtime = model?.runtime || {};
   const features = model?.features || {};
+  const multimodalGeneration = runtime.multimodalGeneration === true;
   return {
     ...runtime,
-    ...(features.imageInput ? { imageInput: true } : {}),
-    ...(features.audioInput ? { audioInput: true } : {}),
-    ...(features.videoInput ? { videoInput: true } : {}),
+    ...(multimodalGeneration && features.imageInput ? { imageInput: true } : {}),
+    ...(multimodalGeneration && features.audioInput ? { audioInput: true } : {}),
+    ...(multimodalGeneration && features.videoInput ? { videoInput: true } : {}),
   };
 }
 

@@ -26,6 +26,26 @@ export const DEFAULT_GENERATION_LIMITS = Object.freeze({
 export const ALLOWED_RUNTIME_DTYPES = Object.freeze(new Set(['q4', 'q4f16', 'q8', 'fp16', 'fp32']));
 export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['auto', 'webgpu']));
 
+function normalizeRuntimeDtype(rawDtype) {
+  if (typeof rawDtype === 'string' && ALLOWED_RUNTIME_DTYPES.has(rawDtype.trim())) {
+    return rawDtype.trim();
+  }
+  if (!rawDtype || typeof rawDtype !== 'object' || Array.isArray(rawDtype)) {
+    return null;
+  }
+  const entries = Object.entries(rawDtype)
+    .map(([key, value]) => {
+      const normalizedKey = typeof key === 'string' ? key.trim() : '';
+      const normalizedValue = typeof value === 'string' ? value.trim() : '';
+      if (!normalizedKey || !ALLOWED_RUNTIME_DTYPES.has(normalizedValue)) {
+        return null;
+      }
+      return [normalizedKey, normalizedValue];
+    })
+    .filter(Boolean);
+  return entries.length ? Object.fromEntries(entries) : null;
+}
+
 function toPositiveInt(value, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
@@ -119,12 +139,10 @@ export function normalizeGenerationLimits(rawLimits) {
 }
 
 function normalizeRuntime(rawRuntime) {
-  const dtype =
-    typeof rawRuntime?.dtype === 'string' && ALLOWED_RUNTIME_DTYPES.has(rawRuntime.dtype.trim())
-      ? rawRuntime.dtype.trim()
-      : null;
+  const dtype = normalizeRuntimeDtype(rawRuntime?.dtype);
   const enableThinking = rawRuntime?.enableThinking === true;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
+  const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
   const useExternalDataFormat =
     rawRuntime?.useExternalDataFormat === true ||
     (Number.isInteger(rawRuntime?.useExternalDataFormat) && rawRuntime.useExternalDataFormat > 0)
@@ -134,6 +152,7 @@ function normalizeRuntime(rawRuntime) {
     ...(dtype ? { dtype } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
+    ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
     ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
   };
 }

@@ -114,7 +114,16 @@
     {
       "id": "onnx-community/gemma-3n-E2B-it-ONNX",
       "label": "onnx-community/gemma-3n-E2B-it-ONNX",
-      "runtime": {},
+      "runtime": {
+        "dtype": {
+          "audio_encoder": "fp32",
+          "vision_encoder": "fp32",
+          "embed_tokens": "q4",
+          "decoder_model_merged": "q4"
+        },
+        "requiresWebGpu": true,
+        "multimodalGeneration": true
+      },
       "generation": {
         "defaultMaxOutputTokens": 1024,
         "maxOutputTokens": 32768,

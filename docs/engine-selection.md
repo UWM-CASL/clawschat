@@ -8,6 +8,7 @@ Inference is executed in a dedicated Web Worker (`src/workers/llm.worker.js`).
 - `webgpu`: WebGPU only
 - `wasm`: WASM only
 - Models with `requiresWebGpu: true` only attempt WebGPU and do not fall back to WASM or CPU.
+- Models with `multimodalGeneration: true` use a processor/model execution path in the worker instead of the text-generation pipeline.
 
 The resolved backend is shown in the status region in the main UI.
 Initialization is user-triggered on first message send in the chat workspace.

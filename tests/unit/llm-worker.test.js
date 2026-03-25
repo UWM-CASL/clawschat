@@ -5,7 +5,9 @@ globalThis.self = /** @type {any} */ ({
   onmessage: null,
 });
 
-const { getBackendAttemptOrder, resolvePrompt } = await import('../../src/workers/llm.worker.js');
+const { getBackendAttemptOrder, prepareImageInputsFromPrompt, resolvePrompt } = await import(
+  '../../src/workers/llm.worker.js'
+);
 
 describe('llm.worker resolvePrompt', () => {
   test('normalizes structured chat messages and drops empty entries', () => {
@@ -55,6 +57,39 @@ describe('llm.worker resolvePrompt', () => {
 
   test('falls back to a single user message for flat prompts', () => {
     expect(resolvePrompt('Flat prompt')).toEqual([{ role: 'user', content: 'Flat prompt' }]);
+  });
+
+  test('extracts image payloads for multimodal processing while keeping chat-template image markers', async () => {
+    const read = vi.fn(async (value) => ({ kind: 'raw-image', value }));
+
+    const result = await prepareImageInputsFromPrompt(
+      [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this image.' },
+            { type: 'image', image: 'data:image/png;base64,abc123' },
+            { type: 'text', text: 'Focus on the visible objects.' },
+          ],
+        },
+      ],
+      { read },
+    );
+
+    expect(read).toHaveBeenCalledWith('data:image/png;base64,abc123');
+    expect(result).toEqual({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this image.' },
+            { type: 'image' },
+            { type: 'text', text: 'Focus on the visible objects.' },
+          ],
+        },
+      ],
+      images: [{ kind: 'raw-image', value: 'data:image/png;base64,abc123' }],
+    });
   });
 
   test('restricts WebGPU-required models to the WebGPU backend', () => {
