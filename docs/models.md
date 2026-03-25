@@ -3,6 +3,12 @@
 Model support is configured in `src/config/models.json`:
 
 - `models`: list of selectable models (`id`, `label`, optional `features`)
+- `models[].features`: normalized capability flags used by the app UI/runtime gating:
+  - `streaming`
+  - `thinking`
+  - `imageInput`
+  - `audioInput`
+  - `videoInput`
 - `models[].runtime`: optional runtime hints per model:
   - `dtype` (example: `q4f16`)
   - `enableThinking` (`true` to pass `enable_thinking` during generation)
@@ -36,13 +42,15 @@ Current supported models in Settings:
   - Uses ONNX `q4` weights.
   - Uses `<think>...</think>` tags for thought separation.
   - Requires WebGPU in-browser, so it is disabled when WebGPU is unavailable or when `WASM only` is selected.
-- `huggingworld/gemma-3-1b-it-ONNX-GQA`
-  - Uses ONNX `q4` weights and external data sidecar loading.
+- `onnx-community/gemma-3n-E2B-it-ONNX`
+  - Supports text output with image, audio, and video inputs.
+  - The current app UI exposes image attachments only; audio/video input UI is not implemented yet.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Qwen3-0.6B-ONNX`
-  - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `huggingworld/gemma-3-1b-it-ONNX-GQA`
-  - `onnx-community/gemma-3-1b-ONNX-GQA` -> `huggingworld/gemma-3-1b-it-ONNX-GQA`
+  - `huggingworld/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
+  - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
+  - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 
 Notes:
@@ -64,4 +72,4 @@ Per-model limits and defaults:
   - Both Llama entries enable `useExternalDataFormat: true` for `.onnx_data` loading.
 - `onnx-community/Qwen3-0.6B-ONNX`: runtime dtype `q4f16`, max context `40960`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, thinking tags `<think>` / `</think>`
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, thinking tags `<think>` / `</think>`
-- `huggingworld/gemma-3-1b-it-ONNX-GQA`: runtime dtype `q4`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, no thinking tags
+- `onnx-community/gemma-3n-E2B-it-ONNX`: runtime defaults from Transformers.js, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `imageInput`, `audioInput`, and `videoInput`

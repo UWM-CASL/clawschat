@@ -11,6 +11,7 @@ export const TOP_P_STEP = 0.05;
 export const MIN_TOP_P = 0;
 export const MAX_TOP_P = 1;
 export const DEFAULT_TOP_P = 0.9;
+export const MODEL_FEATURE_FLAGS = Object.freeze(['streaming', 'thinking', 'imageInput', 'audioInput', 'videoInput']);
 export const DEFAULT_GENERATION_LIMITS = Object.freeze({
   defaultMaxOutputTokens: 1024,
   maxOutputTokens: 32768,
@@ -141,6 +142,14 @@ function normalizeHiddenFlag(rawHidden) {
   return rawHidden === true;
 }
 
+function normalizeFeatures(rawFeatures, { thinkingTags = null } = {}) {
+  const normalized = Object.fromEntries(MODEL_FEATURE_FLAGS.map((feature) => [feature, rawFeatures?.[feature] === true]));
+  if (thinkingTags) {
+    normalized.thinking = true;
+  }
+  return normalized;
+}
+
 function normalizeConfiguredModelId(modelId) {
   const normalizedId = typeof modelId === 'string' ? modelId.trim() : '';
   return LEGACY_MODEL_ALIASES[normalizedId] || normalizedId;
@@ -181,7 +190,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
         return {
           id,
           label,
-          features: model?.features || {},
+          features: normalizeFeatures(model?.features, { thinkingTags }),
           thinkingTags,
           generation,
           runtime,
@@ -203,7 +212,7 @@ if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
   configuredModels.unshift({
     id: DEFAULT_MODEL,
     label: DEFAULT_MODEL,
-    features: {},
+    features: normalizeFeatures(null),
     thinkingTags: null,
     generation: normalizeGenerationLimits(null),
     runtime: {},

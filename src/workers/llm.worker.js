@@ -165,6 +165,8 @@ function normalizeRuntimeConfig(rawRuntime) {
   const enableThinking = rawRuntime?.enableThinking === true;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const imageInput = rawRuntime?.imageInput === true;
+  const audioInput = rawRuntime?.audioInput === true;
+  const videoInput = rawRuntime?.videoInput === true;
   const useExternalDataFormat =
     rawRuntime?.useExternalDataFormat === true ||
     (Number.isInteger(rawRuntime?.useExternalDataFormat) && rawRuntime.useExternalDataFormat > 0)
@@ -175,6 +177,8 @@ function normalizeRuntimeConfig(rawRuntime) {
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(imageInput ? { imageInput: true } : {}),
+    ...(audioInput ? { audioInput: true } : {}),
+    ...(videoInput ? { videoInput: true } : {}),
     ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
   };
 }

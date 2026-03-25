@@ -3260,11 +3260,14 @@ function getThinkingTagsForModel(modelId) {
 
 function getRuntimeConfigForModel(modelId) {
   const normalizedModelId = normalizeModelId(modelId);
-  const runtime = MODEL_OPTIONS_BY_ID.get(normalizedModelId)?.runtime || {};
-  const imageInput = MODEL_OPTIONS_BY_ID.get(normalizedModelId)?.features?.imageInput === true;
+  const model = MODEL_OPTIONS_BY_ID.get(normalizedModelId);
+  const runtime = model?.runtime || {};
+  const features = model?.features || {};
   return {
     ...runtime,
-    ...(imageInput ? { imageInput: true } : {}),
+    ...(features.imageInput ? { imageInput: true } : {}),
+    ...(features.audioInput ? { audioInput: true } : {}),
+    ...(features.videoInput ? { videoInput: true } : {}),
   };
 }
 

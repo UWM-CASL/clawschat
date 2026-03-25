@@ -9,7 +9,7 @@ import {
 } from '../../src/config/model-settings.js';
 
 const LIQUID_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX';
-const GEMMA_MODEL_ID = 'huggingworld/gemma-3-1b-it-ONNX-GQA';
+const GEMMA_MODEL_ID = 'onnx-community/gemma-3n-E2B-it-ONNX';
 
 describe('model-settings availability', () => {
   test('marks the LiquidAI thinking model unavailable without WebGPU', () => {
@@ -103,5 +103,22 @@ describe('model-settings availability', () => {
       reason: '',
     });
     expect(MODEL_OPTIONS.some((model) => model.id === GEMMA_MODEL_ID)).toBe(true);
+  });
+
+  test('exposes model feature flags from config', () => {
+    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Qwen3-0.6B-ONNX')?.features).toMatchObject({
+      streaming: true,
+      thinking: true,
+      imageInput: false,
+      audioInput: false,
+      videoInput: false,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.features).toMatchObject({
+      streaming: true,
+      thinking: false,
+      imageInput: true,
+      audioInput: true,
+      videoInput: true,
+    });
   });
 });
