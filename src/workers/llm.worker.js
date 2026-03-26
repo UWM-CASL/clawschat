@@ -1,4 +1,21 @@
+import {
+  buildDefaultGenerationConfig,
+  sanitizeGenerationConfig,
+} from '../config/generation-config.js';
+
 const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.0-next.7';
+
+const WORKER_GENERATION_LIMITS = {
+  defaultMaxOutputTokens: 1024,
+  maxOutputTokens: Number.MAX_SAFE_INTEGER,
+  defaultMaxContextTokens: 8192,
+  maxContextTokens: Number.MAX_SAFE_INTEGER,
+  minTemperature: 0.1,
+  maxTemperature: 2.0,
+  defaultTemperature: 0.6,
+  defaultTopK: 50,
+  defaultTopP: 0.9,
+};
 
 let model = null;
 let tokenizer = null;
@@ -8,51 +25,10 @@ let backendInUse = null;
 let loadedModelId = null;
 let loadedExecutionMode = 'text';
 let cachedModule = null;
-let generationConfig = {
-  maxOutputTokens: 1024,
-  maxContextTokens: 8192,
-  temperature: 0.6,
-  topK: 50,
-  topP: 0.9,
-};
+let generationConfig = buildDefaultGenerationConfig(WORKER_GENERATION_LIMITS);
 
 function normalizeGenerationConfig(rawConfig) {
-  const parsedMaxContext = Number.parseInt(String(rawConfig?.maxContextTokens ?? ''), 10);
-  const parsedMaxOutput = Number.parseInt(String(rawConfig?.maxOutputTokens ?? ''), 10);
-  const parsedTemperature = Number.parseFloat(String(rawConfig?.temperature ?? ''));
-  const parsedTopK = Number.parseInt(String(rawConfig?.topK ?? ''), 10);
-  const parsedTopP = Number.parseFloat(String(rawConfig?.topP ?? ''));
-  const maxContextTokens = Number.isInteger(parsedMaxContext) && parsedMaxContext > 0 ? parsedMaxContext : 8192;
-  const maxOutputCap = maxContextTokens;
-  const maxOutputTokens =
-    Number.isInteger(parsedMaxOutput) && parsedMaxOutput > 0
-      ? Math.min(parsedMaxOutput, maxOutputCap)
-      : Math.min(1024, maxOutputCap);
-  const minTemperature = 0.1;
-  const maxTemperature = 2.0;
-  const boundedTemperature = Number.isFinite(parsedTemperature)
-    ? Math.max(minTemperature, Math.min(maxTemperature, parsedTemperature))
-    : 0.6;
-  const temperature = Number(boundedTemperature.toFixed(1));
-  const minTopK = 5;
-  const maxTopK = 500;
-  const topKStep = 5;
-  const boundedTopK = Number.isInteger(parsedTopK) ? Math.max(minTopK, Math.min(maxTopK, parsedTopK)) : 50;
-  const quantizedTopK = minTopK + Math.round((boundedTopK - minTopK) / topKStep) * topKStep;
-  const topK = Math.max(minTopK, Math.min(maxTopK, quantizedTopK));
-  const minTopP = 0;
-  const maxTopP = 1;
-  const topPStep = 0.05;
-  const boundedTopP = Number.isFinite(parsedTopP) ? Math.max(minTopP, Math.min(maxTopP, parsedTopP)) : 0.9;
-  const quantizedTopP = minTopP + Math.round((boundedTopP - minTopP) / topPStep) * topPStep;
-  const topP = Number(Math.max(minTopP, Math.min(maxTopP, quantizedTopP)).toFixed(2));
-  return {
-    maxOutputTokens,
-    maxContextTokens,
-    temperature,
-    topK,
-    topP,
-  };
+  return sanitizeGenerationConfig(rawConfig, WORKER_GENERATION_LIMITS);
 }
 
 function postStatus(message) {

@@ -1,16 +1,43 @@
 import modelCatalog from './models.json';
+import {
+  DEFAULT_GENERATION_LIMITS,
+  DEFAULT_TOP_K,
+  DEFAULT_TOP_P,
+  MAX_TOP_K,
+  MAX_TOP_P,
+  MIN_TOP_K,
+  MIN_TOP_P,
+  MIN_TOKEN_LIMIT,
+  TEMPERATURE_STEP,
+  TOKEN_STEP,
+  TOP_K_STEP,
+  TOP_P_STEP,
+  clamp,
+  normalizeGenerationLimits,
+  quantizeTemperature,
+  quantizeTopKInput,
+  quantizeTopPInput,
+} from './generation-config.js';
 
-export const TOKEN_STEP = 8;
-export const MIN_TOKEN_LIMIT = 8;
-export const TEMPERATURE_STEP = 0.1;
-export const TOP_K_STEP = 5;
-export const MIN_TOP_K = 5;
-export const MAX_TOP_K = 500;
-export const DEFAULT_TOP_K = 50;
-export const TOP_P_STEP = 0.05;
-export const MIN_TOP_P = 0;
-export const MAX_TOP_P = 1;
-export const DEFAULT_TOP_P = 0.9;
+export {
+  DEFAULT_GENERATION_LIMITS,
+  DEFAULT_TOP_K,
+  DEFAULT_TOP_P,
+  MAX_TOP_K,
+  MAX_TOP_P,
+  MIN_TOP_K,
+  MIN_TOP_P,
+  MIN_TOKEN_LIMIT,
+  TEMPERATURE_STEP,
+  TOKEN_STEP,
+  TOP_K_STEP,
+  TOP_P_STEP,
+  clamp,
+  normalizeGenerationLimits,
+  quantizeTemperature,
+  quantizeTopKInput,
+  quantizeTopPInput,
+};
 export const MODEL_FEATURE_FLAGS = Object.freeze([
   'streaming',
   'thinking',
@@ -19,17 +46,6 @@ export const MODEL_FEATURE_FLAGS = Object.freeze([
   'audioInput',
   'videoInput',
 ]);
-export const DEFAULT_GENERATION_LIMITS = Object.freeze({
-  defaultMaxOutputTokens: 1024,
-  maxOutputTokens: 32768,
-  defaultMaxContextTokens: 32768,
-  maxContextTokens: 32768,
-  minTemperature: 0.1,
-  maxTemperature: 2.0,
-  defaultTemperature: 0.6,
-  defaultTopK: DEFAULT_TOP_K,
-  defaultTopP: DEFAULT_TOP_P,
-});
 export const ALLOWED_RUNTIME_DTYPES = Object.freeze(new Set(['q4', 'q4f16', 'q8', 'fp16', 'fp32']));
 export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['auto', 'webgpu']));
 export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
@@ -54,98 +70,6 @@ function normalizeRuntimeDtype(rawDtype) {
     })
     .filter(Boolean);
   return entries.length ? Object.fromEntries(entries) : null;
-}
-
-function toPositiveInt(value, fallback) {
-  return Number.isInteger(value) && value > 0 ? value : fallback;
-}
-
-function toFiniteNumber(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-export function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-export function quantizeTemperature(value, min, max) {
-  const parsed = Number.parseFloat(String(value ?? ''));
-  if (!Number.isFinite(parsed)) {
-    return Number(min.toFixed(1));
-  }
-  const bounded = clamp(parsed, min, max);
-  const steps = Math.round((bounded - min) / TEMPERATURE_STEP);
-  const quantized = min + steps * TEMPERATURE_STEP;
-  return Number(clamp(quantized, min, max).toFixed(1));
-}
-
-export function quantizeTopKInput(value) {
-  const parsed = Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_TOP_K;
-  }
-  const bounded = clamp(parsed, MIN_TOP_K, MAX_TOP_K);
-  const steps = Math.round((bounded - MIN_TOP_K) / TOP_K_STEP);
-  return clamp(MIN_TOP_K + steps * TOP_K_STEP, MIN_TOP_K, MAX_TOP_K);
-}
-
-export function quantizeTopPInput(value) {
-  const parsed = Number.parseFloat(String(value ?? ''));
-  if (!Number.isFinite(parsed)) {
-    return Number(DEFAULT_TOP_P.toFixed(2));
-  }
-  const bounded = clamp(parsed, MIN_TOP_P, MAX_TOP_P);
-  const steps = Math.round((bounded - MIN_TOP_P) / TOP_P_STEP);
-  const quantized = MIN_TOP_P + steps * TOP_P_STEP;
-  return Number(clamp(quantized, MIN_TOP_P, MAX_TOP_P).toFixed(2));
-}
-
-export function normalizeGenerationLimits(rawLimits) {
-  const maxContextTokens = toPositiveInt(rawLimits?.maxContextTokens, DEFAULT_GENERATION_LIMITS.maxContextTokens);
-  const maxOutputTokens = toPositiveInt(rawLimits?.maxOutputTokens, maxContextTokens);
-  const minTemperature = toFiniteNumber(
-    rawLimits?.minTemperature,
-    DEFAULT_GENERATION_LIMITS.minTemperature,
-  );
-  const maxTemperature = toFiniteNumber(
-    rawLimits?.maxTemperature,
-    DEFAULT_GENERATION_LIMITS.maxTemperature,
-  );
-  const boundedMinTemperature = Number(Math.min(minTemperature, maxTemperature).toFixed(1));
-  const boundedMaxTemperature = Number(Math.max(minTemperature, maxTemperature).toFixed(1));
-  const defaultTemperature = quantizeTemperature(
-    toFiniteNumber(rawLimits?.defaultTemperature, DEFAULT_GENERATION_LIMITS.defaultTemperature),
-    boundedMinTemperature,
-    boundedMaxTemperature,
-  );
-  const defaultMaxContextTokens = clamp(
-    toPositiveInt(rawLimits?.defaultMaxContextTokens, maxContextTokens),
-    MIN_TOKEN_LIMIT,
-    maxContextTokens,
-  );
-  const defaultMaxOutputTokens = clamp(
-    toPositiveInt(rawLimits?.defaultMaxOutputTokens, DEFAULT_GENERATION_LIMITS.defaultMaxOutputTokens),
-    MIN_TOKEN_LIMIT,
-    maxOutputTokens,
-  );
-  const defaultTopK = quantizeTopKInput(
-    toPositiveInt(rawLimits?.defaultTopK, DEFAULT_GENERATION_LIMITS.defaultTopK),
-  );
-  const defaultTopP = quantizeTopPInput(
-    toFiniteNumber(rawLimits?.defaultTopP, DEFAULT_GENERATION_LIMITS.defaultTopP),
-  );
-  return {
-    defaultMaxOutputTokens: Math.min(defaultMaxOutputTokens, defaultMaxContextTokens),
-    maxOutputTokens,
-    defaultMaxContextTokens,
-    maxContextTokens,
-    minTemperature: boundedMinTemperature,
-    maxTemperature: boundedMaxTemperature,
-    defaultTemperature,
-    defaultTopK,
-    defaultTopP,
-  };
 }
 
 function normalizeRuntime(rawRuntime) {
@@ -318,6 +242,14 @@ export const LEGACY_MODEL_ALIASES = Object.fromEntries(
     .filter(([alias, canonical]) => alias && canonical),
 );
 export const SUPPORTED_MODELS = new Set(configuredModels.map((model) => model.id));
+
+export function normalizeModelId(modelId) {
+  const canonical = LEGACY_MODEL_ALIASES[modelId] || modelId;
+  if (SUPPORTED_MODELS.has(canonical)) {
+    return canonical;
+  }
+  return DEFAULT_MODEL;
+}
 
 export function getModelAvailability(
   modelId,
