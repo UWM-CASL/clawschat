@@ -7,6 +7,7 @@ import MarkdownIt from 'markdown-it';
 import './styles.css';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
+import { buildToolCallingSystemPrompt, getEnabledToolNames } from './llm/tool-calling.js';
 import renameChatOrchestration from './config/orchestrations/rename-chat.json';
 import fixResponseOrchestration from './config/orchestrations/fix-response.json';
 import {
@@ -78,6 +79,7 @@ import { createTranscriptView } from './ui/transcript-view.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
 const SHOW_THINKING_STORAGE_KEY = 'ui-show-thinking';
+const ENABLE_TOOL_CALLING_STORAGE_KEY = 'conversation-enable-tool-calling';
 const SINGLE_KEY_SHORTCUTS_STORAGE_KEY = 'ui-enable-single-key-shortcuts';
 const TRANSCRIPT_VIEW_STORAGE_KEY = 'ui-transcript-view';
 const DEFAULT_SYSTEM_PROMPT_STORAGE_KEY = 'conversation-default-system-prompt';
@@ -172,6 +174,7 @@ window.MathJax.startup = {
 
 const themeSelect = document.getElementById('themeSelect');
 const showThinkingToggle = document.getElementById('showThinkingToggle');
+const enableToolCallingToggle = document.getElementById('enableToolCallingToggle');
 const defaultSystemPromptInput = document.getElementById('defaultSystemPromptInput');
 const modelSelect = document.getElementById('modelSelect');
 const backendSelect = document.getElementById('backendSelect');
@@ -307,6 +310,7 @@ const appState = createAppState({
     topP: DEFAULT_TOP_P,
   },
   defaultSystemPrompt: '',
+  enableToolCalling: true,
   maxDebugEntries: MAX_DEBUG_ENTRIES,
 });
 void ensureMathJaxLoaded();
@@ -1285,6 +1289,29 @@ function selectedModelSupportsImageInput() {
   const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
   const model = MODEL_OPTIONS_BY_ID.get(selectedModelId);
   return model?.features?.imageInput === true && model?.runtime?.multimodalGeneration === true;
+}
+
+function modelSupportsToolCalling(modelId) {
+  return MODEL_OPTIONS_BY_ID.get(normalizeModelId(modelId))?.features?.toolCalling === true;
+}
+
+function getToolCallingContext(modelId) {
+  const enabled = appState.enableToolCalling === true;
+  const supported = enabled && modelSupportsToolCalling(modelId);
+  const enabledTools = getEnabledToolNames();
+  return {
+    enabled,
+    supported,
+    enabledTools,
+  };
+}
+
+function getToolCallingSystemPromptSuffix(modelId) {
+  const toolContext = getToolCallingContext(modelId);
+  if (!toolContext.supported) {
+    return '';
+  }
+  return buildToolCallingSystemPrompt(toolContext.enabledTools);
 }
 
 function clearPendingComposerAttachments({ resetInput = true } = {}) {
@@ -2482,9 +2509,21 @@ function buildActiveConversationExportPayload(activeConversation) {
     : Number(
         appState.activeGenerationConfig?.temperature ?? DEFAULT_GENERATION_LIMITS.defaultTemperature
       );
+  const toolContext = getToolCallingContext(selectedModelId);
   return buildConversationDownloadPayload(activeConversation, {
     modelId: selectedModelId,
     temperature,
+    systemPromptSuffix: getToolCallingSystemPromptSuffix(selectedModelId),
+    toolContext,
+  });
+}
+
+function buildPromptForActiveConversation(
+  conversation,
+  leafMessageId = conversation?.activeLeafMessageId
+) {
+  return buildPromptForConversationLeaf(conversation, leafMessageId, {
+    systemPromptSuffix: getToolCallingSystemPromptSuffix(getConversationModelId(conversation)),
   });
 }
 
@@ -3362,6 +3401,11 @@ function getStoredShowThinkingPreference() {
   return localStorage.getItem(SHOW_THINKING_STORAGE_KEY) === 'true';
 }
 
+function getStoredToolCallingPreference() {
+  const stored = localStorage.getItem(ENABLE_TOOL_CALLING_STORAGE_KEY);
+  return stored === null ? true : stored === 'true';
+}
+
 function getStoredSingleKeyShortcutPreference() {
   const stored = localStorage.getItem(SINGLE_KEY_SHORTCUTS_STORAGE_KEY);
   return stored === null ? true : stored === 'true';
@@ -3395,6 +3439,16 @@ function applyShowThinkingPreference(value, { persist = false, refresh = false }
   }
   if (refresh) {
     refreshModelThinkingVisibility();
+  }
+}
+
+function applyToolCallingPreference(value, { persist = false } = {}) {
+  appState.enableToolCalling = Boolean(value);
+  if (enableToolCallingToggle instanceof HTMLInputElement) {
+    enableToolCallingToggle.checked = appState.enableToolCalling;
+  }
+  if (persist) {
+    localStorage.setItem(ENABLE_TOOL_CALLING_STORAGE_KEY, String(appState.enableToolCalling));
   }
 }
 
@@ -3733,7 +3787,7 @@ const appController = createAppController({
   getThinkingTagsForModel,
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
   addMessageToConversation,
-  buildPromptForConversationLeaf,
+  buildPromptForConversationLeaf: buildPromptForActiveConversation,
   getMessageNodeById,
   deriveConversationName,
   normalizeConversationName,
@@ -4003,7 +4057,7 @@ function saveUserMessageEdit(messageId) {
     setStatus('Branch saved. Generating response...');
     appController.startModelGeneration(
       activeConversation,
-      buildPromptForConversationLeaf(activeConversation),
+      buildPromptForActiveConversation(activeConversation),
       {
         parentMessageId: branchMessage.id,
         updateLastSpokenOnComplete: true,
@@ -4030,7 +4084,7 @@ function saveUserMessageEdit(messageId) {
   setStatus(`${saveStatus} Generating updated response...`);
   appController.startModelGeneration(
     activeConversation,
-    buildPromptForConversationLeaf(activeConversation),
+    buildPromptForActiveConversation(activeConversation),
     {
       parentMessageId: userMessage.id,
       updateLastSpokenOnComplete: true,
@@ -4093,6 +4147,7 @@ engine.onProgress = (progress) => {
 const themePreference = getStoredThemePreference();
 applyTheme(themePreference);
 applyShowThinkingPreference(getStoredShowThinkingPreference());
+applyToolCallingPreference(getStoredToolCallingPreference());
 applySingleKeyShortcutPreference(getStoredSingleKeyShortcutPreference());
 applyTranscriptViewPreference(getStoredTranscriptViewPreference());
 applyDefaultSystemPrompt(getStoredDefaultSystemPrompt());
@@ -4243,6 +4298,14 @@ if (showThinkingToggle) {
   showThinkingToggle.addEventListener('change', (event) => {
     const value = event.target instanceof HTMLInputElement ? event.target.checked : false;
     applyShowThinkingPreference(value, { persist: true, refresh: true });
+  });
+}
+
+if (enableToolCallingToggle instanceof HTMLInputElement) {
+  enableToolCallingToggle.addEventListener('change', (event) => {
+    const value = event.target instanceof HTMLInputElement ? event.target.checked : true;
+    applyToolCallingPreference(value, { persist: true });
+    setStatus(value ? 'Tool calling enabled.' : 'Tool calling disabled.');
   });
 }
 
@@ -4750,7 +4813,7 @@ if (chatForm && messageInput && chatTranscript) {
     queueConversationStateSave();
     appController.startModelGeneration(
       activeConversation,
-      buildPromptForConversationLeaf(activeConversation),
+      buildPromptForActiveConversation(activeConversation),
       {
         updateLastSpokenOnComplete: true,
       }

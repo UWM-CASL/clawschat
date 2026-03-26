@@ -23,6 +23,7 @@ Student-facing browser chat UI with local model inference.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
 - The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
 - `Settings -> Conversation` includes:
+  - `Enable tool calling` to append tool-call instructions only when the selected conversation model supports tool calling
   - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`
   - `Transcript view` with `Standard` and `Compact`
 - After model load completes, the full conversation header controls appear and response streaming begins.
@@ -75,8 +76,8 @@ Student-facing browser chat UI with local model inference.
 - The conversation list reveals a kebab actions menu on hover/focus for each conversation instead of a direct delete icon.
 - After the first completed model response on the visible branch, that kebab menu includes a nested `Download` submenu.
 - Download submenu options:
-  - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), the conversation's `model`, `temperature`, optional `systemPrompt` (when present on that conversation), and an `exchanges` array containing per-exchange `heading` plus entered/generated timestamps.
-  - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, the conversation's model, temperature), optional `## System prompt` section (when present), and one section per exchange.
+  - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), the conversation's `model`, `temperature`, optional `systemPrompt` (when present on that conversation), optional `toolCalling` metadata when tool calling is enabled at export time, and an `exchanges` array containing per-exchange `heading` plus entered/generated timestamps.
+  - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, the conversation's model, temperature), optional tool-calling metadata when enabled at export time, optional `## System prompt` section (when present), and one section per exchange.
 - Model load progress UI collapses after successful initialization.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in a collapsible "Thinking" section during streaming.
 - Model responses are rendered as Markdown (via `markdown-it`) in the transcript.
@@ -85,6 +86,7 @@ Student-facing browser chat UI with local model inference.
 - `Settings -> Conversation -> Default system prompt` sets an optional system prompt for newly created conversations only.
   - Existing conversations are not retroactively changed.
   - New generations in a conversation use that conversation's captured system prompt.
+- When tool calling is enabled and the active conversation model supports it, a tool-calling instruction block is appended after the effective conversation system prompt.
 - The active conversation's sidebar kebab menu includes `Edit conversation system prompt`:
   - Set optional per-conversation instructions.
   - `Append after default prompt` is enabled by default; when enabled, the conversation prompt is appended after the conversation's captured default prompt.

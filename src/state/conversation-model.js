@@ -251,20 +251,49 @@ export function normalizeConversationPromptMode(value) {
   return value !== false;
 }
 
-export function getEffectiveConversationSystemPrompt(conversation) {
+function joinSystemPromptSections(parts) {
+  return parts
+    .map((part) => normalizeSystemPrompt(part))
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function getEffectiveConversationSystemPrompt(conversation, { suffix = '' } = {}) {
   const capturedDefaultPrompt = normalizeSystemPrompt(conversation?.systemPrompt);
   const conversationPrompt = normalizeSystemPrompt(conversation?.conversationSystemPrompt);
   const shouldAppendPrompt = normalizeConversationPromptMode(conversation?.appendConversationSystemPrompt);
-  if (!conversationPrompt) {
-    return capturedDefaultPrompt;
+  const basePrompt = (() => {
+    if (!conversationPrompt) {
+      return capturedDefaultPrompt;
+    }
+    if (!shouldAppendPrompt) {
+      return conversationPrompt;
+    }
+    if (!capturedDefaultPrompt) {
+      return conversationPrompt;
+    }
+    return `${capturedDefaultPrompt}\n\n${conversationPrompt}`;
+  })();
+  return joinSystemPromptSections([basePrompt, suffix]);
+}
+
+function normalizeEnabledToolNames(enabledToolNames) {
+  const normalizedNames = Array.isArray(enabledToolNames)
+    ? enabledToolNames
+        .map((toolName) => (typeof toolName === 'string' ? toolName.trim() : ''))
+        .filter(Boolean)
+    : [];
+  return normalizedNames.length ? normalizedNames : ['none'];
+}
+
+function buildToolMetadata(toolContext) {
+  if (!toolContext?.enabled) {
+    return null;
   }
-  if (!shouldAppendPrompt) {
-    return conversationPrompt;
-  }
-  if (!capturedDefaultPrompt) {
-    return conversationPrompt;
-  }
-  return `${capturedDefaultPrompt}\n\n${conversationPrompt}`;
+  return {
+    supported: toolContext.supported === true,
+    enabledTools: normalizeEnabledToolNames(toolContext.enabledTools),
+  };
 }
 
 /**
@@ -676,16 +705,23 @@ export function buildConversationMessages(messages, systemPrompt = '') {
 export function buildPromptForConversationLeaf(
   conversation,
   leafMessageId = conversation?.activeLeafMessageId,
+  { systemPromptSuffix = '' } = {},
 ) {
   return buildConversationMessages(
     getConversationPathMessages(conversation, leafMessageId),
-    getEffectiveConversationSystemPrompt(conversation),
+    getEffectiveConversationSystemPrompt(conversation, { suffix: systemPromptSuffix }),
   );
 }
 
 export function buildConversationDownloadPayload(
   conversation,
-  { modelId = conversation?.modelId || 'Unknown', temperature = null, exportedAt = new Date().toISOString() } = {},
+  {
+    modelId = conversation?.modelId || 'Unknown',
+    temperature = null,
+    exportedAt = new Date().toISOString(),
+    systemPromptSuffix = '',
+    toolContext = null,
+  } = {},
 ) {
   const startedAt = normalizeTimestamp(conversation?.startedAt);
   const exchanges = getConversationPathMessages(conversation)
@@ -713,9 +749,15 @@ export function buildConversationDownloadPayload(
     temperature,
     exchanges,
   };
-  const systemPrompt = getEffectiveConversationSystemPrompt(conversation);
+  const systemPrompt = getEffectiveConversationSystemPrompt(conversation, {
+    suffix: systemPromptSuffix,
+  });
   if (systemPrompt) {
     payload.systemPrompt = systemPrompt;
+  }
+  const toolMetadata = buildToolMetadata(toolContext);
+  if (toolMetadata) {
+    payload.toolCalling = toolMetadata;
   }
   return payload;
 }
@@ -746,6 +788,17 @@ export function buildConversationDownloadMarkdown(payload) {
   lines.push(`- Exported At: ${formatUtcTimestamp(payload?.conversation?.exportedAt)}`);
   lines.push(`- Model: ${String(payload?.model || 'Unknown')}`);
   lines.push(`- Temperature: ${Number.isFinite(payload?.temperature) ? payload.temperature : 'Unknown'}`);
+  const toolCalling = payload?.toolCalling;
+  if (toolCalling && typeof toolCalling === 'object') {
+    lines.push(`- Tool Calling Supported: ${toolCalling.supported ? 'Yes' : 'No'}`);
+    lines.push(
+      `- Enabled Tools: ${
+        Array.isArray(toolCalling.enabledTools) && toolCalling.enabledTools.length
+          ? toolCalling.enabledTools.join(', ')
+          : 'none'
+      }`
+    );
+  }
   lines.push('');
   const systemPrompt = normalizeSystemPrompt(payload?.systemPrompt);
   if (systemPrompt) {

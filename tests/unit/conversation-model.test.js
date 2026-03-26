@@ -46,10 +46,14 @@ describe('conversation-model', () => {
 
     conversation.appendConversationSystemPrompt = false;
 
-    expect(buildPromptForConversationLeaf(conversation, modelMessage.id)).toEqual([
+    expect(
+      buildPromptForConversationLeaf(conversation, modelMessage.id, {
+        systemPromptSuffix: 'Use tools when needed.',
+      })
+    ).toEqual([
       {
         role: 'system',
-        content: 'Answer as a tutor.',
+        content: 'Answer as a tutor.\n\nUse tools when needed.',
       },
       { role: 'user', content: 'What is gravity?' },
       { role: 'assistant', content: 'Gravity pulls objects together.' },
@@ -204,6 +208,12 @@ describe('conversation-model', () => {
     const payload = buildConversationDownloadPayload(conversation, {
       temperature: 0.7,
       exportedAt: '2026-01-02T04:05:06.000Z',
+      systemPromptSuffix: 'Tool calling is enabled.',
+      toolContext: {
+        enabled: true,
+        supported: true,
+        enabledTools: [],
+      },
     });
 
     expect(payload).toEqual({
@@ -215,7 +225,11 @@ describe('conversation-model', () => {
       },
       model: 'physics-model',
       temperature: 0.7,
-      systemPrompt: 'Stay accurate.\n\nUse classroom examples.',
+      systemPrompt: 'Stay accurate.\n\nUse classroom examples.\n\nTool calling is enabled.',
+      toolCalling: {
+        supported: true,
+        enabledTools: ['none'],
+      },
       exchanges: [
         {
           heading: 'User prompt 1',
@@ -258,6 +272,8 @@ describe('conversation-model', () => {
     expect(markdown).toContain('## System prompt');
     expect(markdown).toContain('> Stay accurate.');
     expect(markdown).toContain('> Use classroom examples.');
+    expect(markdown).toContain('Tool Calling Supported: Yes');
+    expect(markdown).toContain('Enabled Tools: none');
     expect(markdown).toContain('## User prompt 2');
     expect(markdown).toContain('> Use a soccer example.');
     expect(markdown).not.toContain('bowling');

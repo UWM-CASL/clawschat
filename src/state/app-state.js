@@ -2,12 +2,14 @@
  * @param {{
  *   activeGenerationConfig?: any;
  *   defaultSystemPrompt?: string;
+ *   enableToolCalling?: boolean;
  *   maxDebugEntries?: number;
  * }} [options]
  */
 export function createAppState({
   activeGenerationConfig,
   defaultSystemPrompt = '',
+  enableToolCalling = true,
   maxDebugEntries = 120,
 } = {}) {
   return {
@@ -26,6 +28,7 @@ export function createAppState({
     pendingComposerAttachments: [],
     conversationSaveTimerId: null,
     showThinkingByDefault: false,
+    enableToolCalling: Boolean(enableToolCalling),
     enableSingleKeyShortcuts: true,
     transcriptView: 'standard',
     defaultSystemPrompt,

@@ -31,6 +31,7 @@ Keeping this logic pure allows focused unit tests for:
 - branch selection and preferred-leaf resolution
 - edit pruning behavior
 - system prompt composition
+- tool-calling prompt suffix composition
 - export payload generation
 
 ## What remains in `src/main.js`
