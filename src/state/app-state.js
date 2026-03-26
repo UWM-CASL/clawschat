@@ -292,9 +292,11 @@ export function hasAnyStartedInference(state) {
 }
 
 export function shouldDisableComposerForPreChatConversationSelection(state) {
+  if (deriveWorkspaceView(state) !== WORKSPACE_VIEWS.PRECHAT) {
+    return false;
+  }
   return (
     state.hasStartedChatWorkspace &&
-    deriveWorkspaceView(state) !== WORKSPACE_VIEWS.SETTINGS &&
     deriveEnginePhase(state) !== ENGINE_PHASES.READY &&
     hasSelectedConversationWithHistory(state)
   );

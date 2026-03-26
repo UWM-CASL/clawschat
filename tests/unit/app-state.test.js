@@ -83,7 +83,7 @@ describe('app-state', () => {
         routeSettings: 'settings',
       }),
     ).toBe('chat');
-    expect(shouldDisableComposerForPreChatConversationSelection(state)).toBe(true);
+    expect(shouldDisableComposerForPreChatConversationSelection(state)).toBe(false);
 
     state.isSettingsPageOpen = true;
     expect(
@@ -93,6 +93,26 @@ describe('app-state', () => {
         routeSettings: 'settings',
       }),
     ).toBe('settings');
+  });
+
+  test('does not disable the composer outside the pre-chat view', () => {
+    const state = createAppState({
+      activeGenerationConfig: {},
+    });
+    state.hasStartedChatWorkspace = true;
+    state.activeConversationId = 'conversation-1';
+    state.conversations.push({
+      id: 'conversation-1',
+      activeLeafMessageId: 'message-1',
+      messageNodes: [{ id: 'message-1', role: 'user', parentId: null }],
+    });
+
+    state.isGenerating = true;
+    expect(shouldDisableComposerForPreChatConversationSelection(state)).toBe(false);
+
+    state.isGenerating = false;
+    state.modelReady = true;
+    expect(shouldDisableComposerForPreChatConversationSelection(state)).toBe(false);
   });
 
   test('shows new conversation only after inference has started in the chat workspace', () => {

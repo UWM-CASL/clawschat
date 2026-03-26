@@ -112,9 +112,7 @@ test('stop generating cancels in-flight stream and resets UI', async ({ page }) 
   await page.locator('#sendButton').click();
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Stop generating');
 
-  await page.evaluate(() => {
-    /** @type {HTMLButtonElement | null} */ (document.getElementById('sendButton'))?.click();
-  });
+  await page.locator('#sendButton').click();
   await expect(page.locator('#debugInfo')).toContainText('Generation canceled by user.');
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
 });
