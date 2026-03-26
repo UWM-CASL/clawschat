@@ -73,12 +73,17 @@ import {
   buildConversationStateSnapshot,
 } from './state/conversation-serialization.js';
 import {
+  clearUserMessageEditState,
   createAppState,
   findConversationById as selectConversationById,
   getActiveConversation as selectActiveConversation,
   getCurrentViewRoute as selectCurrentViewRoute,
   hasConversationHistory as selectHasConversationHistory,
   hasSelectedConversationWithHistory as selectHasSelectedConversationWithHistory,
+  setChatTitleEditing,
+  setChatWorkspaceStarted,
+  setSwitchingVariant,
+  setUserMessageEditState,
   shouldShowNewConversationButton as selectShouldShowNewConversationButton,
   shouldDisableComposerForPreChatConversationSelection as selectShouldDisableComposerForPreChatConversationSelection,
 } from './state/app-state.js';
@@ -329,13 +334,11 @@ function initializeTooltips(root = document) {
 }
 
 function startUserMessageEditSession(messageId, { branchSourceMessageId = null } = {}) {
-  appState.activeUserEditMessageId = messageId;
-  appState.activeUserBranchSourceMessageId = branchSourceMessageId;
+  setUserMessageEditState(appState, { messageId, branchSourceMessageId });
 }
 
 function clearUserMessageEditSession() {
-  appState.activeUserEditMessageId = null;
-  appState.activeUserBranchSourceMessageId = null;
+  clearUserMessageEditState(appState);
 }
 
 function disposeTooltips(root) {
@@ -2137,7 +2140,7 @@ function beginChatTitleEdit({ trigger = null } = {}) {
   if (trigger instanceof HTMLElement) {
     appState.lastConversationTitleTrigger = trigger;
   }
-  appState.isChatTitleEditing = true;
+  setChatTitleEditing(appState, true);
   chatTitleInput.value = activeConversation.name;
   updateChatTitleEditorVisibility();
   chatTitleInput.focus();
@@ -2148,7 +2151,7 @@ function cancelChatTitleEdit({ restoreFocus = true } = {}) {
   if (!appState.isChatTitleEditing) {
     return;
   }
-  appState.isChatTitleEditing = false;
+  setChatTitleEditing(appState, false);
   updateChatTitle();
   if (restoreFocus && appState.lastConversationTitleTrigger instanceof HTMLElement) {
     appState.lastConversationTitleTrigger.focus();
@@ -2174,7 +2177,7 @@ function saveChatTitleEdit() {
   }
   activeConversation.name = nextName;
   activeConversation.hasGeneratedName = true;
-  appState.isChatTitleEditing = false;
+  setChatTitleEditing(appState, false);
   renderConversationList();
   updateChatTitle();
   queueConversationStateSave();
@@ -2275,7 +2278,7 @@ function setActiveConversationById(conversationId) {
     return;
   }
   if (appState.isChatTitleEditing) {
-    appState.isChatTitleEditing = false;
+    setChatTitleEditing(appState, false);
   }
   appState.activeConversationId = conversationId;
   const activeConversation = getActiveConversation();
@@ -2695,7 +2698,6 @@ const routingShell = createRoutingShell({
   routeSettings: ROUTE_SETTINGS,
   windowRef: window,
   selectCurrentViewRoute,
-  getActiveConversation,
   setRegionVisibility,
   settingsPage,
   homePanel,
@@ -2926,7 +2928,7 @@ function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction, o
     if (ensureModelControlsVisible) {
       ensureModelVariantControlsVisible(incomingMessageId);
     }
-    appState.isSwitchingVariant = false;
+    setSwitchingVariant(appState, false);
     updateActionButtons();
     queueConversationStateSave();
   }, 170);
@@ -2964,7 +2966,7 @@ function switchModelVariant(messageId, direction) {
     return;
   }
   const targetLeafId = findPreferredLeafForVariant(activeConversation, targetMessage);
-  appState.isSwitchingVariant = true;
+  setSwitchingVariant(appState, true);
   activeConversation.activeLeafMessageId = targetLeafId || targetMessage.id;
   updateActionButtons();
   animateVariantSwitch(modelMessage.id, targetMessage.id, direction, {
@@ -3004,7 +3006,7 @@ function switchUserVariant(messageId, direction) {
     return;
   }
   const targetLeafId = findPreferredLeafForVariant(activeConversation, targetMessage);
-  appState.isSwitchingVariant = true;
+  setSwitchingVariant(appState, true);
   activeConversation.activeLeafMessageId = targetLeafId || targetMessage.id;
   updateActionButtons();
   animateVariantSwitch(userMessage.id, targetMessage.id, direction);
@@ -3318,7 +3320,7 @@ window.addEventListener('hashchange', () => {
 
 if (startConversationButton instanceof HTMLButtonElement) {
   startConversationButton.addEventListener('click', () => {
-    appState.hasStartedChatWorkspace = true;
+    setChatWorkspaceStarted(appState, true);
     updateWelcomePanelVisibility({ replaceRoute: false });
     if (messageInput instanceof HTMLTextAreaElement) {
       messageInput.focus();
@@ -3331,12 +3333,12 @@ if (newConversationBtn) {
     if (appState.isGenerating) {
       return;
     }
-    appState.hasStartedChatWorkspace = true;
+    setChatWorkspaceStarted(appState, true);
     const conversation = createConversation();
     appState.conversations.unshift(conversation);
     appState.activeConversationId = conversation.id;
     clearUserMessageEditSession();
-    appState.isChatTitleEditing = false;
+    setChatTitleEditing(appState, false);
     renderConversationList();
     renderTranscript();
     updateChatTitle();
@@ -3390,7 +3392,7 @@ if (conversationList) {
       if (wasActive) {
         appState.activeConversationId = appState.conversations[0]?.id || null;
         clearUserMessageEditSession();
-        appState.isChatTitleEditing = false;
+        setChatTitleEditing(appState, false);
         const nextActiveConversation = getActiveConversation();
         if (nextActiveConversation) {
           const selection = syncConversationModelSelection(nextActiveConversation, {
@@ -3632,7 +3634,7 @@ if (chatForm && messageInput && chatTranscript) {
     }
 
     if (!appState.hasStartedChatWorkspace) {
-      appState.hasStartedChatWorkspace = true;
+      setChatWorkspaceStarted(appState, true);
       updateWelcomePanelVisibility({ replaceRoute: false });
     }
 
@@ -3643,7 +3645,7 @@ if (chatForm && messageInput && chatTranscript) {
       appState.activeConversationId = conversation.id;
       activeConversation = conversation;
       clearUserMessageEditSession();
-      appState.isChatTitleEditing = false;
+      setChatTitleEditing(appState, false);
       renderConversationList();
       renderTranscript();
       updateChatTitle();

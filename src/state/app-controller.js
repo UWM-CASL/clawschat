@@ -1,3 +1,10 @@
+import {
+  setGenerating,
+  setLoadingModel,
+  setModelReady,
+  setOrchestrationRunning,
+} from './app-state.js';
+
 /**
  * @param {any} value
  * @returns {string}
@@ -67,7 +74,7 @@ export function createAppController(dependencies) {
     dependencies.appendDebug(
       `Initialize requested (model=${config.modelId}, backendPreference=${config.backendPreference})`,
     );
-    dependencies.state.isLoadingModel = true;
+    setLoadingModel(dependencies.state, true);
     dependencies.clearLoadError();
     dependencies.resetLoadProgressFiles();
     dependencies.showProgressRegion(true);
@@ -76,8 +83,8 @@ export function createAppController(dependencies) {
     dependencies.setStatus('Loading model...');
     try {
       await dependencies.engine.initialize(config);
-      dependencies.state.modelReady = true;
-      dependencies.state.isLoadingModel = false;
+      setModelReady(dependencies.state, true);
+      setLoadingModel(dependencies.state, false);
       dependencies.setLoadProgress({ percent: 100, message: 'Model ready.' });
       dependencies.showProgressRegion(false);
       dependencies.appendDebug('Model initialization succeeded.');
@@ -86,8 +93,8 @@ export function createAppController(dependencies) {
       dependencies.updateChatTitle();
     } catch (error) {
       const message = toErrorMessage(error);
-      dependencies.state.modelReady = false;
-      dependencies.state.isLoadingModel = false;
+      setModelReady(dependencies.state, false);
+      setLoadingModel(dependencies.state, false);
       dependencies.setStatus(`Error: ${message}`);
       dependencies.showLoadError(message);
       dependencies.appendDebug(`Model initialization failed: ${message}`);
@@ -100,7 +107,7 @@ export function createAppController(dependencies) {
 
   async function reinitializeEngineFromSettings() {
     dependencies.persistInferencePreferences();
-    dependencies.state.modelReady = false;
+    setModelReady(dependencies.state, false);
     dependencies.setStatus('Settings updated. Send a message to load the model with new settings.');
     dependencies.appendDebug('Inference settings changed; awaiting first message to load model.');
     dependencies.updateActionButtons();
@@ -231,7 +238,7 @@ export function createAppController(dependencies) {
     }
     let streamedText = '';
 
-    dependencies.state.isGenerating = true;
+    setGenerating(dependencies.state, true);
     dependencies.updateActionButtons();
 
     try {
@@ -307,7 +314,7 @@ export function createAppController(dependencies) {
             });
             return;
           }
-          dependencies.state.isGenerating = false;
+          setGenerating(dependencies.state, false);
           dependencies.updateActionButtons();
           dependencies.applyPendingGenerationSettingsIfReady();
         },
@@ -323,7 +330,7 @@ export function createAppController(dependencies) {
           if (updateLastSpokenOnComplete) {
             activeConversation.lastSpokenLeafMessageId = modelMessage.id;
           }
-          dependencies.state.isGenerating = false;
+          setGenerating(dependencies.state, false);
           dependencies.updateActionButtons();
           dependencies.applyPendingGenerationSettingsIfReady();
           dependencies.setStatus('Generation failed');
@@ -344,7 +351,7 @@ export function createAppController(dependencies) {
       if (updateLastSpokenOnComplete) {
         activeConversation.lastSpokenLeafMessageId = modelMessage.id;
       }
-      dependencies.state.isGenerating = false;
+      setGenerating(dependencies.state, false);
       dependencies.updateActionButtons();
       dependencies.applyPendingGenerationSettingsIfReady();
       dependencies.setStatus('Generation failed');
@@ -357,17 +364,17 @@ export function createAppController(dependencies) {
     dependencies.setStatus('Stopping generation...');
     try {
       await dependencies.engine.cancelGeneration();
-      dependencies.state.modelReady = true;
+      setModelReady(dependencies.state, true);
       dependencies.setStatus('Stopped');
       dependencies.appendDebug('Generation canceled by user.');
     } catch (error) {
       const message = toErrorMessage(error);
-      dependencies.state.modelReady = false;
+      setModelReady(dependencies.state, false);
       dependencies.setStatus(`Error: ${message}`);
       dependencies.appendDebug(`Cancel failed: ${message}`);
     } finally {
       dependencies.markActiveIncompleteModelMessageComplete();
-      dependencies.state.isGenerating = false;
+      setGenerating(dependencies.state, false);
       dependencies.updateActionButtons();
       dependencies.applyPendingGenerationSettingsIfReady();
     }
@@ -434,7 +441,7 @@ export function createAppController(dependencies) {
     if (!activeConversation || activeConversation.hasGeneratedName) {
       return;
     }
-    dependencies.state.isRunningOrchestration = true;
+    setOrchestrationRunning(dependencies.state, true);
     dependencies.updateActionButtons();
     dependencies.setStatus('Generating conversation title...');
     try {
@@ -459,7 +466,7 @@ export function createAppController(dependencies) {
       dependencies.appendDebug(`Rename orchestration failed: ${message}`);
       dependencies.setStatus('Conversation title generated.');
     } finally {
-      dependencies.state.isRunningOrchestration = false;
+      setOrchestrationRunning(dependencies.state, false);
       dependencies.updateActionButtons();
     }
   }
@@ -521,7 +528,7 @@ export function createAppController(dependencies) {
     dependencies.queueConversationStateSave();
 
     let fixPrompt = '';
-    dependencies.state.isRunningOrchestration = true;
+    setOrchestrationRunning(dependencies.state, true);
     dependencies.updateActionButtons();
     dependencies.setStatus('Preparing response fix...');
     try {
@@ -543,7 +550,7 @@ export function createAppController(dependencies) {
       dependencies.appendDebug(`Fix orchestration error: ${message}`);
       return;
     } finally {
-      dependencies.state.isRunningOrchestration = false;
+      setOrchestrationRunning(dependencies.state, false);
       dependencies.updateActionButtons();
     }
 

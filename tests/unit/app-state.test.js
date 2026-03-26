@@ -1,10 +1,25 @@
 import { describe, expect, test } from 'vitest';
 import {
+  ENGINE_PHASES,
+  INTERACTION_MODES,
+  ORCHESTRATION_STATUSES,
+  WORKSPACE_VIEWS,
+  clearUserMessageEditState,
   createAppState,
+  deriveEnginePhase,
   findConversationById,
   getActiveConversation,
   getCurrentViewRoute,
   hasSelectedConversationWithHistory,
+  refreshWorkspaceView,
+  setChatTitleEditing,
+  setGenerating,
+  setLoadingModel,
+  setModelReady,
+  setOrchestrationRunning,
+  setSettingsPageOpen,
+  setSwitchingVariant,
+  setUserMessageEditState,
   shouldShowNewConversationButton,
   shouldDisableComposerForPreChatConversationSelection,
 } from '../../src/state/app-state.js';
@@ -22,6 +37,10 @@ describe('app-state', () => {
     expect(state.maxDebugEntries).toBe(42);
     expect(state.conversations).toEqual([]);
     expect(state.debugEntries).toEqual([]);
+    expect(state.enginePhase).toBe(ENGINE_PHASES.IDLE);
+    expect(state.workspaceView).toBe(WORKSPACE_VIEWS.HOME);
+    expect(state.interactionMode).toBe(INTERACTION_MODES.NONE);
+    expect(state.orchestrationStatus).toBe(ORCHESTRATION_STATUSES.IDLE);
   });
 
   test('returns active and selected conversations through selectors', () => {
@@ -103,5 +122,56 @@ describe('app-state', () => {
 
     state.modelReady = false;
     expect(shouldShowNewConversationButton(state)).toBe(false);
+  });
+
+  test('tracks engine, interaction, orchestration, and workspace phases through helpers', () => {
+    const state = createAppState({
+      activeGenerationConfig: {},
+    });
+
+    expect(deriveEnginePhase(state)).toBe(ENGINE_PHASES.IDLE);
+
+    setLoadingModel(state, true);
+    expect(state.enginePhase).toBe(ENGINE_PHASES.LOADING);
+
+    setModelReady(state, true);
+    setLoadingModel(state, false);
+    expect(state.enginePhase).toBe(ENGINE_PHASES.READY);
+
+    setGenerating(state, true);
+    expect(state.enginePhase).toBe(ENGINE_PHASES.GENERATING);
+
+    setGenerating(state, false);
+    expect(state.enginePhase).toBe(ENGINE_PHASES.READY);
+
+    setUserMessageEditState(state, { messageId: 'message-1' });
+    expect(state.interactionMode).toBe(INTERACTION_MODES.MESSAGE_EDIT);
+
+    setUserMessageEditState(state, { messageId: 'message-1', branchSourceMessageId: 'message-1' });
+    expect(state.interactionMode).toBe(INTERACTION_MODES.MESSAGE_BRANCH);
+
+    clearUserMessageEditState(state);
+    setChatTitleEditing(state, true);
+    expect(state.interactionMode).toBe(INTERACTION_MODES.TITLE_EDIT);
+
+    setChatTitleEditing(state, false);
+    setSwitchingVariant(state, true);
+    expect(state.interactionMode).toBe(INTERACTION_MODES.VARIANT_SWITCH);
+
+    setSwitchingVariant(state, false);
+    setOrchestrationRunning(state, true);
+    expect(state.orchestrationStatus).toBe(ORCHESTRATION_STATUSES.RUNNING);
+
+    setOrchestrationRunning(state, false);
+    expect(state.orchestrationStatus).toBe(ORCHESTRATION_STATUSES.IDLE);
+
+    setSettingsPageOpen(state, true);
+    expect(state.workspaceView).toBe(WORKSPACE_VIEWS.SETTINGS);
+
+    setSettingsPageOpen(state, false);
+    state.hasStartedChatWorkspace = true;
+    setModelReady(state, false);
+    refreshWorkspaceView(state);
+    expect(state.workspaceView).toBe(WORKSPACE_VIEWS.PRECHAT);
   });
 });

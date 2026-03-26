@@ -1,3 +1,10 @@
+import {
+  refreshWorkspaceView,
+  setChatTitleEditing,
+  setChatWorkspaceStarted,
+  setSettingsPageOpen,
+} from '../state/app-state.js';
+
 export function createRoutingShell({
   appState,
   routeHome = 'home',
@@ -5,7 +12,6 @@ export function createRoutingShell({
   routeSettings = 'settings',
   windowRef = window,
   selectCurrentViewRoute,
-  getActiveConversation,
   setRegionVisibility,
   settingsPage,
   homePanel,
@@ -112,7 +118,7 @@ export function createRoutingShell({
     if (!settingsPage || !topBar) {
       return;
     }
-    appState.isSettingsPageOpen = Boolean(visible);
+    setSettingsPageOpen(appState, visible);
     setRegionVisibility(settingsPage, appState.isSettingsPageOpen);
     const conversationPanelToggle = topBar.querySelector('[data-bs-target="#conversationPanel"]');
     if (openSettingsButton) {
@@ -155,11 +161,10 @@ export function createRoutingShell({
       return;
     }
     const previousView = appState.currentWorkspaceView;
-    const activeConversation = getActiveConversation();
-    const showHome = !appState.hasStartedChatWorkspace;
-    const showPreChat = appState.hasStartedChatWorkspace && !appState.modelReady && !activeConversation;
-    const showChat = appState.hasStartedChatWorkspace && (appState.modelReady || Boolean(activeConversation));
-    appState.currentWorkspaceView = showHome ? routeHome : showPreChat ? 'prechat' : routeChat;
+    refreshWorkspaceView(appState);
+    const showHome = appState.workspaceView === routeHome;
+    const showPreChat = appState.workspaceView === 'prechat';
+    const showChat = appState.workspaceView === routeChat;
     if (chatMain instanceof HTMLElement) {
       chatMain.classList.toggle('is-home', showHome);
       chatMain.classList.toggle('is-prechat', showPreChat);
@@ -179,7 +184,7 @@ export function createRoutingShell({
     setRegionVisibility(chatTranscriptWrap, showChat);
     updateComposerVisibility();
     if (!showChat && appState.isChatTitleEditing) {
-      appState.isChatTitleEditing = false;
+      setChatTitleEditing(appState, false);
     }
     updateChatTitleEditorVisibility();
     updateTranscriptNavigationButtonVisibility();
@@ -211,7 +216,7 @@ export function createRoutingShell({
     }
 
     setSettingsPageVisibility(false, { syncRoute: false });
-    appState.hasStartedChatWorkspace = requestedRoute === routeChat;
+    setChatWorkspaceStarted(appState, requestedRoute === routeChat);
     updateWelcomePanelVisibility({ syncRoute: false });
   }
 

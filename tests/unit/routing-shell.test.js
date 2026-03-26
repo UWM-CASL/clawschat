@@ -41,7 +41,6 @@ function createRoutingHarness() {
       routeSettings: 'settings',
       windowRef: dom.window,
       selectCurrentViewRoute: getCurrentViewRoute,
-      getActiveConversation: () => null,
       setRegionVisibility(region, visible) {
         region.classList.toggle('d-none', !visible);
       },
