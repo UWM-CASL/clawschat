@@ -18,7 +18,7 @@ Student-facing browser chat UI with local model inference.
   - `#/chat` for the chat workspace
   - `#/settings` when Settings is open
   - Browser back/forward navigation follows those screen transitions.
-- Header actions include a `Help` button that opens `help.html` in a new tab with feature and basic usage guidance.
+- Header actions include a `Help` button that opens `help.html` in the current tab with student-focused guidance and a back button to return to the last chat.
 - Header actions include a `Keyboard shortcuts` button (`Ctrl+/`) so users can discover available keyboard actions.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
 - The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.

@@ -3,18 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Browser LLM Runner Help</title>
+    <title>ClawsChat Help</title>
+    <script>
+      (() => {
+        const THEME_STORAGE_KEY = 'ui-theme-preference';
+
+        function getStoredThemePreference() {
+          try {
+            return localStorage.getItem(THEME_STORAGE_KEY) || 'light';
+          } catch {
+            return 'light';
+          }
+        }
+
+        function resolveTheme(preference) {
+          if (preference === 'system') {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          return preference === 'dark' ? 'dark' : 'light';
+        }
+
+        const resolvedTheme = resolveTheme(getStoredThemePreference());
+        document.documentElement.setAttribute('data-theme', resolvedTheme);
+        document.documentElement.setAttribute('data-bs-theme', resolvedTheme);
+      })();
+    </script>
     <style>
       :root {
-        --help-bg: linear-gradient(145deg, #edf4ff 0%, #f8fbff 42%, #ffffff 100%);
-        --help-surface: rgba(255, 255, 255, 0.96);
-        --help-surface-alt: #f4f8ff;
-        --help-border: #c9d8ef;
-        --help-ink: #1f2940;
-        --help-muted: #4f5f7e;
-        --help-accent: #0b84ff;
-        --help-accent-strong: #005fb8;
-        --help-shadow: 0 18px 42px rgba(21, 43, 88, 0.08);
+        --app-bg: linear-gradient(145deg, #e7edf5 0%, #f4f7fb 40%, #ffffff 100%);
+        --frame-title-ink: #3e4f67;
+        --surface: #ffffff;
+        --surface-elevated: #f8fafc;
+        --surface-muted: #e4ebf3;
+        --border-soft: #9eafc6;
+        --control-bg: #edf2f8;
+        --control-border: #7f95b2;
+        --ink-muted: #46566e;
+        --ink-strong: #162338;
+        --action-btn-text: #184d84;
+        --primary-btn-bg: #1e568f;
+        --primary-btn-border: #1e568f;
+        --primary-btn-hover-bg: #194978;
+        --primary-btn-hover-border: #194978;
+        --focus-ring: #1e568f;
+        --shadow-ambient: 0 10px 24px rgba(21, 32, 48, 0.18);
+      }
+
+      :root[data-theme='dark'] {
+        --app-bg: linear-gradient(145deg, #020304 0%, #06080d 48%, #0a0d14 100%);
+        --frame-title-ink: #a0afc4;
+        --surface: #0d1016;
+        --surface-elevated: #141922;
+        --surface-muted: #1a202b;
+        --border-soft: #344050;
+        --control-bg: #171c25;
+        --control-border: #4a5b73;
+        --ink-strong: #edf2f8;
+        --ink-muted: #b3bece;
+        --action-btn-text: #b8cbe2;
+        --primary-btn-bg: #2b4f77;
+        --primary-btn-border: #2b4f77;
+        --primary-btn-hover-bg: #243f5f;
+        --primary-btn-hover-border: #243f5f;
+        --focus-ring: #86a9d1;
+        --shadow-ambient: 0 14px 30px rgba(0, 0, 0, 0.68);
       }
 
       * {
@@ -27,29 +79,35 @@
 
       body {
         margin: 0;
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        color: var(--help-ink);
-        background: var(--help-bg);
+        min-height: 100vh;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--ink-strong);
+        background: var(--app-bg);
       }
 
       a {
-        color: var(--help-accent-strong);
+        color: var(--action-btn-text);
       }
 
       a:focus-visible,
       button:focus-visible,
       summary:focus-visible {
-        outline: 3px solid var(--help-accent);
+        outline: 3px solid var(--focus-ring);
         outline-offset: 3px;
+      }
+
+      p,
+      li {
+        line-height: 1.6;
       }
 
       kbd {
         display: inline-block;
         min-width: 1.8em;
         padding: 0.12rem 0.38rem;
-        border: 1px solid #9fb4d7;
+        border: 1px solid var(--control-border);
         border-radius: 0.35rem;
-        background: #f8fbff;
+        background: var(--surface);
         box-shadow: inset 0 -1px 0 rgba(31, 41, 64, 0.12);
         font: inherit;
         font-size: 0.92em;
@@ -57,22 +115,37 @@
       }
 
       .help-shell {
-        width: min(1120px, calc(100% - 2rem));
-        margin: 1.25rem auto 2rem;
+        width: min(920px, calc(100% - 1.5rem));
+        margin: 0 auto;
+        padding: 0.75rem 0 1.5rem;
+      }
+
+      .app-frame-header {
+        padding: 0.35rem 1rem 0.1rem;
+      }
+
+      .app-window-title {
+        margin: 0;
+        text-align: center;
+        font-size: 0.98rem;
+        line-height: 1.2;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        font-weight: 650;
+        color: var(--frame-title-ink);
       }
 
       .help-card {
-        background: var(--help-surface);
-        border: 1px solid var(--help-border);
+        background: color-mix(in srgb, var(--surface) 96%, transparent);
+        border: 1px solid var(--border-soft);
         border-radius: 1rem;
-        padding: 1.2rem;
-        box-shadow: var(--help-shadow);
+        box-shadow: var(--shadow-ambient);
+        padding: 1rem;
       }
 
       .hero {
         display: grid;
         gap: 1rem;
-        align-items: start;
       }
 
       h1,
@@ -82,165 +155,198 @@
       }
 
       h1 {
-        font-size: clamp(1.7rem, 3.8vw, 2.5rem);
-        margin-bottom: 0.6rem;
+        font-size: clamp(1.8rem, 4vw, 2.55rem);
+        margin-bottom: 0.5rem;
       }
 
       h2 {
-        font-size: clamp(1.1rem, 2.5vw, 1.45rem);
-        margin-bottom: 0.75rem;
+        font-size: 1.05rem;
+        margin-bottom: 0;
       }
 
       h3 {
         font-size: 1rem;
-        margin-bottom: 0.45rem;
-      }
-
-      p,
-      li,
-      td,
-      th {
-        line-height: 1.55;
+        margin-bottom: 0.35rem;
       }
 
       .lede {
-        color: var(--help-muted);
-        max-width: 68ch;
         margin: 0;
+        color: var(--ink-muted);
+        max-width: 66ch;
       }
 
-      .quick-facts {
-        display: grid;
-        gap: 0.75rem;
-      }
-
-      .fact-card,
-      .section-card,
-      .toc,
-      .shortcut-card {
-        background: var(--help-surface-alt);
-        border: 1px solid var(--help-border);
-        border-radius: 0.85rem;
-        padding: 0.95rem;
-      }
-
-      .fact-card strong {
-        display: block;
-        margin-bottom: 0.2rem;
-      }
-
-      .actions {
-        margin-top: 1.15rem;
+      .hero-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 0.7rem;
       }
 
-      .action-link {
-        display: inline-block;
-        padding: 0.6rem 0.9rem;
-        border-radius: 0.65rem;
-        border: 1px solid var(--help-accent);
-        color: #ffffff;
-        background: var(--help-accent);
-        text-decoration: none;
-        font-weight: 600;
-      }
-
-      .action-link.secondary {
-        background: transparent;
-        color: var(--help-ink);
-        border-color: var(--help-border);
-      }
-
-      .toc {
-        margin-top: 1rem;
-      }
-
-      .toc ul,
-      .help-columns,
-      .settings-grid,
-      .shortcut-grid {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .toc ul {
-        display: grid;
+      .action-button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         gap: 0.45rem;
-      }
-
-      .toc a {
+        min-height: 2.7rem;
+        padding: 0.7rem 1rem;
+        border-radius: 0.65rem;
+        border: 1px solid var(--primary-btn-border);
+        background: var(--primary-btn-bg);
+        color: #ffffff;
         text-decoration: none;
+        font: inherit;
         font-weight: 600;
+        cursor: pointer;
       }
 
-      .section-stack {
-        display: grid;
-        gap: 1rem;
+      .action-button:hover,
+      .action-button:focus-visible {
+        background: var(--primary-btn-hover-bg);
+        border-color: var(--primary-btn-hover-border);
+      }
+
+      .action-button.secondary {
+        background: var(--surface-elevated);
+        color: var(--ink-strong);
+        border-color: var(--control-border);
+      }
+
+      .quick-note {
+        margin: 0;
+        padding: 0.9rem 1rem;
+        border-radius: 0.85rem;
+        border: 1px solid var(--border-soft);
+        background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+      }
+
+      .quick-note strong {
+        display: block;
+        margin-bottom: 0.2rem;
+      }
+
+      .accordion {
         margin-top: 1rem;
+        display: grid;
+        gap: 0.75rem;
       }
 
-      .help-columns,
-      .settings-grid,
-      .shortcut-grid {
-        display: grid;
+      .accordion-item {
+        border: 1px solid var(--border-soft);
+        border-radius: 0.9rem;
+        background: color-mix(in srgb, var(--surface-elevated) 92%, transparent);
+        overflow: hidden;
+      }
+
+      .accordion-item summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 1rem 1.1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         gap: 1rem;
       }
 
-      .shortcut-card table {
+      .accordion-item summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .accordion-item summary::after {
+        content: '+';
+        flex: 0 0 auto;
+        font-size: 1.3rem;
+        line-height: 1;
+        color: var(--action-btn-text);
+      }
+
+      .accordion-item[open] summary::after {
+        content: '-';
+      }
+
+      .accordion-body {
+        padding: 0 1.1rem 1.05rem;
+        border-top: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
+      }
+
+      .accordion-body > *:first-child {
+        margin-top: 0.9rem;
+      }
+
+      .accordion-body > *:last-child {
+        margin-bottom: 0;
+      }
+
+      .stack-list {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      .stack-list li + li {
+        margin-top: 0.45rem;
+      }
+
+      .shortcut-table {
         width: 100%;
         border-collapse: collapse;
       }
 
-      .shortcut-card th,
-      .shortcut-card td {
-        padding: 0.5rem 0;
+      .shortcut-table th,
+      .shortcut-table td {
         text-align: left;
         vertical-align: top;
-        border-bottom: 1px solid rgba(159, 180, 215, 0.55);
+        padding: 0.55rem 0;
+        border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 65%, transparent);
       }
 
-      .shortcut-card tr:last-child th,
-      .shortcut-card tr:last-child td {
+      .shortcut-table tr:last-child th,
+      .shortcut-table tr:last-child td {
         border-bottom: 0;
       }
 
-      .shortcut-card th {
-        width: 68%;
+      .shortcut-table th {
+        width: 70%;
         font-weight: 600;
       }
 
       .callout {
-        padding: 0.85rem 1rem;
-        border-left: 4px solid var(--help-accent);
-        background: #eef6ff;
-        border-radius: 0.6rem;
+        padding: 0.9rem 1rem;
+        border-left: 4px solid var(--primary-btn-bg);
+        border-radius: 0.75rem;
+        background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
       }
 
-      .section-card details + details {
-        margin-top: 0.7rem;
+      .help-footer {
+        margin-top: 1rem;
+        padding: 0.9rem 1rem 0;
+        border-top: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
+        color: var(--ink-muted);
+        font-size: 0.92rem;
       }
 
-      .section-card summary {
-        cursor: pointer;
-        font-weight: 600;
-      }
-
-      .section-card summary + * {
-        margin-top: 0.6rem;
-      }
-
-      @media (min-width: 760px) {
-        .hero {
-          grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+      @media (max-width: 575.98px) {
+        .help-shell {
+          width: min(100% - 1rem, 920px);
+          padding-top: 0.55rem;
         }
 
-        .help-columns,
-        .settings-grid,
-        .shortcut-grid {
-          grid-template-columns: 1fr 1fr;
+        .app-frame-header {
+          padding-inline: 0.75rem;
+        }
+
+        .app-window-title {
+          font-size: 0.84rem;
+          letter-spacing: 0.12em;
+        }
+
+        .help-card {
+          padding: 0.9rem;
+        }
+
+        .accordion-item summary,
+        .accordion-body {
+          padding-left: 0.95rem;
+          padding-right: 0.95rem;
         }
       }
 
@@ -253,457 +359,332 @@
   </head>
   <body>
     <main class="help-shell" aria-labelledby="helpTitle">
+      <div class="app-frame-header">
+        <h1 class="app-window-title">ClawsChat</h1>
+      </div>
       <section class="help-card">
         <div class="hero">
           <div>
-            <h1 id="helpTitle">Browser LLM Runner Help</h1>
+            <h1 id="helpTitle">ClawsChat Help</h1>
             <p class="lede">
-              Browser LLM Runner is a local, student-facing chat app that runs supported language models in your
-              browser. It is designed as both a chat tool and a learning tool: model behavior is visible, settings use
-              plain-language labels, and conversations can be copied, revised, compared, and exported for study. This
-              guide covers the full workflow: starting a conversation, loading a model, streaming and stopping
-              responses, editing branches, exporting conversations, and recovering from common issues.
+              ClawsChat is a student-focused local AI chat app. It runs supported models in your
+              browser, keeps your work on your device by default, and gives you tools to compare,
+              revise, stop, copy, and export conversations for study.
             </p>
-            <div class="actions" aria-label="Help page actions">
-              <a class="action-link" href="./">Return to app</a>
-              <a
-                class="action-link secondary"
-                href="https://github.com/cddelgado/browser-llm-runner#readme"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open project README
-              </a>
-              <a
-                class="action-link secondary"
-                href="https://github.com/cddelgado/browser-llm-runner/issues"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Report an issue
-              </a>
-            </div>
           </div>
-          <aside class="quick-facts" aria-label="Quick facts">
-            <section class="fact-card">
-              <strong>Private by default</strong>
-              <span>Prompts and responses stay in the browser unless you explicitly export them.</span>
-            </section>
-            <section class="fact-card">
-              <strong>Runs locally</strong>
-              <span>Inference prefers WebGPU, then falls back to WASM or CPU based on your selected backend.</span>
-            </section>
-            <section class="fact-card">
-              <strong>Cached for reuse</strong>
-              <span>Models download on first use and are reused from browser storage when available.</span>
-            </section>
-          </aside>
+          <div class="hero-actions" aria-label="Help actions">
+            <button id="backToChatButton" type="button" class="action-button">
+              Back to last chat
+            </button>
+            <a class="action-button secondary" href="./#/chat">Open chat home</a>
+            <a
+              class="action-button secondary"
+              href="https://github.com/cddelgado/browser-llm-runner#readme"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Project README
+            </a>
+          </div>
+          <p class="quick-note">
+            <strong>Student quick note</strong>
+            If you just want to get started: open a conversation, pick a model, type a prompt, and
+            send it. The model loads when you send your first message.
+          </p>
         </div>
 
-        <nav class="toc" aria-labelledby="helpContentsHeading">
-          <h2 id="helpContentsHeading">On this page</h2>
-          <ul>
-            <li><a href="#start">Start and load a model</a></li>
-            <li><a href="#chat">Chat, stop, and review responses</a></li>
-            <li><a href="#conversations">Conversations, branches, and variants</a></li>
-            <li><a href="#settings">Settings reference</a></li>
-            <li><a href="#learning">Using it as a learning tool</a></li>
-            <li><a href="#shortcuts">Keyboard shortcuts</a></li>
-            <li><a href="#accessibility">Accessibility and focus behavior</a></li>
-            <li><a href="#privacy">Privacy, storage, and exports</a></li>
-            <li><a href="#troubleshooting">Troubleshooting</a></li>
-          </ul>
-        </nav>
-
-        <div class="section-stack">
-          <section id="start" class="section-card" aria-labelledby="startHeading">
-            <h2 id="startHeading">Start and load a model</h2>
-            <ol>
-              <li>Open the app and select <strong>Start a conversation</strong> from the home screen.</li>
-              <li>In the pre-chat panel, choose a supported model from <strong>Choose a model</strong>.</li>
-              <li>Write your first prompt in <strong>Message input</strong> and send it.</li>
-              <li>
-                The app loads the selected model only when you send the first message. Progress appears in the status
-                area while the engine initializes.
-              </li>
-              <li>
-                After loading finishes, the full chat controls appear and the response begins streaming into the
-                transcript.
-              </li>
-            </ol>
-            <div class="callout">
-              If you already selected a saved conversation before loading a model, the pre-chat panel will prompt you
-              to load the model first. This is expected behavior.
-            </div>
-          </section>
-
-          <section id="chat" class="section-card" aria-labelledby="chatHeading">
-            <h2 id="chatHeading">Chat, stop, and review responses</h2>
-            <div class="help-columns">
-              <section>
-                <h3>During generation</h3>
-                <ul>
-                  <li>Responses stream into the transcript incrementally for faster feedback.</li>
-                  <li>Use <strong>Stop generating</strong> at any time to cancel the current response.</li>
-                  <li>
-                    If you change token or sampling settings during generation, the app queues those changes and applies
-                    them after the current response finishes or stops.
-                  </li>
-                </ul>
-              </section>
-              <section>
-                <h3>After generation</h3>
-                <ul>
-                  <li>Model replies support <strong>Copy</strong>, <strong>Regenerate</strong>, and <strong>Fix</strong>.</li>
-                  <li>
-                    When a model outputs internal thinking tags, the app places that content in a separate
-                    <strong>Thinking</strong> section instead of mixing it into the final answer.
-                  </li>
-                  <li>Markdown formatting and LaTeX math render directly in the transcript.</li>
-                </ul>
-              </section>
-            </div>
-            <details>
-              <summary>What does Fix do?</summary>
-              <p>
-                <strong>Fix</strong> runs a multi-step orchestration that critiques the current response, revises it,
-                and validates the revised answer before adding the result as a new response variant at the same turn.
+        <section class="accordion" aria-label="Help topics">
+          <details class="accordion-item" open>
+            <summary>Start a conversation</summary>
+            <div class="accordion-body">
+              <ol class="stack-list">
+                <li>Select <strong>Start a conversation</strong> from the home screen.</li>
+                <li>Choose a model in the pre-chat panel.</li>
+                <li>Type your first prompt in <strong>Message input</strong>.</li>
+                <li>Send the message to begin model loading and response generation.</li>
+                <li>Watch the loading progress area until the transcript starts streaming.</li>
+              </ol>
+              <p class="callout">
+                ClawsChat loads the selected model only when you send the first message for that
+                conversation.
               </p>
-            </details>
-          </section>
-
-          <section id="conversations" class="section-card" aria-labelledby="conversationHeading">
-            <h2 id="conversationHeading">Conversations, branches, and variants</h2>
-            <div class="help-columns">
-              <section>
-                <h3>Conversation management</h3>
-                <ul>
-                  <li>Conversations are saved locally and restored when you reopen the app.</li>
-                  <li>New conversations start untitled and are automatically renamed after the first completed reply.</li>
-                  <li>
-                    After that first completed reply, a download menu appears so you can export the visible branch as
-                    Markdown or JSON.
-                  </li>
-                  <li>
-                    Each conversation can store its own system prompt. You can append it after the captured default
-                    prompt or use it instead.
-                  </li>
-                </ul>
-              </section>
-              <section>
-                <h3>Branch-aware editing</h3>
-                <ul>
-                  <li><strong>Edit</strong> updates a user message in place and removes later turns on that branch.</li>
-                  <li>
-                    <strong>Branch</strong> lets you save an alternate user-message path without replacing the original
-                    branch.
-                  </li>
-                  <li>
-                    <strong>Regenerate</strong> creates additional model response variants for the same turn while
-                    keeping prior variants available.
-                  </li>
-                  <li>
-                    Left and right branch controls, along with the <strong>x/y</strong> indicator, let you switch among
-                    sibling user branches and model variants.
-                  </li>
-                </ul>
-              </section>
             </div>
-          </section>
+          </details>
 
-          <section id="settings" class="section-card" aria-labelledby="settingsHeading">
-            <h2 id="settingsHeading">Settings reference</h2>
-            <div class="settings-grid">
-              <section>
-                <h3>Backend and model behavior</h3>
-                <ul>
-                  <li><strong>Auto</strong> tries WebGPU first, then WASM, then CPU.</li>
-                  <li><strong>WebGPU only</strong> requires browser WebGPU support.</li>
-                  <li><strong>WASM only</strong> forces a software fallback path.</li>
-                  <li>The selected backend and model are stored in browser storage.</li>
-                </ul>
-              </section>
-              <section>
-                <h3>Generation controls</h3>
-                <ul>
-                  <li><strong>Maximum output tokens</strong> sets the response length cap.</li>
-                  <li><strong>Context size</strong> controls short-term memory for the current conversation.</li>
-                  <li><strong>Temperature</strong> shifts creativity versus predictability.</li>
-                  <li><strong>Top K</strong> narrows sampling to the most likely next-token options.</li>
-                  <li><strong>Top P</strong> widens or narrows nucleus sampling for more or less variety.</li>
-                </ul>
-              </section>
-              <section>
-                <h3>Per-model controls</h3>
-                <ul>
-                  <li>Token limits and temperature are constrained by the selected model.</li>
-                  <li>Those values are disabled until a model is loaded.</li>
-                  <li>Context size and temperature each include <strong>Reset to model default</strong>.</li>
-                  <li>Token and temperature overrides are remembered separately for each model.</li>
-                </ul>
-              </section>
-              <section>
-                <h3>Conversation controls</h3>
-                <ul>
-                  <li><strong>Default system prompt</strong> applies only to newly created conversations.</li>
-                  <li><strong>Show thinking</strong> controls whether thinking sections start expanded.</li>
-                  <li>
-                    <strong>Enable single-key transcript shortcuts</strong> toggles focused transcript keys like
-                    <kbd>E</kbd>, <kbd>B</kbd>, <kbd>R</kbd>, <kbd>F</kbd>, and <kbd>C</kbd>.
-                  </li>
-                  <li><strong>Transcript view</strong> lets you switch between standard and compact layouts.</li>
-                </ul>
-              </section>
-            </div>
-          </section>
-
-          <section id="learning" class="section-card" aria-labelledby="learningHeading">
-            <h2 id="learningHeading">Using it as a learning tool</h2>
-            <div class="help-columns">
-              <section>
-                <h3>Why this app is useful for learning</h3>
-                <ul>
-                  <li>
-                    The app exposes more of the model workflow than most chat tools, so you can see how loading,
-                    streaming, stopping, revision, and branching actually work.
-                  </li>
-                  <li>
-                    Settings use plain-language labels such as <strong>Temperature (Creativity)</strong>,
-                    <strong>Top K (Predictability)</strong>, and <strong>Top P (Strangeness)</strong> so learners can
-                    connect technical controls to practical effects.
-                  </li>
-                  <li>
-                    Response variants and branch-aware editing make it easy to compare prompt phrasing, inspect how
-                    outputs change, and discuss why one version is stronger than another.
-                  </li>
-                  <li>
-                    Thinking sections, when available for a model, are separated from the final answer so students can
-                    inspect process signals without losing the polished response.
-                  </li>
-                </ul>
-              </section>
-              <section>
-                <h3>Pedagogical workflows</h3>
-                <ul>
-                  <li>
-                    Use <strong>Copy</strong> on individual prompts, answers, or thinking blocks to move examples into
-                    notes, assignments, or teacher feedback documents.
-                  </li>
-                  <li>
-                    Use <strong>Regenerate</strong> and <strong>Fix</strong> to compare drafts, revisions, and
-                    self-correction behavior on the same task.
-                  </li>
-                  <li>
-                    Export the visible branch as <strong>Markdown</strong> or <strong>JSON</strong> when you want a
-                    record of a tutoring session, writing exercise, or prompt experiment.
-                  </li>
-                  <li>
-                    Keep prompts local by default, which makes classroom experimentation easier when privacy and careful
-                    handling of student writing matter.
-                  </li>
-                </ul>
-              </section>
-            </div>
-            <div class="callout">
-              A strong classroom pattern is to vary one setting or one prompt at a time, then use branching,
-              regeneration, copying, and export to compare results side by side.
-            </div>
-          </section>
-
-          <section id="shortcuts" class="section-card" aria-labelledby="shortcutsHeading">
-            <h2 id="shortcutsHeading">Keyboard shortcuts</h2>
-            <p class="lede">
-              The app exposes the same shortcut list inside the keyboard shortcuts dialog. Single-key transcript
-              shortcuts only apply when a transcript message is focused and the setting is enabled.
-            </p>
-            <div class="shortcut-grid">
-              <section class="shortcut-card" aria-labelledby="globalShortcutsHeading">
-                <h3 id="globalShortcutsHeading">Global actions</h3>
-                <table>
-                  <tbody>
-                    <tr>
-                      <th scope="row">Show keyboard shortcuts</th>
-                      <td><kbd>Ctrl</kbd>+<kbd>/</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Start or create a conversation</th>
-                      <td><kbd>Alt</kbd>+<kbd>N</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Open or close settings</th>
-                      <td><kbd>Alt</kbd>+<kbd>S</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Open help</th>
-                      <td><kbd>Alt</kbd>+<kbd>H</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Send message</th>
-                      <td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Stop generating</th>
-                      <td><kbd>Alt</kbd>+<kbd>.</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Load model</th>
-                      <td><kbd>Alt</kbd>+<kbd>L</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Edit conversation title</th>
-                      <td><kbd>Alt</kbd>+<kbd>T</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Edit conversation system prompt</th>
-                      <td><kbd>Alt</kbd>+<kbd>P</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Download JSON</th>
-                      <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Download Markdown</th>
-                      <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Jump to last prompt</th>
-                      <td><kbd>Alt</kbd>+<kbd>K</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Jump to latest message</th>
-                      <td><kbd>Alt</kbd>+<kbd>J</kbd></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-              <section class="shortcut-card" aria-labelledby="transcriptShortcutsHeading">
-                <h3 id="transcriptShortcutsHeading">Focused transcript actions</h3>
-                <table>
-                  <tbody>
-                    <tr>
-                      <th scope="row">Previous branch or response</th>
-                      <td><kbd>[</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Next branch or response</th>
-                      <td><kbd>]</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Edit focused user message</th>
-                      <td><kbd>E</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Branch from focused user message</th>
-                      <td><kbd>B</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Regenerate focused model response</th>
-                      <td><kbd>R</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Fix focused model response</th>
-                      <td><kbd>F</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Copy focused message or response</th>
-                      <td><kbd>C</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Copy focused thoughts</th>
-                      <td><kbd>Shift</kbd>+<kbd>C</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Save message edit</th>
-                      <td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td>
-                    </tr>
-                    <tr>
-                      <th scope="row">Cancel message edit or close panels</th>
-                      <td><kbd>Escape</kbd></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-            </div>
-          </section>
-
-          <section id="accessibility" class="section-card" aria-labelledby="accessibilityHeading">
-            <h2 id="accessibilityHeading">Accessibility and focus behavior</h2>
-            <ul>
-              <li>Primary controls are reachable with <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd>.</li>
-              <li>Dialogs and panels close with <kbd>Escape</kbd> and return focus to a sensible trigger.</li>
-              <li>
-                The transcript has helper links near the start and end so you can jump to the transcript boundaries or
-                back to the message composer.
-              </li>
-              <li>
-                Status updates such as loading, ready, generating, stopped, and errors are announced through dedicated
-                status regions instead of streaming every token to screen readers.
-              </li>
-              <li>Messages use clear speaker labeling so the conversation stays readable in assistive technologies.</li>
-            </ul>
-          </section>
-
-          <section id="privacy" class="section-card" aria-labelledby="privacyHeading">
-            <h2 id="privacyHeading">Privacy, storage, and exports</h2>
-            <div class="help-columns">
-              <section>
-                <h3>Stored in your browser</h3>
-                <ul>
-                  <li>Selected model and backend preference.</li>
-                  <li>Saved conversations and their branch structure.</li>
-                  <li>Model downloads cached for reuse.</li>
-                  <li>Generation settings such as token limits, temperature, Top K, and Top P.</li>
-                </ul>
-              </section>
-              <section>
-                <h3>Export options</h3>
-                <ul>
-                  <li><strong>JSON (.llm.json)</strong> exports structured conversation metadata and exchanges.</li>
-                  <li><strong>Markdown (.md)</strong> exports a readable branch transcript.</li>
-                  <li>Exports include only the currently visible branch, not every hidden branch or variant.</li>
-                </ul>
-              </section>
-            </div>
-          </section>
-
-          <section id="troubleshooting" class="section-card" aria-labelledby="troubleshootingHeading">
-            <h2 id="troubleshootingHeading">Troubleshooting</h2>
-            <details open>
-              <summary>The model does not load or WebGPU fails</summary>
-              <ul>
-                <li>Open <strong>Settings</strong> and switch the backend to <strong>WASM only</strong>.</li>
-                <li>Send another message to trigger a fresh model load with the new backend.</li>
-                <li>Check the debug info section in Settings for backend and initialization details.</li>
-              </ul>
-            </details>
-            <details>
-              <summary>Generation feels stuck</summary>
-              <ul>
-                <li>Use <strong>Stop generating</strong> to cancel the current run.</li>
-                <li>Try a shorter prompt or lower the context size before sending again.</li>
-                <li>If you changed settings during generation, wait for the current run to finish or stop first.</li>
-              </ul>
-            </details>
-            <details>
-              <summary>I cannot edit token or temperature fields</summary>
-              <ul>
-                <li>Those controls stay disabled until a model is fully loaded.</li>
-                <li>After loading, the allowed range depends on the selected model.</li>
-              </ul>
-            </details>
-            <details>
-              <summary>Keyboard shortcuts are not working inside the transcript</summary>
-              <ul>
-                <li>Make sure a transcript message has focus.</li>
+          <details class="accordion-item">
+            <summary>Chat, stop, and review responses</summary>
+            <div class="accordion-body">
+              <ul class="stack-list">
+                <li>Responses stream into the transcript as they are generated.</li>
                 <li>
-                  Confirm <strong>Enable single-key transcript shortcuts</strong> is still turned on in
-                  <strong>Settings -> Conversation</strong>.
+                  Use <strong>Stop generating</strong> at any time to cancel the current reply.
+                </li>
+                <li>
+                  After a reply finishes, you can copy it, regenerate it, or run
+                  <strong>Fix</strong>.
+                </li>
+                <li>
+                  If a model exposes thinking content, ClawsChat places it in a separate
+                  <strong>Thinking</strong> section instead of mixing it into the final answer.
+                </li>
+                <li>Markdown and LaTeX math render directly in the transcript.</li>
+              </ul>
+              <p>
+                <strong>Fix</strong> creates a revised answer by running a critique, revision, and
+                validation flow on the current response.
+              </p>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary>Manage conversations, branches, and variants</summary>
+            <div class="accordion-body">
+              <ul class="stack-list">
+                <li>Conversations are saved locally and restored when you reopen the app.</li>
+                <li>
+                  New conversations start untitled and rename automatically after the first full
+                  reply.
+                </li>
+                <li>
+                  Use <strong>Edit</strong> to replace a user message and continue from that point.
+                </li>
+                <li>
+                  Use <strong>Branch</strong> to create an alternate path without deleting the
+                  original branch.
+                </li>
+                <li>
+                  Use <strong>Regenerate</strong> to create multiple model replies for the same turn
+                  and compare them with the left and right variant controls.
+                </li>
+                <li>
+                  After the first completed reply, the conversation menu can export the visible
+                  branch as Markdown or JSON.
                 </li>
               </ul>
-            </details>
-          </section>
-        </div>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary>Use settings with confidence</summary>
+            <div class="accordion-body">
+              <ul class="stack-list">
+                <li><strong>Backend</strong> lets you choose Auto, WebGPU only, or WASM only.</li>
+                <li>
+                  <strong>Theme</strong> lets the app match light, dark, or system appearance.
+                </li>
+                <li><strong>Maximum output tokens</strong> controls reply length.</li>
+                <li>
+                  <strong>Context size</strong> controls how much short-term conversation memory is
+                  used.
+                </li>
+                <li>
+                  <strong>Temperature</strong>, <strong>Top K</strong>, and
+                  <strong>Top P</strong> adjust response style.
+                </li>
+                <li>
+                  Generation settings are model-aware, saved per model, and disabled until the model
+                  is loaded.
+                </li>
+                <li>
+                  <strong>Default system prompt</strong> applies only to newly created
+                  conversations.
+                </li>
+                <li>
+                  <strong>Transcript view</strong> switches between standard and compact spacing.
+                </li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary>Keyboard shortcuts</summary>
+            <div class="accordion-body">
+              <h2>Global shortcuts</h2>
+              <table class="shortcut-table">
+                <tbody>
+                  <tr>
+                    <th scope="row">Show keyboard shortcuts</th>
+                    <td><kbd>Ctrl</kbd>+<kbd>/</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Start or create a conversation</th>
+                    <td><kbd>Alt</kbd>+<kbd>N</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Open or close settings</th>
+                    <td><kbd>Alt</kbd>+<kbd>S</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Open help</th>
+                    <td><kbd>Alt</kbd>+<kbd>H</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Send message</th>
+                    <td><kbd>Enter</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Stop generating</th>
+                    <td><kbd>Alt</kbd>+<kbd>.</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Load model</th>
+                    <td><kbd>Alt</kbd>+<kbd>L</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Edit conversation title</th>
+                    <td><kbd>Alt</kbd>+<kbd>T</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Edit conversation system prompt</th>
+                    <td><kbd>Alt</kbd>+<kbd>P</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Download JSON</th>
+                    <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Download Markdown</th>
+                    <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Jump to previous user prompt</th>
+                    <td><kbd>Alt</kbd>+<kbd>K</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Jump to latest message</th>
+                    <td><kbd>Alt</kbd>+<kbd>J</kbd></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <h2>Focused transcript shortcuts</h2>
+              <table class="shortcut-table">
+                <tbody>
+                  <tr>
+                    <th scope="row">Previous branch or response</th>
+                    <td><kbd>[</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Next branch or response</th>
+                    <td><kbd>]</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Edit focused user message</th>
+                    <td><kbd>E</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Branch from focused user message</th>
+                    <td><kbd>B</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Regenerate focused model response</th>
+                    <td><kbd>R</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Fix focused model response</th>
+                    <td><kbd>F</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Copy focused message or response</th>
+                    <td><kbd>C</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Copy focused thoughts</th>
+                    <td><kbd>Shift</kbd>+<kbd>C</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Save message edit</th>
+                    <td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Cancel message edit or close panels</th>
+                    <td><kbd>Escape</kbd></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary>Accessibility and focus behavior</summary>
+            <div class="accordion-body">
+              <ul class="stack-list">
+                <li>All primary controls can be reached with keyboard navigation.</li>
+                <li>Dialogs and panels close with <kbd>Escape</kbd> and return focus sensibly.</li>
+                <li>The transcript has clear speaker labels for user and model messages.</li>
+                <li>
+                  Status updates such as loading, generating, stopped, and errors use dedicated
+                  announcements instead of reading every streamed token.
+                </li>
+                <li>
+                  Transcript helper controls help you move to the start, the end, or the message
+                  input.
+                </li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary>Privacy, storage, and exports</summary>
+            <div class="accordion-body">
+              <ul class="stack-list">
+                <li>Prompts and outputs stay in the browser unless you export them yourself.</li>
+                <li>
+                  ClawsChat stores conversations, settings, and model choices locally in browser
+                  storage.
+                </li>
+                <li>Downloaded model files are cached for reuse in the browser.</li>
+                <li>JSON exports preserve structured conversation data for the visible branch.</li>
+                <li>Markdown exports provide a readable version of the visible branch.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary>Troubleshooting</summary>
+            <div class="accordion-body">
+              <ul class="stack-list">
+                <li>
+                  If WebGPU fails, switch the backend to <strong>WASM only</strong> in Settings and
+                  try again.
+                </li>
+                <li>
+                  If generation seems stuck, use <strong>Stop generating</strong> and send the
+                  prompt again.
+                </li>
+                <li>Token and sampling fields stay disabled until the model has fully loaded.</li>
+                <li>
+                  If transcript shortcuts are not working, focus a transcript message and confirm
+                  <strong>Enable single-key transcript shortcuts</strong> is on.
+                </li>
+                <li>
+                  Use <strong>Debug info</strong> in Settings when you need engine or initialization
+                  details.
+                </li>
+              </ul>
+            </div>
+          </details>
+        </section>
+
+        <p class="help-footer">
+          Need more detail? The project README documents the full feature set and current supported
+          models.
+        </p>
       </section>
     </main>
+
+    <script>
+      const backToChatButton = document.getElementById('backToChatButton');
+
+      if (backToChatButton instanceof HTMLButtonElement) {
+        backToChatButton.addEventListener('click', () => {
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+          window.location.href = './#/chat';
+        });
+      }
+    </script>
   </body>
 </html>
