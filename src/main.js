@@ -5,6 +5,7 @@ import Modal from 'bootstrap/js/dist/modal';
 import Tooltip from 'bootstrap/js/dist/tooltip';
 import MarkdownIt from 'markdown-it';
 import './styles.css';
+import { bindConversationListEvents } from './app/conversation-list-events.js';
 import { createPreferencesController } from './app/preferences.js';
 import { createRoutingShell } from './app/routing-shell.js';
 import { bindSettingsEvents } from './app/settings-events.js';
@@ -494,9 +495,9 @@ function getConversationMenuState(conversation) {
     (message) => message?.role === 'model' && Boolean(message.isResponseComplete)
   );
   return {
-    canEditName: appState.modelReady && Boolean(conversation?.hasGeneratedName),
+    canEditName: isEngineReady(appState) && Boolean(conversation?.hasGeneratedName),
     canEditPrompt: Boolean(conversation),
-    canDownload: appState.modelReady && hasCompletedGeneration,
+    canDownload: isEngineReady(appState) && hasCompletedGeneration,
     controlsDisabled: isUiBusy(),
   };
 }
@@ -697,7 +698,7 @@ function handleGlobalShortcut(event) {
 
   if (normalizedKey === SHORTCUT_KEY.settings) {
     event.preventDefault();
-    if (appState.isSettingsPageOpen) {
+    if (isSettingsView(appState)) {
       setSettingsPageVisibility(false, { replaceRoute: false });
       if (openSettingsButton instanceof HTMLButtonElement) {
         openSettingsButton.focus();
@@ -715,7 +716,7 @@ function handleGlobalShortcut(event) {
 
   if (normalizedKey === SHORTCUT_KEY.newConversation) {
     event.preventDefault();
-    if (!appState.hasStartedChatWorkspace) {
+    if (!selectHasStartedWorkspace(appState)) {
       return clickShortcutTarget(startConversationButton);
     }
     return clickShortcutTarget(newConversationBtn);
@@ -763,7 +764,7 @@ function handleGlobalShortcut(event) {
     return true;
   }
 
-  if (normalizedKey === '.' && appState.isGenerating) {
+  if (normalizedKey === '.' && isGeneratingResponse(appState)) {
     event.preventDefault();
     return clickShortcutTarget(sendButton);
   }
@@ -1594,7 +1595,7 @@ function activeConversationNeedsModelLoad(
     return false;
   }
   const loadedModelId = getLoadedModelId();
-  return !appState.modelReady || loadedModelId !== getConversationModelId(conversation);
+  return !isEngineReady(appState) || loadedModelId !== getConversationModelId(conversation);
 }
 
 function requestSingleGeneration(prompt) {
@@ -1685,12 +1686,12 @@ const transcriptView = createTranscriptView({
   getShowThinkingByDefault: () => appState.showThinkingByDefault,
   getActiveUserEditMessageId: () => appState.activeUserEditMessageId,
   getControlsState: () => ({
-    isGenerating: appState.isGenerating,
-    isLoadingModel: appState.isLoadingModel,
-    isRunningOrchestration: appState.isRunningOrchestration,
-    isSwitchingVariant: appState.isSwitchingVariant,
+    isGenerating: isGeneratingResponse(appState),
+    isLoadingModel: isLoadingModelState(appState),
+    isRunningOrchestration: isOrchestrationRunningState(appState),
+    isSwitchingVariant: isVariantSwitchingState(appState),
   }),
-  getEmptyStateVisible: () => appState.modelReady && appState.conversations.length > 0,
+  getEmptyStateVisible: () => isEngineReady(appState) && appState.conversations.length > 0,
   initializeTooltips,
   disposeTooltips,
   applyVariantCardSignals,
@@ -1954,25 +1955,26 @@ function updateTranscriptNavigationButtonVisibility() {
     return;
   }
   const hasTranscriptItems = Boolean(chatTranscript?.children.length);
+  const engineReady = isEngineReady(appState);
   jumpToTopButton.setAttribute(
     'aria-disabled',
-    !appState.modelReady || !hasTranscriptItems || isTranscriptNearTop() ? 'true' : 'false'
+    !engineReady || !hasTranscriptItems || isTranscriptNearTop() ? 'true' : 'false'
   );
   jumpToPreviousUserButton.setAttribute(
     'aria-disabled',
-    !appState.modelReady || !hasTranscriptItems || !hasTranscriptStepTarget('user', -1)
+    !engineReady || !hasTranscriptItems || !hasTranscriptStepTarget('user', -1)
       ? 'true'
       : 'false'
   );
   jumpToNextModelButton.setAttribute(
     'aria-disabled',
-    !appState.modelReady || !hasTranscriptItems || !hasTranscriptStepTarget('model', 1)
+    !engineReady || !hasTranscriptItems || !hasTranscriptStepTarget('model', 1)
       ? 'true'
       : 'false'
   );
   jumpToLatestButton.setAttribute(
     'aria-disabled',
-    !appState.modelReady || !hasTranscriptItems || isTranscriptNearBottom() ? 'true' : 'false'
+    !engineReady || !hasTranscriptItems || isTranscriptNearBottom() ? 'true' : 'false'
   );
 }
 
@@ -2017,7 +2019,7 @@ function updateChatTitleEditorVisibility() {
   const menuState = getConversationMenuState(activeConversation);
   const canEditTitle = menuState.canEditName;
   const controlsDisabled = isUiBusy();
-  const showEditor = canEditTitle && appState.isChatTitleEditing;
+  const showEditor = canEditTitle && isChatTitleEditingState(appState);
   chatTitle.classList.toggle('d-none', showEditor);
   chatTitleInput.classList.toggle('d-none', !showEditor);
   saveChatTitleBtn.classList.toggle('d-none', !showEditor);
@@ -2158,7 +2160,7 @@ function beginChatTitleEdit({ trigger = null } = {}) {
 }
 
 function cancelChatTitleEdit({ restoreFocus = true } = {}) {
-  if (!appState.isChatTitleEditing) {
+  if (!isChatTitleEditingState(appState)) {
     return;
   }
   setChatTitleEditing(appState, false);
@@ -2170,7 +2172,7 @@ function cancelChatTitleEdit({ restoreFocus = true } = {}) {
 }
 
 function saveChatTitleEdit() {
-  if (!appState.isChatTitleEditing || !chatTitleInput) {
+  if (!isChatTitleEditingState(appState) || !chatTitleInput) {
     return;
   }
   const activeConversation = getActiveConversation();
@@ -2287,7 +2289,7 @@ function setActiveConversationById(conversationId) {
   if (appState.activeConversationId === conversationId) {
     return;
   }
-  if (appState.isChatTitleEditing) {
+  if (isChatTitleEditingState(appState)) {
     setChatTitleEditing(appState, false);
   }
   appState.activeConversationId = conversationId;
@@ -2460,7 +2462,7 @@ function updateSendButtonMode() {
   if (tooltipInstance) {
     tooltipInstance.dispose();
   }
-  if (appState.isGenerating) {
+  if (isGeneratingResponse(appState)) {
     sendButton.type = 'button';
     sendButton.classList.remove('btn-primary');
     sendButton.classList.add('btn-outline-secondary');
@@ -3353,157 +3355,30 @@ if (newConversationBtn) {
   });
 }
 
-if (conversationList) {
-  conversationList.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) {
-      return;
-    }
-
-    if (isGeneratingResponse(appState)) {
-      return;
-    }
-
-    const menuToggle = target.closest('.conversation-menu-toggle');
-    if (menuToggle instanceof HTMLButtonElement) {
-      const item = menuToggle.closest('.conversation-item');
-      openConversationMenu(item, menuToggle);
-      return;
-    }
-
-    const downloadToggle = target.closest('.conversation-download-toggle');
-    if (downloadToggle instanceof HTMLButtonElement) {
-      const item = downloadToggle.closest('.conversation-item');
-      toggleConversationDownloadMenu(item, downloadToggle);
-      return;
-    }
-
-    const deleteButton = target.closest('.conversation-delete');
-    if (deleteButton instanceof HTMLButtonElement) {
-      const item = deleteButton.closest('.conversation-item');
-      const conversationId = item?.dataset.conversationId;
-      if (!conversationId) {
-        return;
-      }
-
-      const index = appState.conversations.findIndex(
-        (conversation) => conversation.id === conversationId
-      );
-      if (index < 0) {
-        return;
-      }
-
-      const wasActive = appState.activeConversationId === conversationId;
-      appState.conversations.splice(index, 1);
-
-      if (wasActive) {
-        appState.activeConversationId = appState.conversations[0]?.id || null;
-        clearUserMessageEditSession();
-        setChatTitleEditing(appState, false);
-        const nextActiveConversation = getActiveConversation();
-        if (nextActiveConversation) {
-          const selection = syncConversationModelSelection(nextActiveConversation, {
-            useDefaults: true,
-          });
-          if (activeConversationNeedsModelLoad(nextActiveConversation, selection)) {
-            void appController.loadModelForSelectedConversation();
-          }
-        }
-      }
-      renderConversationList();
-      renderTranscript();
-      updateChatTitle();
-      queueConversationStateSave();
-      return;
-    }
-
-    const editNameButton = target.closest('.conversation-edit-name');
-    if (editNameButton instanceof HTMLButtonElement) {
-      const item = editNameButton.closest('.conversation-item');
-      const conversationId = item?.dataset.conversationId;
-      if (!conversationId) {
-        return;
-      }
-      runConversationMenuAction(conversationId, editNameButton, (trigger) => {
-        beginChatTitleEdit({ trigger });
-      });
-      return;
-    }
-
-    const editPromptButton = target.closest('.conversation-edit-prompt');
-    if (editPromptButton instanceof HTMLButtonElement) {
-      const item = editPromptButton.closest('.conversation-item');
-      const conversationId = item?.dataset.conversationId;
-      if (!conversationId) {
-        return;
-      }
-      runConversationMenuAction(conversationId, editPromptButton, (trigger) => {
-        beginConversationSystemPromptEdit({ trigger });
-      });
-      return;
-    }
-
-    const downloadJsonButton = target.closest('.conversation-download-json');
-    if (downloadJsonButton instanceof HTMLButtonElement) {
-      const item = downloadJsonButton.closest('.conversation-item');
-      const conversationId = item?.dataset.conversationId;
-      if (!conversationId) {
-        return;
-      }
-      runConversationMenuAction(conversationId, downloadJsonButton, () => {
-        downloadActiveConversationBranchAsJson();
-      });
-      return;
-    }
-
-    const downloadMarkdownButton = target.closest('.conversation-download-markdown');
-    if (downloadMarkdownButton instanceof HTMLButtonElement) {
-      const item = downloadMarkdownButton.closest('.conversation-item');
-      const conversationId = item?.dataset.conversationId;
-      if (!conversationId) {
-        return;
-      }
-      runConversationMenuAction(conversationId, downloadMarkdownButton, () => {
-        downloadActiveConversationBranchAsMarkdown();
-      });
-      return;
-    }
-
-    const selectButton = target.closest('.conversation-select');
-    if (selectButton) {
-      const item = selectButton.closest('.conversation-item');
-      const conversationId = item?.dataset.conversationId;
-      if (conversationId) {
-        setActiveConversationById(conversationId);
-      }
-    }
-  });
-
-  conversationList.addEventListener('keydown', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-    if (event.key === 'Escape') {
-      const item = target.closest('.conversation-item');
-      const menuToggle = item?.querySelector('.conversation-menu-toggle');
-      if (item?.classList.contains('menu-open') && menuToggle instanceof HTMLElement) {
-        event.preventDefault();
-        closeConversationMenus({ restoreFocusTo: menuToggle });
-      }
-    }
-  });
-}
-
-document.addEventListener('click', (event) => {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    return;
-  }
-  if (target.closest('#conversationList')) {
-    return;
-  }
-  closeConversationMenus();
+bindConversationListEvents({
+  appState,
+  documentRef: document,
+  conversationList,
+  isGeneratingResponse,
+  clearUserMessageEditSession,
+  setChatTitleEditing,
+  getActiveConversation,
+  syncConversationModelSelection,
+  activeConversationNeedsModelLoad,
+  loadModelForSelectedConversation: () => appController.loadModelForSelectedConversation(),
+  renderConversationList,
+  renderTranscript,
+  updateChatTitle,
+  queueConversationStateSave,
+  openConversationMenu,
+  toggleConversationDownloadMenu,
+  closeConversationMenus,
+  runConversationMenuAction,
+  beginChatTitleEdit,
+  beginConversationSystemPromptEdit,
+  downloadActiveConversationBranchAsJson,
+  downloadActiveConversationBranchAsMarkdown,
+  setActiveConversationById,
 });
 
 if (sendButton) {

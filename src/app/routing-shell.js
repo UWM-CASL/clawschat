@@ -1,4 +1,7 @@
 import {
+  hasStartedWorkspace,
+  isChatTitleEditingState,
+  isSettingsView,
   refreshWorkspaceView,
   setChatTitleEditing,
   setChatWorkspaceStarted,
@@ -119,16 +122,18 @@ export function createRoutingShell({
       return;
     }
     setSettingsPageOpen(appState, visible);
-    setRegionVisibility(settingsPage, appState.isSettingsPageOpen);
+    const settingsViewActive = isSettingsView(appState);
+    const workspaceStarted = hasStartedWorkspace(appState);
+    setRegionVisibility(settingsPage, settingsViewActive);
     const conversationPanelToggle = topBar.querySelector('[data-bs-target="#conversationPanel"]');
     if (openSettingsButton) {
-      openSettingsButton.setAttribute('aria-expanded', String(appState.isSettingsPageOpen));
-      openSettingsButton.classList.toggle('d-none', appState.isSettingsPageOpen);
+      openSettingsButton.setAttribute('aria-expanded', String(settingsViewActive));
+      openSettingsButton.classList.toggle('d-none', settingsViewActive);
     }
     if (conversationPanelToggle) {
-      conversationPanelToggle.classList.toggle('d-none', appState.isSettingsPageOpen);
+      conversationPanelToggle.classList.toggle('d-none', settingsViewActive);
     }
-    if (appState.isSettingsPageOpen) {
+    if (settingsViewActive) {
       setRegionVisibility(homePanel, false);
       setRegionVisibility(preChatPanel, false);
       setRegionVisibility(conversationPanel, false);
@@ -138,7 +143,7 @@ export function createRoutingShell({
       setActiveSettingsTab(appState.activeSettingsTab);
       if (topBar instanceof HTMLElement) {
         topBar.setAttribute('aria-label', 'Settings');
-        topBar.classList.toggle('top-bar-actions-only', !appState.hasStartedChatWorkspace);
+        topBar.classList.toggle('top-bar-actions-only', !workspaceStarted);
       }
       if (syncRoute) {
         syncRouteToCurrentView({ replace: replaceRoute });
@@ -148,7 +153,7 @@ export function createRoutingShell({
 
     if (topBar) {
       topBar.removeAttribute('aria-label');
-      topBar.classList.toggle('top-bar-actions-only', !appState.hasStartedChatWorkspace);
+      topBar.classList.toggle('top-bar-actions-only', !workspaceStarted);
     }
     updateWelcomePanelVisibility({ syncRoute: false });
     if (syncRoute) {
@@ -157,7 +162,7 @@ export function createRoutingShell({
   }
 
   function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } = {}) {
-    if (appState.isSettingsPageOpen) {
+    if (isSettingsView(appState)) {
       return;
     }
     const previousView = appState.currentWorkspaceView;
@@ -165,6 +170,7 @@ export function createRoutingShell({
     const showHome = appState.workspaceView === routeHome;
     const showPreChat = appState.workspaceView === 'prechat';
     const showChat = appState.workspaceView === routeChat;
+    const workspaceStarted = hasStartedWorkspace(appState);
     if (chatMain instanceof HTMLElement) {
       chatMain.classList.toggle('is-home', showHome);
       chatMain.classList.toggle('is-prechat', showPreChat);
@@ -174,16 +180,16 @@ export function createRoutingShell({
     setRegionVisibility(preChatPanel, showPreChat);
     setRegionVisibility(topBar, true);
     if (topBar instanceof HTMLElement) {
-      topBar.classList.toggle('top-bar-actions-only', !appState.hasStartedChatWorkspace);
+      topBar.classList.toggle('top-bar-actions-only', !workspaceStarted);
     }
-    setRegionVisibility(conversationPanel, appState.hasStartedChatWorkspace);
+    setRegionVisibility(conversationPanel, workspaceStarted);
     const conversationPanelToggle = topBar?.querySelector('[data-bs-target="#conversationPanel"]');
     if (conversationPanelToggle instanceof HTMLElement) {
-      conversationPanelToggle.classList.toggle('d-none', !appState.hasStartedChatWorkspace);
+      conversationPanelToggle.classList.toggle('d-none', !workspaceStarted);
     }
     setRegionVisibility(chatTranscriptWrap, showChat);
     updateComposerVisibility();
-    if (!showChat && appState.isChatTitleEditing) {
+    if (!showChat && isChatTitleEditingState(appState)) {
       setChatTitleEditing(appState, false);
     }
     updateChatTitleEditorVisibility();
