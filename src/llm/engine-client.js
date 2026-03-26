@@ -7,6 +7,8 @@ export class LLMEngineClient {
     this.worker = null;
     this.pendingInit = null;
     this.pendingGeneration = null;
+    this.loadedModelId = null;
+    this.loadedBackend = null;
     this.config = {
       modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       backendPreference: 'auto',
@@ -27,6 +29,10 @@ export class LLMEngineClient {
   async initialize(config = {}) {
     const modelId = config.modelId || this.config.modelId;
     this.config = { ...this.config, ...config, modelId };
+    if (this.worker && this.loadedModelId && this.loadedModelId !== modelId) {
+      this.dispose();
+      this.config = { ...this.config, ...config, modelId };
+    }
     this.#ensureWorker();
     this.pendingInit = this.#sendAndWait({
       type: 'init',
@@ -34,6 +40,8 @@ export class LLMEngineClient {
     });
     const result = await this.pendingInit;
     this.pendingInit = null;
+    this.loadedModelId = result?.modelId || modelId;
+    this.loadedBackend = result?.backend || null;
     return result;
   }
 
@@ -96,6 +104,8 @@ export class LLMEngineClient {
     }
     this.pendingGeneration = null;
     this.pendingInit = null;
+    this.loadedModelId = null;
+    this.loadedBackend = null;
   }
 
   #ensureWorker() {

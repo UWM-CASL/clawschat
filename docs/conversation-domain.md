@@ -7,6 +7,7 @@ The conversation tree logic now lives in `src/state/conversation-model.js`.
 This module is the pure domain layer for:
 
 - creating conversation records
+- storing the selected model for each conversation
 - adding user/model messages to the tree
 - resolving the visible branch and variant navigation state
 - pruning descendants after user edits

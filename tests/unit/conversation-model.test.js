@@ -178,6 +178,7 @@ describe('conversation-model', () => {
     const conversation = createConversation({
       id: 'conversation-1',
       name: 'Physics Notes',
+      modelId: 'physics-model',
       systemPrompt: 'Stay accurate.',
       startedAt: Date.UTC(2026, 0, 2, 3, 4, 5),
     });
@@ -201,7 +202,6 @@ describe('conversation-model', () => {
     conversation.activeLeafMessageId = branchModel.id;
 
     const payload = buildConversationDownloadPayload(conversation, {
-      modelId: 'test-model',
       temperature: 0.7,
       exportedAt: '2026-01-02T04:05:06.000Z',
     });
@@ -213,7 +213,7 @@ describe('conversation-model', () => {
         startedAtMs: Date.UTC(2026, 0, 2, 3, 4, 5),
         exportedAt: '2026-01-02T04:05:06.000Z',
       },
-      model: 'test-model',
+      model: 'physics-model',
       temperature: 0.7,
       systemPrompt: 'Stay accurate.\n\nUse classroom examples.',
       exchanges: [

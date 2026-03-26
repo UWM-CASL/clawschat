@@ -272,6 +272,7 @@ export function getEffectiveConversationSystemPrompt(conversation) {
  *   id: string;
  *   name?: string;
  *   untitledPrefix?: string;
+ *   modelId?: string;
  *   systemPrompt?: string;
  *   startedAt?: number;
  * }} [options]
@@ -281,6 +282,7 @@ export function createConversation(options) {
     id,
     name,
     untitledPrefix = 'New Conversation',
+    modelId = '',
     systemPrompt = '',
     startedAt = Date.now(),
   } = options || {};
@@ -290,6 +292,7 @@ export function createConversation(options) {
   return {
     id: id.trim(),
     name: name || untitledPrefix,
+    modelId: typeof modelId === 'string' ? modelId.trim() : '',
     systemPrompt: normalizeSystemPrompt(systemPrompt),
     conversationSystemPrompt: '',
     appendConversationSystemPrompt: true,
@@ -682,7 +685,7 @@ export function buildPromptForConversationLeaf(
 
 export function buildConversationDownloadPayload(
   conversation,
-  { modelId = 'Unknown', temperature = null, exportedAt = new Date().toISOString() } = {},
+  { modelId = conversation?.modelId || 'Unknown', temperature = null, exportedAt = new Date().toISOString() } = {},
 ) {
   const startedAt = normalizeTimestamp(conversation?.startedAt);
   const exchanges = getConversationPathMessages(conversation)

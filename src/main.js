@@ -1556,6 +1556,10 @@ function buildConversationStateSnapshot() {
       return {
         id: conversation.id,
         name: conversation.name,
+        modelId:
+          typeof conversation.modelId === 'string' && conversation.modelId.trim()
+            ? normalizeModelId(conversation.modelId)
+            : undefined,
         systemPrompt:
           typeof conversation.systemPrompt === 'string' && conversation.systemPrompt.trim()
             ? conversation.systemPrompt
@@ -1803,6 +1807,7 @@ function applyStoredConversationState(rawState) {
       const name = isLegacyUntitledConversationName(normalizedStoredName)
         ? UNTITLED_CONVERSATION_PREFIX
         : normalizedStoredName || UNTITLED_CONVERSATION_PREFIX;
+      const modelId = normalizeModelId(rawConversation.modelId || DEFAULT_MODEL);
       const systemPrompt = normalizeSystemPrompt(rawConversation.systemPrompt);
       const conversationSystemPrompt = normalizeSystemPrompt(
         rawConversation.conversationSystemPrompt
@@ -1901,6 +1906,7 @@ function applyStoredConversationState(rawState) {
       return {
         id,
         name,
+        modelId,
         systemPrompt,
         conversationSystemPrompt,
         appendConversationSystemPrompt,
@@ -1980,10 +1986,83 @@ function createConversation(name) {
   return createConversationRecord({
     id: `conversation-${++appState.conversationIdCounter}`,
     name,
+    modelId: getAvailableModelId(
+      modelSelect?.value || DEFAULT_MODEL,
+      normalizeBackendPreference(backendSelect?.value || 'auto')
+    ),
     untitledPrefix: UNTITLED_CONVERSATION_PREFIX,
     systemPrompt: appState.defaultSystemPrompt,
     startedAt: Date.now(),
   });
+}
+
+function getConversationModelId(conversation) {
+  return getAvailableModelId(
+    conversation?.modelId || modelSelect?.value || DEFAULT_MODEL,
+    normalizeBackendPreference(backendSelect?.value || 'auto')
+  );
+}
+
+function assignConversationModelId(conversation, modelId) {
+  if (!conversation) {
+    return { changed: false, modelId: getAvailableModelId(modelId || DEFAULT_MODEL) };
+  }
+  const nextModelId = getAvailableModelId(
+    modelId || conversation.modelId || DEFAULT_MODEL,
+    normalizeBackendPreference(backendSelect?.value || 'auto')
+  );
+  const changed = conversation.modelId !== nextModelId;
+  conversation.modelId = nextModelId;
+  return { changed, modelId: nextModelId };
+}
+
+function syncConversationModelSelection(
+  conversation,
+  { announceFallback = false, useDefaults = true } = {}
+) {
+  const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'auto');
+  const requestedModelId = normalizeModelId(conversation?.modelId || modelSelect?.value || DEFAULT_MODEL);
+
+  populateModelSelect();
+
+  const selectedModelId = getAvailableModelId(requestedModelId, selectedBackend);
+  if (conversation) {
+    conversation.modelId = selectedModelId;
+  }
+  if (modelSelect && modelSelect.value !== selectedModelId) {
+    modelSelect.value = selectedModelId;
+  }
+  syncGenerationSettingsFromModel(selectedModelId, useDefaults);
+
+  if (announceFallback && selectedModelId !== requestedModelId) {
+    const requestedModel = MODEL_OPTIONS_BY_ID.get(requestedModelId);
+    const availability = getModelAvailability(requestedModelId, {
+      backendPreference: selectedBackend,
+      webGpuAvailable: getWebGpuAvailability(),
+    });
+    if (requestedModel?.runtime?.requiresWebGpu) {
+      setStatus(
+        `${requestedModel.label} is unavailable with ${formatBackendPreferenceLabel(selectedBackend)}. ${availability.reason} Switched to ${selectedModelId}.`
+      );
+    }
+  }
+
+  return selectedModelId;
+}
+
+function getLoadedModelId() {
+  if (typeof engine?.loadedModelId === 'string' && engine.loadedModelId.trim()) {
+    return normalizeModelId(engine.loadedModelId.trim());
+  }
+  return null;
+}
+
+function activeConversationNeedsModelLoad(conversation = getActiveConversation()) {
+  if (!conversation || !hasConversationHistory(conversation)) {
+    return false;
+  }
+  const loadedModelId = getLoadedModelId();
+  return !appState.modelReady || loadedModelId !== getConversationModelId(conversation);
 }
 
 function requestSingleGeneration(prompt) {
@@ -2373,10 +2452,7 @@ function isUiBusy() {
 }
 
 function buildActiveConversationExportPayload(activeConversation) {
-  const selectedModelId =
-    typeof engine?.config?.modelId === 'string' && engine.config.modelId.trim()
-      ? engine.config.modelId.trim()
-      : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const selectedModelId = getConversationModelId(activeConversation);
   const temperature = Number.isFinite(engine?.config?.generationConfig?.temperature)
     ? Number(engine.config.generationConfig.temperature)
     : Number(
@@ -2873,12 +2949,20 @@ function setActiveConversationById(conversationId) {
   ) {
     activeConversation.activeLeafMessageId = activeConversation.lastSpokenLeafMessageId;
   }
+  let shouldLoadConversationModel = false;
+  if (activeConversation) {
+    syncConversationModelSelection(activeConversation, { useDefaults: true });
+    shouldLoadConversationModel = activeConversationNeedsModelLoad(activeConversation);
+  }
   clearUserMessageEditSession();
   clearPendingComposerAttachments();
   renderConversationList();
   renderTranscript();
   updateChatTitle();
   queueConversationStateSave();
+  if (shouldLoadConversationModel) {
+    void appController.loadModelForSelectedConversation();
+  }
 }
 
 function updateActionButtons() {
@@ -3620,6 +3704,7 @@ const appController = createAppController({
   findConversationById,
   hasSelectedConversationWithHistory,
   normalizeModelId,
+  getLoadedModelId,
   getThinkingTagsForModel,
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
   addMessageToConversation,
@@ -4175,6 +4260,13 @@ if (modelSelect) {
   modelSelect.addEventListener('change', () => {
     const selectedModel = syncModelSelectionForCurrentEnvironment();
     syncGenerationSettingsFromModel(selectedModel, true);
+    const activeConversation = getActiveConversation();
+    if (activeConversation) {
+      const { changed } = assignConversationModelId(activeConversation, selectedModel);
+      if (changed) {
+        queueConversationStateSave();
+      }
+    }
     void appController.reinitializeEngineFromSettings();
   });
 }
@@ -4183,6 +4275,13 @@ if (backendSelect) {
   backendSelect.addEventListener('change', () => {
     const selectedModel = syncModelSelectionForCurrentEnvironment({ announceFallback: true });
     syncGenerationSettingsFromModel(selectedModel, true);
+    const activeConversation = getActiveConversation();
+    if (activeConversation) {
+      const { changed } = assignConversationModelId(activeConversation, selectedModel);
+      if (changed) {
+        queueConversationStateSave();
+      }
+    }
     void appController.reinitializeEngineFromSettings();
   });
 }
@@ -4330,6 +4429,13 @@ if (conversationList) {
         appState.activeConversationId = appState.conversations[0]?.id || null;
         clearUserMessageEditSession();
         appState.isChatTitleEditing = false;
+        const nextActiveConversation = getActiveConversation();
+        if (nextActiveConversation) {
+          syncConversationModelSelection(nextActiveConversation, { useDefaults: true });
+          if (activeConversationNeedsModelLoad(nextActiveConversation)) {
+            void appController.loadModelForSelectedConversation();
+          }
+        }
       }
       renderConversationList();
       renderTranscript();
@@ -4580,9 +4686,15 @@ if (chatForm && messageInput && chatTranscript) {
       queueConversationStateSave();
     }
 
-    if (!appState.modelReady) {
+    const activeConversationModelId = syncConversationModelSelection(activeConversation, {
+      useDefaults: false,
+    });
+
+    if (!appState.modelReady || getLoadedModelId() !== activeConversationModelId) {
       persistInferencePreferences();
-      setStatus('Loading model for your first message...');
+      setStatus(
+        appState.modelReady ? 'Switching models for this conversation...' : 'Loading model for your first message...'
+      );
       try {
         await appController.initializeEngine();
       } catch (_error) {

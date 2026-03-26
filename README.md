@@ -9,6 +9,9 @@ Student-facing browser chat UI with local model inference.
 - On initial load, the app shows a home screen with a `Start a conversation` action.
 - Clicking `Start a conversation` opens the chat workspace with model selection, an empty composer, and no model load yet.
 - The selected model starts loading only after the first message is sent.
+- Each conversation stores its own selected model.
+- Changing the model for the active conversation updates that conversation only.
+- Switching to a saved conversation with a different model unloads the previous model worker and loads the selected conversation's model.
 - During model load, the workspace shows one progress bar.
 - The URL hash reflects the visible screen:
   - `#/` for setup/home
@@ -72,8 +75,8 @@ Student-facing browser chat UI with local model inference.
 - The conversation list reveals a kebab actions menu on hover/focus for each conversation instead of a direct delete icon.
 - After the first completed model response on the visible branch, that kebab menu includes a nested `Download` submenu.
 - Download submenu options:
-  - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), `model`, `temperature`, optional `systemPrompt` (when present on that conversation), and an `exchanges` array containing per-exchange `heading` plus entered/generated timestamps.
-  - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, model, temperature), optional `## System prompt` section (when present), and one section per exchange.
+  - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), the conversation's `model`, `temperature`, optional `systemPrompt` (when present on that conversation), and an `exchanges` array containing per-exchange `heading` plus entered/generated timestamps.
+  - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, the conversation's model, temperature), optional `## System prompt` section (when present), and one section per exchange.
 - Model load progress UI collapses after successful initialization.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in a collapsible "Thinking" section during streaming.
 - Model responses are rendered as Markdown (via `markdown-it`) in the transcript.

@@ -134,4 +134,17 @@ describe('LLMEngineClient', () => {
     expect(client.worker).not.toBe(firstWorker);
     expect(MockWorker.instances).toHaveLength(2);
   });
+
+  test('switching models unloads the previous worker before loading the next model', async () => {
+    const client = new LLMEngineClient();
+    await client.initialize({ modelId: 'example/model-a' });
+
+    const firstWorker = client.worker;
+    await client.initialize({ modelId: 'example/model-b' });
+
+    expect(/** @type {any} */ (firstWorker).terminated).toBe(true);
+    expect(client.worker).not.toBe(firstWorker);
+    expect(client.loadedModelId).toBe('example/model-b');
+    expect(MockWorker.instances).toHaveLength(2);
+  });
 });

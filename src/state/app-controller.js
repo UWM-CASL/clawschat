@@ -22,6 +22,7 @@ function toErrorMessage(value) {
  *   findConversationById: (conversationId: string) => any;
  *   hasSelectedConversationWithHistory: () => boolean;
  *   normalizeModelId: (value: string) => string;
+ *   getLoadedModelId?: () => string | null;
  *   getThinkingTagsForModel: (modelId: string) => any;
  *   getSelectedModelId: () => string;
  *   addMessageToConversation: (conversation: any, role: string, text: string, options?: any) => any;
@@ -106,8 +107,15 @@ export function createAppController(dependencies) {
   }
 
   async function loadModelForSelectedConversation() {
+    const selectedModelId = dependencies.normalizeModelId(dependencies.getSelectedModelId());
+    const rawLoadedModelId = dependencies.getLoadedModelId?.();
+    const loadedModelId = rawLoadedModelId
+      ? dependencies.normalizeModelId(rawLoadedModelId)
+      : null;
+    const selectedConversationModelReady =
+      dependencies.state.modelReady && loadedModelId === selectedModelId;
     if (
-      dependencies.state.modelReady ||
+      selectedConversationModelReady ||
       dependencies.state.isLoadingModel ||
       dependencies.state.isGenerating ||
       dependencies.state.isRunningOrchestration

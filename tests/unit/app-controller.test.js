@@ -59,6 +59,7 @@ function createControllerHarness() {
       conversations.find((conversation) => conversation.id === conversationId) || null,
     hasSelectedConversationWithHistory: () => Boolean(getActiveConversation()?.messageNodes.length),
     normalizeModelId: (value) => value,
+    getLoadedModelId: () => engine.loadedModelId,
     getThinkingTagsForModel: () => null,
     getSelectedModelId: () => 'test-model',
     addMessageToConversation,
@@ -176,5 +177,19 @@ describe('app-controller', () => {
     expect(harness.callLog).toContain('renderConversationList');
     expect(harness.callLog).toContain('updateChatTitle');
     expect(harness.state.isRunningOrchestration).toBe(false);
+  });
+
+  test('reloads the selected conversation model when a different model is currently loaded', async () => {
+    const harness = createControllerHarness();
+    harness.state.modelReady = true;
+    harness.engine.loadedModelId = 'other-model';
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    addMessageToConversation(conversation, 'user', 'Hello');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+
+    await harness.controller.loadModelForSelectedConversation();
+
+    expect(harness.engine.initialize).toHaveBeenCalledTimes(1);
   });
 });
