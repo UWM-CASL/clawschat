@@ -1044,12 +1044,13 @@
 
 .composer {
   flex: 0 0 auto;
-  border-top: 2px solid var(--composer-border);
-  background: color-mix(in srgb, var(--surface) 95%, transparent);
-  padding: 0.85rem 1rem 1rem;
+  background: transparent;
+  padding: 0 0 1rem;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: -0.15rem auto 0;
+  position: relative;
+  z-index: 2;
   transition:
     width 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
     padding 280ms cubic-bezier(0.2, 0.85, 0.24, 1),
@@ -1089,6 +1090,12 @@
   display: flex;
   align-items: stretch;
   gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--composer-border) 85%, transparent);
+  border-radius: 1.2rem;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: 0 16px 28px rgba(5, 10, 20, 0.28);
+  backdrop-filter: blur(10px);
 }
 
 .composer-attachment-tray {
@@ -1096,6 +1103,7 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+  padding: 0 1rem;
 }
 
 .composer-attachment-card {
