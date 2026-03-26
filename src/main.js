@@ -2342,18 +2342,26 @@ function updateTranscriptNavigationButtonVisibility() {
     return;
   }
   const hasTranscriptItems = Boolean(chatTranscript?.children.length);
-  jumpToTopButton.classList.toggle('d-none', !appState.modelReady || !hasTranscriptItems || isTranscriptNearTop());
-  jumpToPreviousUserButton.classList.toggle(
-    'd-none',
+  jumpToTopButton.setAttribute(
+    'aria-disabled',
+    !appState.modelReady || !hasTranscriptItems || isTranscriptNearTop() ? 'true' : 'false'
+  );
+  jumpToPreviousUserButton.setAttribute(
+    'aria-disabled',
     !appState.modelReady || !hasTranscriptItems || !hasTranscriptStepTarget('user', -1)
+      ? 'true'
+      : 'false'
   );
-  jumpToNextModelButton.classList.toggle(
-    'd-none',
+  jumpToNextModelButton.setAttribute(
+    'aria-disabled',
     !appState.modelReady || !hasTranscriptItems || !hasTranscriptStepTarget('model', 1)
+      ? 'true'
+      : 'false'
   );
-  const shouldShowJumpToLatest =
-    appState.modelReady && hasTranscriptItems && !isTranscriptNearBottom();
-  jumpToLatestButton.classList.toggle('d-none', !shouldShowJumpToLatest);
+  jumpToLatestButton.setAttribute(
+    'aria-disabled',
+    !appState.modelReady || !hasTranscriptItems || isTranscriptNearBottom() ? 'true' : 'false'
+  );
 }
 
 function renderTranscript(options = {}) {
@@ -4685,12 +4693,18 @@ if (chatMain) {
 
 if (jumpToTopButton instanceof HTMLButtonElement) {
   jumpToTopButton.addEventListener('click', () => {
+    if (jumpToTopButton.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
     focusTranscriptBoundary(chatTranscriptStart, { align: 'start' });
   });
 }
 
 if (jumpToPreviousUserButton instanceof HTMLButtonElement) {
   jumpToPreviousUserButton.addEventListener('click', () => {
+    if (jumpToPreviousUserButton.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
     stepTranscriptNavigation('user', -1);
     updateTranscriptNavigationButtonVisibility();
   });
@@ -4698,6 +4712,9 @@ if (jumpToPreviousUserButton instanceof HTMLButtonElement) {
 
 if (jumpToNextModelButton instanceof HTMLButtonElement) {
   jumpToNextModelButton.addEventListener('click', () => {
+    if (jumpToNextModelButton.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
     stepTranscriptNavigation('model', 1);
     updateTranscriptNavigationButtonVisibility();
   });
@@ -4705,6 +4722,9 @@ if (jumpToNextModelButton instanceof HTMLButtonElement) {
 
 if (jumpToLatestButton instanceof HTMLButtonElement) {
   jumpToLatestButton.addEventListener('click', () => {
+    if (jumpToLatestButton.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
     const restoreComposerFocus = document.activeElement === jumpToLatestButton;
     focusTranscriptBoundary(chatTranscriptEnd, { align: 'end' });
     if (restoreComposerFocus && messageInput instanceof HTMLTextAreaElement) {
