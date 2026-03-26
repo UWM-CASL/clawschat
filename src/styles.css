@@ -217,9 +217,7 @@
 
 .app-frame-header {
   padding: 0.65rem 1rem 0.4rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 45%, transparent);
-  background: color-mix(in srgb, var(--frame-bar-bg) 92%, transparent);
-  backdrop-filter: blur(12px);
+  background: transparent;
 }
 
 .app-window-title {
@@ -236,13 +234,10 @@
 .top-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 0.6rem;
+  gap: 0.4rem;
   align-items: center;
-  padding: 0.9rem calc(1rem + 3.25rem) 0.9rem 1rem;
-  border-bottom: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 24px rgba(18, 28, 48, 0.08);
+  padding: 0.2rem 1rem 0.85rem;
+  background: transparent;
 }
 
 .top-bar.animate-in {
@@ -297,7 +292,8 @@
 .top-bar-actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-self: end;
+  gap: 0.35rem;
 }
 
 .icon-button {
@@ -1333,7 +1329,7 @@
 
   .top-bar {
     grid-template-columns: minmax(0, 1fr) auto;
-    padding-right: calc(0.75rem + 3.1rem);
+    padding: 0.2rem 0.75rem 0.75rem;
   }
 
   .status-alert {

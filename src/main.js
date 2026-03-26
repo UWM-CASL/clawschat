@@ -2600,14 +2600,19 @@ function updateChatTitle() {
     return;
   }
   const activeConversation = getActiveConversation();
+  let nextTitle = '';
   if (appState.modelReady && !activeConversation && appState.conversations.length) {
-    chatTitle.textContent = 'Select a Conversation';
+    nextTitle = 'Select a Conversation';
+    chatTitle.textContent = nextTitle;
+    chatTitle.classList.toggle('d-none', !nextTitle);
     updateComposerVisibility();
     updateChatTitleEditorVisibility();
     return;
   }
   if (activeConversation?.hasGeneratedName) {
-    chatTitle.textContent = activeConversation.name;
+    nextTitle = activeConversation.name;
+    chatTitle.textContent = nextTitle;
+    chatTitle.classList.toggle('d-none', !nextTitle);
     if (!appState.isChatTitleEditing && chatTitleInput) {
       chatTitleInput.value = activeConversation.name;
     }
@@ -2615,7 +2620,9 @@ function updateChatTitle() {
     updateChatTitleEditorVisibility();
     return;
   }
-  chatTitle.textContent = appState.modelReady ? 'Start Your Chat Now' : 'ChatClaws';
+  nextTitle = appState.modelReady ? 'Start Your Chat Now' : '';
+  chatTitle.textContent = nextTitle;
+  chatTitle.classList.toggle('d-none', !nextTitle);
   if (!appState.isChatTitleEditing && chatTitleInput && activeConversation) {
     chatTitleInput.value = activeConversation.name;
   }
