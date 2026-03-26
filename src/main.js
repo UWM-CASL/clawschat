@@ -1807,7 +1807,10 @@ function applyStoredConversationState(rawState) {
       const name = isLegacyUntitledConversationName(normalizedStoredName)
         ? UNTITLED_CONVERSATION_PREFIX
         : normalizedStoredName || UNTITLED_CONVERSATION_PREFIX;
-      const modelId = normalizeModelId(rawConversation.modelId || DEFAULT_MODEL);
+      const modelId =
+        typeof rawConversation.modelId === 'string' && rawConversation.modelId.trim()
+          ? normalizeModelId(rawConversation.modelId)
+          : '';
       const systemPrompt = normalizeSystemPrompt(rawConversation.systemPrompt);
       const conversationSystemPrompt = normalizeSystemPrompt(
         rawConversation.conversationSystemPrompt
@@ -1997,8 +2000,9 @@ function createConversation(name) {
 }
 
 function getConversationModelId(conversation) {
+  const loadedModelId = getLoadedModelId();
   return getAvailableModelId(
-    conversation?.modelId || modelSelect?.value || DEFAULT_MODEL,
+    conversation?.modelId || loadedModelId || modelSelect?.value || DEFAULT_MODEL,
     normalizeBackendPreference(backendSelect?.value || 'auto')
   );
 }
@@ -2021,7 +2025,13 @@ function syncConversationModelSelection(
   { announceFallback = false, useDefaults = true } = {}
 ) {
   const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'auto');
-  const requestedModelId = normalizeModelId(conversation?.modelId || modelSelect?.value || DEFAULT_MODEL);
+  const hasStoredModelId = Boolean(
+    typeof conversation?.modelId === 'string' && conversation.modelId.trim()
+  );
+  const loadedModelId = getLoadedModelId();
+  const requestedModelId = hasStoredModelId
+    ? normalizeModelId(conversation.modelId)
+    : normalizeModelId(loadedModelId || modelSelect?.value || DEFAULT_MODEL);
 
   populateModelSelect();
 
@@ -2047,7 +2057,10 @@ function syncConversationModelSelection(
     }
   }
 
-  return selectedModelId;
+  return {
+    selectedModelId,
+    hadStoredModelId: hasStoredModelId,
+  };
 }
 
 function getLoadedModelId() {
@@ -2057,8 +2070,14 @@ function getLoadedModelId() {
   return null;
 }
 
-function activeConversationNeedsModelLoad(conversation = getActiveConversation()) {
+function activeConversationNeedsModelLoad(
+  conversation = getActiveConversation(),
+  { hadStoredModelId = false } = {}
+) {
   if (!conversation || !hasConversationHistory(conversation)) {
+    return false;
+  }
+  if (!hadStoredModelId) {
     return false;
   }
   const loadedModelId = getLoadedModelId();
@@ -2951,8 +2970,8 @@ function setActiveConversationById(conversationId) {
   }
   let shouldLoadConversationModel = false;
   if (activeConversation) {
-    syncConversationModelSelection(activeConversation, { useDefaults: true });
-    shouldLoadConversationModel = activeConversationNeedsModelLoad(activeConversation);
+    const selection = syncConversationModelSelection(activeConversation, { useDefaults: true });
+    shouldLoadConversationModel = activeConversationNeedsModelLoad(activeConversation, selection);
   }
   clearUserMessageEditSession();
   clearPendingComposerAttachments();
@@ -4431,8 +4450,10 @@ if (conversationList) {
         appState.isChatTitleEditing = false;
         const nextActiveConversation = getActiveConversation();
         if (nextActiveConversation) {
-          syncConversationModelSelection(nextActiveConversation, { useDefaults: true });
-          if (activeConversationNeedsModelLoad(nextActiveConversation)) {
+          const selection = syncConversationModelSelection(nextActiveConversation, {
+            useDefaults: true,
+          });
+          if (activeConversationNeedsModelLoad(nextActiveConversation, selection)) {
             void appController.loadModelForSelectedConversation();
           }
         }
@@ -4686,7 +4707,7 @@ if (chatForm && messageInput && chatTranscript) {
       queueConversationStateSave();
     }
 
-    const activeConversationModelId = syncConversationModelSelection(activeConversation, {
+    const { selectedModelId: activeConversationModelId } = syncConversationModelSelection(activeConversation, {
       useDefaults: false,
     });
 

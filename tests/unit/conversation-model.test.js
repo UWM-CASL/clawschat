@@ -262,4 +262,13 @@ describe('conversation-model', () => {
     expect(markdown).toContain('> Use a soccer example.');
     expect(markdown).not.toContain('bowling');
   });
+
+  test('preserves conversations without a stored model id', () => {
+    const conversation = createConversation({
+      id: 'conversation-1',
+      modelId: '',
+    });
+
+    expect(conversation.modelId).toBe('');
+  });
 });
