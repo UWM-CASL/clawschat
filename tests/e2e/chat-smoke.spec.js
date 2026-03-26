@@ -27,12 +27,14 @@ test('chat flow: start, send message, load model, stream response', async ({ pag
 
   await expect(page.locator('#chatTranscriptWrap')).toBeVisible();
   await expect(page.locator('.message-row.user-message')).toHaveCount(1);
-  await expect(page.locator('.message-row.model-message .response-content')).toContainText('Mock streamed response.');
+  await expect(page.locator('.message-row.model-message .response-content')).toContainText(
+    'Mock streamed response.'
+  );
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
 
   const promptShape = await page.evaluate(() => {
-    const payloads = Array.isArray((/** @type {any} */ (window)).__mockWorkerGeneratePayloads)
-      ? (/** @type {any} */ (window)).__mockWorkerGeneratePayloads
+    const payloads = Array.isArray(/** @type {any} */ (window).__mockWorkerGeneratePayloads)
+      ? /** @type {any} */ (window).__mockWorkerGeneratePayloads
       : [];
     const firstPrompt = payloads[0];
     return {
@@ -62,11 +64,12 @@ test('keyboard shortcuts open shortcut help, send, and open settings', async ({ 
   await page.keyboard.up('Alt');
   await expect(page).toHaveURL(/#\/chat$/);
   await ensureComposerVisible(page);
-  await expect(page.getByText('Press Ctrl+/ to view available actions.')).toBeVisible();
 
   await page.locator('#messageInput').fill('Shortcut send');
-  await page.keyboard.press('Control+Enter');
-  await expect(page.locator('.message-row.model-message .response-content')).toContainText('Mock streamed response.');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.message-row.model-message .response-content')).toContainText(
+    'Mock streamed response.'
+  );
 
   await page.evaluate(() => {
     document.dispatchEvent(
@@ -74,10 +77,30 @@ test('keyboard shortcuts open shortcut help, send, and open settings', async ({ 
         key: 's',
         altKey: true,
         bubbles: true,
-      }),
+      })
     );
   });
   await expect(page).toHaveURL(/#\/settings$/);
+});
+
+test('composer uses Enter to send and Shift+Enter for a new line', async ({ page }) => {
+  await page.getByRole('button', { name: 'Start a conversation' }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await ensureComposerVisible(page);
+
+  const messageInput = page.locator('#messageInput');
+  await messageInput.fill('Line one');
+  await messageInput.press('Shift+Enter');
+  await messageInput.type('Line two');
+  await expect(messageInput).toHaveValue('Line one\nLine two');
+
+  await messageInput.press('Enter');
+  await expect(page.locator('.message-row.user-message')).toHaveCount(1);
+  await expect(page.locator('.message-row.user-message')).toContainText('Line one');
+  await expect(page.locator('.message-row.user-message')).toContainText('Line two');
+  await expect(page.locator('.message-row.model-message .response-content')).toContainText(
+    'Mock streamed response.'
+  );
 });
 
 test('stop generating cancels in-flight stream and resets UI', async ({ page }) => {

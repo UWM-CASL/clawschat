@@ -16,7 +16,7 @@ Student-facing browser chat UI with local model inference.
   - `#/settings` when Settings is open
   - Browser back/forward navigation follows those screen transitions.
 - Header actions include a `Help` button that opens `help.html` in a new tab with feature and basic usage guidance.
-- Header actions include a `Keyboard shortcuts` button and the composer shows a visible shortcut hint (`Ctrl+/`) so users can discover available keyboard actions.
+- Header actions include a `Keyboard shortcuts` button (`Ctrl+/`) so users can discover available keyboard actions.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
 - The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
 - `Settings -> Conversation` includes:
@@ -90,6 +90,7 @@ Student-facing browser chat UI with local model inference.
 - Each user message and model response includes a copy action; model response copy excludes thought text.
 - The Thinking section includes a dedicated copy action to copy thoughts only.
 - Keyboard shortcuts cover the primary workspace actions (start/new conversation, help, settings, send/stop, load model, downloads, transcript jumps) plus focused transcript actions (edit, branch, regenerate, fix, copy, and branch/response variant navigation).
+- Composer keyboard behavior uses `Enter` to send and `Shift+Enter` to insert a new line.
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.
 - Each model response includes a `Fix` button (wrench icon). `Fix` now runs a multi-step orchestration from `src/config/orchestrations/fix-response.json` (critique -> revise -> validate) before streaming a corrected variant at that turn.
 - Each user message now supports branch-aware editing controls:

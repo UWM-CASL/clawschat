@@ -242,7 +242,6 @@ const downloadConversationMarkdownBtn = document.getElementById('downloadConvers
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
 const openKeyboardShortcutsButton = document.getElementById('openKeyboardShortcutsButton');
-const composerShortcutsHintButton = document.getElementById('composerShortcutsHintButton');
 const keyboardShortcutsModal = document.getElementById('keyboardShortcutsModal');
 const conversationSystemPromptModal = document.getElementById('conversationSystemPromptModal');
 const conversationSystemPromptInput = document.getElementById('conversationSystemPromptInput');
@@ -2922,8 +2921,8 @@ function updateSendButtonMode() {
   sendButton.classList.remove('btn-outline-secondary');
   sendButton.classList.add('btn-primary');
   sendButton.setAttribute('aria-label', 'Send message');
-  sendButton.setAttribute('aria-keyshortcuts', 'Control+Enter');
-  sendButton.setAttribute('data-bs-title', 'Send message (Ctrl+Enter)');
+  sendButton.setAttribute('aria-keyshortcuts', 'Enter');
+  sendButton.setAttribute('data-bs-title', 'Send message (Enter)');
   setIconButtonContent(sendButton, 'bi-send', 'Send message');
   initializeTooltips(document);
 }
@@ -3958,12 +3957,6 @@ if (openKeyboardShortcutsButton instanceof HTMLButtonElement) {
   });
 }
 
-if (composerShortcutsHintButton instanceof HTMLButtonElement) {
-  composerShortcutsHintButton.addEventListener('click', (event) => {
-    openKeyboardShortcuts(event.currentTarget);
-  });
-}
-
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && keyboardShortcutsModal?.classList.contains('show')) {
     event.preventDefault();
@@ -4231,6 +4224,32 @@ if (sendButton) {
     }
     event.preventDefault();
     await appController.stopGeneration();
+  });
+}
+
+if (messageInput instanceof HTMLTextAreaElement) {
+  messageInput.addEventListener('keydown', (event) => {
+    if (
+      event.key !== 'Enter' ||
+      event.shiftKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.isComposing
+    ) {
+      return;
+    }
+    if (messageInput.disabled || sendButton?.hasAttribute('disabled')) {
+      return;
+    }
+    event.preventDefault();
+    if (sendButton instanceof HTMLButtonElement) {
+      sendButton.click();
+      return;
+    }
+    if (chatForm && typeof chatForm.requestSubmit === 'function') {
+      chatForm.requestSubmit();
+    }
   });
 }
 

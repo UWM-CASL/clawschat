@@ -368,19 +368,6 @@
               accept="image/*"
               multiple
             />
-            <div class="composer-shortcuts-hint">
-              <button
-                id="composerShortcutsHintButton"
-                type="button"
-                class="btn btn-link btn-sm composer-shortcuts-link"
-                aria-describedby="composerShortcutsHintText"
-              >
-                Keyboard shortcuts
-              </button>
-              <span id="composerShortcutsHintText" class="small text-body-secondary">
-                Press <kbd>Ctrl</kbd>+<kbd>/</kbd> to view available actions.
-              </span>
-            </div>
             <section
               id="composerAttachmentTray"
               class="composer-attachment-tray d-none"
@@ -408,9 +395,9 @@
                 type="submit"
                 class="btn btn-primary"
                 aria-label="Send message"
-                aria-keyshortcuts="Control+Enter"
+                aria-keyshortcuts="Enter"
                 data-bs-toggle="tooltip"
-                data-bs-title="Send message (Ctrl+Enter)"
+                data-bs-title="Send message (Enter)"
               >
                 <i class="bi bi-send" aria-hidden="true"></i>
                 <span class="visually-hidden">Send message</span>
@@ -843,7 +830,7 @@
                   </tr>
                   <tr>
                     <td>Send message</td>
-                    <td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td>
+                    <td><kbd>Enter</kbd></td>
                   </tr>
                   <tr>
                     <td>Stop generating</td>
