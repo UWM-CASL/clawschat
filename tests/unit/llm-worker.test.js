@@ -3,10 +3,10 @@ import { beforeAll, describe, expect, test } from 'vitest';
 let resolvePrompt;
 
 beforeAll(async () => {
-  globalThis.self = {
+  globalThis.self = /** @type {any} */ ({
     postMessage: () => {},
     onmessage: null,
-  };
+  });
   ({ resolvePrompt } = await import('../../src/workers/llm.worker.js'));
 });
 

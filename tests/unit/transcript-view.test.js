@@ -169,7 +169,7 @@ describe('transcript-view', () => {
       },
     ];
     harness.conversation.messageNodes[1].childIds = ['tool-1'];
-    const toolMessage = {
+    const toolMessage = /** @type {any} */ ({
       id: 'tool-1',
       role: 'tool',
       speaker: 'Tool',
@@ -177,7 +177,7 @@ describe('transcript-view', () => {
       toolName: 'get_weather',
       toolResult: '{"temperature":72,"summary":"72 F and sunny."}',
       parentId: 'model-1',
-    };
+    });
     harness.conversation.messageNodes.push(toolMessage);
     harness.conversation.activeLeafMessageId = toolMessage.id;
 
