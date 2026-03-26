@@ -11,7 +11,14 @@ export const TOP_P_STEP = 0.05;
 export const MIN_TOP_P = 0;
 export const MAX_TOP_P = 1;
 export const DEFAULT_TOP_P = 0.9;
-export const MODEL_FEATURE_FLAGS = Object.freeze(['streaming', 'thinking', 'imageInput', 'audioInput', 'videoInput']);
+export const MODEL_FEATURE_FLAGS = Object.freeze([
+  'streaming',
+  'thinking',
+  'toolCalling',
+  'imageInput',
+  'audioInput',
+  'videoInput',
+]);
 export const DEFAULT_GENERATION_LIMITS = Object.freeze({
   defaultMaxOutputTokens: 1024,
   maxOutputTokens: 32768,

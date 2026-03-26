@@ -126,6 +126,15 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Qwen3-0.6B-ONNX')?.features).toMatchObject({
       streaming: true,
       thinking: true,
+      toolCalling: true,
+      imageInput: false,
+      audioInput: false,
+      videoInput: false,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.features).toMatchObject({
+      streaming: true,
+      thinking: false,
+      toolCalling: true,
       imageInput: false,
       audioInput: false,
       videoInput: false,
@@ -133,9 +142,18 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.features).toMatchObject({
       streaming: true,
       thinking: false,
+      toolCalling: true,
       imageInput: true,
       audioInput: true,
       videoInput: true,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.features).toMatchObject({
+      streaming: true,
+      thinking: true,
+      toolCalling: true,
+      imageInput: false,
+      audioInput: false,
+      videoInput: false,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.runtime).toMatchObject({
       requiresWebGpu: true,
