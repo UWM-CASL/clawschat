@@ -243,61 +243,44 @@
               aria-label="Chat transcript"
             >
               <div id="chatTranscriptStart" class="transcript-boundary" tabindex="-1"></div>
-              <nav class="transcript-helper-links mb-3" aria-label="Transcript navigation">
-                <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="start">
-                  Jump to transcript start
+              <div class="transcript-step-nav" aria-label="Transcript navigation">
+                <button
+                  id="jumpToPreviousUserButton"
+                  type="button"
+                  class="btn btn-primary transcript-step-btn d-none"
+                  aria-keyshortcuts="Alt+K"
+                >
+                  <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
+                  <span class="visually-hidden">Jump to previous user prompt</span>
                 </button>
-                <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="end">
-                  Jump to transcript end
+                <button
+                  id="jumpToNextModelButton"
+                  type="button"
+                  class="btn btn-primary transcript-step-btn d-none"
+                >
+                  <i class="bi bi-arrow-down-circle" aria-hidden="true"></i>
+                  <span class="visually-hidden">Jump to next model response</span>
                 </button>
-                <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="input">
-                  Jump to message input
+                <button
+                  id="jumpToLatestButton"
+                  type="button"
+                  class="btn btn-primary transcript-step-btn d-none"
+                  aria-keyshortcuts="Alt+J"
+                >
+                  <i class="bi bi-chevron-double-down" aria-hidden="true"></i>
+                  <span class="visually-hidden">Jump to latest response</span>
                 </button>
-              </nav>
-              <div
-                class="alert alert-info transcript-note"
-                role="note"
-                aria-labelledby="transcriptNoteHeading"
-              >
-                <h2 id="transcriptNoteHeading" class="alert-heading h6 mb-1">
-                  Transcript navigation
-                </h2>
-                <p class="mb-0">
-                  Each chat exchange has a heading that assistive technology can index. Use the
-                  transcript links to jump to the start or end of the conversation.
-                </p>
               </div>
               <button
-                id="jumpToLastPromptButton"
+                id="jumpToTopButton"
                 type="button"
-                class="btn btn-primary jump-to-last-prompt-btn d-none"
-                aria-keyshortcuts="Alt+K"
+                class="btn btn-primary jump-to-top-btn d-none"
               >
-                <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
-                <span>Jump to last prompt</span>
+                <i class="bi bi-chevron-double-up" aria-hidden="true"></i>
+                <span class="visually-hidden">Jump to transcript top</span>
               </button>
               <ol id="chatTranscript" class="chat-transcript"></ol>
-              <nav class="transcript-helper-links mt-3" aria-label="Transcript end navigation">
-                <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="start">
-                  Jump to transcript start
-                </button>
-                <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="end">
-                  Jump to transcript end
-                </button>
-                <button type="button" class="btn btn-link btn-sm p-0" data-transcript-nav="input">
-                  Jump to message input
-                </button>
-              </nav>
               <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
-              <button
-                id="jumpToLatestButton"
-                type="button"
-                class="btn btn-primary jump-to-latest-btn d-none"
-                aria-keyshortcuts="Alt+J"
-              >
-                <i class="bi bi-arrow-down-circle" aria-hidden="true"></i>
-                <span>Jump to latest</span>
-              </button>
             </section>
           </main>
 
@@ -800,7 +783,7 @@
                     <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td>
                   </tr>
                   <tr>
-                    <td>Jump to last prompt</td>
+                    <td>Jump to previous user prompt</td>
                     <td><kbd>Alt</kbd>+<kbd>K</kbd></td>
                   </tr>
                   <tr>

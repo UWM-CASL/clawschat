@@ -216,7 +216,9 @@ const chatTranscript = document.getElementById('chatTranscript');
 const chatTranscriptWrap = document.getElementById('chatTranscriptWrap');
 const chatTranscriptStart = document.getElementById('chatTranscriptStart');
 const chatTranscriptEnd = document.getElementById('chatTranscriptEnd');
-const jumpToLastPromptButton = document.getElementById('jumpToLastPromptButton');
+const jumpToTopButton = document.getElementById('jumpToTopButton');
+const jumpToPreviousUserButton = document.getElementById('jumpToPreviousUserButton');
+const jumpToNextModelButton = document.getElementById('jumpToNextModelButton');
 const jumpToLatestButton = document.getElementById('jumpToLatestButton');
 const chatMain = document.querySelector('.chat-main');
 const homePanel = document.getElementById('homePanel');
@@ -705,7 +707,7 @@ function handleGlobalShortcut(event) {
 
   if (normalizedKey === SHORTCUT_KEY.jumpPrompt) {
     event.preventDefault();
-    return clickShortcutTarget(jumpToLastPromptButton);
+    return clickShortcutTarget(jumpToPreviousUserButton);
   }
 
   if (event.shiftKey && normalizedKey === SHORTCUT_KEY.jumpLatest) {
@@ -2195,30 +2197,73 @@ function isTranscriptNearBottom() {
   return distanceToBottom <= TRANSCRIPT_BOTTOM_THRESHOLD_PX;
 }
 
-function getLastPromptMessageId(conversation = getActiveConversation()) {
-  if (!conversation) {
-    return null;
+function isTranscriptNearTop() {
+  if (!chatMain) {
+    return true;
   }
-  const pathMessages = getConversationPathMessages(conversation);
-  for (let index = pathMessages.length - 1; index >= 0; index -= 1) {
-    if (pathMessages[index]?.role === 'user') {
-      return pathMessages[index].id;
-    }
-  }
-  return null;
+  return chatMain.scrollTop <= TRANSCRIPT_BOTTOM_THRESHOLD_PX;
 }
 
-function isMessageInView(messageId) {
-  if (!chatMain || !messageId) {
+function getTranscriptMessageRows(role = null) {
+  if (!chatTranscript) {
+    return [];
+  }
+  return Array.from(chatTranscript.querySelectorAll('.message-row')).filter((item) => {
+    if (!(item instanceof HTMLElement)) {
+      return false;
+    }
+    if (role === 'user') {
+      return item.classList.contains('user-message');
+    }
+    if (role === 'model') {
+      return item.classList.contains('model-message');
+    }
+    return true;
+  });
+}
+
+function findTranscriptStepTarget(role, direction) {
+  if (!(chatMain instanceof HTMLElement)) {
+    return null;
+  }
+  const rows = getTranscriptMessageRows(role);
+  if (!rows.length) {
+    return null;
+  }
+  const containerRect = chatMain.getBoundingClientRect();
+  const referenceLine = containerRect.top + Math.max(getElementClearanceFromTop(topBar, containerRect), 16) + 24;
+  if (direction < 0) {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const rect = rows[index].getBoundingClientRect();
+      if (rect.top < referenceLine - 4) {
+        return rows[index];
+      }
+    }
+    return rows[0];
+  }
+  for (let index = 0; index < rows.length; index += 1) {
+    const rect = rows[index].getBoundingClientRect();
+    if (rect.top > referenceLine + 4) {
+      return rows[index];
+    }
+  }
+  return rows[rows.length - 1];
+}
+
+function hasTranscriptStepTarget(role, direction) {
+  if (!(chatMain instanceof HTMLElement)) {
     return false;
   }
-  const messageItem = chatTranscript?.querySelector(`[data-message-id="${messageId}"]`);
-  if (!(messageItem instanceof HTMLElement)) {
+  const rows = getTranscriptMessageRows(role);
+  if (!rows.length) {
     return false;
   }
   const containerRect = chatMain.getBoundingClientRect();
-  const messageRect = messageItem.getBoundingClientRect();
-  return messageRect.bottom >= containerRect.top && messageRect.top <= containerRect.bottom;
+  const referenceLine = containerRect.top + Math.max(getElementClearanceFromTop(topBar, containerRect), 16) + 24;
+  if (direction < 0) {
+    return rows.some((row) => row.getBoundingClientRect().top < referenceLine - 4);
+  }
+  return rows.some((row) => row.getBoundingClientRect().top > referenceLine + 4);
 }
 
 function getElementClearanceFromTop(element, containerRect) {
@@ -2246,7 +2291,7 @@ function scrollElementIntoAccessibleView(element, { align = 'start' } = {}) {
   const topClearance =
     Math.max(
       getElementClearanceFromTop(topBar, containerRect),
-      getElementClearanceFromTop(jumpToLastPromptButton, containerRect)
+      getElementClearanceFromTop(jumpToTopButton, containerRect)
     ) + 16;
   const bottomClearance =
     Math.max(
@@ -2279,40 +2324,36 @@ function focusTranscriptBoundary(boundary, { align = 'start' } = {}) {
   scrollElementIntoAccessibleView(boundary, { align });
 }
 
-function handleTranscriptHelperNavigation(action) {
-  if (action === 'start') {
-    focusTranscriptBoundary(chatTranscriptStart, { align: 'start' });
+function stepTranscriptNavigation(role, direction) {
+  const target = findTranscriptStepTarget(role, direction);
+  if (!(target instanceof HTMLElement)) {
     return;
   }
-  if (action === 'end') {
-    focusTranscriptBoundary(chatTranscriptEnd, { align: 'end' });
-    return;
-  }
-  if (action === 'input' && messageInput instanceof HTMLTextAreaElement) {
-    messageInput.focus({ preventScroll: true });
-    scrollElementIntoAccessibleView(messageInput, { align: 'end' });
-  }
+  scrollElementIntoAccessibleView(target, { align: 'start' });
 }
 
 function updateTranscriptNavigationButtonVisibility() {
   if (
-    !(jumpToLatestButton instanceof HTMLButtonElement) ||
-    !(jumpToLastPromptButton instanceof HTMLButtonElement)
+    !(jumpToTopButton instanceof HTMLButtonElement) ||
+    !(jumpToPreviousUserButton instanceof HTMLButtonElement) ||
+    !(jumpToNextModelButton instanceof HTMLButtonElement) ||
+    !(jumpToLatestButton instanceof HTMLButtonElement)
   ) {
     return;
   }
   const hasTranscriptItems = Boolean(chatTranscript?.children.length);
+  jumpToTopButton.classList.toggle('d-none', !appState.modelReady || !hasTranscriptItems || isTranscriptNearTop());
+  jumpToPreviousUserButton.classList.toggle(
+    'd-none',
+    !appState.modelReady || !hasTranscriptItems || !hasTranscriptStepTarget('user', -1)
+  );
+  jumpToNextModelButton.classList.toggle(
+    'd-none',
+    !appState.modelReady || !hasTranscriptItems || !hasTranscriptStepTarget('model', 1)
+  );
   const shouldShowJumpToLatest =
     appState.modelReady && hasTranscriptItems && !isTranscriptNearBottom();
   jumpToLatestButton.classList.toggle('d-none', !shouldShowJumpToLatest);
-
-  const lastPromptMessageId = getLastPromptMessageId();
-  const shouldShowJumpToPrompt =
-    appState.modelReady &&
-    hasTranscriptItems &&
-    Boolean(lastPromptMessageId) &&
-    !isMessageInView(lastPromptMessageId);
-  jumpToLastPromptButton.classList.toggle('d-none', !shouldShowJumpToPrompt);
 }
 
 function renderTranscript(options = {}) {
@@ -4641,23 +4682,28 @@ if (chatTranscript) {
   });
 }
 
-if (chatTranscriptWrap instanceof HTMLElement) {
-  chatTranscriptWrap.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-    const helperButton = target.closest('[data-transcript-nav]');
-    if (!(helperButton instanceof HTMLButtonElement)) {
-      return;
-    }
-    event.preventDefault();
-    handleTranscriptHelperNavigation(helperButton.dataset.transcriptNav || '');
+if (chatMain) {
+  chatMain.addEventListener('scroll', () => {
+    updateTranscriptNavigationButtonVisibility();
   });
 }
 
-if (chatMain) {
-  chatMain.addEventListener('scroll', () => {
+if (jumpToTopButton instanceof HTMLButtonElement) {
+  jumpToTopButton.addEventListener('click', () => {
+    focusTranscriptBoundary(chatTranscriptStart, { align: 'start' });
+  });
+}
+
+if (jumpToPreviousUserButton instanceof HTMLButtonElement) {
+  jumpToPreviousUserButton.addEventListener('click', () => {
+    stepTranscriptNavigation('user', -1);
+    updateTranscriptNavigationButtonVisibility();
+  });
+}
+
+if (jumpToNextModelButton instanceof HTMLButtonElement) {
+  jumpToNextModelButton.addEventListener('click', () => {
+    stepTranscriptNavigation('model', 1);
     updateTranscriptNavigationButtonVisibility();
   });
 }
@@ -4666,25 +4712,6 @@ if (jumpToLatestButton instanceof HTMLButtonElement) {
   jumpToLatestButton.addEventListener('click', () => {
     const restoreComposerFocus = document.activeElement === jumpToLatestButton;
     focusTranscriptBoundary(chatTranscriptEnd, { align: 'end' });
-    if (restoreComposerFocus && messageInput instanceof HTMLTextAreaElement) {
-      messageInput.focus();
-    }
-  });
-}
-
-if (jumpToLastPromptButton instanceof HTMLButtonElement) {
-  jumpToLastPromptButton.addEventListener('click', () => {
-    const lastPromptMessageId = getLastPromptMessageId();
-    if (!lastPromptMessageId) {
-      return;
-    }
-    const messageItem = chatTranscript?.querySelector(`[data-message-id="${lastPromptMessageId}"]`);
-    if (!(messageItem instanceof HTMLElement)) {
-      return;
-    }
-    const restoreComposerFocus = document.activeElement === jumpToLastPromptButton;
-    scrollElementIntoAccessibleView(messageItem, { align: 'start' });
-    updateTranscriptNavigationButtonVisibility();
     if (restoreComposerFocus && messageInput instanceof HTMLTextAreaElement) {
       messageInput.focus();
     }
