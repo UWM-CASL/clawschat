@@ -326,7 +326,12 @@
 .top-bar-start {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
   min-width: 0;
+}
+
+.top-bar-new-conversation {
+  flex: 0 0 auto;
 }
 
 .top-bar.top-bar-actions-only {
