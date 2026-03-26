@@ -129,7 +129,9 @@ export function createTranscriptView(dependencies) {
     const activeConversation = getActiveConversation();
     const cardHeading = getConversationCardHeading(activeConversation, message);
     const item = documentRef.createElement('li');
-    item.className = `message-row ${message.role === 'user' ? 'user-message' : 'model-message'}`;
+    item.className = `message-row ${
+      message.role === 'user' ? 'user-message' : message.role === 'tool' ? 'tool-message' : 'model-message'
+    }`;
     item.dataset.messageId = message.id;
 
     if (message.role === 'model') {
@@ -276,7 +278,7 @@ export function createTranscriptView(dependencies) {
       }
       applyVariantCardSignals(item, variantState);
       applyFixCardSignals(item, message);
-    } else {
+    } else if (message.role === 'user') {
       const variantState = getUserVariantState(activeConversation, message);
       const variantLabel = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
       const isEditing = getActiveUserEditMessageId() === message.id;
@@ -436,6 +438,22 @@ export function createTranscriptView(dependencies) {
           variantNext,
         };
         updateUserMessageElement(message, item);
+      }
+    } else {
+      item.innerHTML = `
+        <h3 class="visually-hidden">${cardHeading}</h3>
+        <p class="message-speaker">${message.speaker}</p>
+        <div class="message-bubble">
+          <section class="response-region">
+            <h3 class="visually-hidden">Tool result</h3>
+            <p class="mb-2"><strong>Tool:</strong> ${message.toolName || 'Unknown tool'}</p>
+            <div class="response-content"></div>
+          </section>
+        </div>
+      `;
+      const responseText = item.querySelector('.response-content');
+      if (responseText) {
+        responseText.textContent = message.toolResult || message.text || '';
       }
     }
     container.appendChild(item);

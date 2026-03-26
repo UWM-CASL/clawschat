@@ -61,6 +61,7 @@ function createControllerHarness() {
     normalizeModelId: (value) => value,
     getLoadedModelId: () => engine.loadedModelId,
     getThinkingTagsForModel: () => null,
+    detectToolCalls: vi.fn(() => []),
     getSelectedModelId: () => 'test-model',
     addMessageToConversation,
     buildPromptForConversationLeaf,
@@ -191,5 +192,40 @@ describe('app-controller', () => {
     await harness.controller.loadModelForSelectedConversation();
 
     expect(harness.engine.initialize).toHaveBeenCalledTimes(1);
+  });
+
+  test('captures emitted tool calls on completed model messages', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Weather?');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.detectToolCalls.mockReturnValue([
+      {
+        name: 'get_weather',
+        arguments: { location: 'Milwaukee, WI' },
+        rawText: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+        format: 'json',
+      },
+    ]);
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onComplete('{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}');
+    });
+
+    harness.controller.startModelGeneration(conversation, buildPromptForConversationLeaf(conversation), {
+      parentMessageId: userMessage.id,
+    });
+
+    const modelMessage = conversation.messageNodes.find((message) => message.role === 'model');
+    expect(modelMessage?.toolCalls).toEqual([
+      {
+        name: 'get_weather',
+        arguments: { location: 'Milwaukee, WI' },
+        rawText: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+        format: 'json',
+      },
+    ]);
   });
 });

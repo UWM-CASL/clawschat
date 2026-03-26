@@ -156,4 +156,64 @@ describe('transcript-view', () => {
     expect(userItem.querySelector('.save-user-message-btn')?.classList.contains('d-none')).toBe(false);
     expect(userItem.querySelector('.edit-user-message-btn')?.classList.contains('d-none')).toBe(true);
   });
+
+  test('renders tool result messages', () => {
+    const harness = createViewHarness();
+    const toolMessage = {
+      id: 'tool-1',
+      role: 'tool',
+      speaker: 'Tool',
+      text: '72 F and sunny.',
+      toolName: 'get_weather',
+      toolResult: '72 F and sunny.',
+    };
+    harness.conversation.messageNodes.push(toolMessage);
+    harness.conversation.activeLeafMessageId = toolMessage.id;
+
+    const view = createTranscriptView({
+      container: harness.container,
+      getActiveConversation: () => harness.conversation,
+      getConversationPathMessages: (conversation) => conversation.messageNodes,
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user' ? 'User Prompt 1' : message.role === 'tool' ? 'Tool Result 1' : 'Model Response 1',
+      getModelVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      getUserVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      renderModelMarkdown: (content) => `<p>${content}</p>`,
+      scheduleMathTypeset: vi.fn(),
+      getShowThinkingByDefault: () => false,
+      getActiveUserEditMessageId: () => null,
+      getControlsState: () => ({
+        isGenerating: false,
+        isLoadingModel: false,
+        isRunningOrchestration: false,
+        isSwitchingVariant: false,
+      }),
+      getEmptyStateVisible: () => false,
+      initializeTooltips: vi.fn(),
+      disposeTooltips: vi.fn(),
+      applyVariantCardSignals: vi.fn(),
+      applyFixCardSignals: vi.fn(),
+      scrollTranscriptToBottom: vi.fn(),
+      updateTranscriptNavigationButtonVisibility: vi.fn(),
+      cancelUserMessageEdit: vi.fn(),
+      saveUserMessageEdit: vi.fn(),
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    expect(harness.container.querySelector('.tool-message .message-speaker')?.textContent).toContain('Tool');
+    expect(harness.container.querySelector('.tool-message .response-content')?.textContent).toContain('72 F and sunny.');
+  });
 });

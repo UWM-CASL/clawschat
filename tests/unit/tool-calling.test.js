@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { buildToolCallingSystemPrompt } from '../../src/llm/tool-calling.js';
+import { buildToolCallingSystemPrompt, sniffToolCalls } from '../../src/llm/tool-calling.js';
 
 describe('tool-calling prompt builder', () => {
   test('builds the Llama json tool-calling prompt', () => {
@@ -63,5 +63,59 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain('Enabled tools: none.');
+  });
+
+  test('sniffs plain json tool calls', () => {
+    expect(
+      sniffToolCalls('{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}', {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'parameters',
+      })
+    ).toEqual([
+      {
+        name: 'get_weather',
+        arguments: { location: 'Milwaukee, WI' },
+        rawText: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+        format: 'json',
+      },
+    ]);
+  });
+
+  test('sniffs tagged json tool calls', () => {
+    expect(
+      sniffToolCalls('<tool_call>\n{"name":"lookup_fact","arguments":{"topic":"stars"}}\n</tool_call>', {
+        format: 'tagged-json',
+        nameKey: 'name',
+        argumentsKey: 'arguments',
+        openTag: '<tool_call>',
+        closeTag: '</tool_call>',
+      })
+    ).toEqual([
+      {
+        name: 'lookup_fact',
+        arguments: { topic: 'stars' },
+        rawText: '{"name":"lookup_fact","arguments":{"topic":"stars"}}',
+        format: 'tagged-json',
+      },
+    ]);
+  });
+
+  test('sniffs special-token function calls', () => {
+    expect(
+      sniffToolCalls('<|tool_call_start|>[get_weather(location="Milwaukee, WI", unit="fahrenheit")]<|tool_call_end|>', {
+        format: 'special-token-call',
+        callOpen: '<|tool_call_start|>[',
+        callClose: ']<|tool_call_end|>',
+      })
+    ).toEqual([
+      {
+        name: 'get_weather',
+        arguments: { location: 'Milwaukee, WI', unit: 'fahrenheit' },
+        rawText:
+          '<|tool_call_start|>[get_weather(location="Milwaukee, WI", unit="fahrenheit")]<|tool_call_end|>',
+        format: 'special-token-call',
+      },
+    ]);
   });
 });

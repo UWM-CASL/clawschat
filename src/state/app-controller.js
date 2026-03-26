@@ -24,6 +24,7 @@ function toErrorMessage(value) {
  *   normalizeModelId: (value: string) => string;
  *   getLoadedModelId?: () => string | null;
  *   getThinkingTagsForModel: (modelId: string) => any;
+ *   detectToolCalls?: (rawText: string, modelId: string) => any[];
  *   getSelectedModelId: () => string;
  *   addMessageToConversation: (conversation: any, role: string, text: string, options?: any) => any;
  *   buildPromptForConversationLeaf: (conversation: any, leafMessageId?: string) => any;
@@ -166,9 +167,11 @@ export function createAppController(dependencies) {
       modelMessage.thoughts = '';
       modelMessage.hasThinking = false;
       modelMessage.isThinkingComplete = false;
+      modelMessage.toolCalls = [];
     }
 
     modelMessage.isResponseComplete = false;
+    modelMessage.toolCalls = Array.isArray(modelMessage.toolCalls) ? modelMessage.toolCalls : [];
     activeConversation.activeLeafMessageId = modelMessage.id;
     const modelBubbleItem =
       dependencies.findMessageElement(modelMessage.id) || dependencies.addMessageElement(modelMessage);
@@ -211,6 +214,10 @@ export function createAppController(dependencies) {
           modelMessage.isThinkingComplete =
             parsed.isThinkingComplete || (modelMessage.hasThinking && !thinkingTags);
           modelMessage.text = modelMessage.response || '[No output]';
+          modelMessage.toolCalls =
+            typeof dependencies.detectToolCalls === 'function'
+              ? dependencies.detectToolCalls(modelMessage.response || modelMessage.text || '', selectedModelId)
+              : [];
           modelMessage.isResponseComplete = true;
           dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
           dependencies.scrollTranscriptToBottom();
@@ -232,6 +239,11 @@ export function createAppController(dependencies) {
           }
 
           dependencies.appendDebug('Generation completed.');
+          if (Array.isArray(modelMessage.toolCalls) && modelMessage.toolCalls.length) {
+            dependencies.appendDebug(
+              `Detected ${modelMessage.toolCalls.length} emitted tool call${modelMessage.toolCalls.length === 1 ? '' : 's'}.`,
+            );
+          }
           dependencies.queueConversationStateSave();
           dependencies.state.isGenerating = false;
           dependencies.updateActionButtons();

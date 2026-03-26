@@ -7,7 +7,7 @@ import MarkdownIt from 'markdown-it';
 import './styles.css';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
-import { buildToolCallingSystemPrompt, getEnabledToolNames } from './llm/tool-calling.js';
+import { buildToolCallingSystemPrompt, getEnabledToolNames, sniffToolCalls } from './llm/tool-calling.js';
 import renameChatOrchestration from './config/orchestrations/rename-chat.json';
 import fixResponseOrchestration from './config/orchestrations/fix-response.json';
 import {
@@ -1320,6 +1320,14 @@ function getToolCallingSystemPromptSuffix(modelId) {
   return buildToolCallingSystemPrompt(toolContext.config, toolContext.enabledTools);
 }
 
+function detectToolCallsForModel(rawText, modelId) {
+  const toolCallingConfig = getToolCallingConfigForModel(modelId);
+  if (!toolCallingConfig) {
+    return [];
+  }
+  return sniffToolCalls(rawText, toolCallingConfig);
+}
+
 function clearPendingComposerAttachments({ resetInput = true } = {}) {
   appState.pendingComposerAttachments = [];
   if (resetInput && imageAttachmentInput instanceof HTMLInputElement) {
@@ -1561,6 +1569,15 @@ function buildConversationStateSnapshot() {
           hasThinking: Boolean(message.hasThinking),
           isThinkingComplete: Boolean(message.isThinkingComplete),
           isResponseComplete: Boolean(message.isResponseComplete ?? true),
+          toolCalls: Array.isArray(message.toolCalls) ? message.toolCalls : [],
+          toolName: typeof message.toolName === 'string' ? message.toolName : undefined,
+          toolArguments:
+            message.toolArguments && typeof message.toolArguments === 'object'
+              ? message.toolArguments
+              : undefined,
+          toolResult: typeof message.toolResult === 'string' ? message.toolResult : undefined,
+          isToolResultComplete:
+            message.role === 'tool' ? Boolean(message.isToolResultComplete ?? true) : undefined,
           parentId: typeof message.parentId === 'string' ? message.parentId : null,
           childIds: Array.isArray(message.childIds)
             ? message.childIds.filter((childId) => typeof childId === 'string' && childId.trim())
@@ -1709,7 +1726,14 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
   if (!rawMessage || typeof rawMessage !== 'object') {
     return null;
   }
-  const role = rawMessage.role === 'user' ? 'user' : rawMessage.role === 'model' ? 'model' : '';
+  const role =
+    rawMessage.role === 'user'
+      ? 'user'
+      : rawMessage.role === 'model'
+        ? 'model'
+        : rawMessage.role === 'tool'
+          ? 'tool'
+          : '';
   if (!role) {
     return null;
   }
@@ -1732,7 +1756,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
   const message = {
     id,
     role,
-    speaker: role === 'user' ? 'User' : 'Model',
+    speaker: role === 'user' ? 'User' : role === 'tool' ? 'Tool' : 'Model',
     text,
     createdAt: normalizeTimestamp(rawMessage.createdAt ?? rawMessage.timestamp),
     content: {
@@ -1777,6 +1801,39 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
       rawMessage.isResponseComplete ?? rawMessage.inference?.status?.complete ?? true
     );
     message.text = message.response;
+    message.toolCalls = Array.isArray(rawMessage.toolCalls)
+      ? rawMessage.toolCalls
+          .map((toolCall) => {
+            if (!toolCall || typeof toolCall !== 'object') {
+              return null;
+            }
+            const name = typeof toolCall.name === 'string' ? toolCall.name.trim() : '';
+            if (!name) {
+              return null;
+            }
+            return {
+              name,
+              arguments:
+                toolCall.arguments && typeof toolCall.arguments === 'object' && !Array.isArray(toolCall.arguments)
+                  ? toolCall.arguments
+                  : {},
+              rawText: typeof toolCall.rawText === 'string' ? toolCall.rawText : undefined,
+              format: typeof toolCall.format === 'string' ? toolCall.format : undefined,
+            };
+          })
+          .filter(Boolean)
+      : [];
+  } else if (role === 'tool') {
+    message.toolName = typeof rawMessage.toolName === 'string' ? rawMessage.toolName : '';
+    message.toolArguments =
+      rawMessage.toolArguments &&
+      typeof rawMessage.toolArguments === 'object' &&
+      !Array.isArray(rawMessage.toolArguments)
+        ? rawMessage.toolArguments
+        : {};
+    message.toolResult = String(rawMessage.toolResult || text);
+    message.isToolResultComplete = Boolean(rawMessage.isToolResultComplete ?? true);
+    message.text = message.toolResult;
   } else {
     message.text = String(
       rawMessage.inference?.input?.verbatimText ||
@@ -3791,6 +3848,7 @@ const appController = createAppController({
   normalizeModelId,
   getLoadedModelId,
   getThinkingTagsForModel,
+  detectToolCalls: detectToolCallsForModel,
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
   addMessageToConversation,
   buildPromptForConversationLeaf: buildPromptForActiveConversation,

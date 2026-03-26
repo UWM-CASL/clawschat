@@ -240,15 +240,16 @@ describe('conversation-model', () => {
           text: 'Explain momentum.',
         },
         {
-          heading: 'Model response 1',
+          heading: 'Model response 2',
           role: 'model',
           event: 'generated',
           timestamp: expect.any(String),
           timestampMs: expect.any(Number),
           text: 'Momentum is mass times velocity.',
+          toolCalls: [],
         },
         {
-          heading: 'User prompt 2',
+          heading: 'User prompt 3',
           role: 'user',
           event: 'entered',
           timestamp: expect.any(String),
@@ -256,12 +257,13 @@ describe('conversation-model', () => {
           text: 'Use a soccer example.',
         },
         {
-          heading: 'Model response 2',
+          heading: 'Model response 4',
           role: 'model',
           event: 'generated',
           timestamp: expect.any(String),
           timestampMs: expect.any(Number),
           text: 'A fast soccer ball has more momentum than a slow one.',
+          toolCalls: [],
         },
       ],
     });
@@ -274,9 +276,90 @@ describe('conversation-model', () => {
     expect(markdown).toContain('> Use classroom examples.');
     expect(markdown).toContain('Tool Calling Supported: Yes');
     expect(markdown).toContain('Enabled Tools: none');
-    expect(markdown).toContain('## User prompt 2');
+    expect(markdown).toContain('## User prompt 3');
     expect(markdown).toContain('> Use a soccer example.');
     expect(markdown).not.toContain('bowling');
+  });
+
+  test('preserves tool call metadata and tool results in prompts and exports', () => {
+    const conversation = createConversation({
+      id: 'conversation-1',
+      modelId: 'tool-model',
+    });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Check the weather.');
+    const modelMessage = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', {
+        parentId: userMessage.id,
+        toolCalls: [
+          {
+            name: 'get_weather',
+            arguments: { location: 'Milwaukee, WI' },
+            rawText: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+            format: 'json',
+          },
+        ],
+      }),
+      '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+    );
+    const toolMessage = addMessageToConversation(conversation, 'tool', '72 F and sunny.', {
+      parentId: modelMessage.id,
+      toolName: 'get_weather',
+      toolArguments: { location: 'Milwaukee, WI' },
+    });
+    const finalModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', 'It is 72 F and sunny in Milwaukee.', {
+        parentId: toolMessage.id,
+      }),
+      'It is 72 F and sunny in Milwaukee.',
+    );
+
+    conversation.activeLeafMessageId = finalModel.id;
+
+    expect(buildPromptForConversationLeaf(conversation)).toEqual([
+      { role: 'user', content: 'Check the weather.' },
+      {
+        role: 'assistant',
+        content: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+      },
+      { role: 'tool', content: '72 F and sunny.' },
+      { role: 'assistant', content: 'It is 72 F and sunny in Milwaukee.' },
+    ]);
+
+    const payload = buildConversationDownloadPayload(conversation);
+    expect(payload.exchanges).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        text: 'Check the weather.',
+      }),
+      expect.objectContaining({
+        role: 'model',
+        text: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+        toolCalls: [
+          {
+            name: 'get_weather',
+            arguments: { location: 'Milwaukee, WI' },
+            rawText: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
+            format: 'json',
+          },
+        ],
+      }),
+      expect.objectContaining({
+        role: 'tool',
+        text: '72 F and sunny.',
+        toolName: 'get_weather',
+        toolArguments: { location: 'Milwaukee, WI' },
+      }),
+      expect.objectContaining({
+        role: 'model',
+        text: 'It is 72 F and sunny in Milwaukee.',
+        toolCalls: [],
+      }),
+    ]);
+
+    const markdown = buildConversationDownloadMarkdown(payload);
+    expect(markdown).toContain('Tool: get_weather');
+    expect(markdown).toContain('Tool Calls: [{"name":"get_weather"');
+    expect(markdown).toContain('> 72 F and sunny.');
   });
 
   test('preserves conversations without a stored model id', () => {

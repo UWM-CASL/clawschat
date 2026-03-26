@@ -186,7 +186,13 @@ export function setUserMessageText(message, nextText) {
 }
 
 function buildMessagePromptContent(message) {
-  if (!message || message.role !== 'user') {
+  if (!message) {
+    return '';
+  }
+  if (message.role === 'tool') {
+    return String(message.toolResult ?? message.text ?? '').trim();
+  }
+  if (message.role !== 'user') {
     return String(message?.response || message?.text || '').trim();
   }
   const normalizedParts = normalizeMessageContentParts(message.content?.parts, message.text || '');
@@ -198,6 +204,35 @@ function buildMessagePromptContent(message) {
     return getTextFromMessageContentParts(normalizedParts, message.text || '').trim();
   }
   return normalizedParts.map((part) => ({ ...part }));
+}
+
+function normalizeToolCall(rawToolCall) {
+  if (!rawToolCall || typeof rawToolCall !== 'object') {
+    return null;
+  }
+  const name = typeof rawToolCall.name === 'string' ? rawToolCall.name.trim() : '';
+  if (!name) {
+    return null;
+  }
+  const argumentsValue =
+    rawToolCall.arguments && typeof rawToolCall.arguments === 'object' && !Array.isArray(rawToolCall.arguments)
+      ? rawToolCall.arguments
+      : {};
+  const normalized = {
+    name,
+    arguments: argumentsValue,
+  };
+  if (typeof rawToolCall.rawText === 'string' && rawToolCall.rawText.trim()) {
+    normalized.rawText = rawToolCall.rawText.trim();
+  }
+  if (typeof rawToolCall.format === 'string' && rawToolCall.format.trim()) {
+    normalized.format = rawToolCall.format.trim();
+  }
+  return normalized;
+}
+
+function normalizeToolCalls(rawToolCalls) {
+  return Array.isArray(rawToolCalls) ? rawToolCalls.map(normalizeToolCall).filter(Boolean) : [];
 }
 
 function toIsoTimestamp(value) {
@@ -406,6 +441,7 @@ function getVisibleMessageRoleSequence(conversation, message) {
   }
   let userPromptCount = 0;
   let modelResponseCount = 0;
+  let toolResultCount = 0;
   const visiblePath = getConversationPathMessages(conversation);
   for (const pathMessage of visiblePath) {
     if (pathMessage.role === 'user') {
@@ -417,6 +453,11 @@ function getVisibleMessageRoleSequence(conversation, message) {
       modelResponseCount += 1;
       if (pathMessage.id === message.id) {
         return modelResponseCount;
+      }
+    } else if (pathMessage.role === 'tool') {
+      toolResultCount += 1;
+      if (pathMessage.id === message.id) {
+        return toolResultCount;
       }
     }
   }
@@ -464,7 +505,7 @@ export function getModelSiblingMessages(conversation, modelMessage) {
     return [];
   }
   const parentMessage = getMessageNodeById(conversation, modelMessage.parentId);
-  if (!parentMessage || parentMessage.role !== 'user') {
+  if (!parentMessage || (parentMessage.role !== 'user' && parentMessage.role !== 'tool')) {
     return [];
   }
   return (parentMessage.childIds || [])
@@ -522,7 +563,16 @@ export function getConversationCardHeading(conversation, message) {
   if (!conversation || !message) {
     return '';
   }
-  const baseLabel = message.role === 'user' ? 'User Prompt' : 'Model Response';
+  const baseLabel =
+    message.role === 'user'
+      ? 'User Prompt'
+      : message.role === 'tool'
+        ? 'Tool Result'
+        : 'Model Response';
+  if (message.role === 'tool') {
+    const sequence = Math.max(getVisibleMessageRoleSequence(conversation, message), 1);
+    return `${baseLabel} ${sequence}`;
+  }
   const sequence = Math.max(getVisibleMessageRoleSequence(conversation, message), 1);
   const variantState =
     message.role === 'user'
@@ -536,7 +586,7 @@ export function getConversationCardHeading(conversation, message) {
 }
 
 export function addMessageToConversation(conversation, role, text, options = {}) {
-  const normalizedRole = role === 'user' ? 'user' : 'model';
+  const normalizedRole = role === 'user' ? 'user' : role === 'tool' ? 'tool' : 'model';
   const normalizedText = String(text || '');
   const hasExplicitParentId = Object.prototype.hasOwnProperty.call(options, 'parentId');
   const requestedParentId = hasExplicitParentId
@@ -549,7 +599,7 @@ export function addMessageToConversation(conversation, role, text, options = {})
   const message = {
     id: `${conversation.id}-node-${++conversation.messageNodeCounter}`,
     role: normalizedRole,
-    speaker: normalizedRole === 'user' ? 'User' : 'Model',
+    speaker: normalizedRole === 'user' ? 'User' : normalizedRole === 'tool' ? 'Tool' : 'Model',
     text: normalizedText,
     createdAt: normalizeTimestamp(options.createdAt) || Date.now(),
     parentId: parentId || null,
@@ -576,6 +626,21 @@ export function addMessageToConversation(conversation, role, text, options = {})
       ),
       llmRepresentation:
         typeof options.response === 'string' ? options.response : normalizedText,
+    };
+    message.artifactRefs = normalizeMessageArtifactRefs(options.artifactRefs);
+    message.toolCalls = normalizeToolCalls(options.toolCalls);
+  }
+  if (normalizedRole === 'tool') {
+    message.toolName = typeof options.toolName === 'string' ? options.toolName.trim() : '';
+    message.toolArguments =
+      options.toolArguments && typeof options.toolArguments === 'object' && !Array.isArray(options.toolArguments)
+        ? options.toolArguments
+        : {};
+    message.toolResult = normalizedText;
+    message.isToolResultComplete = true;
+    message.content = {
+      parts: normalizeMessageContentParts(options.contentParts, normalizedText),
+      llmRepresentation: normalizedText,
     };
     message.artifactRefs = normalizeMessageArtifactRefs(options.artifactRefs);
   }
@@ -686,7 +751,7 @@ export function buildConversationMessages(messages, systemPrompt = '') {
     });
   }
   messages.forEach((message) => {
-    if (!message || (message.role !== 'user' && message.role !== 'model')) {
+    if (!message || (message.role !== 'user' && message.role !== 'model' && message.role !== 'tool')) {
       return;
     }
     const content = buildMessagePromptContent(message);
@@ -695,7 +760,7 @@ export function buildConversationMessages(messages, systemPrompt = '') {
       return;
     }
     structuredMessages.push({
-      role: message.role === 'user' ? 'user' : 'assistant',
+      role: message.role === 'user' ? 'user' : message.role === 'tool' ? 'tool' : 'assistant',
       content,
     });
   });
@@ -725,17 +790,39 @@ export function buildConversationDownloadPayload(
 ) {
   const startedAt = normalizeTimestamp(conversation?.startedAt);
   const exchanges = getConversationPathMessages(conversation)
-    .filter((message) => message?.role === 'user' || message?.role === 'model')
+    .filter((message) => message?.role === 'user' || message?.role === 'model' || message?.role === 'tool')
     .map((message, index) => {
-      const exchangeNumber = Math.floor(index / 2) + 1;
-      const isUserMessage = message.role === 'user';
+      const exchangeNumber = index + 1;
+      if (message.role === 'user') {
+        return {
+          heading: `User prompt ${exchangeNumber}`,
+          role: message.role,
+          event: 'entered',
+          timestamp: toIsoTimestamp(message.createdAt),
+          timestampMs: normalizeTimestamp(message.createdAt),
+          text: String(message.text || ''),
+        };
+      }
+      if (message.role === 'tool') {
+        return {
+          heading: `Tool result ${exchangeNumber}`,
+          role: message.role,
+          event: 'tool_result',
+          timestamp: toIsoTimestamp(message.createdAt),
+          timestampMs: normalizeTimestamp(message.createdAt),
+          text: String(message.toolResult || message.text || ''),
+          toolName: typeof message.toolName === 'string' ? message.toolName : '',
+          toolArguments: message.toolArguments && typeof message.toolArguments === 'object' ? message.toolArguments : {},
+        };
+      }
       return {
-        heading: `${isUserMessage ? 'User prompt' : 'Model response'} ${exchangeNumber}`,
+        heading: `Model response ${exchangeNumber}`,
         role: message.role,
-        event: isUserMessage ? 'entered' : 'generated',
+        event: 'generated',
         timestamp: toIsoTimestamp(message.createdAt),
         timestampMs: normalizeTimestamp(message.createdAt),
-        text: isUserMessage ? String(message.text || '') : String(message.response || message.text || ''),
+        text: String(message.response || message.text || ''),
+        toolCalls: normalizeToolCalls(message.toolCalls),
       };
     });
   const payload = {
@@ -811,6 +898,17 @@ export function buildConversationDownloadMarkdown(payload) {
   exchanges.forEach((exchange) => {
     lines.push(`## ${String(exchange?.heading || 'Exchange')}`);
     lines.push(formatUtcTimestamp(exchange?.timestamp));
+    if (exchange?.role === 'tool' && exchange?.toolName) {
+      lines.push('');
+      lines.push(`Tool: ${exchange.toolName}`);
+      if (exchange.toolArguments && typeof exchange.toolArguments === 'object') {
+        lines.push(`Arguments: ${JSON.stringify(exchange.toolArguments)}`);
+      }
+    }
+    if (exchange?.role === 'model' && Array.isArray(exchange.toolCalls) && exchange.toolCalls.length) {
+      lines.push('');
+      lines.push(`Tool Calls: ${JSON.stringify(exchange.toolCalls)}`);
+    }
     lines.push('');
     lines.push(toMarkdownBlockquote(exchange?.text || ''));
     lines.push('');
