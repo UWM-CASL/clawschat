@@ -17,7 +17,7 @@ Student-facing browser chat UI with local model inference.
   - Browser back/forward navigation follows those screen transitions.
 - Header actions include a `Help` button that opens `help.html` in a new tab with feature and basic usage guidance.
 - Header actions include a `Keyboard shortcuts` button and the composer shows a visible shortcut hint (`Ctrl+/`) so users can discover available keyboard actions.
-- The app shell uses a full-width `ClawsChat` banner above the main control bar.
+- The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
 - The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
 - `Settings -> Conversation` includes:
   - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`

@@ -2592,6 +2592,7 @@ function setSettingsPageVisibility(visible, { syncRoute = true, replaceRoute = t
     setActiveSettingsTab(appState.activeSettingsTab);
     if (topBar instanceof HTMLElement) {
       topBar.setAttribute('aria-label', 'Settings');
+      topBar.classList.toggle('top-bar-actions-only', !appState.hasStartedChatWorkspace);
     }
     if (syncRoute) {
       syncRouteToCurrentView({ replace: replaceRoute });
@@ -2601,6 +2602,7 @@ function setSettingsPageVisibility(visible, { syncRoute = true, replaceRoute = t
 
   if (topBar) {
     topBar.removeAttribute('aria-label');
+    topBar.classList.toggle('top-bar-actions-only', !appState.hasStartedChatWorkspace);
   }
   updateWelcomePanelVisibility({ syncRoute: false });
   if (syncRoute) {
@@ -2628,6 +2630,9 @@ function updateWelcomePanelVisibility({ syncRoute = true, replaceRoute = true } 
   setRegionVisibility(homePanel, showHome);
   setRegionVisibility(preChatPanel, showPreChat);
   setRegionVisibility(topBar, true);
+  if (topBar instanceof HTMLElement) {
+    topBar.classList.toggle('top-bar-actions-only', !appState.hasStartedChatWorkspace);
+  }
   setRegionVisibility(conversationPanel, appState.hasStartedChatWorkspace);
   const conversationPanelToggle = topBar?.querySelector('[data-bs-target="#conversationPanel"]');
   if (conversationPanelToggle instanceof HTMLElement) {

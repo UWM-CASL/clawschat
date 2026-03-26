@@ -245,6 +245,16 @@
   background: transparent;
 }
 
+.top-bar.top-bar-actions-only {
+  grid-template-columns: auto;
+  justify-content: end;
+  padding-top: 0;
+}
+
+.top-bar.top-bar-actions-only .chat-title-wrap {
+  display: none !important;
+}
+
 .top-bar.animate-in {
   animation: surface-enter 320ms cubic-bezier(0.2, 0.85, 0.24, 1);
 }
@@ -336,6 +346,7 @@
   align-items: center;
   gap: 0.9rem;
   flex-wrap: wrap;
+  width: 100%;
   padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
   border-top: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -1318,6 +1329,11 @@
 
   .top-bar {
     padding: 0.2rem 0.75rem 0.75rem;
+  }
+
+  .top-bar.top-bar-actions-only {
+    padding-top: 0;
+    padding-bottom: 0.35rem;
   }
 
   .chat-title-input {
