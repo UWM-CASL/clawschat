@@ -1,4 +1,8 @@
 import {
+  isEngineBusy,
+  isEngineReady,
+  isMessageEditActive,
+  isOrchestrationRunningState,
   setGenerating,
   setLoadingModel,
   setModelReady,
@@ -122,12 +126,11 @@ export function createAppController(dependencies) {
       ? dependencies.normalizeModelId(rawLoadedModelId)
       : null;
     const selectedConversationModelReady =
-      dependencies.state.modelReady && loadedModelId === selectedModelId;
+      isEngineReady(dependencies.state) && loadedModelId === selectedModelId;
     if (
       selectedConversationModelReady ||
-      dependencies.state.isLoadingModel ||
-      dependencies.state.isGenerating ||
-      dependencies.state.isRunningOrchestration
+      isEngineBusy(dependencies.state) ||
+      isOrchestrationRunningState(dependencies.state)
     ) {
       return;
     }
@@ -383,14 +386,13 @@ export function createAppController(dependencies) {
   function regenerateFromMessage(messageId) {
     if (
       !messageId ||
-      dependencies.state.isGenerating ||
-      dependencies.state.isLoadingModel ||
-      dependencies.state.isRunningOrchestration ||
-      dependencies.state.activeUserEditMessageId
+      isEngineBusy(dependencies.state) ||
+      isOrchestrationRunningState(dependencies.state) ||
+      isMessageEditActive(dependencies.state)
     ) {
       return;
     }
-    if (!dependencies.state.modelReady) {
+    if (!isEngineReady(dependencies.state)) {
       dependencies.setStatus('Send a message first to load the model before regenerating.');
       dependencies.appendDebug('Regenerate blocked: model not ready.');
       return;
@@ -430,10 +432,9 @@ export function createAppController(dependencies) {
   async function runRenameChatOrchestration(conversationId, inputs) {
     if (
       !conversationId ||
-      dependencies.state.isGenerating ||
-      dependencies.state.isLoadingModel ||
-      dependencies.state.isRunningOrchestration ||
-      !dependencies.state.modelReady
+      isEngineBusy(dependencies.state) ||
+      isOrchestrationRunningState(dependencies.state) ||
+      !isEngineReady(dependencies.state)
     ) {
       return;
     }
@@ -474,14 +475,13 @@ export function createAppController(dependencies) {
   async function fixResponseFromMessage(messageId) {
     if (
       !messageId ||
-      dependencies.state.isGenerating ||
-      dependencies.state.isLoadingModel ||
-      dependencies.state.isRunningOrchestration ||
-      dependencies.state.activeUserEditMessageId
+      isEngineBusy(dependencies.state) ||
+      isOrchestrationRunningState(dependencies.state) ||
+      isMessageEditActive(dependencies.state)
     ) {
       return;
     }
-    if (!dependencies.state.modelReady) {
+    if (!isEngineReady(dependencies.state)) {
       dependencies.setStatus('Send a message first to load the model before using Fix.');
       dependencies.appendDebug('Fix blocked: model not ready.');
       return;

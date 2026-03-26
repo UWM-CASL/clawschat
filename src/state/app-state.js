@@ -105,6 +105,23 @@ export function refreshEnginePhase(state) {
   return nextPhase;
 }
 
+export function isEngineReady(state) {
+  return deriveEnginePhase(state) === ENGINE_PHASES.READY;
+}
+
+export function isLoadingModelState(state) {
+  return deriveEnginePhase(state) === ENGINE_PHASES.LOADING;
+}
+
+export function isGeneratingResponse(state) {
+  return deriveEnginePhase(state) === ENGINE_PHASES.GENERATING;
+}
+
+export function isEngineBusy(state) {
+  const phase = deriveEnginePhase(state);
+  return phase === ENGINE_PHASES.LOADING || phase === ENGINE_PHASES.GENERATING;
+}
+
 export function setModelReady(state, value) {
   state.modelReady = Boolean(value);
   return refreshEnginePhase(state);
@@ -128,6 +145,10 @@ export function setOrchestrationRunning(state, value) {
   return state.orchestrationStatus;
 }
 
+export function isOrchestrationRunningState(state) {
+  return state?.orchestrationStatus === ORCHESTRATION_STATUSES.RUNNING;
+}
+
 export function deriveInteractionMode(state) {
   if (state?.activeUserEditMessageId) {
     return state.activeUserBranchSourceMessageId
@@ -147,6 +168,23 @@ export function refreshInteractionMode(state) {
   const nextMode = deriveInteractionMode(state);
   state.interactionMode = nextMode;
   return nextMode;
+}
+
+export function isMessageEditActive(state) {
+  const mode = deriveInteractionMode(state);
+  return mode === INTERACTION_MODES.MESSAGE_EDIT || mode === INTERACTION_MODES.MESSAGE_BRANCH;
+}
+
+export function isVariantSwitchingState(state) {
+  return deriveInteractionMode(state) === INTERACTION_MODES.VARIANT_SWITCH;
+}
+
+export function isChatTitleEditingState(state) {
+  return deriveInteractionMode(state) === INTERACTION_MODES.TITLE_EDIT;
+}
+
+export function isInteractionLocked(state) {
+  return deriveInteractionMode(state) !== INTERACTION_MODES.NONE;
 }
 
 export function setUserMessageEditState(
@@ -190,6 +228,17 @@ export function refreshWorkspaceView(state) {
   state.workspaceView = nextView;
   state.currentWorkspaceView = nextView;
   return nextView;
+}
+
+export function isSettingsView(state) {
+  return deriveWorkspaceView(state) === WORKSPACE_VIEWS.SETTINGS;
+}
+
+export function hasStartedWorkspace(state) {
+  const workspaceView = deriveWorkspaceView(state);
+  return workspaceView !== WORKSPACE_VIEWS.HOME && workspaceView !== WORKSPACE_VIEWS.SETTINGS
+    ? true
+    : Boolean(state?.hasStartedChatWorkspace);
 }
 
 export function setSettingsPageOpen(state, value) {

@@ -80,6 +80,16 @@ import {
   getCurrentViewRoute as selectCurrentViewRoute,
   hasConversationHistory as selectHasConversationHistory,
   hasSelectedConversationWithHistory as selectHasSelectedConversationWithHistory,
+  hasStartedWorkspace as selectHasStartedWorkspace,
+  isChatTitleEditingState,
+  isEngineBusy,
+  isEngineReady,
+  isGeneratingResponse,
+  isMessageEditActive,
+  isOrchestrationRunningState,
+  isSettingsView,
+  isVariantSwitchingState,
+  isLoadingModelState,
   setChatTitleEditing,
   setChatWorkspaceStarted,
   setSwitchingVariant,
@@ -1054,7 +1064,7 @@ function syncGenerationSettingsFromModel(modelId, useDefaults = true) {
 }
 
 function updateGenerationSettingsEnabledState() {
-  const disabled = !appState.modelReady;
+  const disabled = !isEngineReady(appState);
   if (maxOutputTokensInput) {
     maxOutputTokensInput.disabled = disabled;
   }
@@ -1085,7 +1095,7 @@ function updateGenerationSettingsEnabledState() {
 }
 
 function applyPendingGenerationSettingsIfReady() {
-  if (appState.isGenerating || !appState.pendingGenerationConfig) {
+  if (isGeneratingResponse(appState) || !appState.pendingGenerationConfig) {
     return;
   }
   const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
@@ -1109,7 +1119,7 @@ function onGenerationSettingInputChanged() {
   appState.activeGenerationConfig = nextConfig;
   syncGenerationSettingsFromModel(selectedModel, false);
   persistGenerationConfigForModel(selectedModel, nextConfig);
-  if (appState.isGenerating) {
+  if (isGeneratingResponse(appState)) {
     appState.pendingGenerationConfig = nextConfig;
     setStatus('Generation settings will apply after current response.');
     appendDebug('Generation settings change queued until current response completes.');
@@ -1207,7 +1217,7 @@ function updatePreChatStatusHint() {
   if (!(onboardingStatusRegion instanceof HTMLElement)) {
     return;
   }
-  if (appState.hasStartedChatWorkspace && !appState.modelReady && !appState.isLoadingModel) {
+  if (selectHasStartedWorkspace(appState) && !isEngineReady(appState) && !isLoadingModelState(appState)) {
     applyStatusRegion(
       onboardingStatusRegion,
       onboardingStatusRegionHeading,
@@ -1971,7 +1981,7 @@ function renderTranscript(options = {}) {
 }
 
 function isUiBusy() {
-  return appState.isGenerating || appState.isLoadingModel || appState.isRunningOrchestration;
+  return isEngineBusy(appState) || isOrchestrationRunningState(appState);
 }
 
 function buildActiveConversationExportPayload(activeConversation) {
@@ -2206,9 +2216,9 @@ function updatePreChatActionButtons() {
   const activeConversation = getActiveConversation();
   const hasExistingConversation = hasConversationHistory(activeConversation);
   const canShowPreChatActions =
-    appState.hasStartedChatWorkspace &&
-    !appState.modelReady &&
-    !appState.isSettingsPageOpen &&
+    selectHasStartedWorkspace(appState) &&
+    !isEngineReady(appState) &&
+    !isSettingsView(appState) &&
     Boolean(activeConversation);
   const isBusy = isUiBusy();
 
@@ -2226,9 +2236,9 @@ function updatePreChatActionButtons() {
 
 function updateComposerVisibility() {
   const showComposer =
-    appState.hasStartedChatWorkspace &&
-    !appState.isSettingsPageOpen &&
-    (!appState.modelReady || Boolean(getActiveConversation()));
+    selectHasStartedWorkspace(appState) &&
+    !isSettingsView(appState) &&
+    (!isEngineReady(appState) || Boolean(getActiveConversation()));
   setRegionVisibility(chatForm, showComposer);
   if (chatForm instanceof HTMLElement) {
     chatForm.classList.remove('is-prechat');
@@ -2244,7 +2254,7 @@ function updateChatTitle() {
   }
   const activeConversation = getActiveConversation();
   let nextTitle = '';
-  if (appState.modelReady && !activeConversation && appState.conversations.length) {
+  if (isEngineReady(appState) && !activeConversation && appState.conversations.length) {
     nextTitle = 'Select a Conversation';
     chatTitle.textContent = nextTitle;
     chatTitle.classList.toggle('d-none', !nextTitle);
@@ -2256,17 +2266,17 @@ function updateChatTitle() {
     nextTitle = activeConversation.name;
     chatTitle.textContent = nextTitle;
     chatTitle.classList.toggle('d-none', !nextTitle);
-    if (!appState.isChatTitleEditing && chatTitleInput) {
+    if (!isChatTitleEditingState(appState) && chatTitleInput) {
       chatTitleInput.value = activeConversation.name;
     }
     updateComposerVisibility();
     updateChatTitleEditorVisibility();
     return;
   }
-  nextTitle = appState.modelReady ? 'Start Your Chat Now' : '';
+  nextTitle = isEngineReady(appState) ? 'Start Your Chat Now' : '';
   chatTitle.textContent = nextTitle;
   chatTitle.classList.toggle('d-none', !nextTitle);
-  if (!appState.isChatTitleEditing && chatTitleInput && activeConversation) {
+  if (!isChatTitleEditingState(appState) && chatTitleInput && activeConversation) {
     chatTitleInput.value = activeConversation.name;
   }
   updateComposerVisibility();
@@ -2311,9 +2321,9 @@ function updateActionButtons() {
   updatePreChatActionButtons();
   const disableComposerForPreChatSelection = shouldDisableComposerForPreChatConversationSelection();
   const composerControlsDisabled =
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
-    Boolean(appState.activeUserEditMessageId) ||
+    isLoadingModelState(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isMessageEditActive(appState) ||
     disableComposerForPreChatSelection;
   const imageInputSupported = selectedModelSupportsImageInput();
   if (messageInput instanceof HTMLTextAreaElement) {
@@ -2322,11 +2332,11 @@ function updateActionButtons() {
   if (addImagesButton instanceof HTMLButtonElement) {
     addImagesButton.classList.toggle('d-none', !imageInputSupported);
     addImagesButton.disabled =
-      !imageInputSupported || composerControlsDisabled || appState.isGenerating;
+      !imageInputSupported || composerControlsDisabled || isGeneratingResponse(appState);
   }
   if (imageAttachmentInput instanceof HTMLInputElement) {
     imageAttachmentInput.disabled =
-      !imageInputSupported || composerControlsDisabled || appState.isGenerating;
+      !imageInputSupported || composerControlsDisabled || isGeneratingResponse(appState);
   }
   if (!imageInputSupported && getPendingComposerAttachments().length) {
     clearPendingComposerAttachments();
@@ -2334,13 +2344,15 @@ function updateActionButtons() {
   if (sendButton) {
     sendButton.disabled =
       composerControlsDisabled ||
-      (!appState.isGenerating && !appState.hasStartedChatWorkspace) ||
+      (!isGeneratingResponse(appState) && !selectHasStartedWorkspace(appState)) ||
       false;
   }
   if (newConversationBtn) {
     newConversationBtn.classList.toggle('d-none', !shouldShowNewConversationButton());
     newConversationBtn.disabled =
-      appState.isGenerating || appState.isRunningOrchestration || !appState.hasStartedChatWorkspace;
+      isGeneratingResponse(appState) ||
+      isOrchestrationRunningState(appState) ||
+      !selectHasStartedWorkspace(appState);
   }
   updateRegenerateButtons();
   updateUserMessageButtons();
@@ -2351,12 +2363,12 @@ function updateRegenerateButtons() {
     return;
   }
   const disabled =
-    appState.isLoadingModel ||
-    appState.isGenerating ||
-    appState.isRunningOrchestration ||
-    appState.isSwitchingVariant ||
-    !appState.modelReady ||
-    Boolean(appState.activeUserEditMessageId);
+    isLoadingModelState(appState) ||
+    isGeneratingResponse(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isVariantSwitchingState(appState) ||
+    !isEngineReady(appState) ||
+    isMessageEditActive(appState);
   chatTranscript.querySelectorAll('.message-row.model-message').forEach((item) => {
     if (!(item instanceof HTMLElement)) {
       return;
@@ -2937,11 +2949,10 @@ function animateVariantSwitch(outgoingMessageId, incomingMessageId, direction, o
 function switchModelVariant(messageId, direction) {
   if (
     !messageId ||
-    appState.isGenerating ||
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
-    appState.isSwitchingVariant ||
-    appState.activeUserEditMessageId
+    isEngineBusy(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isVariantSwitchingState(appState) ||
+    isMessageEditActive(appState)
   ) {
     return;
   }
@@ -2977,11 +2988,10 @@ function switchModelVariant(messageId, direction) {
 function switchUserVariant(messageId, direction) {
   if (
     !messageId ||
-    appState.isGenerating ||
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
-    appState.isSwitchingVariant ||
-    appState.activeUserEditMessageId
+    isEngineBusy(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isVariantSwitchingState(appState) ||
+    isMessageEditActive(appState)
   ) {
     return;
   }
@@ -3015,10 +3025,9 @@ function switchUserVariant(messageId, direction) {
 function beginUserMessageEdit(messageId) {
   if (
     !messageId ||
-    appState.isGenerating ||
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
-    appState.isSwitchingVariant
+    isEngineBusy(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isVariantSwitchingState(appState)
   ) {
     return;
   }
@@ -3046,7 +3055,7 @@ function beginUserMessageEdit(messageId) {
 
 function cancelUserMessageEdit(messageId) {
   if (
-    !appState.activeUserEditMessageId ||
+    !isMessageEditActive(appState) ||
     (messageId && appState.activeUserEditMessageId !== messageId)
   ) {
     return;
@@ -3060,10 +3069,9 @@ function cancelUserMessageEdit(messageId) {
 function saveUserMessageEdit(messageId) {
   if (
     !messageId ||
-    appState.isGenerating ||
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
-    appState.isSwitchingVariant ||
+    isEngineBusy(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isVariantSwitchingState(appState) ||
     appState.activeUserEditMessageId !== messageId
   ) {
     return;
@@ -3116,7 +3124,7 @@ function saveUserMessageEdit(messageId) {
     renderTranscript();
     updateActionButtons();
     queueConversationStateSave();
-    if (!appState.modelReady) {
+    if (!isEngineReady(appState)) {
       setStatus('Branch saved. Send a message to load the model and generate a new response.');
       return;
     }
@@ -3143,7 +3151,7 @@ function saveUserMessageEdit(messageId) {
     removedCount > 0
       ? 'Message saved. Later turns were removed from this branch.'
       : 'Message saved.';
-  if (!appState.modelReady) {
+  if (!isEngineReady(appState)) {
     setStatus(`${saveStatus} Send a message to load the model and generate a new response.`);
     return;
   }
@@ -3161,11 +3169,10 @@ function saveUserMessageEdit(messageId) {
 function branchFromUserMessage(messageId) {
   if (
     !messageId ||
-    appState.isGenerating ||
-    appState.isLoadingModel ||
-    appState.isRunningOrchestration ||
-    appState.isSwitchingVariant ||
-    appState.activeUserEditMessageId
+    isEngineBusy(appState) ||
+    isOrchestrationRunningState(appState) ||
+    isVariantSwitchingState(appState) ||
+    isMessageEditActive(appState)
   ) {
     return;
   }
@@ -3330,7 +3337,7 @@ if (startConversationButton instanceof HTMLButtonElement) {
 
 if (newConversationBtn) {
   newConversationBtn.addEventListener('click', () => {
-    if (appState.isGenerating) {
+    if (isGeneratingResponse(appState)) {
       return;
     }
     setChatWorkspaceStarted(appState, true);
@@ -3353,7 +3360,7 @@ if (conversationList) {
       return;
     }
 
-    if (appState.isGenerating) {
+    if (isGeneratingResponse(appState)) {
       return;
     }
 
@@ -3501,7 +3508,7 @@ document.addEventListener('click', (event) => {
 
 if (sendButton) {
   sendButton.addEventListener('click', async (event) => {
-    if (!appState.isGenerating) {
+    if (!isGeneratingResponse(appState)) {
       return;
     }
     event.preventDefault();
@@ -3621,19 +3628,19 @@ if (chatForm && messageInput && chatTranscript) {
     const hasAttachments = attachments.length > 0;
     if (
       (!value && !hasAttachments) ||
-      appState.isGenerating ||
-      appState.isRunningOrchestration ||
-      appState.activeUserEditMessageId
+      isGeneratingResponse(appState) ||
+      isOrchestrationRunningState(appState) ||
+      isMessageEditActive(appState)
     ) {
-      if (appState.activeUserEditMessageId) {
+      if (isMessageEditActive(appState)) {
         setStatus('Save or cancel the current message edit before sending a new message.');
-      } else if (appState.isRunningOrchestration) {
+      } else if (isOrchestrationRunningState(appState)) {
         setStatus('Please wait for the current orchestration step to finish.');
       }
       return;
     }
 
-    if (!appState.hasStartedChatWorkspace) {
+    if (!selectHasStartedWorkspace(appState)) {
       setChatWorkspaceStarted(appState, true);
       updateWelcomePanelVisibility({ replaceRoute: false });
     }
@@ -3656,10 +3663,12 @@ if (chatForm && messageInput && chatTranscript) {
       useDefaults: false,
     });
 
-    if (!appState.modelReady || getLoadedModelId() !== activeConversationModelId) {
+    if (!isEngineReady(appState) || getLoadedModelId() !== activeConversationModelId) {
       persistInferencePreferences(appState.activeGenerationConfig);
       setStatus(
-        appState.modelReady ? 'Switching models for this conversation...' : 'Loading model for your first message...'
+        isEngineReady(appState)
+          ? 'Switching models for this conversation...'
+          : 'Loading model for your first message...'
       );
       try {
         await appController.initializeEngine();
