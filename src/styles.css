@@ -1047,16 +1047,6 @@
     transform 280ms cubic-bezier(0.2, 0.85, 0.24, 1);
 }
 
-.composer.is-prechat {
-  margin: 0 auto 1.1rem;
-  width: min(900px, calc(100% - 2rem));
-  border: 1px solid var(--composer-border);
-  border-radius: 1.35rem;
-  box-shadow: 0 14px 30px rgba(31, 41, 64, 0.16);
-  padding: 1rem;
-  transform: translateY(-0.2rem);
-}
-
 .composer.animate-dock {
   animation: composer-dock 360ms cubic-bezier(0.2, 0.85, 0.24, 1);
 }

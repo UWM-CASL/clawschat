@@ -24,7 +24,7 @@ Student-facing browser chat UI with local model inference.
   - `Transcript view` with `Standard` and `Compact`
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
-- Before the first model load, the initial pre-chat panel is shown only when no active conversation exists; creating a new conversation opens the normal chat workspace immediately.
+- Before the first model load, the initial pre-chat panel is shown only when no active conversation exists; the bottom message composer keeps the same size before and after model load.
 - If no active conversation exists, a new untitled conversation is created when the first message is sent.
 - Backend selection supports:
   - `Auto (WebGPU then WASM then CPU)`

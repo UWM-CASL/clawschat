@@ -2808,12 +2808,7 @@ function updateComposerVisibility() {
     (!appState.modelReady || Boolean(getActiveConversation()));
   setRegionVisibility(chatForm, showComposer);
   if (chatForm instanceof HTMLElement) {
-    const showPreChatComposer =
-      appState.hasStartedChatWorkspace &&
-      !appState.modelReady &&
-      !appState.isSettingsPageOpen &&
-      !getActiveConversation();
-    chatForm.classList.toggle('is-prechat', showPreChatComposer);
+    chatForm.classList.remove('is-prechat');
   }
   if (messageInput instanceof HTMLTextAreaElement) {
     messageInput.disabled = shouldDisableComposerForPreChatConversationSelection();
