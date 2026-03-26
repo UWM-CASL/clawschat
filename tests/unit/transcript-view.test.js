@@ -159,6 +159,14 @@ describe('transcript-view', () => {
 
   test('renders tool result messages', () => {
     const harness = createViewHarness();
+    harness.conversation.messageNodes[1].toolCalls = [
+      {
+        name: 'get_weather',
+        arguments: { location: 'Milwaukee, WI' },
+        rawText: '{"name":"get_weather","arguments":{"location":"Milwaukee, WI"}}',
+      },
+    ];
+    harness.conversation.messageNodes[1].childIds = ['tool-1'];
     const toolMessage = {
       id: 'tool-1',
       role: 'tool',
@@ -166,6 +174,7 @@ describe('transcript-view', () => {
       text: '72 F and sunny.',
       toolName: 'get_weather',
       toolResult: '72 F and sunny.',
+      parentId: 'model-1',
     };
     harness.conversation.messageNodes.push(toolMessage);
     harness.conversation.activeLeafMessageId = toolMessage.id;
@@ -213,7 +222,14 @@ describe('transcript-view', () => {
 
     view.renderTranscript({ scrollToBottom: false });
 
-    expect(harness.container.querySelector('.tool-message .message-speaker')?.textContent).toContain('Tool');
-    expect(harness.container.querySelector('.tool-message .response-content')?.textContent).toContain('72 F and sunny.');
+    expect(harness.container.querySelectorAll('.message-row')).toHaveLength(2);
+    expect(harness.container.querySelector('.tool-message')).toBeNull();
+    const toggle = harness.container.querySelector('.tool-call-toggle');
+    expect(toggle?.textContent).toContain('🛠️ Tool Call');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    toggle?.dispatchEvent(new harness.document.defaultView.Event('click', { bubbles: true }));
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(harness.container.querySelector('.tool-call-request')?.textContent).toContain('"name": "get_weather"');
+    expect(harness.container.querySelector('.tool-call-result')?.textContent).toContain('72 F and sunny.');
   });
 });

@@ -81,6 +81,83 @@ export function createTranscriptView(dependencies) {
     bubble.appendChild(content);
   }
 
+  function getInlineToolResultMessages(conversation, modelMessage) {
+    if (!conversation || modelMessage?.role !== 'model' || !Array.isArray(modelMessage.childIds)) {
+      return [];
+    }
+    const messageById = new Map(
+      Array.isArray(conversation.messageNodes)
+        ? conversation.messageNodes.map((message) => [message.id, message])
+        : []
+    );
+    return modelMessage.childIds
+      .map((childId) => messageById.get(childId) || null)
+      .filter((message) => message?.role === 'tool');
+  }
+
+  function formatToolCallText(toolCall) {
+    if (!toolCall || typeof toolCall !== 'object') {
+      return '';
+    }
+    const rawText = typeof toolCall.rawText === 'string' ? toolCall.rawText.trim() : '';
+    if (rawText) {
+      if (rawText.startsWith('{') && rawText.endsWith('}')) {
+        try {
+          return JSON.stringify(JSON.parse(rawText), null, 2);
+        } catch {
+          return rawText;
+        }
+      }
+      return rawText;
+    }
+    return JSON.stringify(
+      {
+        name: typeof toolCall.name === 'string' ? toolCall.name : '',
+        arguments:
+          toolCall.arguments && typeof toolCall.arguments === 'object' && !Array.isArray(toolCall.arguments)
+            ? toolCall.arguments
+            : {},
+      },
+      null,
+      2
+    );
+  }
+
+  function formatToolResultText(toolMessages) {
+    if (!Array.isArray(toolMessages) || !toolMessages.length) {
+      return '';
+    }
+    return toolMessages
+      .map((message) => String(message.toolResult || message.text || '').trim())
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  function setModelToolCallContent(message, refs) {
+    if (!refs) {
+      return;
+    }
+    const toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : [];
+    const hasToolCalls = toolCalls.length > 0;
+    refs.toolCallRegion.classList.toggle('d-none', !hasToolCalls);
+    refs.responseRegion.classList.toggle('d-none', hasToolCalls);
+    if (!hasToolCalls) {
+      refs.toolCallRequest.textContent = '';
+      refs.toolCallResult.textContent = '';
+      refs.toolCallResultSection.hidden = true;
+      return;
+    }
+
+    const isExpanded = refs.toolCallToggle.getAttribute('aria-expanded') === 'true';
+    refs.toolCallToggle.setAttribute('aria-expanded', String(isExpanded));
+    refs.toolCallBody.hidden = !isExpanded;
+    refs.toolCallRequest.textContent = toolCalls.map(formatToolCallText).filter(Boolean).join('\n\n');
+
+    const toolResultText = formatToolResultText(getInlineToolResultMessages(getActiveConversation(), message));
+    refs.toolCallResult.textContent = toolResultText;
+    refs.toolCallResultSection.hidden = !toolResultText;
+  }
+
   function setModelBubbleContent(message, refs) {
     if (!refs) {
       return;
@@ -101,6 +178,7 @@ export function createTranscriptView(dependencies) {
     /** @type {HTMLElement} */ (refs.thinkingBody).hidden = !hasThinking || !isExpanded;
     refs.thoughtsText.textContent = message.thoughts || '';
     refs.responseText.innerHTML = renderModelMarkdown(message.response || message.text || '');
+    setModelToolCallContent(message, refs);
     scheduleMathTypeset(refs.responseText, { immediate: Boolean(message.isResponseComplete) });
   }
 
@@ -160,6 +238,24 @@ export function createTranscriptView(dependencies) {
               </button>
             </div>
             <p class="thoughts-content" hidden></p>
+          </section>
+          <section class="tool-call-region d-none">
+            <h3 class="visually-hidden">Tool call</h3>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary tool-call-toggle"
+              aria-expanded="false"
+            >
+              🛠️ Tool Call
+            </button>
+            <div class="tool-call-body mt-2" hidden>
+              <p class="mb-1 fw-semibold">Request</p>
+              <pre class="tool-call-request mb-2"></pre>
+              <section class="tool-call-result-section" hidden>
+                <p class="mb-1 fw-semibold">Response</p>
+                <pre class="tool-call-result mb-0"></pre>
+              </section>
+            </div>
           </section>
           <section class="response-region">
             <h3 class="visually-hidden">Response</h3>
@@ -245,6 +341,13 @@ export function createTranscriptView(dependencies) {
       const thinkingCopyButton = item.querySelector('.thoughts-copy-btn');
       const thinkingBody = item.querySelector('.thoughts-content');
       const thoughtsText = item.querySelector('.thoughts-content');
+      const toolCallRegion = item.querySelector('.tool-call-region');
+      const toolCallToggle = item.querySelector('.tool-call-toggle');
+      const toolCallBody = item.querySelector('.tool-call-body');
+      const toolCallRequest = item.querySelector('.tool-call-request');
+      const toolCallResultSection = item.querySelector('.tool-call-result-section');
+      const toolCallResult = item.querySelector('.tool-call-result');
+      const responseRegion = item.querySelector('.response-region');
       const responseText = item.querySelector('.response-content');
       if (
         thinkingRegion &&
@@ -252,6 +355,13 @@ export function createTranscriptView(dependencies) {
         thinkingCopyButton &&
         thinkingBody &&
         thoughtsText &&
+        toolCallRegion &&
+        toolCallToggle &&
+        toolCallBody &&
+        toolCallRequest &&
+        toolCallResultSection &&
+        toolCallResult &&
+        responseRegion &&
         responseText
       ) {
         const refs = {
@@ -260,6 +370,13 @@ export function createTranscriptView(dependencies) {
           thinkingCopyButton,
           thinkingBody,
           thoughtsText,
+          toolCallRegion,
+          toolCallToggle,
+          toolCallBody,
+          toolCallRequest,
+          toolCallResultSection,
+          toolCallResult,
+          responseRegion,
           responseText,
         };
         const showThinkingByDefault = getShowThinkingByDefault();
@@ -271,6 +388,11 @@ export function createTranscriptView(dependencies) {
           thinkingToggle.setAttribute('aria-expanded', String(!expanded));
           /** @type {HTMLElement} */ (thinkingBody).hidden = expanded;
           setModelBubbleContent(message, refs);
+        });
+        toolCallToggle.addEventListener('click', () => {
+          const expanded = toolCallToggle.getAttribute('aria-expanded') === 'true';
+          toolCallToggle.setAttribute('aria-expanded', String(!expanded));
+          toolCallBody.hidden = expanded;
         });
         setModelBubbleContent(message, refs);
         /** @type {any} */ (item)._modelBubbleRefs = refs;
@@ -564,7 +686,15 @@ export function createTranscriptView(dependencies) {
       updateTranscriptNavigationButtonVisibility();
       return;
     }
+    const suppressedToolMessageIds = new Set(
+      getConversationPathMessages(conversation)
+        .filter((message) => message?.role === 'model' && Array.isArray(message.toolCalls) && message.toolCalls.length)
+        .flatMap((message) => getInlineToolResultMessages(conversation, message).map((toolMessage) => toolMessage.id))
+    );
     getConversationPathMessages(conversation).forEach((message) => {
+      if (message?.role === 'tool' && suppressedToolMessageIds.has(message.id)) {
+        return;
+      }
       addMessageElement(message, { scroll: false });
     });
     if (shouldScrollToBottom) {
