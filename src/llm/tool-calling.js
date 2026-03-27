@@ -31,6 +31,8 @@ export const TOOL_DEFINITIONS = Object.freeze([
   },
 ]);
 
+const reverseGeocodeCache = new Map();
+
 function humanizeToolName(toolName) {
   const normalizedName = typeof toolName === 'string' ? toolName.trim() : '';
   if (!normalizedName) {
@@ -126,6 +128,22 @@ function buildEnabledToolInstructions(enabledTools = []) {
   ];
 }
 
+function buildToolSpecificUsageInstructions(enabledToolNames = []) {
+  const normalizedNames = Array.isArray(enabledToolNames)
+    ? enabledToolNames
+        .map((toolName) => (typeof toolName === 'string' ? toolName.trim() : ''))
+        .filter(Boolean)
+    : [];
+  const instructions = [];
+  if (normalizedNames.includes('get_user_location')) {
+    instructions.push(
+      'For get_user_location: a result with source "browser_geolocation" or "approximate_browser_signals" is a completed lookup.',
+      'For get_user_location: if the result includes shouldRetry false, do not call get_user_location again and answer using the returned location data.'
+    );
+  }
+  return instructions;
+}
+
 export function buildToolCallingSystemPrompt(
   toolCallingConfig,
   enabledToolNames = [],
@@ -139,6 +157,7 @@ export function buildToolCallingSystemPrompt(
     'After you receive a tool result, use it to answer the user naturally.',
     'Do not call the same tool again unless the tool result is missing required information or the user asks for refreshed data.',
     ...buildEnabledToolInstructions(enabledTools),
+    ...buildToolSpecificUsageInstructions(enabledToolNames),
     ...buildToolCallingFormatInstructions(toolCallingConfig),
     'Do not wrap tool calls in Markdown, and never invent tool names that are not enabled.',
   ]
@@ -406,6 +425,91 @@ function formatUtcOffset(offsetMinutes) {
   return `UTC${sign}${hours}:${minutes}`;
 }
 
+function buildNominatimReverseUrl(latitude, longitude, language) {
+  const url = new URL('https://nominatim.openstreetmap.org/reverse');
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('lat', String(latitude));
+  url.searchParams.set('lon', String(longitude));
+  url.searchParams.set('addressdetails', '1');
+  if (typeof language === 'string' && language.trim()) {
+    url.searchParams.set('accept-language', language.trim());
+  }
+  return url.toString();
+}
+
+function getReadableLocality(address = {}) {
+  if (!address || typeof address !== 'object') {
+    return '';
+  }
+  return (
+    address.city ||
+    address.town ||
+    address.village ||
+    address.hamlet ||
+    address.suburb ||
+    address.county ||
+    ''
+  );
+}
+
+function buildFormattedResolvedLocation(address = {}, fallbackDisplayName = '') {
+  const locality = getReadableLocality(address);
+  const adminRegion = address.state || address.region || address.county || '';
+  const country = address.country || '';
+  const parts = [locality, adminRegion, country].filter(
+    (value, index, values) => typeof value === 'string' && value.trim() && values.indexOf(value) === index
+  );
+  if (parts.length) {
+    return parts.join(', ');
+  }
+  return typeof fallbackDisplayName === 'string' ? fallbackDisplayName.trim() : '';
+}
+
+async function reverseGeocodeCoordinates(latitude, longitude, runtimeContext = {}) {
+  const cacheKey = `${Number(latitude).toFixed(3)},${Number(longitude).toFixed(3)}`;
+  if (reverseGeocodeCache.has(cacheKey)) {
+    return reverseGeocodeCache.get(cacheKey);
+  }
+  const fetchRef = runtimeContext.fetchRef || (typeof fetch === 'function' ? fetch.bind(globalThis) : null);
+  if (typeof fetchRef !== 'function') {
+    return null;
+  }
+  try {
+    const response = await fetchRef(
+      buildNominatimReverseUrl(latitude, longitude, runtimeContext.navigatorRef?.language),
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      }
+    );
+    if (!response?.ok) {
+      return null;
+    }
+    const payload = await response.json();
+    const address = payload?.address && typeof payload.address === 'object' ? payload.address : {};
+    const formattedLocation = buildFormattedResolvedLocation(
+      address,
+      typeof payload?.display_name === 'string' ? payload.display_name : ''
+    );
+    const result = {
+      provider: 'OpenStreetMap Nominatim',
+      attribution: '© OpenStreetMap contributors',
+      formattedLocation: formattedLocation || null,
+      displayName: typeof payload?.display_name === 'string' ? payload.display_name : null,
+      locality: getReadableLocality(address) || null,
+      state: typeof address.state === 'string' ? address.state : null,
+      country: typeof address.country === 'string' ? address.country : null,
+      countryCode: typeof address.country_code === 'string' ? address.country_code.toUpperCase() : null,
+      postcode: typeof address.postcode === 'string' ? address.postcode : null,
+    };
+    reverseGeocodeCache.set(cacheKey, result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
 function buildApproximateLocationResult(navigatorRef) {
   const locale =
     navigatorRef?.languages?.find((entry) => typeof entry === 'string' && entry.trim()) ||
@@ -421,6 +525,8 @@ function buildApproximateLocationResult(navigatorRef) {
   const utcOffsetMinutes = getTimeZoneOffsetMinutes(now, timeZone);
   return {
     source: 'approximate_browser_signals',
+    status: 'completed',
+    shouldRetry: false,
     confidenceLevel: 'low',
     permissionState: 'denied',
     coordinates: null,
@@ -431,6 +537,9 @@ function buildApproximateLocationResult(navigatorRef) {
       utcOffset: formatUtcOffset(utcOffsetMinutes),
       locale,
     },
+    summary: regionCode
+      ? `Approximate user location: ${approximateArea}, ${regionCode}.`
+      : `Approximate user location: ${approximateArea}.`,
   };
 }
 
@@ -468,16 +577,30 @@ async function executeGetUserLocation(argumentsValue = {}, runtimeContext = {}) 
         : Number.isFinite(accuracyMeters) && accuracyMeters <= 1000
           ? 'medium'
           : 'low';
+    const latitude = Number(position?.coords?.latitude);
+    const longitude = Number(position?.coords?.longitude);
+    const resolvedLocation = await reverseGeocodeCoordinates(latitude, longitude, runtimeContext);
+    const formattedLocation =
+      typeof resolvedLocation?.formattedLocation === 'string' && resolvedLocation.formattedLocation.trim()
+        ? resolvedLocation.formattedLocation.trim()
+        : null;
     return {
       source: 'browser_geolocation',
+      status: 'completed',
+      shouldRetry: false,
       confidenceLevel,
-      permissionState: permissionState === 'unavailable' ? 'granted' : permissionState,
+      permissionState: 'granted',
       coordinates: {
-        latitude: Number(position?.coords?.latitude),
-        longitude: Number(position?.coords?.longitude),
+        latitude,
+        longitude,
         accuracyMeters: Number.isFinite(accuracyMeters) ? accuracyMeters : null,
       },
+      formattedLocation,
+      resolvedLocation,
       approximateLocation: null,
+      summary: formattedLocation
+        ? `User location: ${formattedLocation}.`
+        : `Precise user coordinates: ${latitude}, ${longitude}.`,
     };
   } catch (error) {
     const errorCode = Number(error?.code);
