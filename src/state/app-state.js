@@ -43,6 +43,7 @@ export function createAppState({
     modelReady: false,
     enginePhase: ENGINE_PHASES.IDLE,
     hasStartedChatWorkspace: false,
+    isPreparingNewConversation: false,
     isGenerating: false,
     isLoadingModel: false,
     conversationCount: 0,
@@ -221,6 +222,9 @@ export function deriveWorkspaceView(state) {
   if (!state?.hasStartedChatWorkspace) {
     return WORKSPACE_VIEWS.HOME;
   }
+  if (state?.isPreparingNewConversation) {
+    return WORKSPACE_VIEWS.PRECHAT;
+  }
   if (!state?.modelReady && !getActiveConversation(state)) {
     return WORKSPACE_VIEWS.PRECHAT;
   }
@@ -252,6 +256,11 @@ export function setSettingsPageOpen(state, value) {
 
 export function setChatWorkspaceStarted(state, value) {
   state.hasStartedChatWorkspace = Boolean(value);
+  return refreshWorkspaceView(state);
+}
+
+export function setPreparingNewConversation(state, value) {
+  state.isPreparingNewConversation = Boolean(value);
   return refreshWorkspaceView(state);
 }
 

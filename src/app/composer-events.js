@@ -12,6 +12,7 @@ export function bindComposerEvents({
   isEngineReady,
   hasStartedWorkspace,
   setChatWorkspaceStarted,
+  setPreparingNewConversation,
   updateWelcomePanelVisibility,
   getPendingComposerAttachments,
   selectedModelSupportsImageInput,
@@ -182,11 +183,14 @@ export function bindComposerEvents({
     }
 
     let activeConversation = getActiveConversation();
+    let createdConversationForSend = false;
     if (!activeConversation) {
       const conversation = createConversation();
       appState.conversations.unshift(conversation);
       appState.activeConversationId = conversation.id;
+      setPreparingNewConversation(appState, false);
       activeConversation = conversation;
+      createdConversationForSend = true;
       clearUserMessageEditSession();
       setChatTitleEditing(appState, false);
       renderConversationList();
@@ -201,8 +205,14 @@ export function bindComposerEvents({
         useDefaults: false,
       }
     );
+    const shouldInitializeEngine =
+      !isEngineReady(appState) || getLoadedModelId() !== activeConversationModelId;
 
-    if (!isEngineReady(appState) || getLoadedModelId() !== activeConversationModelId) {
+    if (createdConversationForSend && !shouldInitializeEngine) {
+      updateWelcomePanelVisibility({ replaceRoute: false });
+    }
+
+    if (shouldInitializeEngine) {
       persistInferencePreferences(appState.activeGenerationConfig);
       setStatus(
         isEngineReady(appState)

@@ -17,6 +17,7 @@ import {
   setLoadingModel,
   setModelReady,
   setOrchestrationRunning,
+  setPreparingNewConversation,
   setSettingsPageOpen,
   setSwitchingVariant,
   setUserMessageEditState,
@@ -192,6 +193,10 @@ describe('app-state', () => {
     state.hasStartedChatWorkspace = true;
     setModelReady(state, false);
     refreshWorkspaceView(state);
+    expect(state.workspaceView).toBe(WORKSPACE_VIEWS.PRECHAT);
+
+    setModelReady(state, true);
+    setPreparingNewConversation(state, true);
     expect(state.workspaceView).toBe(WORKSPACE_VIEWS.PRECHAT);
   });
 });

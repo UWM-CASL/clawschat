@@ -10,10 +10,11 @@ export function bindShellEvents({
   newConversationBtn,
   isGeneratingResponse,
   setChatWorkspaceStarted,
+  setPreparingNewConversation,
   updateWelcomePanelVisibility,
-  createConversation,
   clearUserMessageEditSession,
   setChatTitleEditing,
+  clearPendingComposerAttachments,
   renderConversationList,
   renderTranscript,
   updateChatTitle,
@@ -95,15 +96,19 @@ export function bindShellEvents({
         return;
       }
       setChatWorkspaceStarted(appState, true);
-      const conversation = createConversation();
-      appState.conversations.unshift(conversation);
-      appState.activeConversationId = conversation.id;
+      setPreparingNewConversation(appState, true);
+      appState.activeConversationId = null;
       clearUserMessageEditSession();
       setChatTitleEditing(appState, false);
+      clearPendingComposerAttachments();
+      updateWelcomePanelVisibility({ replaceRoute: false });
       renderConversationList();
       renderTranscript();
       updateChatTitle();
       queueConversationStateSave();
+      if (messageInput instanceof HTMLTextAreaElement) {
+        messageInput.focus();
+      }
     });
   }
 

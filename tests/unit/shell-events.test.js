@@ -37,6 +37,7 @@ function createHarness() {
     conversationSaveTimerId: null,
     conversations: [],
     activeConversationId: null,
+    isPreparingNewConversation: false,
     lastKeyboardShortcutsTrigger: null,
     lastConversationSystemPromptTrigger: null,
   };
@@ -66,10 +67,13 @@ function createHarness() {
       newConversationBtn: document.getElementById('newConversationBtn'),
       isGeneratingResponse: vi.fn(() => false),
       setChatWorkspaceStarted: vi.fn(),
+      setPreparingNewConversation: vi.fn((state, value) => {
+        state.isPreparingNewConversation = value;
+      }),
       updateWelcomePanelVisibility: vi.fn(),
-      createConversation: vi.fn(() => ({ id: 'conversation-1' })),
       clearUserMessageEditSession: vi.fn(),
       setChatTitleEditing: vi.fn(),
+      clearPendingComposerAttachments: vi.fn(),
       renderConversationList: vi.fn(),
       renderTranscript: vi.fn(),
       updateChatTitle: vi.fn(),
@@ -140,5 +144,24 @@ describe('shell-events', () => {
 
     expect(harness.deps.saveChatTitleEdit).toHaveBeenCalledTimes(1);
     expect(harness.deps.cancelChatTitleEdit).toHaveBeenCalledTimes(1);
+  });
+
+  test('new conversation enters pre-chat mode without creating a conversation record', () => {
+    const harness = createHarness();
+    harness.appState.activeConversationId = 'conversation-1';
+    bindShellEvents(harness.deps);
+
+    harness.document.getElementById('newConversationBtn')?.dispatchEvent(
+      new harness.dom.window.MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(harness.deps.setChatWorkspaceStarted).toHaveBeenCalledWith(harness.appState, true);
+    expect(harness.deps.setPreparingNewConversation).toHaveBeenCalledWith(harness.appState, true);
+    expect(harness.appState.activeConversationId).toBeNull();
+    expect(harness.deps.clearPendingComposerAttachments).toHaveBeenCalledTimes(1);
+    expect(harness.deps.updateWelcomePanelVisibility).toHaveBeenCalledWith({ replaceRoute: false });
+    expect(harness.deps.renderConversationList).toHaveBeenCalledTimes(1);
+    expect(harness.deps.queueConversationStateSave).toHaveBeenCalledTimes(1);
+    expect(harness.document.activeElement).toBe(harness.document.getElementById('messageInput'));
   });
 });

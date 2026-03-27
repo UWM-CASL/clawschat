@@ -33,6 +33,7 @@ function createHarness() {
     pendingComposerAttachments: [{ filename: 'diagram.png' }],
     conversations: [],
     activeConversationId: null,
+    isPreparingNewConversation: false,
   };
   const messageInput = document.getElementById('messageInput');
   const sendButton = document.getElementById('sendButton');
@@ -58,6 +59,9 @@ function createHarness() {
       hasStartedWorkspace: vi.fn(() => false),
       setChatWorkspaceStarted: vi.fn((state, value) => {
         state.hasStartedChatWorkspace = value;
+      }),
+      setPreparingNewConversation: vi.fn((state, value) => {
+        state.isPreparingNewConversation = value;
       }),
       updateWelcomePanelVisibility: vi.fn(),
       getPendingComposerAttachments: vi.fn(() => appState.pendingComposerAttachments),
@@ -132,5 +136,29 @@ describe('composer-events', () => {
       'Save or cancel the current message edit before sending a new message.',
     );
     expect(harness.deps.startModelGeneration).not.toHaveBeenCalled();
+  });
+
+  test('creates a new conversation only when the first prompt is submitted', async () => {
+    const harness = createHarness();
+    harness.appState.isPreparingNewConversation = true;
+    harness.deps.hasStartedWorkspace.mockReturnValue(true);
+    harness.deps.isEngineReady.mockReturnValue(true);
+    harness.deps.getLoadedModelId.mockReturnValue('model-1');
+    harness.messageInput.value = 'Hello';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.createConversation).toHaveBeenCalledTimes(1);
+    expect(harness.deps.setPreparingNewConversation).toHaveBeenCalledWith(harness.appState, false);
+    expect(harness.appState.activeConversationId).toBe('conversation-1');
+    expect(harness.deps.initializeEngine).not.toHaveBeenCalled();
+    expect(harness.deps.updateWelcomePanelVisibility).toHaveBeenCalledWith({ replaceRoute: false });
+    expect(harness.deps.addMessageToConversation).toHaveBeenCalledTimes(1);
+    expect(harness.deps.startModelGeneration).toHaveBeenCalledTimes(1);
   });
 });

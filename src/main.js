@@ -98,6 +98,7 @@ import {
   isSettingsView,
   isVariantSwitchingState,
   isLoadingModelState,
+  setPreparingNewConversation,
   setChatTitleEditing,
   setChatWorkspaceStarted,
   setSwitchingVariant,
@@ -329,6 +330,8 @@ const SHORTCUT_KEY = {
 const mathTypesetTimers = new WeakMap();
 const PRE_CHAT_STATUS_HINT_DEFAULT = 'Send your first message to load the selected model.';
 const PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION = 'To see your conversation, load a model first.';
+const PRE_CHAT_STATUS_HINT_MODEL_READY =
+  'The current model is ready. Send your first message to continue with it, or choose a different model first.';
 const appState = createAppState({
   activeGenerationConfig: {
     ...normalizeGenerationLimits(null),
@@ -966,14 +969,16 @@ function updatePreChatStatusHint() {
   if (!(onboardingStatusRegion instanceof HTMLElement)) {
     return;
   }
-  if (selectHasStartedWorkspace(appState) && !isEngineReady(appState) && !isLoadingModelState(appState)) {
+  if (selectHasStartedWorkspace(appState) && !isLoadingModelState(appState)) {
     applyStatusRegion(
       onboardingStatusRegion,
       onboardingStatusRegionHeading,
       onboardingStatusRegionMessage,
-      hasSelectedConversationWithHistory()
-        ? PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION
-        : PRE_CHAT_STATUS_HINT_DEFAULT,
+      appState.isPreparingNewConversation && isEngineReady(appState)
+        ? PRE_CHAT_STATUS_HINT_MODEL_READY
+        : hasSelectedConversationWithHistory()
+          ? PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION
+          : PRE_CHAT_STATUS_HINT_DEFAULT,
       'Setup status'
     );
   }
@@ -1871,10 +1876,7 @@ function updatePreChatActionButtons() {
 }
 
 function updateComposerVisibility() {
-  const showComposer =
-    selectHasStartedWorkspace(appState) &&
-    !isSettingsView(appState) &&
-    (!isEngineReady(appState) || Boolean(getActiveConversation()));
+  const showComposer = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
   setRegionVisibility(chatForm, showComposer);
   if (chatForm instanceof HTMLElement) {
     chatForm.classList.remove('is-prechat');
@@ -1926,6 +1928,7 @@ function setActiveConversationById(conversationId) {
   if (isChatTitleEditingState(appState)) {
     setChatTitleEditing(appState, false);
   }
+  setPreparingNewConversation(appState, false);
   appState.activeConversationId = conversationId;
   const activeConversation = getActiveConversation();
   if (
@@ -2755,6 +2758,7 @@ bindComposerEvents({
   isEngineReady,
   hasStartedWorkspace: selectHasStartedWorkspace,
   setChatWorkspaceStarted,
+  setPreparingNewConversation,
   updateWelcomePanelVisibility,
   getPendingComposerAttachments,
   selectedModelSupportsImageInput,
@@ -2820,10 +2824,11 @@ bindShellEvents({
   newConversationBtn,
   isGeneratingResponse,
   setChatWorkspaceStarted,
+  setPreparingNewConversation,
   updateWelcomePanelVisibility,
-  createConversation,
   clearUserMessageEditSession,
   setChatTitleEditing,
+  clearPendingComposerAttachments,
   renderConversationList,
   renderTranscript,
   updateChatTitle,

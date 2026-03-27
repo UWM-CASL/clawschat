@@ -12,6 +12,8 @@ Student-facing browser chat UI with local model inference.
 - Each conversation stores its own selected model.
 - Changing the model for the active conversation updates that conversation only.
 - Switching to a saved conversation with a different model unloads the previous model worker and loads the selected conversation's model.
+- Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
+- From that pre-chat state, users can keep the currently loaded model or choose a different model before sending the first message.
 - During model load, the workspace shows one progress bar.
 - The URL hash reflects the visible screen:
   - `#/` for setup/home
@@ -28,7 +30,7 @@ Student-facing browser chat UI with local model inference.
   - `Transcript view` with `Standard` and `Compact`
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
-- Before the first model load, the initial pre-chat panel is shown only when no active conversation exists; the bottom message composer keeps the same size before and after model load.
+- The pre-chat panel is shown when no active conversation exists or when `New Conversation` is preparing a fresh chat; the bottom message composer keeps the same size before and after model load.
 - If no active conversation exists, a new untitled conversation is created when the first message is sent.
 - Backend selection supports:
   - `Auto (WebGPU then WASM then CPU)`

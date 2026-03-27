@@ -10,6 +10,7 @@ It also provides derived selectors for:
 
 - active conversation lookup
 - conversation selection checks
+- pre-chat and pending-new-conversation visibility
 - pre-chat composer disabling
 - current route/view resolution
 
@@ -23,6 +24,9 @@ Centralizing them in one object gives the app:
 - a single runtime state source
 - selector-based reads for derived behavior
 - better testability for transitions and visibility logic
+
+One important state bit is whether the workspace is explicitly preparing a new conversation.
+That keeps the app in the pre-chat model-selection view without creating or persisting a draft conversation record until the first message is actually sent.
 
 ## Current boundary
 
