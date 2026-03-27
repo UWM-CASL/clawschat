@@ -15,6 +15,7 @@ This module coordinates application actions that cross boundaries between:
 It currently owns the control flow for:
 
 - engine initialization and deferred model loading
+- explicit unload-before-reload behavior when model/backend selection changes
 - generation start and stop
 - regenerate and fix actions
 - automatic rename orchestration

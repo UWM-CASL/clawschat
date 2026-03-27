@@ -30,11 +30,17 @@ function createControllerHarness() {
   const engine = {
     config: {
       modelId: 'test-model',
+      backendPreference: 'auto',
       generationConfig: state.activeGenerationConfig,
     },
+    worker: null,
     initialize: vi.fn().mockResolvedValue({ backend: 'wasm' }),
     generate: vi.fn(),
     cancelGeneration: vi.fn().mockResolvedValue(undefined),
+    dispose: vi.fn(() => {
+      engine.worker = null;
+      engine.loadedModelId = null;
+    }),
   };
 
   function getActiveConversation() {
@@ -184,6 +190,7 @@ describe('app-controller', () => {
   test('reloads the selected conversation model when a different model is currently loaded', async () => {
     const harness = createControllerHarness();
     harness.state.modelReady = true;
+    harness.engine.worker = {};
     harness.engine.loadedModelId = 'other-model';
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
     addMessageToConversation(conversation, 'user', 'Hello');
@@ -192,7 +199,27 @@ describe('app-controller', () => {
 
     await harness.controller.loadModelForSelectedConversation();
 
+    expect(harness.engine.dispose).toHaveBeenCalledTimes(1);
     expect(harness.engine.initialize).toHaveBeenCalledTimes(1);
+  });
+
+  test('unloads the current model when selecting a different model before the next send', async () => {
+    const harness = createControllerHarness();
+    harness.state.modelReady = true;
+    harness.engine.worker = {};
+    harness.engine.loadedModelId = 'other-model';
+    harness.dependencies.readEngineConfig = () => ({
+      modelId: 'test-model',
+      backendPreference: 'auto',
+      runtime: {},
+      generationConfig: harness.state.activeGenerationConfig,
+    });
+
+    await harness.controller.reinitializeEngineFromSettings();
+
+    expect(harness.engine.dispose).toHaveBeenCalledTimes(1);
+    expect(harness.state.modelReady).toBe(false);
+    expect(harness.callLog).toContain('status:Settings updated. Send a message to load the selected model.');
   });
 
   test('captures emitted tool calls on completed model messages', () => {

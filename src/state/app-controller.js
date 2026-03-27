@@ -73,11 +73,41 @@ export function createAppController(dependencies) {
       ? dependencies.scheduleTask
       : (callback) => window.setTimeout(callback, 0);
 
+  function shouldDisposeEngineBeforeInit(nextConfig = {}) {
+    const nextModelId = nextConfig.modelId
+      ? dependencies.normalizeModelId(nextConfig.modelId)
+      : null;
+    const loadedModelId = dependencies.getLoadedModelId?.();
+    const normalizedLoadedModelId = loadedModelId
+      ? dependencies.normalizeModelId(loadedModelId)
+      : null;
+    const currentBackendPreference =
+      typeof dependencies.engine?.config?.backendPreference === 'string'
+        ? dependencies.engine.config.backendPreference.trim().toLowerCase()
+        : '';
+    const nextBackendPreference =
+      typeof nextConfig.backendPreference === 'string'
+        ? nextConfig.backendPreference.trim().toLowerCase()
+        : '';
+
+    return Boolean(
+      dependencies.engine?.worker &&
+        ((nextModelId && normalizedLoadedModelId && nextModelId !== normalizedLoadedModelId) ||
+          (nextBackendPreference &&
+            currentBackendPreference &&
+            nextBackendPreference !== currentBackendPreference)),
+    );
+  }
+
   async function initializeEngine() {
     const config = dependencies.readEngineConfig();
     dependencies.appendDebug(
       `Initialize requested (model=${config.modelId}, backendPreference=${config.backendPreference})`,
     );
+    if (shouldDisposeEngineBeforeInit(config)) {
+      dependencies.engine.dispose();
+      dependencies.appendDebug('Disposed current model worker before loading the new selection.');
+    }
     setLoadingModel(dependencies.state, true);
     dependencies.clearLoadError();
     dependencies.resetLoadProgressFiles();
@@ -110,9 +140,14 @@ export function createAppController(dependencies) {
   }
 
   async function reinitializeEngineFromSettings() {
+    const nextConfig = dependencies.readEngineConfig();
+    if (shouldDisposeEngineBeforeInit(nextConfig)) {
+      dependencies.engine.dispose();
+      dependencies.appendDebug('Disposed current model worker after model selection changed.');
+    }
     dependencies.persistInferencePreferences();
     setModelReady(dependencies.state, false);
-    dependencies.setStatus('Settings updated. Send a message to load the model with new settings.');
+    dependencies.setStatus('Settings updated. Send a message to load the selected model.');
     dependencies.appendDebug('Inference settings changed; awaiting first message to load model.');
     dependencies.updateActionButtons();
     dependencies.updateWelcomePanelVisibility();
