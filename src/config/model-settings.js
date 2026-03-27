@@ -115,6 +115,21 @@ function normalizeRepositoryUrl(rawUrl, fallbackId) {
   return fallback;
 }
 
+function normalizeLanguageSupport(rawLanguageSupport) {
+  if (!rawLanguageSupport || typeof rawLanguageSupport !== 'object' || Array.isArray(rawLanguageSupport)) {
+    return null;
+  }
+  const label = normalizeModelCardText(rawLanguageSupport.label);
+  const detail = normalizeModelCardText(rawLanguageSupport.detail);
+  if (!label && !detail) {
+    return null;
+  }
+  return {
+    ...(label ? { label } : {}),
+    ...(detail ? { detail } : {}),
+  };
+}
+
 function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
   if (!enabled || !rawToolCalling || typeof rawToolCalling !== 'object' || Array.isArray(rawToolCalling)) {
     return null;
@@ -200,6 +215,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           typeof model?.label === 'string' && model.label.trim() ? model.label.trim() : id;
         const displayName = normalizeModelCardText(model?.displayName) || label;
         const summary = normalizeModelCardText(model?.summary);
+        const languageSupport = normalizeLanguageSupport(model?.languageSupport);
         const repositoryUrl = normalizeRepositoryUrl(model?.repositoryUrl, id);
         const openThinkingTag = model?.thinkingTags?.open;
         const closeThinkingTag = model?.thinkingTags?.close;
@@ -222,6 +238,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           label,
           displayName,
           summary,
+          languageSupport,
           repositoryUrl,
           features,
           toolCalling,
@@ -248,6 +265,7 @@ if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
     label: DEFAULT_MODEL,
     displayName: DEFAULT_MODEL,
     summary: '',
+    languageSupport: null,
     repositoryUrl: `https://huggingface.co/${DEFAULT_MODEL}`,
     features: normalizeFeatures(null),
     toolCalling: null,

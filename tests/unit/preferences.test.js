@@ -150,6 +150,7 @@ describe('preferences controller', () => {
     const qwenCard = cards.find((card) => card.textContent?.includes('Qwen3 0.6B'));
     expect(qwenCard?.textContent).toContain('Short-term memory: 40,960 tokens');
     expect(qwenCard?.textContent).toContain('about 30,720 words');
+    expect(qwenCard?.textContent).toContain('Languages: 100+ languages');
     expect(qwenCard?.textContent).not.toContain('onnx-community/Qwen3-0.6B-ONNX');
     expect(
       /** @type {HTMLAnchorElement | null} */ (qwenCard?.querySelector('.model-card-link'))?.href
@@ -171,6 +172,9 @@ describe('preferences controller', () => {
     expect(legend?.textContent).toContain('Model abilities');
     expect(legend?.textContent).toContain('Accepts image input');
     expect(legend?.textContent).not.toContain('Streams replies as they are generated');
+    expect(qwenCard?.querySelector('.model-card-languages')?.getAttribute('aria-label')).toBe(
+      'Supported languages: 100+ languages and dialects'
+    );
 
     const qwenButton = /** @type {HTMLButtonElement | null} */ (
       qwenCard?.querySelector('.model-card-button')

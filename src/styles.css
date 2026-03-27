@@ -606,18 +606,24 @@
 
 .model-card-summary,
 .model-card-context,
+.model-card-languages,
 .model-card-note {
   margin: 0;
 }
 
 .model-card-summary,
 .model-card-context,
+.model-card-languages,
 .model-card-note {
   font-size: 0.9rem;
   line-height: 1.35;
 }
 
 .model-card-context {
+  color: var(--ink-strong);
+}
+
+.model-card-languages {
   color: var(--ink-strong);
 }
 

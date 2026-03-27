@@ -286,6 +286,16 @@ export function createPreferencesController({
     modelCardLegend.appendChild(list);
   }
 
+  function buildLanguageSupportText(model) {
+    const label = typeof model?.languageSupport?.label === 'string' ? model.languageSupport.label.trim() : '';
+    const detail =
+      typeof model?.languageSupport?.detail === 'string' ? model.languageSupport.detail.trim() : '';
+    if (!label && !detail) {
+      return '';
+    }
+    return detail || label;
+  }
+
   function syncModelCardSelection() {
     if (!(modelCardList instanceof HTMLElement)) {
       return;
@@ -369,6 +379,16 @@ export function createPreferencesController({
         model.generation.maxContextTokens
       )} tokens</strong> (about ${formatWordEstimate(model.generation.maxContextTokens)} words)`;
       selectButton.appendChild(context);
+
+      const languageSupportText = buildLanguageSupportText(model);
+      if (languageSupportText) {
+        const languages = documentRef.createElement('p');
+        languages.className = 'model-card-languages';
+        languages.innerHTML = `<i class="bi bi-translate" aria-hidden="true"></i> Languages: <strong>${model.languageSupport.label}</strong>`;
+        languages.title = languageSupportText;
+        languages.setAttribute('aria-label', `Supported languages: ${languageSupportText}`);
+        selectButton.appendChild(languages);
+      }
 
       const featureList = documentRef.createElement('ul');
       featureList.className = 'model-card-features';

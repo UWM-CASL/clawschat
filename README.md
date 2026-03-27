@@ -143,6 +143,7 @@ Student-facing browser chat UI with local model inference.
 - `models`: options shown in the pre-chat model card picker
 - `models[].displayName`: friendly name shown on the card
 - `models[].summary`: short description shown on the card
+- `models[].languageSupport`: user-facing language indicator shown on the card
 - `models[].repositoryUrl`: model details link used from the card footer
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)
   - `models[].runtime`: per-model runtime hints (`dtype`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
