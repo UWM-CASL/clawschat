@@ -119,14 +119,30 @@ function normalizeLanguageSupport(rawLanguageSupport) {
   if (!rawLanguageSupport || typeof rawLanguageSupport !== 'object' || Array.isArray(rawLanguageSupport)) {
     return null;
   }
-  const label = normalizeModelCardText(rawLanguageSupport.label);
-  const detail = normalizeModelCardText(rawLanguageSupport.detail);
-  if (!label && !detail) {
+  const tags = Array.isArray(rawLanguageSupport.tags)
+    ? rawLanguageSupport.tags
+        .map((tag) => {
+          if (!tag || typeof tag !== 'object' || Array.isArray(tag)) {
+            return null;
+          }
+          const code = normalizeModelCardText(tag.code).toUpperCase();
+          const name = normalizeModelCardText(tag.name);
+          if (!code || !name || code.length !== 2) {
+            return null;
+          }
+          return { code, name };
+        })
+        .filter(Boolean)
+    : [];
+  const sourceUrl = normalizeRepositoryUrl(rawLanguageSupport.sourceUrl, '');
+  const hasMore = rawLanguageSupport.hasMore === true;
+  if (!tags.length && !sourceUrl) {
     return null;
   }
   return {
-    ...(label ? { label } : {}),
-    ...(detail ? { detail } : {}),
+    tags,
+    ...(hasMore ? { hasMore: true } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
   };
 }
 

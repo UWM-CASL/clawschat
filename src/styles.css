@@ -627,6 +627,41 @@
   color: var(--ink-strong);
 }
 
+.model-card-language-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  vertical-align: middle;
+}
+
+.model-card-language-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  padding: 0.14rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elevated) 92%, transparent);
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.model-card-language-overflow {
+  color: var(--action-btn-text);
+  font-weight: 600;
+  text-underline-offset: 0.14em;
+}
+
+.model-card-language-overflow:hover,
+.model-card-language-overflow:focus-visible {
+  color: var(--primary-btn-hover-bg);
+}
+
 .model-card-note {
   color: var(--ink-muted);
 }

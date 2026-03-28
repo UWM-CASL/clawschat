@@ -287,13 +287,65 @@ export function createPreferencesController({
   }
 
   function buildLanguageSupportText(model) {
-    const label = typeof model?.languageSupport?.label === 'string' ? model.languageSupport.label.trim() : '';
-    const detail =
-      typeof model?.languageSupport?.detail === 'string' ? model.languageSupport.detail.trim() : '';
-    if (!label && !detail) {
+    const tags = Array.isArray(model?.languageSupport?.tags) ? model.languageSupport.tags : [];
+    if (!tags.length) {
       return '';
     }
-    return detail || label;
+    return tags.map((tag) => `${tag.name} (${tag.code})`).join(', ');
+  }
+
+  function shouldShowLanguageOverflow(model, visibleTagCount) {
+    const tags = Array.isArray(model?.languageSupport?.tags) ? model.languageSupport.tags : [];
+    return tags.length > visibleTagCount || model?.languageSupport?.hasMore === true;
+  }
+
+  function createLanguageSupportNode(model) {
+    const tags = Array.isArray(model?.languageSupport?.tags) ? model.languageSupport.tags : [];
+    if (!tags.length) {
+      return null;
+    }
+    const visibleTagCount = 6;
+    const languages = documentRef.createElement('p');
+    languages.className = 'model-card-languages';
+
+    const icon = documentRef.createElement('i');
+    icon.className = 'bi bi-translate';
+    icon.setAttribute('aria-hidden', 'true');
+    languages.appendChild(icon);
+    languages.append(' Languages: ');
+
+    const list = documentRef.createElement('span');
+    list.className = 'model-card-language-list';
+    tags.slice(0, visibleTagCount).forEach((tag, index) => {
+      if (index > 0) {
+        list.append(' ');
+      }
+      const abbr = documentRef.createElement('abbr');
+      abbr.className = 'model-card-language-tag';
+      abbr.title = tag.name;
+      abbr.textContent = tag.code;
+      list.appendChild(abbr);
+    });
+    languages.appendChild(list);
+
+    if (shouldShowLanguageOverflow(model, visibleTagCount) && model.languageSupport.sourceUrl) {
+      languages.append(' ');
+      const overflowLink = documentRef.createElement('a');
+      overflowLink.className = 'model-card-language-overflow';
+      overflowLink.href = model.languageSupport.sourceUrl;
+      overflowLink.target = '_blank';
+      overflowLink.rel = 'noopener noreferrer';
+      overflowLink.textContent = 'and more';
+      languages.appendChild(overflowLink);
+    }
+
+    const languageSupportText = buildLanguageSupportText(model);
+    const ariaLabel = shouldShowLanguageOverflow(model, visibleTagCount)
+      ? `Supported languages: ${languageSupportText}, and more.`
+      : `Supported languages: ${languageSupportText}`;
+    languages.title = ariaLabel.replace(/^Supported languages:\s*/, '');
+    languages.setAttribute('aria-label', ariaLabel);
+    return languages;
   }
 
   function syncModelCardSelection() {
@@ -380,13 +432,8 @@ export function createPreferencesController({
       )} tokens</strong> (about ${formatWordEstimate(model.generation.maxContextTokens)} words)`;
       selectButton.appendChild(context);
 
-      const languageSupportText = buildLanguageSupportText(model);
-      if (languageSupportText) {
-        const languages = documentRef.createElement('p');
-        languages.className = 'model-card-languages';
-        languages.innerHTML = `<i class="bi bi-translate" aria-hidden="true"></i> Languages: <strong>${model.languageSupport.label}</strong>`;
-        languages.title = languageSupportText;
-        languages.setAttribute('aria-label', `Supported languages: ${languageSupportText}`);
+      const languages = createLanguageSupportNode(model);
+      if (languages) {
         selectButton.appendChild(languages);
       }
 
@@ -592,31 +639,38 @@ export function createPreferencesController({
       ) {
         return;
       }
-      const enabledButtons = Array.from(modelCardList.querySelectorAll('.model-card-button')).filter(
-        (button) => button instanceof HTMLButtonElement && !button.disabled
+      /** @type {HTMLButtonElement[]} */
+      const navigableButtons = Array.from(modelCardList.querySelectorAll('.model-card-button')).reduce(
+        (buttons, button) => {
+          if (button instanceof HTMLButtonElement && !button.disabled) {
+            buttons.push(button);
+          }
+          return buttons;
+        },
+        []
       );
-      if (!enabledButtons.length) {
+      if (!navigableButtons.length) {
         return;
       }
       event.preventDefault();
       if (event.key === 'Home') {
-        enabledButtons[0].focus();
-        setSelectedModelId(enabledButtons[0].dataset.modelId || DEFAULT_MODEL, { dispatch: true });
+        navigableButtons[0].focus();
+        setSelectedModelId(navigableButtons[0].dataset.modelId || DEFAULT_MODEL, { dispatch: true });
         return;
       }
       if (event.key === 'End') {
-        const lastButton = enabledButtons[enabledButtons.length - 1];
+        const lastButton = navigableButtons[navigableButtons.length - 1];
         lastButton.focus();
         setSelectedModelId(lastButton.dataset.modelId || DEFAULT_MODEL, { dispatch: true });
         return;
       }
       const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
-      const currentIndex = enabledButtons.findIndex(
+      const currentIndex = navigableButtons.findIndex(
         (button) => button.dataset.modelId === normalizeModelId(getModelPickerValue())
       );
       const nextIndex =
-        currentIndex < 0 ? 0 : (currentIndex + direction + enabledButtons.length) % enabledButtons.length;
-      const nextButton = enabledButtons[nextIndex];
+        currentIndex < 0 ? 0 : (currentIndex + direction + navigableButtons.length) % navigableButtons.length;
+      const nextButton = navigableButtons[nextIndex];
       nextButton.focus();
       setSelectedModelId(nextButton.dataset.modelId || DEFAULT_MODEL, { dispatch: true });
     });
