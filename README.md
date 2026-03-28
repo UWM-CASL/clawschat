@@ -119,7 +119,9 @@ Student-facing browser chat UI with local model inference.
 ## Supported models
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
+  - Uses the published `q4f16` web export.
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+  - Uses the published `q4f16` web export.
 - `onnx-community/Qwen3-0.6B-ONNX`
   - Uses the model card's WebGPU-recommended `q4f16` runtime.
   - Uses the model card's recommended sampling defaults: temperature `0.6`, top-k `20`, top-p `0.95`.
