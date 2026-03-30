@@ -1,0 +1,52 @@
+{
+  "id": "pdf-to-markdown",
+  "description": "Prepare extracted PDF text for model consumption by chunking the parser output, converting each chunk into conservative Markdown, and merging the results.",
+  "steps": [
+    {
+      "type": "transform",
+      "stepName": "Chunk extracted PDF text",
+      "transform": "chunkText",
+      "source": "documentPages",
+      "outputKey": "documentChunks",
+      "parameters": {
+        "maxChars": 5000,
+        "overlapChars": 400,
+        "textField": "text",
+        "pageField": "pageNumber"
+      }
+    },
+    {
+      "type": "forEach",
+      "stepName": "Convert each chunk to Markdown",
+      "input": "documentChunks",
+      "itemName": "chunk",
+      "outputKey": "chunkMarkdown",
+      "prompt": "You are converting extracted PDF text into compact Markdown for downstream model use.\nPreserve meaning.\nDo not summarize.\nDo not invent structure or missing text.\nPreserve page markers and equations when possible.\nIf structure is uncertain, mark it briefly in Markdown rather than guessing.\n\nChunk {{chunk.chunkIndex}} of {{itemCount}} ({{chunk.pageLabel}}):\n\n{{chunk.text}}",
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return Markdown only. No commentary."
+      },
+      "outputProcessing": {
+        "stripThinking": true
+      }
+    },
+    {
+      "type": "join",
+      "stepName": "Combine chunk Markdown",
+      "source": "chunkMarkdown",
+      "outputKey": "combinedChunkMarkdown",
+      "separator": "\n\n"
+    },
+    {
+      "stepName": "Finalize the document Markdown",
+      "prompt": "You are finalizing a Markdown document produced from chunked PDF extraction.\nKeep all substantive content.\nRemove obvious repeated headers or footers when they appear duplicated from chunk boundaries.\nDo not summarize.\nDo not add content that is not present.\nPreserve page references.\n\nChunk Markdown:\n{{combinedChunkMarkdown}}",
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return the finalized Markdown document only."
+      },
+      "outputProcessing": {
+        "stripThinking": true
+      }
+    }
+  ]
+}

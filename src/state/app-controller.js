@@ -24,7 +24,7 @@ function toErrorMessage(value) {
  * @param {{
  *   state: any;
  *   engine: any;
- *   runOrchestration: (orchestration: any, variables?: Record<string, string>, options?: any) => Promise<{finalPrompt: string, finalOutput: string}>;
+ *   runOrchestration: (orchestration: any, variables?: Record<string, any>, options?: any) => Promise<{finalPrompt: string, finalOutput: any}>;
  *   renameOrchestration: any;
  *   fixOrchestration: any;
  *   readEngineConfig: () => any;
