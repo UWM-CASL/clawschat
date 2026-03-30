@@ -91,9 +91,6 @@ export function bindComposerEvents({
     imageAttachmentInput instanceof HTMLInputElement
   ) {
     addImagesButton.addEventListener('click', () => {
-      if (!selectedModelSupportsImageInput()) {
-        return;
-      }
       imageAttachmentInput.click();
     });
 

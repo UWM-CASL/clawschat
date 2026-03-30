@@ -122,6 +122,19 @@ describe('composer-events', () => {
     expect(harness.deps.setStatus).toHaveBeenCalledWith('Removed diagram.png.');
   });
 
+  test('opens the attachment picker even when image input is unavailable', () => {
+    const harness = createHarness();
+    const clickSpy = vi.fn();
+    harness.deps.imageAttachmentInput.click = clickSpy;
+    bindComposerEvents(harness.deps);
+
+    harness.deps.addImagesButton.dispatchEvent(
+      new harness.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
   test('blocks submit while a message edit is active', () => {
     const harness = createHarness();
     harness.deps.isMessageEditActive.mockReturnValue(true);
