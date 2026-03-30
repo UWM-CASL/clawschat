@@ -144,7 +144,6 @@ Student-facing browser chat UI with local model inference.
 - Model support configuration lives in `src/config/models.json`:
 - `models`: options shown in the pre-chat model card picker
 - `models[].displayName`: friendly name shown on the card
-- `models[].summary`: short description shown on the card
 - `models[].languageSupport`: user-facing language tags shown on the card, with a publisher-linked `and more` suffix when needed
 - `models[].repositoryUrl`: model details link used from the card footer
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)

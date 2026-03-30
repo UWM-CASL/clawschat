@@ -5,7 +5,6 @@
       "id": "onnx-community/Llama-3.2-3B-Instruct-onnx-web",
       "label": "onnx-community/Llama-3.2-3B-Instruct-onnx-web",
       "displayName": "Llama 3.2 3B Instruct",
-      "summary": "Balanced default for general questions and writing.",
       "languageSupport": {
         "tags": [
           { "code": "en", "name": "English" },
@@ -53,7 +52,6 @@
       "id": "onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa",
       "label": "onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa",
       "displayName": "Llama 3.2 1B Instruct",
-      "summary": "Smaller and lighter for quicker local startup on modest devices.",
       "languageSupport": {
         "tags": [
           { "code": "en", "name": "English" },
@@ -96,7 +94,6 @@
       "id": "onnx-community/Qwen3-0.6B-ONNX",
       "label": "onnx-community/Qwen3-0.6B-ONNX",
       "displayName": "Qwen3 0.6B",
-      "summary": "Small model with thinking and tool support.",
       "languageSupport": {
         "tags": [
           { "code": "en", "name": "English" },
@@ -148,7 +145,6 @@
       "id": "LiquidAI/LFM2.5-1.2B-Thinking-ONNX",
       "label": "LiquidAI/LFM2.5-1.2B-Thinking-ONNX",
       "displayName": "Liquid LFM 2.5 1.2B Thinking",
-      "summary": "Reasoning-focused model that requires WebGPU.",
       "languageSupport": {
         "tags": [
           { "code": "en", "name": "English" },
@@ -201,7 +197,6 @@
       "id": "onnx-community/gemma-3n-E2B-it-ONNX",
       "label": "onnx-community/gemma-3n-E2B-it-ONNX",
       "displayName": "Gemma 3n E2B",
-      "summary": "Multimodal option for text, images, audio, and video.",
       "languageSupport": {
         "tags": [
           { "code": "en", "name": "English" },

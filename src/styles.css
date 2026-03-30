@@ -550,6 +550,10 @@
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: 0 10px 20px rgba(22, 35, 56, 0.08);
   overflow: hidden;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
 }
 
 .model-card.is-unavailable {
@@ -566,15 +570,28 @@
   display: grid;
   gap: 0.7rem;
   min-height: 100%;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.model-card:hover,
+.model-card:focus-within {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--conversation-active-border) 72%, var(--border-soft));
+  box-shadow: 0 16px 32px rgba(22, 35, 56, 0.14);
 }
 
 .model-card-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-muted) 55%, var(--surface));
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--conversation-active-border) 56%, transparent);
 }
 
 .model-card-button.is-selected {
-  background: color-mix(in srgb, var(--conversation-active-bg) 72%, var(--surface));
-  box-shadow: inset 0 0 0 2px var(--conversation-active-border);
+  background: color-mix(in srgb, var(--conversation-active-bg) 82%, var(--surface));
+  box-shadow:
+    inset 0 0 0 3px var(--conversation-active-border),
+    inset 0 0 0 999px color-mix(in srgb, var(--conversation-active-bg) 18%, transparent);
 }
 
 .model-card-button:disabled {
@@ -604,14 +621,12 @@
   flex: 0 0 auto;
 }
 
-.model-card-summary,
 .model-card-context,
 .model-card-languages,
 .model-card-note {
   margin: 0;
 }
 
-.model-card-summary,
 .model-card-context,
 .model-card-languages,
 .model-card-note {
@@ -621,6 +636,7 @@
 
 .model-card-context {
   color: var(--ink-strong);
+  font-weight: 600;
 }
 
 .model-card-languages {
@@ -1770,6 +1786,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .model-card,
+  .model-card-button {
+    transition: none;
+    transform: none;
+  }
+
   .model-message .message-bubble::before,
   .model-message .message-bubble::after {
     transition: none;

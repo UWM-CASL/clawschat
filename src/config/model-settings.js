@@ -230,7 +230,6 @@ const configuredModels = Array.isArray(modelCatalog?.models)
         const label =
           typeof model?.label === 'string' && model.label.trim() ? model.label.trim() : id;
         const displayName = normalizeModelCardText(model?.displayName) || label;
-        const summary = normalizeModelCardText(model?.summary);
         const languageSupport = normalizeLanguageSupport(model?.languageSupport);
         const repositoryUrl = normalizeRepositoryUrl(model?.repositoryUrl, id);
         const openThinkingTag = model?.thinkingTags?.open;
@@ -253,7 +252,6 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           id,
           label,
           displayName,
-          summary,
           languageSupport,
           repositoryUrl,
           features,
@@ -280,7 +278,6 @@ if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
     id: DEFAULT_MODEL,
     label: DEFAULT_MODEL,
     displayName: DEFAULT_MODEL,
-    summary: '',
     languageSupport: null,
     repositoryUrl: `https://huggingface.co/${DEFAULT_MODEL}`,
     features: normalizeFeatures(null),

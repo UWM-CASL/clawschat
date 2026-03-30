@@ -4,7 +4,6 @@ Model support is configured in `src/config/models.json`:
 
 - `models`: list of selectable models (`id`, `label`, optional card metadata, optional `features`)
 - `models[].displayName`: friendly card title shown in the pre-chat model picker
-- `models[].summary`: short supporting description shown under the title
 - `models[].languageSupport`: optional language-tag metadata for the pre-chat picker
   - `tags`: ordered language entries with two-letter `code` and full `name`
   - `hasMore`: optional flag to show a linked `and more` suffix when the publisher supports additional languages
@@ -72,7 +71,7 @@ Notes:
 
 - The model is downloaded at runtime by Transformers.js and cached in-browser for reuse.
 - Model assets are not committed to this repository.
-- The pre-chat picker presents each model as a single-select card with icon-only ability badges, language tags, short-term memory, and a rough word estimate (`tokens * 0.75`).
+- The pre-chat picker presents each model as a single-select card with icon-only ability badges, language tags, and short-term memory shown as tokens plus a rough word estimate rounded to the nearest 100.
 - Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
 - Settings fields for maximum output/context tokens are numeric, step in 8, and disabled until a model is loaded.
 - Token fields show an estimated words value based on `tokens * 0.75`.

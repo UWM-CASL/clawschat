@@ -218,7 +218,8 @@ export function createPreferencesController({
   }
 
   function formatWordEstimate(tokenCount) {
-    return formatInteger(Math.round((Number(tokenCount) || 0) * 0.75));
+    const roundedEstimate = Math.round(((Number(tokenCount) || 0) * 0.75) / 100) * 100;
+    return formatInteger(roundedEstimate);
   }
 
   const modelCardLegend = documentRef.getElementById('modelCardLegend');
@@ -418,18 +419,11 @@ export function createPreferencesController({
       }
       selectButton.appendChild(titleRow);
 
-      if (model.summary) {
-        const summary = documentRef.createElement('p');
-        summary.className = 'model-card-summary';
-        summary.textContent = model.summary;
-        selectButton.appendChild(summary);
-      }
-
       const context = documentRef.createElement('p');
       context.className = 'model-card-context';
-      context.innerHTML = `<i class="bi bi-text-paragraph" aria-hidden="true"></i> Short-term memory: <strong>${formatInteger(
+      context.innerHTML = `<i class="bi bi-text-paragraph" aria-hidden="true"></i> <strong>${formatInteger(
         model.generation.maxContextTokens
-      )} tokens</strong> (about ${formatWordEstimate(model.generation.maxContextTokens)} words)`;
+      )} tokens</strong> / about ${formatWordEstimate(model.generation.maxContextTokens)} words`;
       selectButton.appendChild(context);
 
       const languages = createLanguageSupportNode(model);
