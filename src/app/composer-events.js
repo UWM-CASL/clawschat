@@ -4,6 +4,8 @@ export function bindComposerEvents({
   messageInput,
   sendButton,
   addImagesButton,
+  attachImageMenuItem,
+  attachFileMenuItem,
   imageAttachmentInput,
   composerAttachmentTray,
   isGeneratingResponse,
@@ -40,6 +42,9 @@ export function bindComposerEvents({
   startModelGeneration,
   stopGeneration,
 }) {
+  const FILE_ATTACHMENT_ACCEPT = '.txt,.csv,.md,.pdf';
+  const IMAGE_ATTACHMENT_ACCEPT = 'image/*';
+
   const isSupportedTextAttachment = (file) => {
     const name = typeof file?.name === 'string' ? file.name.trim().toLowerCase() : '';
     return (
@@ -48,6 +53,18 @@ export function bindComposerEvents({
       name.endsWith('.md') ||
       name.endsWith('.pdf')
     );
+  };
+
+  const setAttachmentPickerMode = (mode) => {
+    if (!(imageAttachmentInput instanceof HTMLInputElement)) {
+      return;
+    }
+    if (mode === 'image') {
+      imageAttachmentInput.accept = IMAGE_ATTACHMENT_ACCEPT;
+    } else if (mode === 'file') {
+      imageAttachmentInput.accept = FILE_ATTACHMENT_ACCEPT;
+    }
+    imageAttachmentInput.dataset.attachmentMode = mode;
   };
 
   if (sendButton) {
@@ -90,7 +107,21 @@ export function bindComposerEvents({
     addImagesButton instanceof HTMLButtonElement &&
     imageAttachmentInput instanceof HTMLInputElement
   ) {
-    addImagesButton.addEventListener('click', () => {
+    attachImageMenuItem?.addEventListener('click', () => {
+      if (attachImageMenuItem instanceof HTMLButtonElement && attachImageMenuItem.disabled) {
+        setStatus('Image attachments are not available for the selected model.');
+        return;
+      }
+      if (!selectedModelSupportsImageInput()) {
+        setStatus('Image attachments are not available for the selected model.');
+        return;
+      }
+      setAttachmentPickerMode('image');
+      imageAttachmentInput.click();
+    });
+
+    attachFileMenuItem?.addEventListener('click', () => {
+      setAttachmentPickerMode('file');
       imageAttachmentInput.click();
     });
 
@@ -100,18 +131,35 @@ export function bindComposerEvents({
       if (!files.length) {
         return;
       }
+      const attachmentMode =
+        event.target instanceof HTMLInputElement ? event.target.dataset.attachmentMode || '' : '';
       const imageInputSupported = selectedModelSupportsImageInput();
-      const supportedFiles = files.filter(
-        (file) => (file.type && file.type.startsWith('image/')) || isSupportedTextAttachment(file),
-      );
-      const allowedFiles = supportedFiles.filter(
-        (file) => !file.type.startsWith('image/') || imageInputSupported,
-      );
+      const supportedFiles = files.filter((file) => {
+        if (attachmentMode === 'image') {
+          return Boolean(file.type && file.type.startsWith('image/'));
+        }
+        if (attachmentMode === 'file') {
+          return isSupportedTextAttachment(file);
+        }
+        return (file.type && file.type.startsWith('image/')) || isSupportedTextAttachment(file);
+      });
+      const allowedFiles = supportedFiles.filter((file) => {
+        if (!file.type.startsWith('image/')) {
+          return true;
+        }
+        return imageInputSupported;
+      });
       if (!allowedFiles.length) {
         setStatus(
-          imageInputSupported
-            ? 'Only image, .txt, .csv, .md, and .pdf files can be attached.'
-            : 'Only .txt, .csv, .md, and .pdf files can be attached for this model.'
+          attachmentMode === 'image'
+            ? imageInputSupported
+              ? 'Only image files can be attached from this menu option.'
+              : 'Image attachments are not available for the selected model.'
+            : attachmentMode === 'file'
+              ? 'Only .txt, .csv, .md, and .pdf files can be attached from this menu option.'
+              : imageInputSupported
+                ? 'Only image, .txt, .csv, .md, and .pdf files can be attached.'
+                : 'Only .txt, .csv, .md, and .pdf files can be attached for this model.'
         );
         return;
       }
@@ -146,6 +194,7 @@ export function bindComposerEvents({
           }`
         );
       } finally {
+        delete imageAttachmentInput.dataset.attachmentMode;
         imageAttachmentInput.value = '';
       }
     });

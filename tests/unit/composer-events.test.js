@@ -12,6 +12,8 @@ function createHarness() {
           <input id="imageAttachmentInput" type="file" />
         </form>
         <button id="addImagesButton" type="button"></button>
+        <button id="attachImageMenuItem" type="button"></button>
+        <button id="attachFileMenuItem" type="button"></button>
         <div id="composerAttachmentTray">
           <button class="composer-attachment-remove" data-attachment-index="0"></button>
         </div>
@@ -50,6 +52,8 @@ function createHarness() {
       messageInput,
       sendButton,
       addImagesButton: document.getElementById('addImagesButton'),
+      attachImageMenuItem: document.getElementById('attachImageMenuItem'),
+      attachFileMenuItem: document.getElementById('attachFileMenuItem'),
       imageAttachmentInput: document.getElementById('imageAttachmentInput'),
       composerAttachmentTray: document.getElementById('composerAttachmentTray'),
       isGeneratingResponse: vi.fn(() => false),
@@ -122,17 +126,49 @@ describe('composer-events', () => {
     expect(harness.deps.setStatus).toHaveBeenCalledWith('Removed diagram.png.');
   });
 
-  test('opens the attachment picker even when image input is unavailable', () => {
+  test('opens the file picker from the file menu option', () => {
     const harness = createHarness();
     const clickSpy = vi.fn();
     harness.deps.imageAttachmentInput.click = clickSpy;
     bindComposerEvents(harness.deps);
 
-    harness.deps.addImagesButton.dispatchEvent(
+    harness.deps.attachFileMenuItem.dispatchEvent(
       new harness.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
     );
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(harness.deps.imageAttachmentInput.accept).toBe('.txt,.csv,.md,.pdf');
+  });
+
+  test('blocks image picker from the image menu option when the model does not support images', () => {
+    const harness = createHarness();
+    const clickSpy = vi.fn();
+    harness.deps.imageAttachmentInput.click = clickSpy;
+    bindComposerEvents(harness.deps);
+
+    harness.deps.attachImageMenuItem.dispatchEvent(
+      new harness.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Image attachments are not available for the selected model.',
+    );
+  });
+
+  test('opens the image picker from the image menu option when the model supports images', () => {
+    const harness = createHarness();
+    const clickSpy = vi.fn();
+    harness.deps.imageAttachmentInput.click = clickSpy;
+    harness.deps.selectedModelSupportsImageInput.mockReturnValue(true);
+    bindComposerEvents(harness.deps);
+
+    harness.deps.attachImageMenuItem.dispatchEvent(
+      new harness.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(harness.deps.imageAttachmentInput.accept).toBe('image/*');
   });
 
   test('blocks submit while a message edit is active', () => {
@@ -243,5 +279,41 @@ describe('composer-events', () => {
       expect.objectContaining({ filename: 'lesson.pdf', type: 'file', extension: 'pdf' }),
     ]);
     expect(harness.deps.setStatus).toHaveBeenCalledWith('1 file attached.');
+  });
+
+  test('file menu ignores image files even when the model supports image input', async () => {
+    const harness = createHarness();
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.selectedModelSupportsImageInput.mockReturnValue(true);
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    harness.deps.createComposerAttachmentFromFile.mockImplementation(async (file) => ({
+      id: `attachment-${file.name}`,
+      type: 'file',
+      filename: file.name,
+    }));
+    bindComposerEvents(harness.deps);
+
+    harness.deps.attachFileMenuItem.dispatchEvent(
+      new harness.dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    const attachmentInput = harness.deps.imageAttachmentInput;
+    Object.defineProperty(attachmentInput, 'files', {
+      configurable: true,
+      value: [new harness.dom.window.File(['binary'], 'photo.png', { type: 'image/png' })],
+    });
+
+    attachmentInput.dispatchEvent(
+      new harness.dom.window.Event('change', { bubbles: true, cancelable: true })
+    );
+
+    await new Promise((resolve) => harness.dom.window.setTimeout(resolve, 0));
+
+    expect(harness.deps.createComposerAttachmentFromFile).not.toHaveBeenCalled();
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Only .txt, .csv, .md, and .pdf files can be attached from this menu option.'
+    );
   });
 });

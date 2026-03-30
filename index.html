@@ -335,16 +335,40 @@
               aria-label="Attached files"
             ></section>
             <div class="composer-row">
-              <button
-                id="addImagesButton"
-                type="button"
-                class="btn btn-outline-secondary composer-attach-button"
-                aria-label="Add file or image"
-                title="Add file or image"
-              >
-                <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                <span class="visually-hidden">Add file or image</span>
-              </button>
+              <div class="dropdown">
+                <button
+                  id="addImagesButton"
+                  type="button"
+                  class="btn btn-outline-secondary composer-attach-button dropdown-toggle dropdown-toggle-no-caret"
+                  data-bs-toggle="dropdown"
+                  data-bs-auto-close="true"
+                  aria-label="Add attachment"
+                  title="Add attachment"
+                >
+                  <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                  <span class="visually-hidden">Add attachment</span>
+                </button>
+                <ul class="dropdown-menu composer-attach-menu" aria-label="Add attachment options">
+                  <li>
+                    <button
+                      id="attachImageMenuItem"
+                      type="button"
+                      class="dropdown-item"
+                    >
+                      Attach an Image
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      id="attachFileMenuItem"
+                      type="button"
+                      class="dropdown-item"
+                    >
+                      Attach a File
+                    </button>
+                  </li>
+                </ul>
+              </div>
               <textarea
                 id="messageInput"
                 class="form-control"

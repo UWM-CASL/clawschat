@@ -1471,6 +1471,10 @@
   line-height: 1;
 }
 
+.composer-attach-menu {
+  min-width: 12rem;
+}
+
 .composer textarea {
   flex: 1 1 auto;
   resize: none;

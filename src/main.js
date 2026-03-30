@@ -443,6 +443,8 @@ const chatForm = document.querySelector('.composer');
 const imageAttachmentInput = document.getElementById('imageAttachmentInput');
 const composerAttachmentTray = document.getElementById('composerAttachmentTray');
 const addImagesButton = document.getElementById('addImagesButton');
+const attachImageMenuItem = document.getElementById('attachImageMenuItem');
+const attachFileMenuItem = document.getElementById('attachFileMenuItem');
 const messageInput = document.getElementById('messageInput');
 const chatTranscript = document.getElementById('chatTranscript');
 const chatTranscriptWrap = document.getElementById('chatTranscriptWrap');
@@ -2369,6 +2371,17 @@ function updateActionButtons() {
   if (addImagesButton instanceof HTMLButtonElement) {
     addImagesButton.disabled = composerControlsDisabled || isGeneratingResponse(appState);
   }
+  if (attachImageMenuItem instanceof HTMLButtonElement) {
+    const imageMenuDisabled =
+      composerControlsDisabled || isGeneratingResponse(appState) || !imageInputSupported;
+    attachImageMenuItem.disabled = imageMenuDisabled;
+    attachImageMenuItem.setAttribute('aria-disabled', imageMenuDisabled ? 'true' : 'false');
+  }
+  if (attachFileMenuItem instanceof HTMLButtonElement) {
+    const fileMenuDisabled = composerControlsDisabled || isGeneratingResponse(appState);
+    attachFileMenuItem.disabled = fileMenuDisabled;
+    attachFileMenuItem.setAttribute('aria-disabled', fileMenuDisabled ? 'true' : 'false');
+  }
   if (imageAttachmentInput instanceof HTMLInputElement) {
     imageAttachmentInput.disabled = composerControlsDisabled || isGeneratingResponse(appState);
     imageAttachmentInput.accept = getAttachmentButtonAcceptValue(imageInputSupported);
@@ -3169,6 +3182,8 @@ bindComposerEvents({
   messageInput,
   sendButton,
   addImagesButton,
+  attachImageMenuItem,
+  attachFileMenuItem,
   imageAttachmentInput,
   composerAttachmentTray,
   isGeneratingResponse,

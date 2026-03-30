@@ -77,8 +77,8 @@ Student-facing browser chat UI with local model inference.
 - IndexedDB persistence stores conversations, message nodes, and artifacts as separate records to avoid a single ever-growing snapshot entry.
 - Binary artifacts are stored once in IndexedDB as blob-backed records; repeated derived text payloads are gzip-compressed when the browser supports `CompressionStream`.
 - The composer supports local attachments:
-  - `Add file or image` opens a file picker for supported attachments.
-  - Image attachments remain available for models that support image input.
+  - The `+` composer control opens an attachment menu with `Attach an Image` and `Attach a File`.
+  - `Attach an Image` is disabled for models that do not support image input.
   - Text attachments currently support `.txt`, `.csv`, and `.md` files and are added to the user prompt as model-visible text.
   - PDF attachments (`.pdf`) are parsed locally in-browser and converted into page-aware extracted text before being added to the user prompt.
   - PDF importing is parser-first and deterministic in the current implementation; OCR is not available yet, so image-only PDFs are rejected.
