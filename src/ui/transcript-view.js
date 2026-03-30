@@ -172,6 +172,29 @@ export function createTranscriptView(dependencies) {
           card.append(toggle, preview);
         }
 
+        if (Array.isArray(part.conversionWarnings) && part.conversionWarnings.length) {
+          const warningWrap = documentRef.createElement('div');
+          warningWrap.className = 'mt-2';
+          const warningLabel = documentRef.createElement('p');
+          warningLabel.className = 'mb-1 fw-semibold';
+          warningLabel.textContent = 'Conversion warnings';
+          const warningList = documentRef.createElement('ul');
+          warningList.className = 'mb-0 ps-3';
+          part.conversionWarnings.forEach((warningText) => {
+            const warning = typeof warningText === 'string' ? warningText.trim() : '';
+            if (!warning) {
+              return;
+            }
+            const item = documentRef.createElement('li');
+            item.textContent = warning;
+            warningList.appendChild(item);
+          });
+          if (warningList.childElementCount) {
+            warningWrap.append(warningLabel, warningList);
+            card.appendChild(warningWrap);
+          }
+        }
+
         fileList.appendChild(card);
       });
       content.appendChild(fileList);

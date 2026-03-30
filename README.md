@@ -77,6 +77,7 @@ Student-facing browser chat UI with local model inference.
   - `Add file or image` opens a file picker for supported attachments.
   - Image attachments remain available for models that support image input.
   - Text attachments currently support `.txt`, `.csv`, and `.md` files and are added to the user prompt as model-visible text.
+  - Text-backed attachments preserve a normalized representation in conversation state so future features can reuse the same conversion output for search/memory ingestion without re-parsing the source file.
   - Selected attachments appear as removable cards above the composer before send.
   - Sent attachments are restored with the conversation transcript on reload.
   - Text-file attachments include a collapsible `Model sees` preview in the transcript so users can inspect the exact prompt text derived from the file.

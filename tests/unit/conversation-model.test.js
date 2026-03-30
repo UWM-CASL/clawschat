@@ -122,6 +122,13 @@ describe('conversation-model', () => {
           mimeType: 'text/markdown',
           filename: 'notes.md',
           text: '# Notes\n- Gravity pulls objects together.',
+          normalizedText: '# Notes\n- Gravity pulls objects together.',
+          normalizedFormat: 'markdown',
+          memoryHint: {
+            ingestible: true,
+            preferredSource: 'normalizedText',
+            documentRole: 'attachment',
+          },
           llmText:
             'Attached file: notes.md\nMIME type: text/markdown\nContents:\n# Notes\n- Gravity pulls objects together.',
         },
@@ -144,6 +151,14 @@ describe('conversation-model', () => {
           'Summarize these notes.\nAttached file: notes.md\nMIME type: text/markdown\nContents:\n# Notes\n- Gravity pulls objects together.',
       },
     ]);
+    expect(conversation.messageNodes[0]?.content.parts[1]).toMatchObject({
+      normalizedText: '# Notes\n- Gravity pulls objects together.',
+      normalizedFormat: 'markdown',
+      memoryHint: {
+        ingestible: true,
+        preferredSource: 'normalizedText',
+      },
+    });
   });
 
   test('tracks branch variants and prefers a descendant leaf for the selected variant', () => {

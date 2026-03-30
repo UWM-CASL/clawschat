@@ -11,7 +11,7 @@ import {
 } from './conversation-model.js';
 
 export const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
-export const CONVERSATION_SCHEMA_VERSION = 5;
+export const CONVERSATION_SCHEMA_VERSION = 6;
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -77,10 +77,15 @@ function coerceStoredMessageContentParts(rawMessage, artifactLookup) {
           : typeof artifact?.data === 'string'
             ? artifact.data
             : '';
+      const normalizedText =
+        typeof part.normalizedText === 'string'
+          ? part.normalizedText
+          : text;
       return {
         ...part,
         ...(mimeType ? { mimeType } : {}),
         ...(text ? { text } : {}),
+        ...(normalizedText ? { normalizedText } : {}),
       };
     }
     const artifact =
@@ -302,6 +307,26 @@ function serializeMessageContent(message) {
             extension: typeof part.extension === 'string' ? part.extension : undefined,
             size: Number.isFinite(part.size) ? part.size : undefined,
             text: typeof part.text === 'string' ? part.text : undefined,
+            normalizedText: typeof part.normalizedText === 'string' ? part.normalizedText : undefined,
+            normalizedFormat:
+              typeof part.normalizedFormat === 'string' ? part.normalizedFormat : undefined,
+            conversionWarnings: Array.isArray(part.conversionWarnings)
+              ? part.conversionWarnings.filter((warning) => typeof warning === 'string' && warning.trim())
+              : undefined,
+            memoryHint:
+              part.memoryHint && typeof part.memoryHint === 'object'
+                ? {
+                    ingestible: part.memoryHint.ingestible === true ? true : undefined,
+                    preferredSource:
+                      typeof part.memoryHint.preferredSource === 'string'
+                        ? part.memoryHint.preferredSource
+                        : undefined,
+                    documentRole:
+                      typeof part.memoryHint.documentRole === 'string'
+                        ? part.memoryHint.documentRole
+                        : undefined,
+                  }
+                : undefined,
             llmText: typeof part.llmText === 'string' ? part.llmText : undefined,
           }
       : {

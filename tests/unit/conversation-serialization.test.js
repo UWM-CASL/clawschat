@@ -190,6 +190,14 @@ describe('conversation-serialization', () => {
                       artifactId: 'artifact-2',
                       mimeType: 'text/plain',
                       filename: 'notes.txt',
+                      normalizedText: 'The mitochondria is the powerhouse of the cell.',
+                      normalizedFormat: 'text',
+                      conversionWarnings: ['Formatting may differ from the source document.'],
+                      memoryHint: {
+                        ingestible: true,
+                        preferredSource: 'normalizedText',
+                        documentRole: 'attachment',
+                      },
                       llmText:
                         'Attached file: notes.txt\nMIME type: text/plain\nContents:\nThe mitochondria is the powerhouse of the cell.',
                     },
@@ -219,6 +227,14 @@ describe('conversation-serialization', () => {
       type: 'file',
       mimeType: 'text/plain',
       text: 'The mitochondria is the powerhouse of the cell.',
+      normalizedText: 'The mitochondria is the powerhouse of the cell.',
+      normalizedFormat: 'text',
+      conversionWarnings: ['Formatting may differ from the source document.'],
+      memoryHint: {
+        ingestible: true,
+        preferredSource: 'normalizedText',
+        documentRole: 'attachment',
+      },
       llmText:
         'Attached file: notes.txt\nMIME type: text/plain\nContents:\nThe mitochondria is the powerhouse of the cell.',
     });

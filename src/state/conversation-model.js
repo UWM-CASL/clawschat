@@ -119,8 +119,9 @@ function normalizeFileContentPart(rawPart) {
   const mimeType = typeof rawPart.mimeType === 'string' ? rawPart.mimeType.trim() : '';
   const filename = typeof rawPart.filename === 'string' ? rawPart.filename.trim() : '';
   const text = typeof rawPart.text === 'string' ? rawPart.text : '';
+  const normalizedText = typeof rawPart.normalizedText === 'string' ? rawPart.normalizedText : '';
   const llmText = typeof rawPart.llmText === 'string' ? rawPart.llmText : '';
-  if (!artifactId && !mimeType && !filename && !text.trim() && !llmText.trim()) {
+  if (!artifactId && !mimeType && !filename && !text.trim() && !normalizedText.trim() && !llmText.trim()) {
     return null;
   }
   const normalizedPart = { type: 'file' };
@@ -136,8 +137,42 @@ function normalizeFileContentPart(rawPart) {
   if (text) {
     normalizedPart.text = text;
   }
+  if (normalizedText) {
+    normalizedPart.normalizedText = normalizedText;
+  }
   if (llmText) {
     normalizedPart.llmText = llmText;
+  }
+  if (typeof rawPart.normalizedFormat === 'string' && rawPart.normalizedFormat.trim()) {
+    normalizedPart.normalizedFormat = rawPart.normalizedFormat.trim().toLowerCase();
+  }
+  if (Array.isArray(rawPart.conversionWarnings)) {
+    const conversionWarnings = rawPart.conversionWarnings
+      .filter((warning) => typeof warning === 'string')
+      .map((warning) => warning.trim())
+      .filter(Boolean);
+    if (conversionWarnings.length) {
+      normalizedPart.conversionWarnings = conversionWarnings;
+    }
+  }
+  if (rawPart.memoryHint && typeof rawPart.memoryHint === 'object') {
+    const ingestible = rawPart.memoryHint.ingestible === true;
+    const preferredSource =
+      typeof rawPart.memoryHint.preferredSource === 'string' ? rawPart.memoryHint.preferredSource.trim() : '';
+    const documentRole =
+      typeof rawPart.memoryHint.documentRole === 'string' ? rawPart.memoryHint.documentRole.trim() : '';
+    if (ingestible || preferredSource || documentRole) {
+      normalizedPart.memoryHint = {};
+      if (ingestible) {
+        normalizedPart.memoryHint.ingestible = true;
+      }
+      if (preferredSource) {
+        normalizedPart.memoryHint.preferredSource = preferredSource;
+      }
+      if (documentRole) {
+        normalizedPart.memoryHint.documentRole = documentRole;
+      }
+    }
   }
   if (typeof rawPart.extension === 'string' && rawPart.extension.trim()) {
     normalizedPart.extension = rawPart.extension.trim().toLowerCase();

@@ -225,14 +225,49 @@ function getAttachmentIconClass(attachment) {
   return 'bi-file-earmark-text';
 }
 
+function normalizeAttachmentText(text) {
+  return typeof text === 'string' ? text.replace(/\r\n?/g, '\n') : '';
+}
+
+function getNormalizedTextAttachmentFormat({ mimeType, extension }) {
+  const normalizedMimeType = typeof mimeType === 'string' ? mimeType.trim().toLowerCase() : '';
+  const normalizedExtension = typeof extension === 'string' ? extension.trim().toLowerCase() : '';
+  if (normalizedMimeType === 'text/markdown' || normalizedExtension === 'md') {
+    return 'markdown';
+  }
+  if (normalizedMimeType === 'text/csv' || normalizedExtension === 'csv') {
+    return 'csv';
+  }
+  return 'text';
+}
+
 function buildTextFileLlmText({ filename, mimeType, text }) {
   const normalizedFilename = typeof filename === 'string' && filename.trim() ? filename.trim() : 'file';
   const normalizedMimeType =
     typeof mimeType === 'string' && mimeType.trim() ? mimeType.trim() : 'text/plain';
-  const body = typeof text === 'string' ? text.replace(/\r\n?/g, '\n') : '';
+  const body = normalizeAttachmentText(text);
   return [`Attached file: ${normalizedFilename}`, `MIME type: ${normalizedMimeType}`, 'Contents:', body].join(
     '\n'
   );
+}
+
+function buildTextAttachmentConversion({ filename, mimeType, extension, text }) {
+  const normalizedText = normalizeAttachmentText(text);
+  return {
+    normalizedText,
+    normalizedFormat: getNormalizedTextAttachmentFormat({ mimeType, extension }),
+    conversionWarnings: [],
+    memoryHint: {
+      ingestible: true,
+      preferredSource: 'normalizedText',
+      documentRole: 'attachment',
+    },
+    llmText: buildTextFileLlmText({
+      filename,
+      mimeType,
+      text: normalizedText,
+    }),
+  };
 }
 
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
@@ -1299,6 +1334,12 @@ async function createComposerAttachmentFromFile(file) {
   }
   const text = new window.TextDecoder('utf-8').decode(buffer);
   const mimeType = attachmentMetadata.mimeType || 'text/plain';
+  const conversion = buildTextAttachmentConversion({
+    filename: file.name || 'file',
+    mimeType,
+    extension: attachmentMetadata.extension || getFileExtension(file.name || ''),
+    text,
+  });
   return {
     id,
     type: 'file',
@@ -1309,11 +1350,11 @@ async function createComposerAttachmentFromFile(file) {
     filename: file.name || 'file',
     size: Number.isFinite(file.size) ? file.size : buffer.byteLength,
     extension: attachmentMetadata.extension || getFileExtension(file.name || ''),
-    llmText: buildTextFileLlmText({
-      filename: file.name || 'file',
-      mimeType,
-      text,
-    }),
+    normalizedText: conversion.normalizedText,
+    normalizedFormat: conversion.normalizedFormat,
+    conversionWarnings: conversion.conversionWarnings,
+    memoryHint: conversion.memoryHint,
+    llmText: conversion.llmText,
     hash: {
       algorithm: 'sha256',
       value: hashValue,
@@ -1344,6 +1385,15 @@ function buildUserMessageAttachmentPayload(attachments) {
           extension: attachment.extension,
           size: attachment.size,
           text: attachment.data,
+          normalizedText: attachment.normalizedText,
+          normalizedFormat: attachment.normalizedFormat,
+          conversionWarnings: Array.isArray(attachment.conversionWarnings)
+            ? attachment.conversionWarnings
+            : [],
+          memoryHint:
+            attachment.memoryHint && typeof attachment.memoryHint === 'object'
+              ? attachment.memoryHint
+              : undefined,
           llmText: attachment.llmText,
         }),
   }));

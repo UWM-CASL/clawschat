@@ -29,6 +29,7 @@ function createViewHarness() {
               type: 'file',
               filename: 'hello.md',
               mimeType: 'text/markdown',
+              conversionWarnings: ['Embedded spreadsheet object omitted.'],
               llmText: 'Attached file: hello.md\nMIME type: text/markdown\nContents:\n# Hello',
             },
           ],
@@ -111,6 +112,9 @@ describe('transcript-view', () => {
     ).toContain('data:image/png;base64,abc123');
     expect(harness.container.querySelector('.user-message .message-file-name')?.textContent).toBe(
       'hello.md'
+    );
+    expect(harness.container.querySelector('.user-message .message-file-card')?.textContent).toContain(
+      'Embedded spreadsheet object omitted.'
     );
     expect(
       harness.container.querySelector('.model-message .response-content')?.innerHTML
