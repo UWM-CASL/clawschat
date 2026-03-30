@@ -9,7 +9,7 @@ This module is the pure domain layer for:
 - creating conversation records
 - storing the selected model for each conversation
 - adding user/model messages to the tree
-- preserving structured user content parts for attachments, including text-backed file parts and their LLM-facing representation
+- preserving structured user content parts for attachments, including image parts plus text-backed file parts and their LLM-facing representation
 - preserving normalized attachment conversions and future memory-ingestion hints alongside the original attachment metadata
 - resolving the visible branch and variant navigation state
 - pruning descendants after user edits
@@ -17,7 +17,7 @@ This module is the pure domain layer for:
 - building conversation export payloads and Markdown output
 - preserving model-emitted tool calls and `tool` role execution results
 
-For attachment-related document pipelines, this module should store the resulting normalized content and model-visible representation, but it should not perform parsing, chunking, or orchestration work itself.
+For attachment-related document pipelines, this module should store the resulting normalized content and model-visible representation, but it should not perform parsing, chunking, or orchestration work itself. For example, HTML attachments may already be normalized into Markdown before they reach this layer.
 
 It must not depend on:
 

@@ -57,7 +57,7 @@ Current supported models in Settings:
   - Requires WebGPU in-browser, so it is disabled when WebGPU is unavailable or when `WASM only` is selected.
 - `onnx-community/gemma-3n-E2B-it-ONNX`
   - Supports text output with image, audio, and video inputs.
-  - The current app UI exposes image attachments only; audio/video input UI is not implemented yet.
+  - The current app UI exposes image attachments from both `Attach for Reference` and `Attach to Work With` when the selected model/runtime path supports image input; audio/video input UI is not implemented yet.
   - The app uses a dedicated multimodal worker path for this model and requires WebGPU.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
