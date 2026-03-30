@@ -50,6 +50,9 @@ export function createTranscriptView(dependencies) {
     if (part?.extension === 'csv' || part?.mimeType === 'text/csv') {
       return 'bi-file-earmark-spreadsheet';
     }
+    if (part?.extension === 'pdf' || part?.mimeType === 'application/pdf') {
+      return 'bi-file-earmark-pdf';
+    }
     if (part?.extension === 'md' || part?.mimeType === 'text/markdown') {
       return 'bi-file-earmark-richtext';
     }
@@ -131,6 +134,9 @@ export function createTranscriptView(dependencies) {
         const detailBits = [];
         if (typeof part.mimeType === 'string' && part.mimeType.trim()) {
           detailBits.push(part.mimeType.trim());
+        }
+        if (Number.isFinite(part.pageCount) && part.pageCount > 0) {
+          detailBits.push(`${part.pageCount} page${part.pageCount === 1 ? '' : 's'}`);
         }
         if (Number.isFinite(part.size) && part.size >= 0) {
           detailBits.push(`${Math.round(part.size)} bytes`);

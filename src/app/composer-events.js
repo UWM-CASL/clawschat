@@ -42,7 +42,12 @@ export function bindComposerEvents({
 }) {
   const isSupportedTextAttachment = (file) => {
     const name = typeof file?.name === 'string' ? file.name.trim().toLowerCase() : '';
-    return name.endsWith('.txt') || name.endsWith('.csv') || name.endsWith('.md');
+    return (
+      name.endsWith('.txt') ||
+      name.endsWith('.csv') ||
+      name.endsWith('.md') ||
+      name.endsWith('.pdf')
+    );
   };
 
   if (sendButton) {
@@ -108,8 +113,8 @@ export function bindComposerEvents({
       if (!allowedFiles.length) {
         setStatus(
           imageInputSupported
-            ? 'Only image, .txt, .csv, and .md files can be attached.'
-            : 'Only .txt, .csv, and .md files can be attached for this model.'
+            ? 'Only image, .txt, .csv, .md, and .pdf files can be attached.'
+            : 'Only .txt, .csv, .md, and .pdf files can be attached for this model.'
         );
         return;
       }

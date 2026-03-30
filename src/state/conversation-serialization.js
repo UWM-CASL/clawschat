@@ -306,6 +306,7 @@ function serializeMessageContent(message) {
             filename: typeof part.filename === 'string' ? part.filename : undefined,
             extension: typeof part.extension === 'string' ? part.extension : undefined,
             size: Number.isFinite(part.size) ? part.size : undefined,
+            pageCount: Number.isFinite(part.pageCount) ? part.pageCount : undefined,
             text: typeof part.text === 'string' ? part.text : undefined,
             normalizedText: typeof part.normalizedText === 'string' ? part.normalizedText : undefined,
             normalizedFormat:

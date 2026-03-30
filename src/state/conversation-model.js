@@ -180,6 +180,9 @@ function normalizeFileContentPart(rawPart) {
   if (Number.isFinite(rawPart.size) && rawPart.size >= 0) {
     normalizedPart.size = Math.round(rawPart.size);
   }
+  if (Number.isFinite(rawPart.pageCount) && rawPart.pageCount > 0) {
+    normalizedPart.pageCount = Math.round(rawPart.pageCount);
+  }
   return normalizedPart;
 }
 

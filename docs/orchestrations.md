@@ -10,6 +10,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - Critiques, revises, and validates a model response against the originating user prompt (multi-step).
 - `src/config/orchestrations/pdf-to-markdown.json`
   - Prepares extracted document text for future PDF-to-Markdown conversion using chunking, per-chunk conversion, and a final merge pass.
+  - The current shipped PDF attachment import is still deterministic parser-first extraction; this orchestration is the intended next-stage semantic conversion path.
 
 ## Runtime behavior
 

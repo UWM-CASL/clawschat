@@ -5,6 +5,7 @@ import Modal from 'bootstrap/js/dist/modal';
 import Tooltip from 'bootstrap/js/dist/tooltip';
 import MarkdownIt from 'markdown-it';
 import { bindComposerEvents } from './app/composer-events.js';
+import { extractPdfText } from './attachments/pdf-extractor.js';
 import { createConversationEditors } from './app/conversation-editors.js';
 import './styles.css';
 import { bindConversationListEvents } from './app/conversation-list-events.js';
@@ -131,9 +132,12 @@ const SUPPORTED_TEXT_ATTACHMENT_TYPES = Object.freeze({
   txt: { mimeType: 'text/plain', label: 'Text file' },
   csv: { mimeType: 'text/csv', label: 'CSV file' },
   md: { mimeType: 'text/markdown', label: 'Markdown file' },
+  pdf: { mimeType: 'application/pdf', label: 'PDF document', category: 'pdf' },
 });
-const FILE_ATTACHMENT_ACCEPT = '.txt,.csv,.md';
+const FILE_ATTACHMENT_ACCEPT = '.txt,.csv,.md,.pdf';
 const IMAGE_AND_FILE_ATTACHMENT_ACCEPT = `image/*,${FILE_ATTACHMENT_ACCEPT}`;
+const MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_PDF_ATTACHMENT_TEXT_CHARS = 120000;
 
 function base64FromArrayBuffer(buffer) {
   let binary = '';
@@ -199,7 +203,7 @@ function getSupportedAttachmentMetadata(file) {
   const supportedTextType = SUPPORTED_TEXT_ATTACHMENT_TYPES[extension];
   if (supportedTextType) {
     return {
-      category: 'file',
+      category: supportedTextType.category || 'file',
       mimeType: mimeType || supportedTextType.mimeType,
       extension,
       label: supportedTextType.label,
@@ -218,6 +222,9 @@ function getAttachmentIconClass(attachment) {
   }
   if (attachment?.extension === 'csv' || attachment?.mimeType === 'text/csv') {
     return 'bi-file-earmark-spreadsheet';
+  }
+  if (attachment?.extension === 'pdf' || attachment?.mimeType === 'application/pdf') {
+    return 'bi-file-earmark-pdf';
   }
   if (attachment?.extension === 'md' || attachment?.mimeType === 'text/markdown') {
     return 'bi-file-earmark-richtext';
@@ -267,6 +274,94 @@ function buildTextAttachmentConversion({ filename, mimeType, extension, text }) 
       mimeType,
       text: normalizedText,
     }),
+  };
+}
+
+function truncateAttachmentText(text, maxChars) {
+  const normalizedText = normalizeAttachmentText(text);
+  if (!normalizedText || !Number.isFinite(maxChars) || maxChars <= 0 || normalizedText.length <= maxChars) {
+    return {
+      text: normalizedText,
+      wasTruncated: false,
+      omittedChars: 0,
+    };
+  }
+  const truncatedText = normalizedText.slice(0, Math.max(0, maxChars - 32)).trimEnd();
+  return {
+    text: `${truncatedText}\n\n[Truncated due to attachment length limit.]`,
+    wasTruncated: true,
+    omittedChars: normalizedText.length - truncatedText.length,
+  };
+}
+
+function buildPdfPageText(pages) {
+  return pages
+    .map((page) => {
+      const pageNumber = Number.isFinite(page?.pageNumber) ? page.pageNumber : null;
+      const pageText = normalizeAttachmentText(page?.text || '');
+      if (!pageNumber) {
+        return pageText;
+      }
+      return [`Page ${pageNumber}`, pageText].filter(Boolean).join('\n');
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function buildPdfFileLlmText({ filename, mimeType, pageCount, body, conversionWarnings }) {
+  const headerLines = [
+    `Attached PDF: ${typeof filename === 'string' && filename.trim() ? filename.trim() : 'document.pdf'}`,
+    `MIME type: ${typeof mimeType === 'string' && mimeType.trim() ? mimeType.trim() : 'application/pdf'}`,
+  ];
+  if (Number.isFinite(pageCount) && pageCount > 0) {
+    headerLines.push(`Page count: ${pageCount}`);
+  }
+  headerLines.push('Extraction mode: parser-derived text only. OCR is not available.');
+
+  const sections = [headerLines.join('\n')];
+  if (Array.isArray(conversionWarnings) && conversionWarnings.length) {
+    sections.push(
+      ['Extraction warnings:', ...conversionWarnings.map((warning) => `- ${warning}`)].join('\n'),
+    );
+  }
+  sections.push('Extracted contents:');
+  sections.push(body);
+  return sections.join('\n\n').trim();
+}
+
+function buildPdfAttachmentConversion({ filename, mimeType, pages, warnings }) {
+  const normalizedWarnings = Array.isArray(warnings)
+    ? warnings
+        .filter((warning) => typeof warning === 'string')
+        .map((warning) => warning.trim())
+        .filter(Boolean)
+    : [];
+  const pageCount = Array.isArray(pages) ? pages.length : 0;
+  const normalizedTextResult = truncateAttachmentText(buildPdfPageText(Array.isArray(pages) ? pages : []), MAX_PDF_ATTACHMENT_TEXT_CHARS);
+  if (normalizedTextResult.wasTruncated) {
+    normalizedWarnings.push(
+      `Extracted PDF text was truncated to ${MAX_PDF_ATTACHMENT_TEXT_CHARS.toLocaleString()} characters for local storage and prompt preparation.`,
+    );
+  }
+  const normalizedText = normalizedTextResult.text;
+  const llmText = buildPdfFileLlmText({
+    filename,
+    mimeType,
+    pageCount,
+    body: normalizedText,
+    conversionWarnings: normalizedWarnings,
+  });
+  return {
+    normalizedText,
+    normalizedFormat: 'text',
+    conversionWarnings: normalizedWarnings,
+    memoryHint: {
+      ingestible: true,
+      preferredSource: 'llmText',
+      documentRole: 'attachment',
+    },
+    llmText,
+    pageCount,
   };
 }
 
@@ -1332,14 +1427,34 @@ async function createComposerAttachmentFromFile(file) {
       },
     };
   }
-  const text = new window.TextDecoder('utf-8').decode(buffer);
   const mimeType = attachmentMetadata.mimeType || 'text/plain';
-  const conversion = buildTextAttachmentConversion({
-    filename: file.name || 'file',
-    mimeType,
-    extension: attachmentMetadata.extension || getFileExtension(file.name || ''),
-    text,
-  });
+  const extension = attachmentMetadata.extension || getFileExtension(file.name || '');
+  let text = '';
+  let conversion;
+  if (attachmentMetadata.category === 'pdf') {
+    const fileSize = Number.isFinite(file.size) ? file.size : buffer.byteLength;
+    if (fileSize > MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES) {
+      throw new Error(
+        `PDF files larger than ${Math.round(MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES / (1024 * 1024))} MB are not supported yet.`,
+      );
+    }
+    const pdfExtraction = await extractPdfText(buffer.slice(0));
+    conversion = buildPdfAttachmentConversion({
+      filename: file.name || 'file.pdf',
+      mimeType,
+      pages: pdfExtraction.pages,
+      warnings: pdfExtraction.warnings,
+    });
+    text = conversion.normalizedText;
+  } else {
+    text = new window.TextDecoder('utf-8').decode(buffer);
+    conversion = buildTextAttachmentConversion({
+      filename: file.name || 'file',
+      mimeType,
+      extension,
+      text,
+    });
+  }
   return {
     id,
     type: 'file',
@@ -1349,12 +1464,13 @@ async function createComposerAttachmentFromFile(file) {
     data: text,
     filename: file.name || 'file',
     size: Number.isFinite(file.size) ? file.size : buffer.byteLength,
-    extension: attachmentMetadata.extension || getFileExtension(file.name || ''),
+    extension,
     normalizedText: conversion.normalizedText,
     normalizedFormat: conversion.normalizedFormat,
     conversionWarnings: conversion.conversionWarnings,
     memoryHint: conversion.memoryHint,
     llmText: conversion.llmText,
+    pageCount: conversion.pageCount,
     hash: {
       algorithm: 'sha256',
       value: hashValue,
@@ -1387,6 +1503,7 @@ function buildUserMessageAttachmentPayload(attachments) {
           text: attachment.data,
           normalizedText: attachment.normalizedText,
           normalizedFormat: attachment.normalizedFormat,
+          pageCount: attachment.pageCount,
           conversionWarnings: Array.isArray(attachment.conversionWarnings)
             ? attachment.conversionWarnings
             : [],

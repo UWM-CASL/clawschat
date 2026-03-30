@@ -198,4 +198,37 @@ describe('composer-events', () => {
       '1 file attached. 1 unsupported attachment skipped.'
     );
   });
+
+  test('accepts pdf attachments when image input is unavailable', async () => {
+    const harness = createHarness();
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    harness.deps.createComposerAttachmentFromFile.mockImplementation(async (file) => ({
+      id: `attachment-${file.name}`,
+      type: 'file',
+      filename: file.name,
+      extension: 'pdf',
+    }));
+    bindComposerEvents(harness.deps);
+
+    const attachmentInput = harness.deps.imageAttachmentInput;
+    Object.defineProperty(attachmentInput, 'files', {
+      configurable: true,
+      value: [new harness.dom.window.File(['%PDF-1.7'], 'lesson.pdf', { type: 'application/pdf' })],
+    });
+
+    attachmentInput.dispatchEvent(
+      new harness.dom.window.Event('change', { bubbles: true, cancelable: true })
+    );
+
+    await new Promise((resolve) => harness.dom.window.setTimeout(resolve, 0));
+
+    expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenCalledTimes(1);
+    expect(harness.appState.pendingComposerAttachments).toEqual([
+      expect.objectContaining({ filename: 'lesson.pdf', type: 'file', extension: 'pdf' }),
+    ]);
+    expect(harness.deps.setStatus).toHaveBeenCalledWith('1 file attached.');
+  });
 });

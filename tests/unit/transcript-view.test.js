@@ -446,4 +446,69 @@ describe('transcript-view', () => {
       'Attached file: hello.md'
     );
   });
+
+  test('renders PDF attachment metadata in the transcript', () => {
+    const harness = createViewHarness();
+    harness.conversation.messageNodes[0].content.parts[2] = {
+      type: 'file',
+      filename: 'lesson.pdf',
+      mimeType: 'application/pdf',
+      extension: 'pdf',
+      pageCount: 3,
+      size: 4096,
+      llmText: 'Attached PDF: lesson.pdf\n\n## Page 1\nExtracted text',
+      conversionWarnings: ['Page 2 has no extractable text. OCR is not available in this app.'],
+    };
+
+    const view = createTranscriptView({
+      container: harness.container,
+      getActiveConversation: () => harness.conversation,
+      getConversationPathMessages: (conversation) => conversation.messageNodes,
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
+      getModelVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      getUserVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      renderModelMarkdown: (content) => `<p>${content}</p>`,
+      scheduleMathTypeset: vi.fn(),
+      getToolDisplayName: (toolName) => toolName,
+      getShowThinkingByDefault: () => false,
+      getActiveUserEditMessageId: () => null,
+      getControlsState: () => ({
+        isGenerating: false,
+        isLoadingModel: false,
+        isRunningOrchestration: false,
+        isSwitchingVariant: false,
+      }),
+      getEmptyStateVisible: () => false,
+      initializeTooltips: vi.fn(),
+      disposeTooltips: vi.fn(),
+      applyVariantCardSignals: vi.fn(),
+      applyFixCardSignals: vi.fn(),
+      scrollTranscriptToBottom: vi.fn(),
+      updateTranscriptNavigationButtonVisibility: vi.fn(),
+      cancelUserMessageEdit: vi.fn(),
+      saveUserMessageEdit: vi.fn(),
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    const fileCard = harness.container.querySelector('.message-file-card');
+    expect(fileCard?.textContent).toContain('lesson.pdf');
+    expect(fileCard?.textContent).toContain('application/pdf');
+    expect(fileCard?.textContent).toContain('3 pages');
+    expect(fileCard?.textContent).toContain('4096 bytes');
+    expect(fileCard?.textContent).toContain('OCR is not available in this app.');
+  });
 });

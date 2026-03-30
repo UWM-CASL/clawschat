@@ -379,6 +379,7 @@ async function encodeContentPart(part) {
       filename: typeof part.filename === 'string' ? part.filename : undefined,
       extension: typeof part.extension === 'string' ? part.extension : undefined,
       size: Number.isFinite(part.size) ? part.size : undefined,
+      pageCount: Number.isFinite(part.pageCount) ? part.pageCount : undefined,
       text:
         typeof part.text === 'string' && !part.artifactId
           ? await encodeTextValue(part.text)
@@ -455,6 +456,7 @@ async function decodeContentPart(part) {
       filename: typeof part.filename === 'string' ? part.filename : undefined,
       extension: typeof part.extension === 'string' ? part.extension : undefined,
       size: Number.isFinite(part.size) ? part.size : undefined,
+      pageCount: Number.isFinite(part.pageCount) ? part.pageCount : undefined,
       normalizedText: await decodeTextValue(part.normalizedText),
       normalizedFormat:
         typeof part.normalizedFormat === 'string' ? part.normalizedFormat : undefined,

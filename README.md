@@ -80,10 +80,12 @@ Student-facing browser chat UI with local model inference.
   - `Add file or image` opens a file picker for supported attachments.
   - Image attachments remain available for models that support image input.
   - Text attachments currently support `.txt`, `.csv`, and `.md` files and are added to the user prompt as model-visible text.
+  - PDF attachments (`.pdf`) are parsed locally in-browser and converted into page-aware extracted text before being added to the user prompt.
+  - PDF importing is parser-first and deterministic in the current implementation; OCR is not available yet, so image-only PDFs are rejected.
   - Text-backed attachments preserve a normalized representation in conversation state so future features can reuse the same conversion output for search/memory ingestion without re-parsing the source file.
   - Selected attachments appear as removable cards above the composer before send.
   - Sent attachments are restored with the conversation transcript on reload.
-  - Text-file attachments include a collapsible `Model sees` preview in the transcript so users can inspect the exact prompt text derived from the file.
+  - Text-file and PDF attachments include a collapsible `Model sees` preview in the transcript so users can inspect the exact prompt text derived from the file.
 - Document-prep orchestration support is now built into the orchestration runtime for future attachment pipelines.
   - Orchestrations are no longer limited to linear prompt-only flows.
   - The runtime now supports prompt steps plus utility steps for deterministic preparation and chunk pipelines: `transform`, `forEach`, and `join`.
