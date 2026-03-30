@@ -1,4 +1,18 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { WorkerMessageHandler } from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+
+// Run pdf.js in fake-worker mode inside this dedicated extraction worker.
+// This avoids nested worker configuration and the runtime workerSrc error.
+if (!globalThis.pdfjsWorker?.WorkerMessageHandler) {
+  globalThis.pdfjsWorker = {
+    ...(globalThis.pdfjsWorker || {}),
+    WorkerMessageHandler,
+  };
+}
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/legacy/build/pdf.worker.mjs',
+  import.meta.url,
+).toString();
 
 const LINE_VERTICAL_TOLERANCE = 3;
 
@@ -61,7 +75,6 @@ function buildPageText(items) {
 async function extractPdf(buffer) {
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(buffer),
-    useWorker: false,
     isEvalSupported: false,
   });
 

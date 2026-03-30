@@ -12,7 +12,7 @@ function installMockWorker() {
     return String(prompt || '');
   }
 
-  class MockWorker {
+  class BaseMockWorker {
     constructor() {
       this.listeners = new Map();
       this.timer = null;
@@ -33,17 +33,37 @@ function installMockWorker() {
       set.delete(handler);
     }
 
+    terminate() {
+      this.terminated = true;
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+    }
+
+    _emit(type, data) {
+      const set = this.listeners.get(type);
+      if (!set) {
+        return;
+      }
+      for (const handler of set) {
+        handler({ data });
+      }
+    }
+  }
+
+  class MockLlmWorker extends BaseMockWorker {
     postMessage(message) {
       if (!message || this.terminated) {
         return;
       }
 
       if (message.type === 'init') {
-        this.#emit('message', {
+        this._emit('message', {
           type: 'status',
           payload: { message: 'Loading model...' },
         });
-        this.#emit('message', {
+        this._emit('message', {
           type: 'progress',
           payload: {
             percent: 100,
@@ -54,14 +74,14 @@ function installMockWorker() {
             totalBytes: 100,
           },
         });
-        this.#emit('message', {
+        this._emit('message', {
           type: 'init-success',
           payload: {
             backend: 'wasm',
             modelId: message.payload?.modelId || 'mock/model',
           },
         });
-        this.#emit('message', {
+        this._emit('message', {
           type: 'status',
           payload: { message: 'Ready (WASM)' },
         });
@@ -98,7 +118,7 @@ function installMockWorker() {
             return;
           }
           if (index < chunks.length) {
-            this.#emit('message', {
+            this._emit('message', {
               type: 'token',
               payload: { requestId, text: chunks[index] },
             });
@@ -107,38 +127,53 @@ function installMockWorker() {
           }
           clearInterval(this.timer);
           this.timer = null;
-          this.#emit('message', {
+          this._emit('message', {
             type: 'complete',
             payload: { requestId, text: chunks.join('') },
           });
-          this.#emit('message', {
+          this._emit('message', {
             type: 'status',
             payload: { message: 'Complete (WASM)' },
           });
         }, isLong ? 300 : 60);
       }
     }
+  }
 
-    terminate() {
-      this.terminated = true;
-      if (this.timer) {
-        clearInterval(this.timer);
-        this.timer = null;
-      }
-    }
-
-    #emit(type, data) {
-      const set = this.listeners.get(type);
-      if (!set) {
+  class MockPdfExtractWorker extends BaseMockWorker {
+    postMessage(message) {
+      if (!message || this.terminated || message.type !== 'pdf-extract') {
         return;
       }
-      for (const handler of set) {
-        handler({ data });
-      }
+      const requestId = message.requestId;
+      setTimeout(() => {
+        this._emit('message', {
+          type: 'pdf-extract-success',
+          requestId,
+          payload: {
+            pageCount: 1,
+            pages: [
+              {
+                pageNumber: 1,
+                text: 'Mock extracted PDF text.',
+              },
+            ],
+            warnings: [],
+          },
+        });
+      }, 0);
     }
   }
 
-  mockWindow.Worker = /** @type {any} */ (MockWorker);
+  mockWindow.Worker = /** @type {any} */ (class RoutedMockWorker {
+    constructor(url) {
+      const scriptUrl = String(url || '');
+      const worker = scriptUrl.includes('pdf-extract.worker')
+        ? new MockPdfExtractWorker()
+        : new MockLlmWorker();
+      return worker;
+    }
+  });
 }
 
 module.exports = { installMockWorker };
