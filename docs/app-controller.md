@@ -17,6 +17,7 @@ It currently owns the control flow for:
 - engine initialization and deferred model loading
 - explicit unload-before-reload behavior when model/backend selection changes
 - generation start and stop
+- streamed tool-call interception and continuation after tool execution
 - regenerate and fix actions
 - automatic rename orchestration
 - coordination points where UI actions trigger orchestration-backed preparation or follow-up flows
@@ -56,6 +57,19 @@ The controller should remain responsible for:
 
 The controller should not become the place where chunking rules, prompt assembly internals, or document-conversion step sequencing are reimplemented.
 
+## Tool-call interception
+
+Tool calls now follow an agent-style interruption flow.
+
+- While a model response is streaming, the controller watches for a complete tool call.
+- When the first complete tool call is detected, the controller interrupts generation immediately.
+- Narration emitted before that tool call stays visible on the model message.
+- The continuation payload fed back into the conversation uses the raw tool call, not any extra visible narration.
+- The requested tool executes before the turn is allowed to continue.
+- After the tool result is appended to conversation state, the controller starts the next generation step.
+
+This keeps the model from speaking as though it already knows the tool result before the tool has actually run.
+
 ## Testing intent
 
 Controller tests should focus on action behavior and state transitions, not rendered markup.
@@ -64,6 +78,7 @@ Examples:
 
 - initialization success/failure state transitions
 - stop-generation cleanup
+- streamed tool-call interruption and resume sequencing
 - rename/fix orchestration sequencing
 - orchestration-backed preparation flow state transitions when new call sites are added
 - deferred model loading before first generation

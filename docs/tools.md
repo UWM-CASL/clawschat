@@ -13,10 +13,11 @@ When tool calling is enabled for a conversation and the selected model supports 
 
 1. Appends any enabled optional feature-flag prompt section to the effective system prompt.
 2. Appends model-specific tool-call instructions after that optional feature section.
-3. Detects emitted tool calls in the model's output.
-4. Executes the requested tool locally in the browser app.
-5. Stores the tool result as a `tool` role message in the conversation tree.
-6. Resubmits the conversation so the model can continue with a normal user-facing answer.
+3. Watches the streamed model output for a complete tool call.
+4. Stops generation as soon as the first complete tool call is detected for that turn.
+5. Executes the requested tool locally in the browser app.
+6. Stores the tool result as a `tool` role message in the conversation tree.
+7. Resubmits the conversation so the model can continue only after that tool result is available.
 
 Tool calling is model-aware. The app does not use one universal tool-call format for every model family.
 
@@ -59,8 +60,8 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 ### `tasklist`
 
 - Display name: `Task List Planner`
-- Purpose: manages a branch-native task list for multi-step work
-- Discovery behavior: when called with no arguments, it returns its own syntax plus a reminder that task lists matter because context may be short and next steps are easy to forget
+- Purpose: manages a task list for multi-step work
+- Discovery behavior: when called with no arguments, it returns only the minimal syntax reminder needed to use it
 - Commands:
   - `new` to add an undone task, optionally at a specific index
   - `list` to return the current task list with indexes and done/undone state
@@ -71,7 +72,11 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `item`
   - `index`
   - `status`
-- Branch behavior: each `tasklist` tool result includes the full list snapshot after that change; the active list is derived from the latest `tasklist` result on the visible branch
+- Result shape:
+  - `new`, `list`, `update` return `{ items: [...] }`
+  - `clear` returns `{ items: [] }`
+- History behavior: each `tasklist` tool result includes the full list snapshot after that change; the active list is derived from the latest `tasklist` result on the visible branch
+- Input guardrails: task text is normalized and rejects raw code blocks or tool-call-shaped payloads so the planner stays plain-text
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js).
 
@@ -145,14 +150,17 @@ This keeps prompt context smaller, reduces distraction, and encourages the model
 
 ## Transcript behavior
 
-When a model emits a tool call, the transcript shows a collapsible control such as `Tool Call: Get Date and Time`.
+When a model emits a tool call, the transcript keeps that tool activity inline on the originating model response card.
 
-Expanding that control shows:
+Current behavior:
 
-- the emitted tool call request as formatted preformatted text
-- the tool result in the same inline panel once execution completes
+- narration emitted before the first tool call remains visible in the model card
+- the first complete tool call detected in that streamed turn interrupts generation immediately
+- the model does not keep speaking past that intercepted tool call until the tool result is returned
+- the tool request is shown inline on that same model card
+- the tool result is shown inline under that same model card once execution completes
 
-The model's final natural-language answer still appears as its own normal model response card.
+This keeps the visible transcript aligned with agent-style execution: tool use happens at the point where the model decided it needed the tool, not as a later detached transcript node.
 
 Tool results are preserved in the underlying conversation object as `tool` role messages even when the transcript UI renders them inline under the originating model turn.
 
@@ -197,5 +205,6 @@ This is still an early implementation.
 - Tool execution is local and explicit; there is no remote service backend.
 - Detection and parsing are driven by per-model metadata rather than a universal Transformers.js orchestration API.
 - The current tool registry is code-defined, not user-configurable.
+- The current streaming interception path acts on the first complete tool call detected in a streamed turn, then resumes generation after that tool result is available.
 - MCP capability discovery is planned but not implemented yet.
 - `SKILL.md` discovery and selective ingestion are planned but not implemented yet.
