@@ -1,4 +1,6 @@
 :root {
+  --conversation-panel-width: 320px;
+  --conversation-panel-collapsed-width: 1.5rem;
   --app-bg: linear-gradient(145deg, #e7edf5 0%, #f4f7fb 40%, #ffffff 100%);
   --panel-bg: linear-gradient(180deg, rgba(231, 237, 246, 0.98) 0%, rgba(244, 247, 251, 0.96) 100%);
   --panel-border: #bcc8d9;
@@ -105,10 +107,11 @@
 }
 
 .conversation-panel {
-  --bs-offcanvas-width: 320px;
+  --bs-offcanvas-width: var(--conversation-panel-width);
   background: var(--panel-bg);
   border-right: 1px solid var(--panel-border);
   box-shadow: inset -1px 0 0 var(--panel-border);
+  position: relative;
 }
 
 .conversation-item {
@@ -1571,6 +1574,46 @@
   color: var(--ink-strong);
 }
 
+.conversation-panel-collapse-button {
+  position: absolute;
+  top: 1.15rem;
+  right: 0;
+  transform: translateX(50%);
+  width: 1.9rem;
+  height: 3.1rem;
+  border: 1px solid var(--panel-border);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  background: color-mix(in srgb, var(--surface-elevated) 92%, transparent);
+  color: var(--ink-strong);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 12;
+  box-shadow: 0 10px 22px rgba(12, 24, 42, 0.16);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 220ms ease;
+}
+
+.conversation-panel-collapse-button:hover {
+  background: color-mix(in srgb, var(--surface-muted) 88%, var(--surface-elevated));
+  border-color: var(--focus-ring);
+}
+
+.conversation-panel-collapse-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.conversation-panel-collapse-button .bi {
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .settings-page {
   flex: 1 1 auto;
   min-height: 0;
@@ -1910,7 +1953,7 @@
 
 @media (min-width: 768px) {
   .top-bar {
-    grid-template-columns: var(--bs-offcanvas-width) minmax(0, 1fr);
+    grid-template-columns: var(--conversation-panel-width) minmax(0, 1fr);
   }
 
   .app-workspace {
@@ -1918,14 +1961,44 @@
   }
 
   .conversation-panel.offcanvas-md {
-    width: var(--bs-offcanvas-width);
-    min-width: var(--bs-offcanvas-width);
-    max-width: var(--bs-offcanvas-width);
-    flex: 0 0 var(--bs-offcanvas-width);
+    width: var(--conversation-panel-width);
+    min-width: var(--conversation-panel-width);
+    max-width: var(--conversation-panel-width);
+    flex: 0 0 var(--conversation-panel-width);
     height: 100%;
     transform: none;
     visibility: visible;
     border-right: 1px solid var(--panel-border);
+    overflow: visible;
+    transition:
+      width 220ms ease,
+      min-width 220ms ease,
+      max-width 220ms ease,
+      flex-basis 220ms ease;
+  }
+
+  .conversation-panel.offcanvas-md .offcanvas-header,
+  .conversation-panel.offcanvas-md .offcanvas-body,
+  .top-bar {
+    transition:
+      opacity 160ms ease,
+      transform 220ms ease,
+      grid-template-columns 220ms ease;
+  }
+
+  body.conversation-panel-collapsed {
+    --conversation-panel-width: var(--conversation-panel-collapsed-width);
+  }
+
+  body.conversation-panel-collapsed .conversation-panel.offcanvas-md .offcanvas-header,
+  body.conversation-panel-collapsed .conversation-panel.offcanvas-md .offcanvas-body {
+    opacity: 0;
+    transform: translateX(-1rem);
+    pointer-events: none;
+  }
+
+  body.conversation-panel-collapsed .conversation-panel-collapse-button {
+    transform: translateX(50%) rotate(180deg);
   }
 }
 
@@ -1958,7 +2031,13 @@
   .top-bar.animate-in,
   .pre-chat-panel.animate-in .pre-chat-inner,
   .chat-transcript-wrap.animate-in,
-  .composer.animate-dock {
+  .composer.animate-dock,
+  .conversation-panel.offcanvas-md,
+  .conversation-panel.offcanvas-md .offcanvas-header,
+  .conversation-panel.offcanvas-md .offcanvas-body,
+  .conversation-panel-collapse-button,
+  .top-bar {
     animation: none;
+    transition: none;
   }
 }

@@ -19,6 +19,8 @@ function createPreferencesHarness() {
         <option value="standard">Standard</option>
         <option value="compact">Compact</option>
       </select>
+      <button id="conversationPanelCollapseButton" type="button" aria-expanded="true"></button>
+      <span id="conversationPanelCollapseButtonText"></span>
       <textarea id="defaultSystemPromptInput"></textarea>
       <div id="modelCardList"></div>
       <div id="modelCardLegend"></div>
@@ -59,6 +61,7 @@ function createPreferencesHarness() {
       renderMathMlStorageKey: 'render-mathml',
       singleKeyShortcutsStorageKey: 'single-key',
       transcriptViewStorageKey: 'transcript-view',
+      conversationPanelCollapsedStorageKey: 'conversation-panel-collapsed',
       defaultSystemPromptStorageKey: 'default-prompt',
       modelStorageKey: 'model',
       backendStorageKey: 'backend',
@@ -70,6 +73,10 @@ function createPreferencesHarness() {
       renderMathMlToggle: document.getElementById('renderMathMlToggle'),
       enableSingleKeyShortcutsToggle: document.getElementById('enableSingleKeyShortcutsToggle'),
       transcriptViewSelect: document.getElementById('transcriptViewSelect'),
+      conversationPanelCollapseButton: document.getElementById('conversationPanelCollapseButton'),
+      conversationPanelCollapseButtonText: document.getElementById(
+        'conversationPanelCollapseButtonText'
+      ),
       defaultSystemPromptInput: document.getElementById('defaultSystemPromptInput'),
       modelSelect: document.getElementById('modelSelect'),
       modelCardList: document.getElementById('modelCardList'),
@@ -104,6 +111,22 @@ describe('preferences controller', () => {
     expect(harness.controller.getStoredMathRenderingPreference()).toBe(false);
     expect(harness.controller.getStoredTranscriptViewPreference()).toBe('compact');
     expect(harness.controller.getStoredDefaultSystemPrompt()).toBe('Be concise.');
+  });
+
+  test('applies persisted conversation panel preference to state, DOM, and storage', () => {
+    const harness = createPreferencesHarness();
+    const toggleButton = /** @type {HTMLButtonElement} */ (
+      harness.document.getElementById('conversationPanelCollapseButton')
+    );
+    const toggleText = harness.document.getElementById('conversationPanelCollapseButtonText');
+
+    harness.controller.applyConversationPanelCollapsedPreference(true, { persist: true });
+
+    expect(harness.document.body.classList.contains('conversation-panel-collapsed')).toBe(true);
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('false');
+    expect(toggleButton.getAttribute('aria-label')).toBe('Expand conversations panel');
+    expect(toggleText?.textContent).toBe('Expand conversations panel');
+    expect(harness.controller.getStoredConversationPanelCollapsedPreference()).toBe(true);
   });
 
   test('defaults math rendering to enabled when no preference is stored', () => {

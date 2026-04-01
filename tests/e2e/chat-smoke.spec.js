@@ -48,6 +48,23 @@ test('chat flow: start, send message, load model, stream response', async ({ pag
   expect(promptShape.contents).toContain('Say hello');
 });
 
+test('conversation panel can collapse and expand from the panel border', async ({ page }) => {
+  await page.getByRole('button', { name: 'Start a conversation' }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await ensureComposerVisible(page);
+
+  const toggleButton = page.locator('#conversationPanelCollapseButton');
+  await expect(toggleButton).toBeVisible();
+  await expect(toggleButton).toHaveAttribute('aria-label', 'Collapse conversations panel');
+  await toggleButton.click();
+
+  await expect(page.locator('body')).toHaveClass(/conversation-panel-collapsed/);
+  await expect(toggleButton).toHaveAttribute('aria-label', 'Expand conversations panel');
+
+  await toggleButton.click();
+  await expect(page.locator('body')).not.toHaveClass(/conversation-panel-collapsed/);
+});
+
 test('keyboard shortcuts open shortcut help, send, and open settings', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Open keyboard shortcuts' })).toBeVisible();
 

@@ -63,6 +63,7 @@ Student-facing browser chat UI with local model inference.
 - Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
 - Debug status history is available in `Settings -> Debug info` (accordion).
 - Conversation list and transcript are state-driven (no placeholder messages).
+- On desktop widths, the conversation list can be collapsed from a border-mounted toggle to give the active chat more space; the preference is saved locally.
 - Chat and setup status notices use Bootstrap alert patterns with headings so updates are announced in context.
 - The transcript includes helper links at both the start and end to jump to the transcript start, transcript end, or message input.
 - The transcript includes a note that each exchange has a heading so assistive technologies can index the conversation structure.

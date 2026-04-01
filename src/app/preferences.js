@@ -21,6 +21,7 @@ export function createPreferencesController({
   renderMathMlStorageKey,
   singleKeyShortcutsStorageKey,
   transcriptViewStorageKey,
+  conversationPanelCollapsedStorageKey,
   defaultSystemPromptStorageKey,
   modelStorageKey,
   backendStorageKey,
@@ -32,6 +33,8 @@ export function createPreferencesController({
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
+  conversationPanelCollapseButton,
+  conversationPanelCollapseButtonText,
   defaultSystemPromptInput,
   modelSelect,
   modelCardList,
@@ -65,6 +68,10 @@ export function createPreferencesController({
 
   function getStoredTranscriptViewPreference() {
     return storage.getItem(transcriptViewStorageKey) === 'compact' ? 'compact' : 'standard';
+  }
+
+  function getStoredConversationPanelCollapsedPreference() {
+    return storage.getItem(conversationPanelCollapsedStorageKey) === 'true';
   }
 
   function getStoredDefaultSystemPrompt() {
@@ -132,6 +139,25 @@ export function createPreferencesController({
     documentRef.body.classList.toggle('transcript-compact', appState.transcriptView === 'compact');
     if (persist) {
       storage.setItem(transcriptViewStorageKey, appState.transcriptView);
+    }
+  }
+
+  function applyConversationPanelCollapsedPreference(value, { persist = false } = {}) {
+    const isCollapsed = Boolean(value);
+    documentRef.body?.classList.toggle('conversation-panel-collapsed', isCollapsed);
+    if (conversationPanelCollapseButton instanceof HTMLButtonElement) {
+      const label = isCollapsed ? 'Expand conversations panel' : 'Collapse conversations panel';
+      conversationPanelCollapseButton.setAttribute('aria-expanded', String(!isCollapsed));
+      conversationPanelCollapseButton.setAttribute('aria-label', label);
+      conversationPanelCollapseButton.setAttribute('title', label);
+    }
+    if (conversationPanelCollapseButtonText instanceof HTMLElement) {
+      conversationPanelCollapseButtonText.textContent = isCollapsed
+        ? 'Expand conversations panel'
+        : 'Collapse conversations panel';
+    }
+    if (persist) {
+      storage.setItem(conversationPanelCollapsedStorageKey, String(isCollapsed));
     }
   }
 
@@ -676,12 +702,24 @@ export function createPreferencesController({
     });
   }
 
+  if (conversationPanelCollapseButton instanceof HTMLButtonElement) {
+    conversationPanelCollapseButton.addEventListener('click', () => {
+      applyConversationPanelCollapsedPreference(
+        !documentRef.body?.classList.contains('conversation-panel-collapsed'),
+        {
+          persist: true,
+        }
+      );
+    });
+  }
+
   return {
     getStoredShowThinkingPreference,
     getStoredToolCallingPreference,
     getStoredMathRenderingPreference,
     getStoredSingleKeyShortcutPreference,
     getStoredTranscriptViewPreference,
+    getStoredConversationPanelCollapsedPreference,
     getStoredDefaultSystemPrompt,
     applyDefaultSystemPrompt,
     applyShowThinkingPreference,
@@ -689,6 +727,7 @@ export function createPreferencesController({
     applyMathRenderingPreference,
     applySingleKeyShortcutPreference,
     applyTranscriptViewPreference,
+    applyConversationPanelCollapsedPreference,
     getStoredThemePreference,
     resolveTheme,
     applyTheme,

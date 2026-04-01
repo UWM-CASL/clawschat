@@ -122,6 +122,7 @@ const ENABLE_TOOL_CALLING_STORAGE_KEY = 'conversation-enable-tool-calling';
 const RENDER_MATHML_STORAGE_KEY = 'conversation-render-mathml';
 const SINGLE_KEY_SHORTCUTS_STORAGE_KEY = 'ui-enable-single-key-shortcuts';
 const TRANSCRIPT_VIEW_STORAGE_KEY = 'ui-transcript-view';
+const CONVERSATION_PANEL_COLLAPSED_STORAGE_KEY = 'ui-conversation-panel-collapsed';
 const DEFAULT_SYSTEM_PROMPT_STORAGE_KEY = 'conversation-default-system-prompt';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
@@ -499,6 +500,10 @@ const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
 const openKeyboardShortcutsButton = document.getElementById('openKeyboardShortcutsButton');
 const keyboardShortcutsModal = document.getElementById('keyboardShortcutsModal');
+const conversationPanelCollapseButton = document.getElementById('conversationPanelCollapseButton');
+const conversationPanelCollapseButtonText = document.getElementById(
+  'conversationPanelCollapseButtonText'
+);
 const conversationSystemPromptModal = document.getElementById('conversationSystemPromptModal');
 const conversationSystemPromptInput = document.getElementById('conversationSystemPromptInput');
 const conversationSystemPromptAppendToggle = document.getElementById(
@@ -2858,6 +2863,7 @@ const preferencesController = createPreferencesController({
   renderMathMlStorageKey: RENDER_MATHML_STORAGE_KEY,
   singleKeyShortcutsStorageKey: SINGLE_KEY_SHORTCUTS_STORAGE_KEY,
   transcriptViewStorageKey: TRANSCRIPT_VIEW_STORAGE_KEY,
+  conversationPanelCollapsedStorageKey: CONVERSATION_PANEL_COLLAPSED_STORAGE_KEY,
   defaultSystemPromptStorageKey: DEFAULT_SYSTEM_PROMPT_STORAGE_KEY,
   modelStorageKey: MODEL_STORAGE_KEY,
   backendStorageKey: BACKEND_STORAGE_KEY,
@@ -2869,6 +2875,8 @@ const preferencesController = createPreferencesController({
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
+  conversationPanelCollapseButton,
+  conversationPanelCollapseButtonText,
   defaultSystemPromptInput,
   modelSelect,
   modelCardList,
@@ -2889,6 +2897,7 @@ const {
   applyTheme,
   applyToolCallingPreference,
   applyTranscriptViewPreference,
+  applyConversationPanelCollapsedPreference,
   applySingleKeyShortcutPreference,
   formatBackendPreferenceLabel,
   getAvailableModelId,
@@ -2899,6 +2908,7 @@ const {
   getStoredThemePreference,
   getStoredToolCallingPreference,
   getStoredTranscriptViewPreference,
+  getStoredConversationPanelCollapsedPreference,
   getWebGpuAvailability,
   normalizeBackendPreference,
   persistInferencePreferences,
@@ -3102,6 +3112,7 @@ applyToolCallingPreference(getStoredToolCallingPreference());
 applyMathRenderingPreference(getStoredMathRenderingPreference());
 applySingleKeyShortcutPreference(getStoredSingleKeyShortcutPreference());
 applyTranscriptViewPreference(getStoredTranscriptViewPreference());
+applyConversationPanelCollapsedPreference(getStoredConversationPanelCollapsedPreference());
 applyDefaultSystemPrompt(getStoredDefaultSystemPrompt());
 if (appState.renderMathMl) {
   void ensureMathJaxLoaded();
