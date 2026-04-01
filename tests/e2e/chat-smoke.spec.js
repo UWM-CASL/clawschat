@@ -65,6 +65,24 @@ test('conversation panel can collapse and expand from the panel border', async (
   await expect(page.locator('body')).not.toHaveClass(/conversation-panel-collapsed/);
 });
 
+test('transcript step buttons stay clear of the scrollbar gutter', async ({ page }) => {
+  await page.getByRole('button', { name: 'Start a conversation' }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await ensureComposerVisible(page);
+
+  await page.locator('#messageInput').fill('Show the transcript controls');
+  await page.locator('#sendButton').click();
+  await expect(page.locator('.message-row.model-message')).toHaveCount(1);
+
+  const nav = page.locator('.transcript-step-nav');
+  await expect(nav).toBeVisible();
+  const navBox = await nav.boundingBox();
+  expect(navBox).not.toBeNull();
+
+  const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  expect((navBox?.x ?? 0) + (navBox?.width ?? 0)).toBeLessThanOrEqual(clientWidth - 4);
+});
+
 test('keyboard shortcuts open shortcut help, send, and open settings', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Open keyboard shortcuts' })).toBeVisible();
 

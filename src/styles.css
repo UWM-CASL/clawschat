@@ -2,6 +2,7 @@
   --conversation-panel-open-width: 320px;
   --conversation-panel-width: var(--conversation-panel-open-width);
   --conversation-panel-collapsed-width: 1.5rem;
+  --floating-controls-right-offset: calc(max(0.75rem, env(safe-area-inset-right)) + 1rem);
   --app-bg: linear-gradient(145deg, #e7edf5 0%, #f4f7fb 40%, #ffffff 100%);
   --panel-bg: linear-gradient(180deg, rgba(231, 237, 246, 0.98) 0%, rgba(244, 247, 251, 0.96) 100%);
   --panel-border: #bcc8d9;
@@ -795,7 +796,7 @@
 
 .transcript-step-nav {
   position: fixed;
-  right: max(0.75rem, env(safe-area-inset-right));
+  right: var(--floating-controls-right-offset);
   top: calc(clamp(4.5rem, 9vh, 6.2rem) + 3.4rem);
   display: grid;
   gap: 0.5rem;
@@ -827,7 +828,7 @@
 
 .jump-to-top-btn {
   position: fixed;
-  right: max(0.75rem, env(safe-area-inset-right));
+  right: var(--floating-controls-right-offset);
   top: clamp(4.5rem, 9vh, 6.2rem);
   box-shadow: var(--shadow-ambient);
   z-index: 1030;
@@ -2059,7 +2060,7 @@
   }
 
   .transcript-step-nav {
-    right: max(0.5rem, env(safe-area-inset-right));
+    right: calc(max(0.5rem, env(safe-area-inset-right)) + 0.85rem);
     gap: 0.4rem;
   }
 
