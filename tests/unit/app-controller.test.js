@@ -312,7 +312,7 @@ describe('app-controller', () => {
     expect(finalModelMessages.at(-1)?.text).toBe('It is currently 1:00 AM local time.');
   });
 
-  test('preserves visible narration while storing a tool-call-only continuation payload', () => {
+  test('keeps only pre-tool narration visible while storing a tool-call-only continuation payload', () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
     const userMessage = addMessageToConversation(conversation, 'user', 'Test the tools.');
@@ -337,7 +337,7 @@ describe('app-controller', () => {
 
     harness.engine.generate.mockImplementation((_prompt, handlers) => {
       handlers.onComplete(
-        '{"name":"tasklist","parameters":{}}\nI checked the list.\n{"name":"get_current_date_time","parameters":{}}\nNow I have the time.'
+        'I need to check something first.\n{"name":"tasklist","parameters":{}}\nI checked the list.\n{"name":"get_current_date_time","parameters":{}}\nNow I have the time.'
       );
     });
 
@@ -346,10 +346,74 @@ describe('app-controller', () => {
     });
 
     const modelMessage = conversation.messageNodes.find((message) => message.role === 'model');
-    expect(modelMessage?.response).toContain('I checked the list.');
-    expect(modelMessage?.response).toContain('Now I have the time.');
-    expect(modelMessage?.content?.llmRepresentation).toBe(
-      '{"name":"tasklist","parameters":{}}\n\n{"name":"get_current_date_time","parameters":{}}'
+    expect(modelMessage?.response).toBe('I need to check something first.');
+    expect(modelMessage?.content?.llmRepresentation).toBe('{"name":"tasklist","parameters":{}}');
+  });
+
+  test('intercepts a streamed tool call and continues after executing it', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Please test the tool.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.detectToolCalls
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([
+        {
+          name: 'tasklist',
+          arguments: { command: 'list' },
+          rawText: '{"name":"tasklist","parameters":{"command":"list"}}',
+          format: 'json',
+        },
+      ])
+      .mockReturnValueOnce([]);
+    harness.dependencies.executeToolCall.mockResolvedValue({
+      toolName: 'tasklist',
+      arguments: { command: 'list' },
+      resultText: '{"items":[]}',
+    });
+
+    harness.engine.generate
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onToken('I am checking the planner now. ');
+        handlers.onToken('{"name":"tasklist","parameters":{"command":"list"}}');
+        handlers.onComplete(
+          'I am checking the planner now. {"name":"tasklist","parameters":{"command":"list"}} extra text that should never surface as final assistant output.'
+        );
+      })
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onComplete('The task list is currently empty.');
+      });
+
+    harness.controller.startModelGeneration(conversation, buildPromptForConversationLeaf(conversation), {
+      parentMessageId: userMessage.id,
+      updateLastSpokenOnComplete: true,
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const modelMessages = conversation.messageNodes.filter((message) => message.role === 'model');
+    const interceptedModelMessage = modelMessages[0];
+    const finalModelMessage = modelMessages.at(-1);
+    const toolMessage = conversation.messageNodes.find((message) => message.role === 'tool');
+
+    expect(harness.engine.cancelGeneration).toHaveBeenCalledTimes(1);
+    expect(interceptedModelMessage?.text).toBe('I am checking the planner now.');
+    expect(interceptedModelMessage?.toolCalls).toEqual([
+      {
+        name: 'tasklist',
+        arguments: { command: 'list' },
+        rawText: '{"name":"tasklist","parameters":{"command":"list"}}',
+        format: 'json',
+      },
+    ]);
+    expect(interceptedModelMessage?.content?.llmRepresentation).toBe(
+      '{"name":"tasklist","parameters":{"command":"list"}}'
     );
+    expect(toolMessage?.toolResult).toBe('{"items":[]}');
+    expect(finalModelMessage?.text).toBe('The task list is currently empty.');
   });
 });
