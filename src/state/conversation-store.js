@@ -680,23 +680,6 @@ async function normalizeStateForStorage(state) {
     appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
     startedAt: conversation.startedAt,
     hasGeneratedName: Boolean(conversation.hasGeneratedName),
-    taskList: Array.isArray(conversation.taskList)
-      ? conversation.taskList
-          .map((entry) => {
-            if (!entry || typeof entry !== 'object') {
-              return null;
-            }
-            const text = typeof entry.text === 'string' ? entry.text.trim() : '';
-            if (!text) {
-              return null;
-            }
-            return {
-              text,
-              status: entry.status === 1 || entry.status === true ? 1 : 0,
-            };
-          })
-          .filter(Boolean)
-      : [],
     activeLeafMessageId:
       typeof conversation.activeLeafMessageId === 'string'
         ? conversation.activeLeafMessageId
@@ -801,23 +784,6 @@ async function rebuildStateFromNormalizedRecords(rootRecord, conversationRecords
       appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
       startedAt: conversation.startedAt,
       hasGeneratedName: Boolean(conversation.hasGeneratedName),
-      taskList: Array.isArray(conversation.taskList)
-        ? conversation.taskList
-            .map((entry) => {
-              if (!entry || typeof entry !== 'object') {
-                return null;
-              }
-              const text = typeof entry.text === 'string' ? entry.text.trim() : '';
-              if (!text) {
-                return null;
-              }
-              return {
-                text,
-                status: entry.status === 1 || entry.status === true ? 1 : 0,
-              };
-            })
-            .filter(Boolean)
-        : [],
       activeLeafMessageId:
         typeof conversation.activeLeafMessageId === 'string'
           ? conversation.activeLeafMessageId

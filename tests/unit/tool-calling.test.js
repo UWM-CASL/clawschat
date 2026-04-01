@@ -6,7 +6,7 @@ import {
   getEnabledToolDefinitions,
   sniffToolCalls,
 } from '../../src/llm/tool-calling.js';
-import { createConversation } from '../../src/state/conversation-model.js';
+import { addMessageToConversation, createConversation } from '../../src/state/conversation-model.js';
 
 let taskListConversation;
 
@@ -23,6 +23,28 @@ beforeEach(async () => {
     conversation: taskListConversation,
   });
 });
+
+function appendTaskListToolResult(conversation, toolArguments, result) {
+  const parentId = conversation.activeLeafMessageId;
+  const modelMessage = addMessageToConversation(
+    conversation,
+    'model',
+    JSON.stringify({
+      name: 'tasklist',
+      parameters: toolArguments,
+    }),
+    {
+      parentId,
+    }
+  );
+  modelMessage.response = modelMessage.text;
+  modelMessage.isResponseComplete = true;
+  return addMessageToConversation(conversation, 'tool', JSON.stringify(result), {
+    parentId: modelMessage.id,
+    toolName: 'tasklist',
+    toolArguments,
+  });
+}
 
 describe('tool-calling prompt builder', () => {
   test('builds the Llama json tool-calling prompt', () => {
@@ -428,6 +450,14 @@ describe('tool-calling prompt builder', () => {
       text: 'Draft release notes',
       status: 0,
     });
+    appendTaskListToolResult(
+      taskListConversation,
+      {
+        command: 'new',
+        item: 'Draft release notes',
+      },
+      added.result
+    );
 
     const updated = await executeToolCall({
       name: 'tasklist',
@@ -444,6 +474,15 @@ describe('tool-calling prompt builder', () => {
       text: 'Draft release notes',
       status: 1,
     });
+    appendTaskListToolResult(
+      taskListConversation,
+      {
+        command: 'update',
+        index: 0,
+        status: 1,
+      },
+      updated.result
+    );
 
     const listed = await executeToolCall({
       name: 'tasklist',
@@ -478,6 +517,5 @@ describe('tool-calling prompt builder', () => {
       clearedCount: 1,
       items: [],
     });
-    expect(taskListConversation.taskList).toEqual([]);
   });
 });

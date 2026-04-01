@@ -7,6 +7,7 @@ import {
   createConversation,
   findPreferredLeafForVariant,
   getModelVariantState,
+  getTaskListForConversationLeaf,
   getTextFromMessageContentParts,
   getUserVariantState,
   pruneDescendantsFromMessage,
@@ -421,19 +422,73 @@ describe('conversation-model', () => {
     expect(conversation.modelId).toBe('');
   });
 
-  test('initializes a normalized task list on the conversation record', () => {
-    const conversation = createConversation({
-      id: 'conversation-1',
-      taskList: [
-        { text: 'Draft answer', status: 1 },
-        { text: '  Review citations  ', status: 0 },
-        { text: '   ', status: 1 },
-      ],
-    });
+  test('derives task list state from the latest tasklist tool result on the active branch', () => {
+    const conversation = createConversation({ id: 'conversation-1' });
+    const firstUser = addMessageToConversation(conversation, 'user', 'Plan the work.');
+    const firstModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstUser.id }),
+      '{"name":"tasklist","parameters":{"command":"new","item":"Draft outline"}}',
+    );
+    const firstTool = addMessageToConversation(
+      conversation,
+      'tool',
+      JSON.stringify({
+        added: { index: 0, text: 'Draft outline', status: 0 },
+        items: [{ index: 0, text: 'Draft outline', status: 0 }],
+      }),
+      {
+        parentId: firstModel.id,
+        toolName: 'tasklist',
+        toolArguments: { command: 'new', item: 'Draft outline' },
+      },
+    );
+    const branchAModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstTool.id }),
+      '{"name":"tasklist","parameters":{"command":"update","index":0,"status":1}}',
+    );
+    const branchATool = addMessageToConversation(
+      conversation,
+      'tool',
+      JSON.stringify({
+        updated: { index: 0, text: 'Draft outline', status: 1 },
+        items: [{ index: 0, text: 'Draft outline', status: 1 }],
+      }),
+      {
+        parentId: branchAModel.id,
+        toolName: 'tasklist',
+        toolArguments: { command: 'update', index: 0, status: 1 },
+      },
+    );
+    const branchBModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstTool.id }),
+      '{"name":"tasklist","parameters":{"command":"new","item":"Gather examples"}}',
+    );
+    const branchBTool = addMessageToConversation(
+      conversation,
+      'tool',
+      JSON.stringify({
+        added: { index: 1, text: 'Gather examples', status: 0 },
+        items: [
+          { index: 0, text: 'Draft outline', status: 0 },
+          { index: 1, text: 'Gather examples', status: 0 },
+        ],
+      }),
+      {
+        parentId: branchBModel.id,
+        toolName: 'tasklist',
+        toolArguments: { command: 'new', item: 'Gather examples' },
+      },
+    );
 
-    expect(conversation.taskList).toEqual([
-      { text: 'Draft answer', status: 1 },
-      { text: 'Review citations', status: 0 },
+    conversation.activeLeafMessageId = branchATool.id;
+    expect(getTaskListForConversationLeaf(conversation)).toEqual([
+      { text: 'Draft outline', status: 1 },
+    ]);
+
+    conversation.activeLeafMessageId = branchBTool.id;
+    expect(getTaskListForConversationLeaf(conversation)).toEqual([
+      { text: 'Draft outline', status: 0 },
+      { text: 'Gather examples', status: 0 },
     ]);
   });
 });

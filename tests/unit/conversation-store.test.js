@@ -128,10 +128,6 @@ describe('conversation-store', () => {
           id: 'conv-1',
           name: 'Biology',
           modelId: 'model-1',
-          taskList: [
-            { text: 'Summarize notes', status: 0 },
-            { text: 'Check examples', status: 1 },
-          ],
           systemPrompt: '',
           conversationSystemPrompt: '',
           appendConversationSystemPrompt: true,
@@ -203,10 +199,6 @@ describe('conversation-store', () => {
           id: 'conv-1',
           name: 'Biology',
           modelId: 'model-1',
-          taskList: [
-            { text: 'Summarize notes', status: 0 },
-            { text: 'Check examples', status: 1 },
-          ],
           messageNodes: [
             expect.objectContaining({
               id: 'conv-1-node-1',

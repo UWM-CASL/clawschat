@@ -399,6 +399,60 @@ function buildTaskListSnapshot(entries = []) {
   }));
 }
 
+function getConversationPathMessages(conversation, leafMessageId = conversation?.activeLeafMessageId) {
+  if (!conversation || !leafMessageId || !Array.isArray(conversation.messageNodes)) {
+    return [];
+  }
+  const byId = new Map(conversation.messageNodes.map((message) => [message.id, message]));
+  const path = [];
+  let cursor = byId.get(leafMessageId) || null;
+  while (cursor) {
+    path.push(cursor);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) || null : null;
+  }
+  return path.reverse();
+}
+
+function parseTaskListItemsFromToolMessage(message) {
+  if (message?.role !== 'tool' || message.toolName !== 'tasklist') {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(String(message.toolResult || message.text || ''));
+    if (!Array.isArray(parsed?.items)) {
+      return null;
+    }
+    return parsed.items
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return null;
+        }
+        const text = typeof entry.text === 'string' ? entry.text.trim() : '';
+        if (!text) {
+          return null;
+        }
+        return {
+          text,
+          status: entry.status === 1 || entry.status === true ? 1 : 0,
+        };
+      })
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+function deriveTaskListFromConversation(conversation) {
+  const pathMessages = getConversationPathMessages(conversation);
+  for (let index = pathMessages.length - 1; index >= 0; index -= 1) {
+    const taskListItems = parseTaskListItemsFromToolMessage(pathMessages[index]);
+    if (taskListItems) {
+      return taskListItems;
+    }
+  }
+  return [];
+}
+
 function getValidatedTaskListArguments(argumentsValue = {}) {
   if (argumentsValue === undefined) {
     return {};
@@ -453,29 +507,19 @@ function getValidatedTaskListArguments(argumentsValue = {}) {
   return normalized;
 }
 
-function getConversationTaskList(runtimeContext = {}) {
-  const conversation =
-    runtimeContext.conversation && typeof runtimeContext.conversation === 'object'
-      ? runtimeContext.conversation
-      : null;
-  if (!conversation) {
-    return null;
-  }
-  if (!Array.isArray(conversation.taskList)) {
-    conversation.taskList = [];
-  }
-  return conversation.taskList;
-}
-
 function executeTaskList(argumentsValue = {}, runtimeContext = {}) {
   const normalizedArguments = getValidatedTaskListArguments(argumentsValue);
   if (!normalizedArguments.command) {
     return buildTaskListUsageResult();
   }
-  const taskListItems = getConversationTaskList(runtimeContext);
-  if (!taskListItems) {
+  const conversation =
+    runtimeContext.conversation && typeof runtimeContext.conversation === 'object'
+      ? runtimeContext.conversation
+      : null;
+  if (!conversation) {
     throw new Error('tasklist requires an active conversation.');
   }
+  const taskListItems = deriveTaskListFromConversation(conversation);
 
   if (normalizedArguments.command === 'list') {
     const items = buildTaskListSnapshot(taskListItems);
@@ -489,7 +533,6 @@ function executeTaskList(argumentsValue = {}, runtimeContext = {}) {
 
   if (normalizedArguments.command === 'clear') {
     const clearedCount = taskListItems.length;
-    taskListItems.splice(0, taskListItems.length);
     return {
       clearedCount,
       items: [],
@@ -507,14 +550,15 @@ function executeTaskList(argumentsValue = {}, runtimeContext = {}) {
       text: normalizedArguments.item,
       status: 0,
     };
-    taskListItems.splice(insertIndex, 0, nextEntry);
+    const nextItems = [...taskListItems];
+    nextItems.splice(insertIndex, 0, nextEntry);
     return {
       added: {
         index: insertIndex,
         text: nextEntry.text,
         status: nextEntry.status,
       },
-      items: buildTaskListSnapshot(taskListItems),
+      items: buildTaskListSnapshot(nextItems),
     };
   }
 
@@ -529,14 +573,21 @@ function executeTaskList(argumentsValue = {}, runtimeContext = {}) {
     if (!existingItem) {
       throw new Error(`tasklist item ${normalizedArguments.index} does not exist.`);
     }
-    existingItem.status = normalizedArguments.status;
+    const nextItems = taskListItems.map((entry, index) =>
+      index === normalizedArguments.index
+        ? {
+            text: entry.text,
+            status: normalizedArguments.status,
+          }
+        : entry
+    );
     return {
       updated: {
         index: normalizedArguments.index,
         text: existingItem.text,
-        status: existingItem.status,
+        status: normalizedArguments.status,
       },
-      items: buildTaskListSnapshot(taskListItems),
+      items: buildTaskListSnapshot(nextItems),
     };
   }
 

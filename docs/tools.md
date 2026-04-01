@@ -59,7 +59,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 ### `tasklist`
 
 - Display name: `Task List Planner`
-- Purpose: manages a conversation-scoped task list for multi-step work
+- Purpose: manages a branch-native task list for multi-step work
 - Discovery behavior: when called with no arguments, it returns its own syntax plus a reminder that task lists matter because context may be short and next steps are easy to forget
 - Commands:
   - `new` to add an undone task, optionally at a specific index
@@ -71,7 +71,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `item`
   - `index`
   - `status`
-- Persistence: task list items are stored on the active conversation record, so they follow that conversation through local persistence and reloads
+- Branch behavior: each `tasklist` tool result includes the full list snapshot after that change; the active list is derived from the latest `tasklist` result on the visible branch
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js).
 
