@@ -1,5 +1,6 @@
 :root {
-  --conversation-panel-width: 320px;
+  --conversation-panel-open-width: 320px;
+  --conversation-panel-width: var(--conversation-panel-open-width);
   --conversation-panel-collapsed-width: 1.5rem;
   --app-bg: linear-gradient(145deg, #e7edf5 0%, #f4f7fb 40%, #ffffff 100%);
   --panel-bg: linear-gradient(180deg, rgba(231, 237, 246, 0.98) 0%, rgba(244, 247, 251, 0.96) 100%);
@@ -1748,6 +1749,7 @@
 .conversation-panel-collapse-button .bi {
   font-size: 1rem;
   line-height: 1;
+  transition: transform 220ms ease;
 }
 
 .settings-page {
@@ -2132,12 +2134,21 @@
   }
 
   .conversation-panel.offcanvas-md .offcanvas-header,
-  .conversation-panel.offcanvas-md .offcanvas-body,
-  .top-bar {
+  .conversation-panel.offcanvas-md .offcanvas-body {
+    width: var(--conversation-panel-open-width);
+    min-width: var(--conversation-panel-open-width);
+    max-width: var(--conversation-panel-open-width);
+    box-sizing: border-box;
+    clip-path: inset(0 0 0 0);
+    will-change: transform, opacity, clip-path;
     transition:
       opacity 160ms ease,
       transform 220ms ease,
-      grid-template-columns 220ms ease;
+      clip-path 220ms ease;
+  }
+
+  .top-bar {
+    transition: grid-template-columns 220ms ease;
   }
 
   body.conversation-panel-collapsed {
@@ -2147,12 +2158,13 @@
   body.conversation-panel-collapsed .conversation-panel.offcanvas-md .offcanvas-header,
   body.conversation-panel-collapsed .conversation-panel.offcanvas-md .offcanvas-body {
     opacity: 0;
-    transform: translateX(-1rem);
+    transform: translateX(-1.1rem);
+    clip-path: inset(0 calc(var(--conversation-panel-open-width) - var(--conversation-panel-collapsed-width)) 0 0);
     pointer-events: none;
   }
 
-  body.conversation-panel-collapsed .conversation-panel-collapse-button {
-    transform: translateX(50%) rotate(180deg);
+  body.conversation-panel-collapsed .conversation-panel-collapse-button .bi {
+    transform: scaleX(-1);
   }
 }
 
