@@ -518,4 +518,50 @@ describe('tool-calling prompt builder', () => {
       items: [],
     });
   });
+
+  test('sanitizes tasklist item whitespace before storing', async () => {
+    const added = await executeToolCall({
+      name: 'tasklist',
+      arguments: {
+        command: 'new',
+        item: '  Draft\n\nrelease\t notes  ',
+      },
+    }, {
+      conversation: taskListConversation,
+    });
+
+    expect(added.result.added).toEqual({
+      index: 0,
+      text: 'Draft release notes',
+      status: 0,
+    });
+  });
+
+  test('rejects fenced code blocks in tasklist items', async () => {
+    await expect(
+      executeToolCall({
+        name: 'tasklist',
+        arguments: {
+          command: 'new',
+          item: '```js const x = 1; ```',
+        },
+      }, {
+        conversation: taskListConversation,
+      })
+    ).rejects.toThrow('tasklist item must be plain language, not a fenced code block.');
+  });
+
+  test('rejects json-style tool calls in tasklist items', async () => {
+    await expect(
+      executeToolCall({
+        name: 'tasklist',
+        arguments: {
+          command: 'new',
+          item: '{"name":"get_current_date_time","parameters":{}}',
+        },
+      }, {
+        conversation: taskListConversation,
+      })
+    ).rejects.toThrow('tasklist item must be plain language, not a JSON tool call.');
+  });
 });

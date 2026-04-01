@@ -453,6 +453,40 @@ function deriveTaskListFromConversation(conversation) {
   return [];
 }
 
+function sanitizeTaskListItemText(value) {
+  const withoutControlCharacters = Array.from(String(value || ''))
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? ' ' : character;
+    })
+    .join('');
+  const normalizedText = withoutControlCharacters
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalizedText) {
+    throw new Error('tasklist item must be a non-empty string.');
+  }
+  if (normalizedText.length > 200) {
+    throw new Error('tasklist item must be 200 characters or fewer.');
+  }
+  if (normalizedText.includes('```')) {
+    throw new Error('tasklist item must be plain language, not a fenced code block.');
+  }
+  if (
+    /^<tool_call>[\s\S]*<\/tool_call>$/i.test(normalizedText) ||
+    /^<\|tool_call_start\|>[\s\S]*<\|tool_call_end\|>$/i.test(normalizedText)
+  ) {
+    throw new Error('tasklist item must be plain language, not a tool call block.');
+  }
+  if (
+    /^\{[\s\S]*\}$/.test(normalizedText) &&
+    /"(name|arguments|parameters)"\s*:/.test(normalizedText)
+  ) {
+    throw new Error('tasklist item must be plain language, not a JSON tool call.');
+  }
+  return normalizedText;
+}
+
 function getValidatedTaskListArguments(argumentsValue = {}) {
   if (argumentsValue === undefined) {
     return {};
@@ -483,7 +517,7 @@ function getValidatedTaskListArguments(argumentsValue = {}) {
     if (typeof taskListArguments.item !== 'string' || !taskListArguments.item.trim()) {
       throw new Error('tasklist item must be a non-empty string.');
     }
-    normalized.item = taskListArguments.item.trim();
+    normalized.item = sanitizeTaskListItemText(taskListArguments.item);
   }
   if (taskListArguments.index !== undefined) {
     const indexCandidate = taskListArguments.index;
