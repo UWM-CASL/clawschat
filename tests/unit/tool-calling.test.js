@@ -427,12 +427,16 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.importance).toBe(
       'Task lists are important because context may be short, so next steps are easy to forget.'
     );
-    expect(result.result.syntax).toEqual([
-      "tasklist\n  'new',\n  'Task item',\n  index",
-      "tasklist\n  'list'",
-      "tasklist\n  'clear'",
-      "tasklist\n  'update',\n  index,\n  status:bool (0=undone, 1=done)",
+    expect(result.result.wrapperNote).toBe(
+      'Use the normal model-specific tool-call wrapper for this conversation. Only the tasklist arguments below change.'
+    );
+    expect(result.result.argumentsShape).toEqual([
+      '{ "command": "new", "item": "Task item", "index": 0 }',
+      '{ "command": "list" }',
+      '{ "command": "clear" }',
+      '{ "command": "update", "index": 0, "status": 1 }',
     ]);
+    expect(result.result.statusNote).toBe('status uses 0 for undone and 1 for done.');
   });
 
   test('creates, lists, updates, and clears tasklist items', async () => {

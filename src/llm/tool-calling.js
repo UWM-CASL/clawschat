@@ -379,15 +379,18 @@ function executeGetCurrentDateTime(argumentsValue = {}) {
 
 function buildTaskListUsageResult() {
   return {
-    purpose: 'Keep a browser-local task list for multi-step work.',
+    purpose: 'Keep a branch-native task list for multi-step work.',
     importance:
       'Task lists are important because context may be short, so next steps are easy to forget.',
-    syntax: [
-      "tasklist\n  'new',\n  'Task item',\n  index",
-      "tasklist\n  'list'",
-      "tasklist\n  'clear'",
-      "tasklist\n  'update',\n  index,\n  status:bool (0=undone, 1=done)",
+    wrapperNote:
+      'Use the normal model-specific tool-call wrapper for this conversation. Only the tasklist arguments below change.',
+    argumentsShape: [
+      '{ "command": "new", "item": "Task item", "index": 0 }',
+      '{ "command": "list" }',
+      '{ "command": "clear" }',
+      '{ "command": "update", "index": 0, "status": 1 }',
     ],
+    statusNote: 'status uses 0 for undone and 1 for done.',
   };
 }
 
