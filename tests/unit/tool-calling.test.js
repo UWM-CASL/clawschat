@@ -796,6 +796,8 @@ describe('tool-calling prompt builder', () => {
         expect.objectContaining({ name: 'true', usage: 'true' }),
         expect.objectContaining({ name: 'false', usage: 'false' }),
         expect.objectContaining({ name: 'cd', usage: 'cd [<directory>]' }),
+        expect.objectContaining({ name: 'rmdir', usage: 'rmdir <directory>...' }),
+        expect.objectContaining({ name: 'mktemp', usage: 'mktemp [-d] [<template>]' }),
         expect.objectContaining({ name: 'ls', usage: 'ls [-1] [-R] [-d] [-h] [-l] [<path>...]' }),
         expect.objectContaining({
           name: 'cat',
@@ -1009,6 +1011,90 @@ describe('tool-calling prompt builder', () => {
       exitCode: 1,
       stdout: 'ls\necho',
       stderr: '',
+    });
+  });
+
+  test('supports rmdir for empty directories only', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/full/file.txt': 'alpha',
+    });
+    await workspaceFileSystem.ensureDirectory('/workspace/empty');
+
+    const successResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'rmdir empty',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    const failureResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'rmdir full',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(successResult.result).toEqual({
+      shellFlavor: 'GNU/Linux-like shell subset',
+      currentWorkingDirectory: '/workspace',
+      command: 'rmdir empty',
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+    });
+    expect(failureResult.result.exitCode).toBe(1);
+    expect(failureResult.result.stderr).toContain("failed to remove 'full'");
+  });
+
+  test('supports mktemp for files and directories', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem();
+
+    const fileResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'mktemp',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    const directoryResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'mktemp -d /workspace/tmpdir.XXXXXX',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(fileResult.result.exitCode).toBe(0);
+    expect(fileResult.result.stdout).toMatch(/^\/workspace\/tmp\.[a-z0-9]{6}$/);
+    await expect(workspaceFileSystem.stat(fileResult.result.stdout)).resolves.toMatchObject({
+      kind: 'file',
+      path: fileResult.result.stdout,
+    });
+
+    expect(directoryResult.result.exitCode).toBe(0);
+    expect(directoryResult.result.stdout).toMatch(/^\/workspace\/tmpdir\.[a-z0-9]{6}$/);
+    await expect(workspaceFileSystem.stat(directoryResult.result.stdout)).resolves.toMatchObject({
+      kind: 'directory',
+      path: directoryResult.result.stdout,
     });
   });
 

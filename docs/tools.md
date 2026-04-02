@@ -115,7 +115,9 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `head`
   - `tail`
   - `wc`
+  - `rmdir`
   - `mkdir`
+  - `mktemp`
   - `touch`
   - `cp`
   - `mv`

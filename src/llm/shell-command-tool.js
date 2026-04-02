@@ -67,9 +67,19 @@ const SHELL_COMMANDS = Object.freeze([
     description: 'Count lines, words, or bytes in a text file.',
   },
   {
+    name: 'rmdir',
+    usage: 'rmdir <directory>...',
+    description: 'Remove empty directories under /workspace.',
+  },
+  {
     name: 'mkdir',
     usage: 'mkdir [-p] <directory>',
     description: 'Create directories under /workspace.',
+  },
+  {
+    name: 'mktemp',
+    usage: 'mktemp [-d] [<template>]',
+    description: 'Create a unique temporary file or directory under /workspace.',
   },
   {
     name: 'touch',
@@ -204,6 +214,27 @@ function dirname(path) {
     return '/';
   }
   return trimmed.slice(0, lastSlashIndex);
+}
+
+function getMktempTemplatePath(template, currentWorkingDirectory) {
+  const normalizedTemplate = String(template || '').trim();
+  if (!normalizedTemplate) {
+    return `${currentWorkingDirectory}/tmp.XXXXXX`;
+  }
+  return normalizedTemplate;
+}
+
+function fillMktempTemplate(templatePath) {
+  const template = String(templatePath || '');
+  const lastRun = template.match(/X+$/);
+  if (!lastRun || lastRun[0].length < 3) {
+    throw new Error("template must end with at least 3 consecutive 'X' characters.");
+  }
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const replacement = Array.from({ length: lastRun[0].length }, () =>
+    alphabet[Math.floor(Math.random() * alphabet.length)]
+  ).join('');
+  return `${template.slice(0, -lastRun[0].length)}${replacement}`;
 }
 
 function decodePrintfEscapes(text) {
@@ -1322,6 +1353,117 @@ async function runMkdir(commandText, args, workspaceFileSystem, currentWorkingDi
   return createShellResult(commandText, { currentWorkingDirectory });
 }
 
+async function runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+  if (!args.length) {
+    return createShellError(commandText, 'rmdir', 'expected at least one directory path.', 2, currentWorkingDirectory);
+  }
+  for (const rawPath of args) {
+    let normalizedPath;
+    try {
+      normalizedPath = resolveWorkspacePath(workspaceFileSystem, rawPath, currentWorkingDirectory);
+    } catch (error) {
+      return createShellError(
+        commandText,
+        'rmdir',
+        error instanceof Error ? error.message : String(error),
+        1,
+        currentWorkingDirectory
+      );
+    }
+    const stat = await safeStat(workspaceFileSystem, normalizedPath);
+    if (!stat) {
+      return createShellError(
+        commandText,
+        'rmdir',
+        `failed to remove '${rawPath}': No such file or directory.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+    if (stat.kind !== 'directory') {
+      return createShellError(
+        commandText,
+        'rmdir',
+        `failed to remove '${rawPath}': Not a directory.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+    try {
+      await workspaceFileSystem.deletePath(normalizedPath, { recursive: false });
+    } catch (error) {
+      return createShellError(
+        commandText,
+        'rmdir',
+        `failed to remove '${rawPath}': ${error instanceof Error ? error.message : String(error)}`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+  }
+  return createShellResult(commandText, { currentWorkingDirectory });
+}
+
+async function runMktemp(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+  let createDirectory = false;
+  const positionalArgs = [];
+
+  for (const argument of args) {
+    if (argument === '-d') {
+      createDirectory = true;
+      continue;
+    }
+    if (argument.startsWith('-') && argument !== '-') {
+      return createShellError(commandText, 'mktemp', `unsupported option ${argument}.`, 2, currentWorkingDirectory);
+    }
+    positionalArgs.push(argument);
+  }
+
+  if (positionalArgs.length > 1) {
+    return createShellError(commandText, 'mktemp', 'expected zero or one template path.', 2, currentWorkingDirectory);
+  }
+
+  const templatePath = getMktempTemplatePath(positionalArgs[0], currentWorkingDirectory);
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    let normalizedPath;
+    try {
+      normalizedPath = resolveWorkspacePath(
+        workspaceFileSystem,
+        fillMktempTemplate(templatePath),
+        currentWorkingDirectory
+      );
+    } catch (error) {
+      return createShellError(
+        commandText,
+        'mktemp',
+        error instanceof Error ? error.message : String(error),
+        1,
+        currentWorkingDirectory
+      );
+    }
+    if (await safeStat(workspaceFileSystem, normalizedPath)) {
+      continue;
+    }
+    if (createDirectory) {
+      await workspaceFileSystem.ensureDirectory(normalizedPath);
+    } else {
+      await workspaceFileSystem.writeTextFile(normalizedPath, '');
+    }
+    return createShellResult(commandText, {
+      stdout: normalizedPath,
+      currentWorkingDirectory,
+    });
+  }
+
+  return createShellError(
+    commandText,
+    'mktemp',
+    'unable to allocate a unique temporary path.',
+    1,
+    currentWorkingDirectory
+  );
+}
+
 async function runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
     return createShellError(commandText, 'touch', 'expected at least one file path.', 2, currentWorkingDirectory);
@@ -1743,6 +1885,8 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'basename /workspace/file.txt',
       'dirname /workspace/file.txt',
       'printf "Hello %s\\n" world',
+      'mktemp',
+      'mktemp -d /workspace/tmpdir.XXXXXX',
       'cd <directory>',
       'cat /workspace/<file>',
       'NAME=value',
@@ -1912,8 +2056,14 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
   if (commandName === 'wc') {
     return runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory);
   }
+  if (commandName === 'rmdir') {
+    return runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  }
   if (commandName === 'mkdir') {
     return runMkdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  }
+  if (commandName === 'mktemp') {
+    return runMktemp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
   }
   if (commandName === 'touch') {
     return runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory);
