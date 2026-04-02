@@ -169,6 +169,21 @@ function normalizeStoredConversationWorkingDirectory(value) {
   }
 }
 
+function isValidShellVariableName(name) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(String(name || ''));
+}
+
+function normalizeStoredShellVariables(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([name]) => isValidShellVariableName(name))
+      .map(([name, variableValue]) => [name, String(variableValue ?? '')]),
+  );
+}
+
 function base64ToBytes(base64) {
   const normalized = typeof base64 === 'string' ? base64.trim() : '';
   if (!normalized) {
@@ -710,6 +725,7 @@ async function normalizeStateForStorage(state) {
     currentWorkingDirectory: normalizeStoredConversationWorkingDirectory(
       conversation.currentWorkingDirectory
     ),
+    shellVariables: normalizeStoredShellVariables(conversation.shellVariables),
     activeLeafMessageId:
       typeof conversation.activeLeafMessageId === 'string'
         ? conversation.activeLeafMessageId
@@ -817,6 +833,7 @@ async function rebuildStateFromNormalizedRecords(rootRecord, conversationRecords
       currentWorkingDirectory: normalizeStoredConversationWorkingDirectory(
         conversation.currentWorkingDirectory
       ),
+      shellVariables: normalizeStoredShellVariables(conversation.shellVariables),
       activeLeafMessageId:
         typeof conversation.activeLeafMessageId === 'string'
           ? conversation.activeLeafMessageId

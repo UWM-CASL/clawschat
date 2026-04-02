@@ -12,7 +12,7 @@ import {
 } from './conversation-model.js';
 
 export const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
-export const CONVERSATION_SCHEMA_VERSION = 6;
+export const CONVERSATION_SCHEMA_VERSION = 7;
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -24,6 +24,21 @@ function normalizeConversationWorkingDirectory(value) {
   } catch {
     return '/workspace';
   }
+}
+
+function isValidShellVariableName(name) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(String(name || ''));
+}
+
+function normalizeConversationShellVariables(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([name]) => isValidShellVariableName(name))
+      .map(([name, variableValue]) => [name, String(variableValue ?? '')]),
+  );
 }
 
 function parseConversationCounterFromId(conversationId) {
@@ -485,6 +500,7 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
         currentWorkingDirectory: normalizeConversationWorkingDirectory(
           conversation.currentWorkingDirectory
         ),
+        shellVariables: normalizeConversationShellVariables(conversation.shellVariables),
         artifacts: [],
         activeLeafMessageId:
           typeof conversation.activeLeafMessageId === 'string' ? conversation.activeLeafMessageId : null,
@@ -621,6 +637,7 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
       const currentWorkingDirectory = normalizeConversationWorkingDirectory(
         rawConversation.currentWorkingDirectory
       );
+      const shellVariables = normalizeConversationShellVariables(rawConversation.shellVariables);
 
       if (
         messageNodes.length === 0 &&
@@ -644,6 +661,7 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
         lastSpokenLeafMessageId,
         hasGeneratedName: Boolean(rawConversation.hasGeneratedName),
         currentWorkingDirectory,
+        shellVariables,
       };
     })
     .filter(Boolean);

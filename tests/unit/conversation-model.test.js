@@ -422,6 +422,7 @@ describe('conversation-model', () => {
 
     expect(conversation.modelId).toBe('');
     expect(conversation.currentWorkingDirectory).toBe('/workspace');
+    expect(conversation.shellVariables).toEqual({});
   });
 
   test('derives conversation menu capabilities from conversation state only', () => {

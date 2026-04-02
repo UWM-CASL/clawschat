@@ -804,6 +804,14 @@ describe('tool-calling prompt builder', () => {
           name: 'grep',
           usage: 'grep [-i] [-n] [-v] [-c] [-l] [-F] <pattern> <file>...',
         }),
+        expect.objectContaining({
+          name: 'set',
+          usage: 'set <name> <value...>',
+        }),
+        expect.objectContaining({
+          name: 'unset',
+          usage: 'unset <name>...',
+        }),
       ])
     );
     expect(result.result.limitations).toContain(
@@ -811,6 +819,9 @@ describe('tool-calling prompt builder', () => {
     );
     expect(result.result.limitations).toContain(
       'Relative paths resolve from the current working directory.'
+    );
+    expect(result.result.limitations).toContain(
+      'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.'
     );
   });
 
@@ -985,6 +996,121 @@ describe('tool-calling prompt builder', () => {
       stdout: 'chapter one',
       stderr: '',
     });
+  });
+
+  test('supports minimal shell variables with assignment and expansion', async () => {
+    const conversation = createConversation({
+      id: 'conversation-shell-vars',
+    });
+
+    await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'COURSE=biology',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo $COURSE ${COURSE}',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(conversation.shellVariables).toEqual({
+      COURSE: 'biology',
+    });
+    expect(result.result.stdout).toBe('biology biology');
+  });
+
+  test('supports PWD expansion and unset for shell variables', async () => {
+    const conversation = createConversation({
+      id: 'conversation-shell-pwd',
+    });
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/coursework/notes.txt': 'chapter one',
+    });
+
+    await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cd coursework',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem,
+      }
+    );
+
+    const pwdResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo $PWD',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem,
+      }
+    );
+
+    await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'set COURSE science',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem,
+      }
+    );
+
+    await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'unset COURSE',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem,
+      }
+    );
+
+    const unsetResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo $COURSE',
+        },
+      },
+      {
+        conversation,
+        workspaceFileSystem,
+      }
+    );
+
+    expect(pwdResult.result.stdout).toBe('/workspace/coursework');
+    expect(unsetResult.result.stdout).toBe('');
+    expect(conversation.shellVariables).toEqual({});
   });
 
   test('supports ls -l and ls -h for long listings', async () => {

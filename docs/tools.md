@@ -118,11 +118,15 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `find` with `-name`, `-type f`, `-type d`, `-maxdepth`, and `-mindepth`
   - `grep` with `-i`, `-n`, `-v`, `-c`, `-l`, and `-F`
   - `echo`
+  - `set`
+  - `unset`
 - Current limits:
   - commands are GNU/Linux-like, but only this documented subset is implemented
   - relative paths resolve from the conversation's current working directory
   - new conversations start with the shell pointer at `/workspace`
-  - pipes, redirection, globbing, environment variables, and command substitution are not implemented yet
+  - minimal variable support exists for `$VAR`, `${VAR}`, `NAME=value`, `set`, and `unset`
+  - built-in pseudo variables include `PWD` and `WORKSPACE`
+  - pipes, redirection, globbing, command substitution, and full shell expansion semantics are not implemented yet
   - unsupported commands/syntax return shell-style `stderr` text with a non-zero `exitCode`
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js) and [src/llm/shell-command-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/shell-command-tool.js).

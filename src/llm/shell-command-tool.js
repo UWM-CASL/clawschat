@@ -81,6 +81,16 @@ const SHELL_COMMANDS = Object.freeze([
     usage: 'echo <text>',
     description: 'Print text to stdout.',
   },
+  {
+    name: 'set',
+    usage: 'set <name> <value...>',
+    description: 'Set a conversation-scoped shell variable.',
+  },
+  {
+    name: 'unset',
+    usage: 'unset <name>...',
+    description: 'Unset one or more conversation-scoped shell variables.',
+  },
 ]);
 
 function getTextEncoder() {
@@ -326,6 +336,66 @@ function getCurrentWorkingDirectory(runtimeContext = {}) {
   }
 }
 
+function isValidShellVariableName(name) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(String(name || ''));
+}
+
+function isReadonlyShellVariable(name) {
+  return name === 'PWD' || name === 'WORKSPACE';
+}
+
+function getShellVariables(runtimeContext = {}) {
+  if (!runtimeContext?.conversation || typeof runtimeContext.conversation !== 'object') {
+    return {};
+  }
+  const rawVariables =
+    runtimeContext.conversation.shellVariables &&
+    typeof runtimeContext.conversation.shellVariables === 'object' &&
+    !Array.isArray(runtimeContext.conversation.shellVariables)
+      ? runtimeContext.conversation.shellVariables
+      : {};
+  if (runtimeContext.conversation.shellVariables !== rawVariables) {
+    runtimeContext.conversation.shellVariables = rawVariables;
+  }
+  return rawVariables;
+}
+
+function getShellVariableValue(name, runtimeContext = {}, currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
+  if (name === 'PWD') {
+    return currentWorkingDirectory;
+  }
+  if (name === 'WORKSPACE') {
+    return WORKSPACE_ROOT_PATH;
+  }
+  const variables = getShellVariables(runtimeContext);
+  return typeof variables[name] === 'string' ? variables[name] : '';
+}
+
+function setShellVariable(runtimeContext = {}, name, value) {
+  const variables = getShellVariables(runtimeContext);
+  variables[name] = String(value ?? '');
+  return variables[name];
+}
+
+function unsetShellVariable(runtimeContext = {}, name) {
+  const variables = getShellVariables(runtimeContext);
+  delete variables[name];
+}
+
+function expandShellToken(token, runtimeContext = {}, currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
+  return String(token || '').replace(
+    /\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/g,
+    (_match, shortName, bracedName) =>
+      getShellVariableValue(shortName || bracedName, runtimeContext, currentWorkingDirectory),
+  );
+}
+
+function expandShellTokens(tokens, runtimeContext = {}, currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
+  return Array.isArray(tokens)
+    ? tokens.map((token) => expandShellToken(token, runtimeContext, currentWorkingDirectory))
+    : [];
+}
+
 function setCurrentWorkingDirectory(runtimeContext = {}, nextPath) {
   const normalizedPath = normalizeWorkspacePath(nextPath);
   if (runtimeContext?.conversation && typeof runtimeContext.conversation === 'object') {
@@ -495,6 +565,89 @@ async function runCd(commandText, args, workspaceFileSystem, runtimeContext, cur
 async function runEcho(commandText, args, currentWorkingDirectory) {
   return createShellResult(commandText, {
     stdout: args.join(' '),
+    currentWorkingDirectory,
+  });
+}
+
+async function runSet(commandText, args, runtimeContext, currentWorkingDirectory) {
+  if (!args.length) {
+    const userVariables = Object.entries(getShellVariables(runtimeContext))
+      .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+      .map(([name, value]) => `${name}=${value}`);
+    const builtinVariables = [
+      `PWD=${currentWorkingDirectory}`,
+      `WORKSPACE=${WORKSPACE_ROOT_PATH}`,
+    ];
+    return createShellResult(commandText, {
+      stdout: [...builtinVariables, ...userVariables].join('\n'),
+      currentWorkingDirectory,
+    });
+  }
+
+  const assignmentMatch = args.length === 1 ? args[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
+  const variableName = assignmentMatch ? assignmentMatch[1] : args[0];
+  const variableValue = assignmentMatch ? assignmentMatch[2] : args.slice(1).join(' ');
+
+  if (!isValidShellVariableName(variableName)) {
+    return createShellError(
+      commandText,
+      'set',
+      `invalid variable name '${variableName}'.`,
+      2,
+      currentWorkingDirectory
+    );
+  }
+  if (isReadonlyShellVariable(variableName)) {
+    return createShellError(
+      commandText,
+      'set',
+      `cannot overwrite readonly variable '${variableName}'.`,
+      1,
+      currentWorkingDirectory
+    );
+  }
+  if (!assignmentMatch && args.length < 2) {
+    return createShellError(
+      commandText,
+      'set',
+      'expected a variable name and value.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  setShellVariable(runtimeContext, variableName, variableValue);
+  return createShellResult(commandText, {
+    currentWorkingDirectory,
+  });
+}
+
+async function runUnset(commandText, args, runtimeContext, currentWorkingDirectory) {
+  if (!args.length) {
+    return createShellError(commandText, 'unset', 'expected at least one variable name.', 2, currentWorkingDirectory);
+  }
+  for (const variableName of args) {
+    if (!isValidShellVariableName(variableName)) {
+      return createShellError(
+        commandText,
+        'unset',
+        `invalid variable name '${variableName}'.`,
+        2,
+        currentWorkingDirectory
+      );
+    }
+    if (isReadonlyShellVariable(variableName)) {
+      return createShellError(
+        commandText,
+        'unset',
+        `cannot unset readonly variable '${variableName}'.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+    unsetShellVariable(runtimeContext, variableName);
+  }
+  return createShellResult(commandText, {
     currentWorkingDirectory,
   });
 }
@@ -1323,6 +1476,8 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'ls /workspace/<directory>',
       'cd <directory>',
       'cat /workspace/<file>',
+      'NAME=value',
+      'echo $PWD',
       'head -n 20 /workspace/<file>',
       'find /workspace -name "*.txt"',
       'grep -n "term" /workspace/<file>',
@@ -1333,7 +1488,8 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'Only one command runs per tool call.',
       'Commands are GNU/Linux-like, but only the documented subset is implemented.',
       'Relative paths resolve from the current working directory.',
-      'Pipes, redirection, globbing, environment variables, and command substitution are not supported.',
+      'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.',
+      'Pipes, redirection, globbing, command substitution, and full shell expansion semantics are not supported.',
       'Unsupported commands or syntax return stderr text and a non-zero exit code.',
     ],
     placeholders: [
@@ -1415,7 +1571,30 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
     return createShellError(commandText, 'shell', 'command is empty.', 2, currentWorkingDirectory);
   }
 
-  const [commandName, ...args] = tokens;
+  const assignmentMatch =
+    tokens.length === 1 ? tokens[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
+  if (assignmentMatch) {
+    if (isReadonlyShellVariable(assignmentMatch[1])) {
+      return createShellError(
+        commandText,
+        'shell',
+        `cannot overwrite readonly variable '${assignmentMatch[1]}'.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+    setShellVariable(
+      runtimeContext,
+      assignmentMatch[1],
+      expandShellToken(assignmentMatch[2], runtimeContext, currentWorkingDirectory)
+    );
+    return createShellResult(commandText, {
+      currentWorkingDirectory,
+    });
+  }
+
+  const expandedTokens = expandShellTokens(tokens, runtimeContext, currentWorkingDirectory);
+  const [commandName, ...args] = expandedTokens;
   if (commandName === 'pwd') {
     return runPwd(commandText, args, currentWorkingDirectory);
   }
@@ -1424,6 +1603,12 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
   }
   if (commandName === 'echo') {
     return runEcho(commandText, args, currentWorkingDirectory);
+  }
+  if (commandName === 'set') {
+    return runSet(commandText, args, runtimeContext, currentWorkingDirectory);
+  }
+  if (commandName === 'unset') {
+    return runUnset(commandText, args, runtimeContext, currentWorkingDirectory);
   }
   if (commandName === 'ls') {
     return runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory);
