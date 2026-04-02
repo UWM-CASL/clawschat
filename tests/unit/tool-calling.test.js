@@ -577,6 +577,52 @@ describe('tool-calling prompt builder', () => {
     ]);
   });
 
+  test('sniffs a run_shell_command json tool call even when inner shell quotes are not escaped', () => {
+    expect(
+      sniffToolCalls(
+        '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        }
+      )
+    ).toEqual([
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l',
+        },
+        rawText:
+          '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        format: 'json',
+      },
+    ]);
+  });
+
+  test('sniffs a malformed run_shell_command json tool call after leading prose', () => {
+    expect(
+      sniffToolCalls(
+        'I will use the shell tool now.\n{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        }
+      )
+    ).toEqual([
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l',
+        },
+        rawText:
+          '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        format: 'json',
+      },
+    ]);
+  });
+
   test('executes get_current_date_time without arguments', async () => {
     const result = await executeToolCall({
       name: 'get_current_date_time',
