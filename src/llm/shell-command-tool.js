@@ -72,6 +72,11 @@ const SHELL_COMMANDS = Object.freeze([
     description: 'Find files and directories under /workspace.',
   },
   {
+    name: 'grep',
+    usage: 'grep [-i] [-n] [-v] [-c] [-l] [-F] <pattern> <file>...',
+    description: 'Search text files under /workspace.',
+  },
+  {
     name: 'echo',
     usage: 'echo <text>',
     description: 'Print text to stdout.',
@@ -218,6 +223,19 @@ function compileFindNamePattern(pattern) {
     .map((segment) => segment.split('?').map(escapeRegExp).join('.'))
     .join('.*')}$`;
   return new RegExp(expression);
+}
+
+function compileGrepPattern(pattern, { ignoreCase = false, fixedStrings = false } = {}) {
+  const normalizedPattern = String(pattern || '');
+  if (fixedStrings) {
+    return {
+      test: (line) =>
+        ignoreCase
+          ? String(line || '').toLowerCase().includes(normalizedPattern.toLowerCase())
+          : String(line || '').includes(normalizedPattern),
+    };
+  }
+  return new RegExp(normalizedPattern, ignoreCase ? 'i' : '');
 }
 
 function formatLsEntry(entry, { longFormat = false, humanReadable = false } = {}) {
@@ -1159,6 +1177,143 @@ async function runFind(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
+async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+  let ignoreCase = false;
+  let showLineNumbers = false;
+  let invertMatch = false;
+  let countOnly = false;
+  let listMatchingFiles = false;
+  let fixedStrings = false;
+  const positional = [];
+
+  for (const argument of args) {
+    if (argument === '--') {
+      continue;
+    }
+    if (argument.startsWith('-') && argument !== '-') {
+      for (const flag of argument.slice(1)) {
+        if (flag === 'i') {
+          ignoreCase = true;
+          continue;
+        }
+        if (flag === 'n') {
+          showLineNumbers = true;
+          continue;
+        }
+        if (flag === 'v') {
+          invertMatch = true;
+          continue;
+        }
+        if (flag === 'c') {
+          countOnly = true;
+          continue;
+        }
+        if (flag === 'l') {
+          listMatchingFiles = true;
+          continue;
+        }
+        if (flag === 'F') {
+          fixedStrings = true;
+          continue;
+        }
+        return createShellError(commandText, 'grep', `invalid option -- '${flag}'.`, 2, currentWorkingDirectory);
+      }
+      continue;
+    }
+    positional.push(argument);
+  }
+
+  if (positional.length < 2) {
+    return createShellError(
+      commandText,
+      'grep',
+      'expected a pattern and at least one file path.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  const [rawPattern, ...rawPaths] = positional;
+  let matcher;
+  try {
+    matcher = compileGrepPattern(rawPattern, {
+      ignoreCase,
+      fixedStrings,
+    });
+  } catch (error) {
+    return createShellError(
+      commandText,
+      'grep',
+      error instanceof Error ? error.message : String(error),
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  const multipleFiles = rawPaths.length > 1;
+  const outputs = [];
+
+  for (const rawPath of rawPaths) {
+    const fileResult = await readWorkspaceTextFile(
+      'grep',
+      commandText,
+      rawPath,
+      workspaceFileSystem,
+      currentWorkingDirectory
+    );
+    if (fileResult.error) {
+      return fileResult.error;
+    }
+
+    const normalizedPath = fileResult.path;
+    const lines = String(fileResult.text).split(/\r?\n/);
+    if (/\r?\n$/.test(String(fileResult.text))) {
+      lines.pop();
+    }
+
+    const matchingLines = [];
+    let matchCount = 0;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const isMatch = matcher.test(line);
+      const includeLine = invertMatch ? !isMatch : isMatch;
+      if (!includeLine) {
+        continue;
+      }
+      matchCount += 1;
+      if (!countOnly && !listMatchingFiles) {
+        const prefixes = [];
+        if (multipleFiles) {
+          prefixes.push(normalizedPath);
+        }
+        if (showLineNumbers) {
+          prefixes.push(String(index + 1));
+        }
+        matchingLines.push(prefixes.length ? `${prefixes.join(':')}:${line}` : line);
+      }
+    }
+
+    if (listMatchingFiles) {
+      if (matchCount > 0) {
+        outputs.push(normalizedPath);
+      }
+      continue;
+    }
+
+    if (countOnly) {
+      outputs.push(multipleFiles ? `${normalizedPath}:${matchCount}` : String(matchCount));
+      continue;
+    }
+
+    outputs.push(...matchingLines);
+  }
+
+  return createShellResult(commandText, {
+    stdout: outputs.join('\n'),
+    currentWorkingDirectory,
+  });
+}
+
 function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
   return {
     shellFlavor: SHELL_FLAVOR,
@@ -1170,6 +1325,7 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'cat /workspace/<file>',
       'head -n 20 /workspace/<file>',
       'find /workspace -name "*.txt"',
+      'grep -n "term" /workspace/<file>',
       'mkdir -p /workspace/<directory>',
       'cp /workspace/<source-file> /workspace/<destination-file>',
     ],
@@ -1301,6 +1457,9 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
   }
   if (commandName === 'find') {
     return runFind(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  }
+  if (commandName === 'grep') {
+    return runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory);
   }
 
   return createShellError(

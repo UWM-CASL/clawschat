@@ -800,6 +800,10 @@ describe('tool-calling prompt builder', () => {
           name: 'find',
           usage: 'find [<path>] [-name <pattern>] [-type f|d] [-maxdepth <n>] [-mindepth <n>]',
         }),
+        expect.objectContaining({
+          name: 'grep',
+          usage: 'grep [-i] [-n] [-v] [-c] [-l] [-F] <pattern> <file>...',
+        }),
       ])
     );
     expect(result.result.limitations).toContain(
@@ -913,7 +917,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'grep hello notes.txt',
+          command: 'sed -n 1p notes.txt',
         },
       },
       {
@@ -926,7 +930,7 @@ describe('tool-calling prompt builder', () => {
     expect(result.toolName).toBe('run_shell_command');
     expect(result.result.exitCode).toBe(127);
     expect(result.result.stdout).toBe('');
-    expect(result.result.stderr).toContain("command 'grep' is not available");
+    expect(result.result.stderr).toContain("command 'sed' is not available");
   });
 
   test('changes and reuses the conversation working directory for shell commands', async () => {
@@ -1172,6 +1176,94 @@ describe('tool-calling prompt builder', () => {
     expect(deepOnlyResult.result.stdout.split('\n')).toEqual([
       '/workspace/coursework/week1/day1/tasks.txt',
       '/workspace/coursework/week1/todo.txt',
+    ]);
+  });
+
+  test('supports grep -i, -n, and -F', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'Alpha\nbeta\nALPHA BETA\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep -inF alpha notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toBe('1:Alpha\n3:ALPHA BETA');
+  });
+
+  test('supports grep -v and -c', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'Alpha\nbeta\nALPHA BETA\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep -vc alpha notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toBe('3');
+  });
+
+  test('supports grep -l across multiple files', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'Alpha\nbeta\n',
+      '/workspace/todo.txt': 'gamma\ndelta\n',
+      '/workspace/summary.txt': 'alphabet soup\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep -l alpha notes.txt todo.txt summary.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout.split('\n')).toEqual([
+      '/workspace/summary.txt',
+    ]);
+  });
+
+  test('prefixes grep output with file names for multiple files', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/a.txt': 'target\n',
+      '/workspace/b.txt': 'skip\ntarget\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep target a.txt b.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout.split('\n')).toEqual([
+      '/workspace/a.txt:target',
+      '/workspace/b.txt:target',
     ]);
   });
 
