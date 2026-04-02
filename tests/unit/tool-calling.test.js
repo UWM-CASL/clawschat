@@ -792,7 +792,10 @@ describe('tool-calling prompt builder', () => {
         expect.objectContaining({ name: 'pwd', usage: 'pwd' }),
         expect.objectContaining({ name: 'cd', usage: 'cd [<directory>]' }),
         expect.objectContaining({ name: 'ls', usage: 'ls [-1] [-R] [-d] [-h] [-l] [<path>...]' }),
-        expect.objectContaining({ name: 'cat', usage: 'cat <file>' }),
+        expect.objectContaining({
+          name: 'cat',
+          usage: 'cat [-bns] [--number] [--number-nonblank] [--squeeze-blank] <file>...',
+        }),
       ])
     );
     expect(result.result.limitations).toContain(
@@ -827,6 +830,78 @@ describe('tool-calling prompt builder', () => {
       stdout: 'alpha\nbeta\n',
       stderr: '',
     });
+  });
+
+  test('supports cat -n for numbering all output lines', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat -n notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'alpha\n\nbeta\n',
+        }),
+      }
+    );
+
+    expect(result.result.stdout).toBe('     1\talpha\n     2\t\n     3\tbeta\n');
+  });
+
+  test('supports cat -b and prefers it over -n for blank lines', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat -bn notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'alpha\n\nbeta\n',
+        }),
+      }
+    );
+
+    expect(result.result.stdout).toBe('     1\talpha\n\n     2\tbeta\n');
+  });
+
+  test('supports cat -s for squeezing repeated blank lines', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat -s notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'alpha\n\n\nbeta\n',
+        }),
+      }
+    );
+
+    expect(result.result.stdout).toBe('alpha\n\nbeta\n');
+  });
+
+  test('supports cat long aliases', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat --number-nonblank --squeeze-blank notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'alpha\n\n\nbeta\n',
+        }),
+      }
+    );
+
+    expect(result.result.stdout).toBe('     1\talpha\n\n     2\tbeta\n');
   });
 
   test('returns shell-style stderr for unsupported shell commands', async () => {

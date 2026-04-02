@@ -106,7 +106,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `pwd`
   - `cd`
   - `ls` with `-l`, `-R`, `-1`, `-d`, and `-h`
-  - `cat`
+  - `cat` with `-n`, `-b`, `-s`, `--number`, `--number-nonblank`, and `--squeeze-blank`
   - `head`
   - `tail`
   - `wc`

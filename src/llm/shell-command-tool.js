@@ -23,7 +23,7 @@ const SHELL_COMMANDS = Object.freeze([
   },
   {
     name: 'cat',
-    usage: 'cat <file>',
+    usage: 'cat [-bns] [--number] [--number-nonblank] [--squeeze-blank] <file>...',
     description: 'Read a text file.',
   },
   {
@@ -610,12 +610,96 @@ async function readWorkspaceTextFile(
   };
 }
 
+function isBlankCatLine(line) {
+  return line.trim() === '';
+}
+
+function formatCatText(text, { numberAllLines = false, numberNonBlankLines = false, squeezeBlank = false } = {}) {
+  const normalizedText = String(text || '');
+  const trailingNewline = /\r?\n$/.test(normalizedText);
+  const lines = normalizedText.split(/\r?\n/);
+  if (trailingNewline) {
+    lines.pop();
+  }
+
+  const outputLines = [];
+  let lineNumber = 1;
+  let previousWasBlank = false;
+
+  for (const line of lines) {
+    const blankLine = isBlankCatLine(line);
+    if (squeezeBlank && blankLine && previousWasBlank) {
+      continue;
+    }
+    previousWasBlank = blankLine;
+
+    const shouldNumberLine = numberNonBlankLines ? !blankLine : numberAllLines;
+    if (shouldNumberLine) {
+      outputLines.push(`${String(lineNumber).padStart(6, ' ')}\t${line}`);
+      lineNumber += 1;
+      continue;
+    }
+    outputLines.push(line);
+  }
+
+  const outputText = outputLines.join('\n');
+  return trailingNewline ? `${outputText}\n` : outputText;
+}
+
 async function runCat(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
     return createShellError(commandText, 'cat', 'expected at least one file path.', 2, currentWorkingDirectory);
   }
+  let numberAllLines = false;
+  let numberNonBlankLines = false;
+  let squeezeBlank = false;
+  const filePaths = [];
+
+  for (const argument of args) {
+    if (argument === '--') {
+      continue;
+    }
+    if (argument === '--number') {
+      numberAllLines = true;
+      continue;
+    }
+    if (argument === '--number-nonblank') {
+      numberNonBlankLines = true;
+      continue;
+    }
+    if (argument === '--squeeze-blank') {
+      squeezeBlank = true;
+      continue;
+    }
+    if (argument.startsWith('--')) {
+      return createShellError(commandText, 'cat', `unrecognized option '${argument}'.`, 2, currentWorkingDirectory);
+    }
+    if (argument.startsWith('-') && argument !== '-') {
+      for (const flag of argument.slice(1)) {
+        if (flag === 'n') {
+          numberAllLines = true;
+          continue;
+        }
+        if (flag === 'b') {
+          numberNonBlankLines = true;
+          continue;
+        }
+        if (flag === 's') {
+          squeezeBlank = true;
+          continue;
+        }
+        return createShellError(commandText, 'cat', `invalid option -- '${flag}'.`, 2, currentWorkingDirectory);
+      }
+      continue;
+    }
+    filePaths.push(argument);
+  }
+
+  if (!filePaths.length) {
+    return createShellError(commandText, 'cat', 'expected at least one file path.', 2, currentWorkingDirectory);
+  }
   const chunks = [];
-  for (const rawPath of args) {
+  for (const rawPath of filePaths) {
     const fileResult = await readWorkspaceTextFile(
       'cat',
       commandText,
@@ -628,8 +712,13 @@ async function runCat(commandText, args, workspaceFileSystem, currentWorkingDire
     }
     chunks.push(fileResult.text);
   }
+  const combinedText = chunks.join('');
   return createShellResult(commandText, {
-    stdout: chunks.join(''),
+    stdout: formatCatText(combinedText, {
+      numberAllLines,
+      numberNonBlankLines,
+      squeezeBlank,
+    }),
     currentWorkingDirectory,
   });
 }
