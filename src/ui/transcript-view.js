@@ -318,6 +318,20 @@ export function createTranscriptView(dependencies) {
     return turnMessages;
   }
 
+  function getLastModelTurnMessage(conversation, rootModelMessage) {
+    const turnMessages = getModelTurnMessages(conversation, rootModelMessage);
+    for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
+      if (turnMessages[index]?.role === 'model') {
+        return turnMessages[index];
+      }
+    }
+    return rootModelMessage?.role === 'model' ? rootModelMessage : null;
+  }
+
+  function isModelTurnComplete(conversation, rootModelMessage) {
+    return Boolean(getLastModelTurnMessage(conversation, rootModelMessage)?.isResponseComplete);
+  }
+
   function getToolCallActionLabel(toolCall) {
     const toolName = typeof toolCall?.name === 'string' ? toolCall.name.trim() : '';
     const toolLabel = toolName ? resolveToolDisplayName(toolName) : 'Tool';
@@ -374,6 +388,7 @@ export function createTranscriptView(dependencies) {
     }
     const conversation = getActiveConversation();
     const turnMessages = getModelTurnMessages(conversation, message);
+    const lastModelTurnMessage = getLastModelTurnMessage(conversation, message);
     const timeline = refs.timeline;
     timeline.replaceChildren();
 
@@ -432,7 +447,12 @@ export function createTranscriptView(dependencies) {
         Array.isArray(turnMessage.toolCalls) && turnMessage.toolCalls.length > 0
           ? getToolCallNarrationText(turnMessage)
           : String(turnMessage.response || turnMessage.text || '');
-      const shouldShowPendingResponse = !turnMessage.isResponseComplete && !responseContent.trim();
+      const hasToolCalls = Array.isArray(turnMessage.toolCalls) && turnMessage.toolCalls.length > 0;
+      const shouldShowPendingResponse =
+        turnMessage.id === lastModelTurnMessage?.id &&
+        !turnMessage.isResponseComplete &&
+        !responseContent.trim() &&
+        !hasToolCalls;
       if (shouldShowPendingResponse || responseContent.trim()) {
         const responseRegion = documentRef.createElement('section');
         responseRegion.className = 'response-region';
@@ -453,7 +473,7 @@ export function createTranscriptView(dependencies) {
         hasMathMlCopyAction ||= canShowMathMlCopyAction(responseContent);
       }
 
-      const toolCalls = Array.isArray(turnMessage.toolCalls) ? turnMessage.toolCalls : [];
+      const toolCalls = hasToolCalls ? turnMessage.toolCalls : [];
       if (toolCalls.length) {
         const isExpanded = refs.toolExpansion.get(turnMessage.id) === true;
         const primaryToolName =
@@ -634,7 +654,7 @@ export function createTranscriptView(dependencies) {
       `;
       const responseActions = item.querySelector('.response-actions');
       if (responseActions) {
-        responseActions.classList.toggle('d-none', !message.isResponseComplete);
+        responseActions.classList.toggle('d-none', !isModelTurnComplete(activeConversation, message));
       }
       const timeline = item.querySelector('.model-turn-timeline');
       const copyMathMlButton = item.querySelector('.copy-mathml-btn');
@@ -871,11 +891,12 @@ export function createTranscriptView(dependencies) {
       return;
     }
     /** @type {any} */ (item)._modelMessage = message;
+    const activeConversation = getActiveConversation();
+    const isTurnComplete = isModelTurnComplete(activeConversation, message);
     const responseActions = item.querySelector('.response-actions');
     if (responseActions) {
-      responseActions.classList.toggle('d-none', !message.isResponseComplete);
+      responseActions.classList.toggle('d-none', !isTurnComplete);
     }
-    const activeConversation = getActiveConversation();
     const variantState = getModelVariantState(activeConversation, message);
     const variantNav = item.querySelector('.response-variant-nav');
     const variantLabel = item.querySelector('.response-variant-status');
@@ -884,17 +905,17 @@ export function createTranscriptView(dependencies) {
     if (variantNav) {
       variantNav.classList.toggle(
         'd-none',
-        !variantState.hasVariants || !message.isResponseComplete
+        !variantState.hasVariants || !isTurnComplete
       );
     }
     if (variantLabel) {
       variantLabel.textContent = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
     }
     if (prevButton instanceof view.HTMLButtonElement) {
-      prevButton.disabled = !variantState.canGoPrev || !message.isResponseComplete;
+      prevButton.disabled = !variantState.canGoPrev || !isTurnComplete;
     }
     if (nextButton instanceof view.HTMLButtonElement) {
-      nextButton.disabled = !variantState.canGoNext || !message.isResponseComplete;
+      nextButton.disabled = !variantState.canGoNext || !isTurnComplete;
     }
     applyVariantCardSignals(item, variantState);
     applyFixCardSignals(item, message);

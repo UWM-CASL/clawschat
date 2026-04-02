@@ -1740,6 +1740,30 @@ function getActiveConversation() {
   return selectActiveConversation(appState);
 }
 
+function isModelTurnComplete(conversation, rootModelMessage) {
+  if (!conversation || rootModelMessage?.role !== 'model') {
+    return false;
+  }
+  const pathMessages = getConversationPathMessages(conversation);
+  const startIndex = pathMessages.findIndex((message) => message?.id === rootModelMessage.id);
+  if (startIndex < 0) {
+    return Boolean(rootModelMessage.isResponseComplete);
+  }
+  for (let index = pathMessages.length - 1; index >= startIndex; index -= 1) {
+    const message = pathMessages[index];
+    if (!message) {
+      continue;
+    }
+    if (index > startIndex && message.role === 'user') {
+      break;
+    }
+    if (message.role === 'model') {
+      return Boolean(message.isResponseComplete);
+    }
+  }
+  return Boolean(rootModelMessage.isResponseComplete);
+}
+
 function findConversationById(conversationId) {
   return selectConversationById(appState, conversationId);
 }
@@ -2561,7 +2585,7 @@ function updateRegenerateButtons() {
     const modelMessage = activeConversation?.messageNodes.find(
       (message) => message.id === messageId && message.role === 'model'
     );
-    const hideActions = !modelMessage?.isResponseComplete;
+    const hideActions = !isModelTurnComplete(activeConversation, modelMessage);
     const responseActions = item.querySelector('.response-actions');
     if (responseActions) {
       responseActions.classList.toggle('d-none', hideActions);
