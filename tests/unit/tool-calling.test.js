@@ -623,6 +623,43 @@ describe('tool-calling prompt builder', () => {
     ]);
   });
 
+  test('sniffs a run_shell_command json tool call with escaped quotes and backslashes intact', () => {
+    expect(
+      sniffToolCalls(
+        '{"name":"run_shell_command","parameters":{"command":"curl -X POST -H \\"Content-Type: application/json\\" -d \\"{\\\\\\"topic\\\\\\":\\\\\\"planets\\\\\\"}\\" https://example.com/api"}}',
+        {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        }
+      )
+    ).toEqual([
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command:
+            'curl -X POST -H "Content-Type: application/json" -d "{\\"topic\\":\\"planets\\"}" https://example.com/api',
+        },
+        rawText:
+          '{"name":"run_shell_command","parameters":{"command":"curl -X POST -H \\"Content-Type: application/json\\" -d \\"{\\\\\\"topic\\\\\\":\\\\\\"planets\\\\\\"}\\" https://example.com/api"}}',
+        format: 'json',
+      },
+    ]);
+  });
+
+  test('does not sniff an incomplete run_shell_command json tool call', () => {
+    expect(
+      sniffToolCalls(
+        '{"name":"run_shell_command","parameters":{"command":"printf \\"%s\\" \\"unterminated"',
+        {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        }
+      )
+    ).toEqual([]);
+  });
+
   test('executes get_current_date_time without arguments', async () => {
     const result = await executeToolCall({
       name: 'get_current_date_time',
@@ -1029,6 +1066,53 @@ describe('tool-calling prompt builder', () => {
       stdout: 'alpha\nbeta\n',
       stderr: '',
     });
+  });
+
+  test('preserves escaped quotes and spaces in echoed shell text', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem();
+
+    const quotedResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo "a \\"quoted\\" value"',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    const escapedSpaceResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo a\\ b',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(quotedResult.result.stdout).toBe('a "quoted" value');
+    expect(escapedSpaceResult.result.stdout).toBe('a b');
+  });
+
+  test('preserves backslashes through printf arguments', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'printf "%s" "C:\\\\temp\\\\file.txt"',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.result.stdout).toBe('C:\\temp\\file.txt');
   });
 
   test('supports true and false as fixed exit-code commands', async () => {
@@ -1801,6 +1885,40 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.result.stdout).toBe('biology biology $COURSE $COURSE');
+  });
+
+  test('preserves escaped JSON payloads in curl request bodies', async () => {
+    const fetchRef = vi.fn(async (_url, init = {}) => {
+      expect(init).toMatchObject({
+        method: 'POST',
+        body: '{"topic":"planets"}',
+      });
+      const headers =
+        init.headers instanceof globalThis.Headers
+          ? init.headers
+          : new globalThis.Headers(init.headers);
+      expect(headers.get('Content-Type')).toBe('application/json');
+      return new globalThis.Response('ok', {
+        status: 200,
+      });
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command:
+            'curl -H "Content-Type: application/json" -d "{\\"topic\\":\\"planets\\"}" https://example.com/api',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+        fetchRef,
+      }
+    );
+
+    expect(result.result.exitCode).toBe(0);
+    expect(result.result.stdout).toBe('ok');
   });
 
   test('supports PWD expansion and unset for shell variables', async () => {
