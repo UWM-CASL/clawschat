@@ -13,6 +13,7 @@ function createHarness() {
         <div id="conversationSystemPromptModal"></div>
         <textarea id="conversationSystemPromptInput"></textarea>
         <input id="conversationSystemPromptAppendToggle" type="checkbox" />
+        <textarea id="conversationSystemPromptComputedPreview"></textarea>
       </div>
     `,
     { url: 'https://example.test/' },
@@ -58,6 +59,9 @@ function createHarness() {
       conversationSystemPromptAppendToggle: document.getElementById(
         'conversationSystemPromptAppendToggle',
       ),
+      conversationSystemPromptComputedPreview: document.getElementById(
+        'conversationSystemPromptComputedPreview',
+      ),
     },
     deps: {
       appState,
@@ -65,6 +69,9 @@ function createHarness() {
       conversationSystemPromptInput: document.getElementById('conversationSystemPromptInput'),
       conversationSystemPromptAppendToggle: document.getElementById(
         'conversationSystemPromptAppendToggle',
+      ),
+      conversationSystemPromptComputedPreview: document.getElementById(
+        'conversationSystemPromptComputedPreview',
       ),
       chatTitle: document.getElementById('chatTitle'),
       chatTitleInput: document.getElementById('chatTitleInput'),
@@ -79,6 +86,10 @@ function createHarness() {
       }),
       normalizeSystemPrompt: vi.fn((value) => String(value || '').trim()),
       normalizeConversationPromptMode: vi.fn((value) => value !== false),
+      buildComputedConversationSystemPromptPreview: vi.fn(
+        ({ conversationPrompt = '', appendConversationPrompt = true }) =>
+          `computed:${conversationPrompt}|append:${appendConversationPrompt}`,
+      ),
       queueConversationStateSave: vi.fn(),
       setStatus: vi.fn(),
       renderConversationList: vi.fn(),
@@ -127,9 +138,16 @@ describe('conversation-editors', () => {
     editors.beginConversationSystemPromptEdit();
     expect(harness.elements.conversationSystemPromptInput.value).toBe('Draft prompt.');
     expect(harness.elements.conversationSystemPromptAppendToggle.checked).toBe(false);
+    expect(harness.elements.conversationSystemPromptComputedPreview.value).toBe(
+      'computed:Draft prompt.|append:false',
+    );
 
     harness.elements.conversationSystemPromptInput.value = '  Fresh chat context  ';
     harness.elements.conversationSystemPromptAppendToggle.checked = true;
+    editors.updateConversationSystemPromptPreview();
+    expect(harness.elements.conversationSystemPromptComputedPreview.value).toBe(
+      'computed:Fresh chat context|append:true',
+    );
     editors.saveConversationSystemPromptEdit();
 
     expect(harness.appState.pendingConversationSystemPrompt).toBe('Fresh chat context');

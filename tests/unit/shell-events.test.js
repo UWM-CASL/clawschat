@@ -17,6 +17,7 @@ function createHarness() {
         <button id="saveChatTitleBtn"></button>
         <button id="cancelChatTitleBtn"></button>
         <textarea id="conversationSystemPromptInput"></textarea>
+        <input id="conversationSystemPromptAppendToggle" type="checkbox" />
         <button id="saveConversationSystemPromptBtn"></button>
         <input id="chatTitleInput" />
       </div>
@@ -98,8 +99,12 @@ function createHarness() {
       cancelChatTitleBtn: document.getElementById('cancelChatTitleBtn'),
       cancelChatTitleEdit: vi.fn(),
       conversationSystemPromptInput: document.getElementById('conversationSystemPromptInput'),
+      conversationSystemPromptAppendToggle: document.getElementById(
+        'conversationSystemPromptAppendToggle',
+      ),
       saveConversationSystemPromptBtn: document.getElementById('saveConversationSystemPromptBtn'),
       saveConversationSystemPromptEdit: vi.fn(),
+      updateConversationSystemPromptPreview: vi.fn(),
       chatTitleInput: document.getElementById('chatTitleInput'),
       updateChatTitleEditorVisibility: vi.fn(),
     },
@@ -146,6 +151,20 @@ describe('shell-events', () => {
 
     expect(harness.deps.saveChatTitleEdit).toHaveBeenCalledTimes(1);
     expect(harness.deps.cancelChatTitleEdit).toHaveBeenCalledTimes(1);
+  });
+
+  test('conversation system prompt inputs refresh the computed preview', () => {
+    const harness = createHarness();
+    bindShellEvents(harness.deps);
+
+    harness.document.getElementById('conversationSystemPromptInput')?.dispatchEvent(
+      new harness.dom.window.Event('input', { bubbles: true }),
+    );
+    harness.document.getElementById('conversationSystemPromptAppendToggle')?.dispatchEvent(
+      new harness.dom.window.Event('change', { bubbles: true }),
+    );
+
+    expect(harness.deps.updateConversationSystemPromptPreview).toHaveBeenCalledTimes(2);
   });
 
   test('new conversation enters pre-chat mode without creating a conversation record', () => {

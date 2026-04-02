@@ -70,6 +70,7 @@ import {
   deriveConversationName,
   findPreferredLeafForVariant,
   getConversationCardHeading,
+  getEffectiveConversationSystemPrompt,
   getConversationPathMessages,
   getTaskListForConversationLeaf,
   getMessageNodeById,
@@ -513,6 +514,9 @@ const conversationSystemPromptModal = document.getElementById('conversationSyste
 const conversationSystemPromptInput = document.getElementById('conversationSystemPromptInput');
 const conversationSystemPromptAppendToggle = document.getElementById(
   'conversationSystemPromptAppendToggle'
+);
+const conversationSystemPromptComputedPreview = document.getElementById(
+  'conversationSystemPromptComputedPreview'
 );
 const saveConversationSystemPromptBtn = document.getElementById('saveConversationSystemPromptBtn');
 const openSettingsButton = document.getElementById('openSettingsButton');
@@ -1350,6 +1354,30 @@ function getConversationSystemPromptSuffix(modelId) {
     .map((section) => normalizeSystemPrompt(section))
     .filter(Boolean)
     .join('\n\n');
+}
+
+function buildComputedConversationSystemPromptPreview({
+  conversationPrompt = '',
+  appendConversationPrompt = true,
+} = {}) {
+  const activeConversation = getActiveConversation();
+  const modelId = activeConversation
+    ? getConversationModelId(activeConversation)
+    : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const promptTarget = activeConversation
+    ? {
+        ...activeConversation,
+        conversationSystemPrompt: normalizeSystemPrompt(conversationPrompt),
+        appendConversationSystemPrompt: normalizeConversationPromptMode(appendConversationPrompt),
+      }
+    : {
+        systemPrompt: appState.defaultSystemPrompt,
+        conversationSystemPrompt: normalizeSystemPrompt(conversationPrompt),
+        appendConversationSystemPrompt: normalizeConversationPromptMode(appendConversationPrompt),
+      };
+  return getEffectiveConversationSystemPrompt(promptTarget, {
+    suffix: getConversationSystemPromptSuffix(modelId),
+  });
 }
 
 function detectToolCallsForModel(rawText, modelId) {
@@ -2832,6 +2860,7 @@ function getRuntimeConfigForModel(modelId) {
 
 const {
   updateChatTitleEditorVisibility,
+  updateConversationSystemPromptPreview,
   beginConversationSystemPromptEdit,
   saveConversationSystemPromptEdit,
   beginChatTitleEdit,
@@ -2842,6 +2871,7 @@ const {
   conversationSystemPromptModal,
   conversationSystemPromptInput,
   conversationSystemPromptAppendToggle,
+  conversationSystemPromptComputedPreview,
   chatTitle,
   chatTitleInput,
   saveChatTitleBtn,
@@ -2853,6 +2883,7 @@ const {
   setChatTitleEditing,
   normalizeSystemPrompt,
   normalizeConversationPromptMode,
+  buildComputedConversationSystemPromptPreview,
   queueConversationStateSave,
   setStatus,
   renderConversationList,
@@ -3366,8 +3397,10 @@ bindShellEvents({
   cancelChatTitleBtn,
   cancelChatTitleEdit,
   conversationSystemPromptInput,
+  conversationSystemPromptAppendToggle,
   saveConversationSystemPromptBtn,
   saveConversationSystemPromptEdit,
+  updateConversationSystemPromptPreview,
   chatTitleInput,
   updateChatTitleEditorVisibility,
 });

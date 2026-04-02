@@ -1901,6 +1901,21 @@
   color: var(--ink-strong);
 }
 
+#conversationSystemPromptComputedPreview {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    'Courier New',
+    monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .settings-close-button {
   display: inline-flex;
   align-items: center;

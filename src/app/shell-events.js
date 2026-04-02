@@ -35,8 +35,10 @@ export function bindShellEvents({
   cancelChatTitleBtn,
   cancelChatTitleEdit,
   conversationSystemPromptInput,
+  conversationSystemPromptAppendToggle,
   saveConversationSystemPromptBtn,
   saveConversationSystemPromptEdit,
+  updateConversationSystemPromptPreview,
   chatTitleInput,
   updateChatTitleEditorVisibility,
 }) {
@@ -149,6 +151,7 @@ export function bindShellEvents({
 
   if (conversationSystemPromptModal instanceof HTMLElement) {
     conversationSystemPromptModal.addEventListener('shown.bs.modal', () => {
+      updateConversationSystemPromptPreview();
       if (conversationSystemPromptInput instanceof HTMLTextAreaElement) {
         conversationSystemPromptInput.focus();
         conversationSystemPromptInput.setSelectionRange(
@@ -169,6 +172,18 @@ export function bindShellEvents({
           preChatEditConversationSystemPromptBtn.focus();
         }
       }
+    });
+  }
+
+  if (conversationSystemPromptInput instanceof HTMLTextAreaElement) {
+    conversationSystemPromptInput.addEventListener('input', () => {
+      updateConversationSystemPromptPreview();
+    });
+  }
+
+  if (conversationSystemPromptAppendToggle instanceof HTMLInputElement) {
+    conversationSystemPromptAppendToggle.addEventListener('change', () => {
+      updateConversationSystemPromptPreview();
     });
   }
 

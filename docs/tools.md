@@ -20,6 +20,7 @@ When tool calling is enabled for a conversation and the selected model supports 
 7. Resubmits the conversation so the model can continue only after that tool result is available.
 
 Tool calling is model-aware. The app does not use one universal tool-call format for every model family.
+If the selected model does not support tool calling, the tool-instruction section is omitted entirely from the computed system prompt even when the conversation-level tool-calling toggle is enabled.
 
 ## Current scope
 

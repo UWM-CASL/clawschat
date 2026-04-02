@@ -3,6 +3,7 @@ export function createConversationEditors({
   conversationSystemPromptModal,
   conversationSystemPromptInput,
   conversationSystemPromptAppendToggle,
+  conversationSystemPromptComputedPreview,
   chatTitle,
   chatTitleInput,
   saveChatTitleBtn,
@@ -14,6 +15,7 @@ export function createConversationEditors({
   setChatTitleEditing,
   normalizeSystemPrompt,
   normalizeConversationPromptMode,
+  buildComputedConversationSystemPromptPreview,
   queueConversationStateSave,
   setStatus,
   renderConversationList,
@@ -32,6 +34,31 @@ export function createConversationEditors({
           : null;
     }
     return appState.conversationSystemPromptModalInstance;
+  }
+
+  function updateConversationSystemPromptPreview() {
+    if (!(conversationSystemPromptComputedPreview instanceof HTMLTextAreaElement)) {
+      return;
+    }
+    const normalizedPrompt = normalizeSystemPrompt(
+      conversationSystemPromptInput instanceof HTMLTextAreaElement
+        ? conversationSystemPromptInput.value
+        : '',
+    );
+    const appendPrompt = normalizeConversationPromptMode(
+      conversationSystemPromptAppendToggle instanceof HTMLInputElement
+        ? conversationSystemPromptAppendToggle.checked
+        : true,
+    );
+    const computedPrompt =
+      typeof buildComputedConversationSystemPromptPreview === 'function'
+        ? buildComputedConversationSystemPromptPreview({
+            conversationPrompt: normalizedPrompt,
+            appendConversationPrompt: appendPrompt,
+          })
+        : '';
+    conversationSystemPromptComputedPreview.value =
+      computedPrompt || '[No system prompt will be sent.]';
   }
 
   function updateChatTitleEditorVisibility() {
@@ -74,6 +101,7 @@ export function createConversationEditors({
         ? activeConversation.appendConversationSystemPrompt
         : appState.pendingAppendConversationSystemPrompt,
     );
+    updateConversationSystemPromptPreview();
     const modalInstance = getConversationSystemPromptModalInstance();
     if (modalInstance) {
       modalInstance.show();
@@ -166,6 +194,7 @@ export function createConversationEditors({
 
   return {
     updateChatTitleEditorVisibility,
+    updateConversationSystemPromptPreview,
     beginConversationSystemPromptEdit,
     saveConversationSystemPromptEdit,
     beginChatTitleEdit,
