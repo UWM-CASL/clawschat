@@ -9,7 +9,9 @@ export function buildOptionalFeaturePromptSection(instructions = []) {
   if (!normalizedInstructions.length) {
     return '';
   }
-  return normalizedInstructions.join('\n');
+  return ['**Special behaviors**', ...normalizedInstructions.map((instruction) => `- ${instruction}`)].join(
+    '\n'
+  );
 }
 
 export function buildMathRenderingFeaturePrompt({ renderMathMl = false } = {}) {

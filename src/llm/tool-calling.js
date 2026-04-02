@@ -179,16 +179,16 @@ export function buildToolCallingSystemPrompt(
     ...buildEnabledToolInstructions(enabledTools),
     ...(enabledTools.length ? [] : toolList.map((toolName) => `- ${toolName}`)),
   ];
-  const specialBehaviorLines = [
+  const toolBehaviorLines = [
     'After a tool result, continue the work and answer naturally.',
     ...buildToolSpecificUsageInstructions(enabledToolNames),
   ].filter(Boolean);
   const formatLines = buildToolCallingFormatInstructions(toolCallingConfig);
   return [
     ...toolLines,
-    specialBehaviorLines.length ? '' : null,
-    specialBehaviorLines.length ? '**Special behavior**' : null,
-    ...specialBehaviorLines.map((line) => `- ${line}`),
+    toolBehaviorLines.length ? '' : null,
+    toolBehaviorLines.length ? '**Tool behavior**' : null,
+    ...toolBehaviorLines.map((line) => `- ${line}`),
     formatLines.length ? '' : null,
     ...formatLines.map((line) => `- ${line}`),
   ]
