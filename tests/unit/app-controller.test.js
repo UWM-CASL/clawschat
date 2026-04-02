@@ -106,6 +106,7 @@ function createControllerHarness() {
       callLog.push('markActiveIncompleteModelMessageComplete'),
     ),
     scheduleTask: (callback) => callback(),
+    streamUpdateIntervalMs: 0,
   };
 
   return {
@@ -415,5 +416,27 @@ describe('app-controller', () => {
     );
     expect(toolMessage?.toolResult).toBe('{"items":[]}');
     expect(finalModelMessage?.text).toBe('The task list is currently empty.');
+  });
+
+  test('queues conversation persistence after completion instead of on every streamed token', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Stream a short reply.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onToken('Hello');
+      handlers.onToken(' world');
+      expect(harness.dependencies.queueConversationStateSave).not.toHaveBeenCalled();
+      handlers.onComplete('Hello world');
+    });
+
+    harness.controller.startModelGeneration(conversation, buildPromptForConversationLeaf(conversation), {
+      parentMessageId: userMessage.id,
+    });
+
+    expect(harness.dependencies.queueConversationStateSave).toHaveBeenCalledTimes(1);
   });
 });

@@ -65,6 +65,7 @@ function toErrorMessage(value) {
  *   applyPendingGenerationSettingsIfReady: () => void;
  *   markActiveIncompleteModelMessageComplete: () => void;
  *   scheduleTask?: (callback: () => void) => void;
+ *   streamUpdateIntervalMs?: number;
  * }} dependencies
  */
 export function createAppController(dependencies) {
@@ -72,6 +73,10 @@ export function createAppController(dependencies) {
     typeof dependencies?.scheduleTask === 'function'
       ? dependencies.scheduleTask
       : (callback) => window.setTimeout(callback, 0);
+  const streamUpdateIntervalMs =
+    Number.isFinite(dependencies?.streamUpdateIntervalMs) && dependencies.streamUpdateIntervalMs >= 0
+      ? Math.max(0, Math.trunc(dependencies.streamUpdateIntervalMs))
+      : 50;
 
   function shouldDisposeEngineBeforeInit(nextConfig = {}) {
     const nextModelId = nextConfig.modelId
@@ -295,6 +300,123 @@ export function createAppController(dependencies) {
     }
     let streamedText = '';
     let isInterceptingToolCall = false;
+    let pendingStreamUpdateTimerId = null;
+    let lastStreamUpdateAt = 0;
+
+    function clearPendingStreamUpdate() {
+      if (pendingStreamUpdateTimerId === null) {
+        return;
+      }
+      globalThis.clearTimeout(pendingStreamUpdateTimerId);
+      pendingStreamUpdateTimerId = null;
+    }
+
+    function getStreamUpdateTimestamp() {
+      if (typeof globalThis.performance?.now === 'function') {
+        return globalThis.performance.now();
+      }
+      return Date.now();
+    }
+
+    function applyStreamUpdate({ allowToolCallInterception = true } = {}) {
+      clearPendingStreamUpdate();
+      if (isInterceptingToolCall) {
+        return true;
+      }
+      if (modelMessage.isFixPreparing) {
+        modelMessage.isFixPreparing = false;
+      }
+      const parsed = dependencies.parseThinkingText(streamedText, thinkingTags);
+      if (thinkingTags) {
+        modelMessage.thoughts = parsed.thoughts;
+        modelMessage.response = parsed.response.trimStart();
+        modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
+        modelMessage.isThinkingComplete = parsed.isThinkingComplete;
+        modelMessage.text = modelMessage.response;
+      } else {
+        modelMessage.response = streamedText.trimStart();
+        modelMessage.text = modelMessage.response;
+      }
+      if (allowToolCallInterception) {
+        const interceptedToolCall =
+          typeof dependencies.detectToolCalls === 'function'
+            ? normalizeToolCallInterception(
+                dependencies.detectToolCalls(
+                  modelMessage.response || modelMessage.text || '',
+                  selectedModelId,
+                ),
+                modelMessage.response || modelMessage.text || '',
+              )
+            : null;
+        if (interceptedToolCall) {
+          isInterceptingToolCall = true;
+          modelMessage.toolCalls = interceptedToolCall.toolCalls;
+          modelMessage.response = interceptedToolCall.narrationText;
+          modelMessage.text = interceptedToolCall.narrationText;
+          if (modelMessage.content && typeof modelMessage.content === 'object') {
+            modelMessage.content.llmRepresentation = interceptedToolCall.toolCallPromptText;
+          }
+          dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
+          dependencies.scrollTranscriptToBottom();
+          dependencies.appendDebug('Detected emitted tool call during streaming.');
+          dependencies.setStatus('Running tool call...');
+          scheduleTask(() => {
+            void dependencies.engine.cancelGeneration().then(
+              () => {
+                void continueGenerationAfterToolCalls(
+                  activeConversation,
+                  modelMessage,
+                  interceptedToolCall.toolCalls,
+                  {
+                    updateLastSpokenOnComplete,
+                  },
+                );
+              },
+              (error) => {
+                const message = toErrorMessage(error);
+                modelMessage.text = `Tool call interception failed: ${message}`;
+                modelMessage.response = modelMessage.text;
+                modelMessage.thoughts = '';
+                modelMessage.hasThinking = false;
+                modelMessage.isThinkingComplete = false;
+                modelMessage.isResponseComplete = true;
+                setGenerating(dependencies.state, false);
+                dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
+                dependencies.updateActionButtons();
+                dependencies.applyPendingGenerationSettingsIfReady();
+                dependencies.setStatus('Generation failed');
+                dependencies.appendDebug(`Tool call interception failed: ${message}`);
+                dependencies.queueConversationStateSave();
+              },
+            );
+          });
+          return true;
+        }
+      }
+      lastStreamUpdateAt = getStreamUpdateTimestamp();
+      dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
+      dependencies.scrollTranscriptToBottom();
+      return false;
+    }
+
+    function scheduleStreamUpdate() {
+      if (streamUpdateIntervalMs === 0) {
+        applyStreamUpdate();
+        return;
+      }
+      const now = getStreamUpdateTimestamp();
+      const elapsed = lastStreamUpdateAt > 0 ? now - lastStreamUpdateAt : streamUpdateIntervalMs;
+      if (elapsed >= streamUpdateIntervalMs) {
+        applyStreamUpdate();
+        return;
+      }
+      if (pendingStreamUpdateTimerId !== null) {
+        return;
+      }
+      pendingStreamUpdateTimerId = globalThis.setTimeout(() => {
+        applyStreamUpdate();
+      }, Math.max(0, streamUpdateIntervalMs - elapsed));
+    }
 
     setGenerating(dependencies.state, true);
     dependencies.updateActionButtons();
@@ -306,81 +428,15 @@ export function createAppController(dependencies) {
           if (isInterceptingToolCall) {
             return;
           }
-          if (modelMessage.isFixPreparing) {
-            modelMessage.isFixPreparing = false;
-          }
           streamedText += chunk;
-          const parsed = dependencies.parseThinkingText(streamedText, thinkingTags);
-          if (thinkingTags) {
-            modelMessage.thoughts = parsed.thoughts;
-            modelMessage.response = parsed.response.trimStart();
-            modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
-            modelMessage.isThinkingComplete = parsed.isThinkingComplete;
-            modelMessage.text = modelMessage.response;
-          } else {
-            modelMessage.response = streamedText.trimStart();
-            modelMessage.text = modelMessage.response;
-          }
-          const interceptedToolCall =
-            typeof dependencies.detectToolCalls === 'function'
-              ? normalizeToolCallInterception(
-                  dependencies.detectToolCalls(
-                    modelMessage.response || modelMessage.text || '',
-                    selectedModelId,
-                  ),
-                  modelMessage.response || modelMessage.text || '',
-                )
-              : null;
-          if (interceptedToolCall) {
-            isInterceptingToolCall = true;
-            modelMessage.toolCalls = interceptedToolCall.toolCalls;
-            modelMessage.response = interceptedToolCall.narrationText;
-            modelMessage.text = interceptedToolCall.narrationText;
-            if (modelMessage.content && typeof modelMessage.content === 'object') {
-              modelMessage.content.llmRepresentation = interceptedToolCall.toolCallPromptText;
-            }
-            dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
-            dependencies.scrollTranscriptToBottom();
-            dependencies.appendDebug('Detected emitted tool call during streaming.');
-            dependencies.setStatus('Running tool call...');
-            scheduleTask(() => {
-              void dependencies.engine.cancelGeneration().then(
-                () => {
-                  void continueGenerationAfterToolCalls(
-                    activeConversation,
-                    modelMessage,
-                    interceptedToolCall.toolCalls,
-                    {
-                      updateLastSpokenOnComplete,
-                    },
-                  );
-                },
-                (error) => {
-                  const message = toErrorMessage(error);
-                  modelMessage.text = `Tool call interception failed: ${message}`;
-                  modelMessage.response = modelMessage.text;
-                  modelMessage.thoughts = '';
-                  modelMessage.hasThinking = false;
-                  modelMessage.isThinkingComplete = false;
-                  modelMessage.isResponseComplete = true;
-                  setGenerating(dependencies.state, false);
-                  dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
-                  dependencies.updateActionButtons();
-                  dependencies.applyPendingGenerationSettingsIfReady();
-                  dependencies.setStatus('Generation failed');
-                  dependencies.appendDebug(`Tool call interception failed: ${message}`);
-                  dependencies.queueConversationStateSave();
-                },
-              );
-            });
-            return;
-          }
-          dependencies.updateModelMessageElement(modelMessage, modelBubbleItem);
-          dependencies.scrollTranscriptToBottom();
-          dependencies.queueConversationStateSave();
+          scheduleStreamUpdate();
         },
         onComplete: (finalText) => {
           if (isInterceptingToolCall) {
+            return;
+          }
+          streamedText = String(finalText || streamedText);
+          if (applyStreamUpdate()) {
             return;
           }
           const parsed = dependencies.parseThinkingText(finalText || streamedText, thinkingTags);
@@ -452,6 +508,7 @@ export function createAppController(dependencies) {
           if (isInterceptingToolCall) {
             return;
           }
+          clearPendingStreamUpdate();
           modelMessage.text = `Generation error: ${message}`;
           modelMessage.response = modelMessage.text;
           modelMessage.thoughts = '';
@@ -472,6 +529,7 @@ export function createAppController(dependencies) {
         },
       });
     } catch (error) {
+      clearPendingStreamUpdate();
       const message = toErrorMessage(error);
       modelMessage.text = `Generation error: ${message}`;
       modelMessage.response = modelMessage.text;
@@ -510,6 +568,7 @@ export function createAppController(dependencies) {
       setGenerating(dependencies.state, false);
       dependencies.updateActionButtons();
       dependencies.applyPendingGenerationSettingsIfReady();
+      dependencies.queueConversationStateSave();
     }
   }
 
