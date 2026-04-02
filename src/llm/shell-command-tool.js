@@ -18,7 +18,7 @@ const SHELL_COMMANDS = Object.freeze([
   },
   {
     name: 'ls',
-    usage: 'ls [-l] [<path>]',
+    usage: 'ls [-1] [-R] [-d] [-h] [-l] [<path>...]',
     description: 'List files or directories under /workspace.',
   },
   {
@@ -186,12 +186,67 @@ function hasUnsupportedShellSyntax(command) {
   return /(^|[^\\])(?:\||&&|\|\||;|`|>|<)|[\r\n]/.test(text) || text.includes('$(');
 }
 
-function formatLsEntry(entry) {
-  if (entry.kind === 'directory') {
-    return `d ${entry.name}`;
+function formatHumanReadableSize(size) {
+  const normalizedSize = Number.isFinite(size) && size >= 0 ? size : 0;
+  if (normalizedSize < 1024) {
+    return `${normalizedSize}B`;
   }
+  const units = ['K', 'M', 'G', 'T'];
+  let value = normalizedSize;
+  let unitIndex = -1;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const roundedValue = value >= 10 || Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+  return `${roundedValue}${units[unitIndex]}`;
+}
+
+function formatLsEntry(entry, { longFormat = false, humanReadable = false } = {}) {
+  if (!longFormat) {
+    return entry.name;
+  }
+  const typeMarker = entry.kind === 'directory' ? 'd' : '-';
   const size = Number.isFinite(entry.size) ? entry.size : 0;
-  return `- ${String(size).padStart(8, ' ')} ${entry.name}`;
+  const formattedSize = humanReadable ? formatHumanReadableSize(size) : String(size);
+  return `${typeMarker} ${formattedSize.padStart(8, ' ')} ${entry.name}`;
+}
+
+async function listDirectoryRecursively(
+  workspaceFileSystem,
+  directoryPath,
+  options,
+  seenDirectories = new Set()
+) {
+  const normalizedDirectoryPath = workspaceFileSystem.normalizePath(directoryPath);
+  if (seenDirectories.has(normalizedDirectoryPath)) {
+    return [];
+  }
+  seenDirectories.add(normalizedDirectoryPath);
+
+  const entries = await workspaceFileSystem.listDirectory(normalizedDirectoryPath);
+  const sections = [
+    {
+      path: normalizedDirectoryPath,
+      lines: entries.map((entry) => formatLsEntry(entry, options)),
+    },
+  ];
+
+  for (const entry of entries) {
+    if (entry.kind !== 'directory') {
+      continue;
+    }
+    sections.push(
+      ...(await listDirectoryRecursively(
+        workspaceFileSystem,
+        entry.path,
+        options,
+        seenDirectories
+      ))
+    );
+  }
+
+  return sections;
 }
 
 async function safeStat(workspaceFileSystem, path) {
@@ -394,6 +449,10 @@ async function runEcho(commandText, args, currentWorkingDirectory) {
 async function runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   const paths = [];
   let longFormat = false;
+  let singleColumn = false;
+  let recursive = false;
+  let listDirectoriesThemselves = false;
+  let humanReadable = false;
 
   for (const argument of args) {
     if (argument === '--') {
@@ -405,7 +464,23 @@ async function runLs(commandText, args, workspaceFileSystem, currentWorkingDirec
           longFormat = true;
           continue;
         }
-        if (flag === 'a' || flag === '1') {
+        if (flag === '1') {
+          singleColumn = true;
+          continue;
+        }
+        if (flag === 'R') {
+          recursive = true;
+          continue;
+        }
+        if (flag === 'd') {
+          listDirectoriesThemselves = true;
+          continue;
+        }
+        if (flag === 'h') {
+          humanReadable = true;
+          continue;
+        }
+        if (flag === 'a') {
           continue;
         }
         return createShellError(commandText, 'ls', `unsupported option -${flag}.`, 2, currentWorkingDirectory);
@@ -417,6 +492,11 @@ async function runLs(commandText, args, workspaceFileSystem, currentWorkingDirec
 
   const targetPaths = paths.length ? paths : [currentWorkingDirectory];
   const outputs = [];
+  const listOptions = {
+    longFormat,
+    humanReadable,
+    singleColumn,
+  };
 
   for (const rawPath of targetPaths) {
     let normalizedPath;
@@ -444,23 +524,38 @@ async function runLs(commandText, args, workspaceFileSystem, currentWorkingDirec
     }
 
     let section = '';
-    if (stat.kind === 'directory') {
-      const entries = await workspaceFileSystem.listDirectory(normalizedPath);
-      const lines = longFormat ? entries.map(formatLsEntry) : entries.map((entry) => entry.name);
-      section = lines.join('\n');
+    if (stat.kind === 'directory' && !listDirectoriesThemselves) {
+      if (recursive) {
+        const sections = await listDirectoryRecursively(workspaceFileSystem, normalizedPath, listOptions);
+        section = sections
+          .map(({ path, lines }) => `${path}:\n${lines.join('\n')}`.trimEnd())
+          .join('\n\n');
+      } else {
+        const entries = await workspaceFileSystem.listDirectory(normalizedPath);
+        const lines = entries.map((entry) => formatLsEntry(entry, listOptions));
+        section = lines.join('\n');
+      }
     } else {
-      section = longFormat ? formatLsEntry(stat) : basename(normalizedPath);
+      section = formatLsEntry(
+        {
+          ...stat,
+          name: basename(normalizedPath),
+        },
+        listOptions
+      );
     }
 
-    if (targetPaths.length > 1) {
+    if (targetPaths.length > 1 && !recursive) {
       outputs.push(`${normalizedPath}:\n${section}`.trimEnd());
     } else {
       outputs.push(section);
     }
   }
 
+  const stdout = outputs.filter(Boolean).join('\n\n');
+
   return createShellResult(commandText, {
-    stdout: outputs.filter(Boolean).join('\n\n'),
+    stdout: singleColumn ? stdout : stdout,
     currentWorkingDirectory,
   });
 }

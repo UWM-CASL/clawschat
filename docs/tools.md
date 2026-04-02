@@ -105,7 +105,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 - Current supported command subset:
   - `pwd`
   - `cd`
-  - `ls`
+  - `ls` with `-l`, `-R`, `-1`, `-d`, and `-h`
   - `cat`
   - `head`
   - `tail`

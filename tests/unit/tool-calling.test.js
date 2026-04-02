@@ -791,7 +791,7 @@ describe('tool-calling prompt builder', () => {
       expect.arrayContaining([
         expect.objectContaining({ name: 'pwd', usage: 'pwd' }),
         expect.objectContaining({ name: 'cd', usage: 'cd [<directory>]' }),
-        expect.objectContaining({ name: 'ls', usage: 'ls [-l] [<path>]' }),
+        expect.objectContaining({ name: 'ls', usage: 'ls [-1] [-R] [-d] [-h] [-l] [<path>...]' }),
         expect.objectContaining({ name: 'cat', usage: 'cat <file>' }),
       ])
     );
@@ -902,6 +902,113 @@ describe('tool-calling prompt builder', () => {
       stdout: 'chapter one',
       stderr: '',
     });
+  });
+
+  test('supports ls -l and ls -h for long listings', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': '1234567890',
+      '/workspace/readme.md': 'abc',
+    });
+
+    const longResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'ls -l',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(longResult.result.stdout).toContain('-       10 notes.txt');
+    expect(longResult.result.stdout).toContain('-        3 readme.md');
+
+    const humanReadableResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'ls -lh',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(humanReadableResult.result.stdout).toContain('-      10B notes.txt');
+    expect(humanReadableResult.result.stdout).toContain('-       3B readme.md');
+  });
+
+  test('supports ls -d for listing a directory entry instead of its contents', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/coursework/notes.txt': 'chapter one',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'ls -d coursework',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toBe('coursework');
+  });
+
+  test('supports ls -R for recursive listings', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/coursework/notes.txt': 'chapter one',
+      '/workspace/coursework/week1/todo.txt': 'finish reading',
+      '/workspace/root.txt': 'top level',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'ls -R',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toContain('/workspace:');
+    expect(result.result.stdout).toContain('coursework');
+    expect(result.result.stdout).toContain('root.txt');
+    expect(result.result.stdout).toContain('/workspace/coursework:');
+    expect(result.result.stdout).toContain('notes.txt');
+    expect(result.result.stdout).toContain('week1');
+    expect(result.result.stdout).toContain('/workspace/coursework/week1:');
+    expect(result.result.stdout).toContain('todo.txt');
+  });
+
+  test('accepts ls -1 without changing line-based output behavior', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/a.txt': 'a',
+      '/workspace/b.txt': 'b',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'ls -1',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout.split('\n')).toEqual(['a.txt', 'b.txt']);
   });
 
   test('creates, lists, updates, and clears tasklist items', async () => {
