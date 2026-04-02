@@ -418,6 +418,127 @@ describe('app-controller', () => {
     expect(finalModelMessage?.text).toBe('The task list is currently empty.');
   });
 
+  test('regenerates from a continuation model message after a tool call', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Please test the tool.');
+    const interceptedModelMessage = addMessageToConversation(
+      conversation,
+      'model',
+      'I am checking the planner now.',
+      {
+        parentId: userMessage.id,
+        toolCalls: [
+          {
+            name: 'tasklist',
+            arguments: { command: 'list' },
+            rawText: '{"name":"tasklist","parameters":{"command":"list"}}',
+            format: 'json',
+          },
+        ],
+      },
+    );
+    interceptedModelMessage.isResponseComplete = true;
+    const toolMessage = addMessageToConversation(conversation, 'tool', '{"items":[]}', {
+      parentId: interceptedModelMessage.id,
+      toolName: 'tasklist',
+      toolArguments: { command: 'list' },
+    });
+    const continuationModelMessage = addMessageToConversation(
+      conversation,
+      'model',
+      'The task list is currently empty.',
+      {
+        parentId: toolMessage.id,
+      },
+    );
+    continuationModelMessage.isResponseComplete = true;
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onComplete('Here is a regenerated answer.');
+    });
+
+    harness.controller.regenerateFromMessage(continuationModelMessage.id);
+
+    expect(harness.engine.generate).toHaveBeenCalledTimes(1);
+    expect(harness.engine.generate.mock.calls[0][0]).toEqual([
+      {
+        role: 'user',
+        content: 'Please test the tool.',
+      },
+    ]);
+    const regeneratedModelMessages = conversation.messageNodes.filter(
+      (message) => message.role === 'model' && message.parentId === userMessage.id,
+    );
+    expect(regeneratedModelMessages).toHaveLength(2);
+    expect(regeneratedModelMessages.at(-1)?.text).toBe('Here is a regenerated answer.');
+  });
+
+  test('fixes a continuation model message after a tool call', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Please test the tool.');
+    const interceptedModelMessage = addMessageToConversation(
+      conversation,
+      'model',
+      'I am checking the planner now.',
+      {
+        parentId: userMessage.id,
+        toolCalls: [
+          {
+            name: 'tasklist',
+            arguments: { command: 'list' },
+            rawText: '{"name":"tasklist","parameters":{"command":"list"}}',
+            format: 'json',
+          },
+        ],
+      },
+    );
+    interceptedModelMessage.isResponseComplete = true;
+    const toolMessage = addMessageToConversation(conversation, 'tool', '{"items":[]}', {
+      parentId: interceptedModelMessage.id,
+      toolName: 'tasklist',
+      toolArguments: { command: 'list' },
+    });
+    const continuationModelMessage = addMessageToConversation(
+      conversation,
+      'model',
+      'The task list is currently empty.',
+      {
+        parentId: toolMessage.id,
+      },
+    );
+    continuationModelMessage.isResponseComplete = true;
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.runOrchestration.mockResolvedValue({
+      finalPrompt: 'Rewrite the answer clearly.',
+      finalOutput: '',
+    });
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onComplete('Here is a fixed answer.');
+    });
+
+    await harness.controller.fixResponseFromMessage(continuationModelMessage.id);
+
+    expect(harness.dependencies.runOrchestration).toHaveBeenCalledWith(
+      harness.dependencies.fixOrchestration,
+      {
+        userPrompt: 'Please test the tool.',
+        assistantResponse: 'The task list is currently empty.',
+      },
+      {
+        runFinalStep: false,
+      },
+    );
+    expect(harness.engine.generate).toHaveBeenCalledTimes(1);
+  });
+
   test('queues conversation persistence after completion instead of on every streamed token', () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });

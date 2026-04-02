@@ -236,6 +236,26 @@ export function createAppController(dependencies) {
     );
   }
 
+  function findOriginatingUserMessage(conversation, message) {
+    if (!conversation || !message) {
+      return null;
+    }
+    let cursor =
+      typeof message.parentId === 'string' && message.parentId
+        ? dependencies.getMessageNodeById(conversation, message.parentId)
+        : null;
+    while (cursor) {
+      if (cursor.role === 'user') {
+        return cursor;
+      }
+      cursor =
+        typeof cursor.parentId === 'string' && cursor.parentId
+          ? dependencies.getMessageNodeById(conversation, cursor.parentId)
+          : null;
+    }
+    return null;
+  }
+
   function startModelGeneration(activeConversation, prompt, options = {}) {
     const selectedModelId = dependencies.normalizeModelId(dependencies.getSelectedModelId());
     const thinkingTags = dependencies.getThinkingTagsForModel(selectedModelId);
@@ -597,9 +617,7 @@ export function createAppController(dependencies) {
       return;
     }
 
-    const parentUserMessage = targetModelMessage.parentId
-      ? dependencies.getMessageNodeById(activeConversation, targetModelMessage.parentId)
-      : null;
+    const parentUserMessage = findOriginatingUserMessage(activeConversation, targetModelMessage);
     if (!parentUserMessage || parentUserMessage.role !== 'user') {
       dependencies.setStatus('Unable to regenerate: no user message found.');
       dependencies.appendDebug('Regenerate failed: target model message has no preceding user message.');
@@ -687,9 +705,7 @@ export function createAppController(dependencies) {
     if (!targetModelMessage.isResponseComplete) {
       return;
     }
-    const parentUserMessage = targetModelMessage.parentId
-      ? dependencies.getMessageNodeById(activeConversation, targetModelMessage.parentId)
-      : null;
+    const parentUserMessage = findOriginatingUserMessage(activeConversation, targetModelMessage);
     if (!parentUserMessage || parentUserMessage.role !== 'user') {
       dependencies.setStatus('Unable to fix response: no user message found.');
       dependencies.appendDebug('Fix failed: target model message has no preceding user message.');
