@@ -759,6 +759,66 @@ describe('transcript-view', () => {
     expect(toggle?.getAttribute('aria-label')).toBe('Updating task list: Task List Planner');
   });
 
+  test('uses a shell-oriented label for shell command actions', () => {
+    const harness = createViewHarness();
+    harness.conversation.messageNodes[1].toolCalls = [
+      {
+        name: 'run_shell_command',
+        arguments: { command: 'ls /workspace' },
+        rawText: '{"name":"run_shell_command","parameters":{"command":"ls /workspace"}}',
+      },
+    ];
+
+    const view = createTranscriptView({
+      container: harness.container,
+      getActiveConversation: () => harness.conversation,
+      getConversationPathMessages: (conversation) => conversation.messageNodes,
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
+      getModelVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      getUserVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      renderModelMarkdown: (content) => `<p>${content}</p>`,
+      scheduleMathTypeset: vi.fn(),
+      getToolDisplayName: (toolName) =>
+        toolName === 'run_shell_command' ? 'Shell Command Runner' : toolName,
+      getShowThinkingByDefault: () => false,
+      getActiveUserEditMessageId: () => null,
+      getControlsState: () => ({
+        isGenerating: false,
+        isLoadingModel: false,
+        isRunningOrchestration: false,
+        isSwitchingVariant: false,
+      }),
+      getEmptyStateVisible: () => false,
+      initializeTooltips: vi.fn(),
+      disposeTooltips: vi.fn(),
+      applyVariantCardSignals: vi.fn(),
+      applyFixCardSignals: vi.fn(),
+      scrollTranscriptToBottom: vi.fn(),
+      updateTranscriptNavigationButtonVisibility: vi.fn(),
+      cancelUserMessageEdit: vi.fn(),
+      saveUserMessageEdit: vi.fn(),
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    const toggle = harness.container.querySelector('.tool-call-toggle');
+    expect(toggle?.textContent).toContain('Tool action: Running shell command');
+    expect(toggle?.getAttribute('aria-label')).toBe('Running shell command: Shell Command Runner');
+  });
+
   test('renders PDF attachment metadata in the transcript', () => {
     const harness = createViewHarness();
     harness.conversation.messageNodes[0].content.parts[2] = /** @type {any} */ ({

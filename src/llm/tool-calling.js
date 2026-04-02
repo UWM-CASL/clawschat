@@ -1,3 +1,5 @@
+import { executeShellCommandTool } from './shell-command-tool.js';
+
 export const TOOL_DEFINITIONS = Object.freeze([
   {
     name: 'get_current_date_time',
@@ -52,6 +54,22 @@ export const TOOL_DEFINITIONS = Object.freeze([
         status: {
           type: 'integer',
           enum: [0, 1],
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'run_shell_command',
+    displayName: 'Shell Command Runner',
+    description:
+      'Runs a browser-local GNU/Linux-like shell command subset against /workspace. Call it once with an empty arguments object to inspect the supported command list and placeholder paths.',
+    enabled: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
         },
       },
       additionalProperties: false,
@@ -162,6 +180,11 @@ function buildToolInstructionLines(name, description = '') {
   if (normalizedName === 'tasklist') {
     lines.push(
       '  If tasklist would help and you need its command syntax, call it first with an empty arguments object.'
+    );
+  }
+  if (normalizedName === 'run_shell_command') {
+    lines.push(
+      '  Commands are GNU/Linux-like but only a subset is implemented. Call it first with an empty arguments object to see the supported commands and placeholder paths.'
     );
   }
   return lines;
@@ -969,6 +992,15 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
   }
   if (toolName === 'tasklist') {
     const result = executeTaskList(argumentsValue, runtimeContext);
+    return {
+      toolName,
+      arguments: argumentsValue,
+      result,
+      resultText: JSON.stringify(result),
+    };
+  }
+  if (toolName === 'run_shell_command') {
+    const result = await executeShellCommandTool(argumentsValue, runtimeContext);
     return {
       toolName,
       arguments: argumentsValue,

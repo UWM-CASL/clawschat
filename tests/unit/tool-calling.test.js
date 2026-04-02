@@ -13,6 +13,189 @@ import {
 
 let taskListConversation;
 
+function getTextEncoder() {
+  return new globalThis.TextEncoder();
+}
+
+function getTextDecoder() {
+  return new globalThis.TextDecoder();
+}
+
+function createMockWorkspaceFileSystem(initialFiles = {}) {
+  const directories = new Set(['/workspace']);
+  const files = new Map();
+
+  function normalizePath(path) {
+    const rawPath = typeof path === 'string' ? path.trim() : '';
+    if (!rawPath || rawPath === '.' || rawPath === './' || rawPath === '/') {
+      return '/workspace';
+    }
+    const slashNormalized = rawPath.replace(/\\/g, '/');
+    const absolutePath = slashNormalized.startsWith('/')
+      ? slashNormalized
+      : slashNormalized.startsWith('workspace/')
+        ? `/${slashNormalized}`
+        : slashNormalized === 'workspace'
+          ? '/workspace'
+          : `/workspace/${slashNormalized.replace(/^\.\//, '')}`;
+    const segments = absolutePath.split('/').filter(Boolean);
+    if (!segments.length || segments[0] !== 'workspace' || segments.includes('..')) {
+      throw new Error('Workspace paths must stay under /workspace.');
+    }
+    return `/${segments.join('/')}`;
+  }
+
+  function ensureParentDirectories(path) {
+    const segments = normalizePath(path).split('/').filter(Boolean);
+    for (let index = 1; index < segments.length; index += 1) {
+      directories.add(`/${segments.slice(0, index).join('/')}`);
+    }
+  }
+
+  function getEntryName(path) {
+    const segments = normalizePath(path).split('/').filter(Boolean);
+    return segments[segments.length - 1] || 'workspace';
+  }
+
+  Object.entries(initialFiles).forEach(([path, content]) => {
+    const normalizedPath = normalizePath(path);
+    ensureParentDirectories(normalizedPath);
+    files.set(normalizedPath, String(content));
+  });
+
+  return {
+    normalizePath,
+    async ensureDirectory(path) {
+      const normalizedPath = normalizePath(path);
+      const segments = normalizedPath.split('/').filter(Boolean);
+      for (let index = 1; index <= segments.length; index += 1) {
+        directories.add(`/${segments.slice(0, index).join('/')}`);
+      }
+      return {
+        path: normalizedPath,
+        kind: 'directory',
+      };
+    },
+    async stat(path) {
+      const normalizedPath = normalizePath(path);
+      if (files.has(normalizedPath)) {
+        const content = files.get(normalizedPath) || '';
+        return {
+          path: normalizedPath,
+          name: getEntryName(normalizedPath),
+          kind: 'file',
+          size: getTextEncoder().encode(content).byteLength,
+        };
+      }
+      if (directories.has(normalizedPath)) {
+        return {
+          path: normalizedPath,
+          name: getEntryName(normalizedPath),
+          kind: 'directory',
+        };
+      }
+      const error = new Error(`No such file or directory: ${normalizedPath}`);
+      error.name = 'NotFoundError';
+      throw error;
+    },
+    async listDirectory(path = '/workspace') {
+      const normalizedPath = normalizePath(path);
+      const entries = [];
+      for (const directoryPath of directories) {
+        if (directoryPath === normalizedPath || !directoryPath.startsWith(`${normalizedPath}/`)) {
+          continue;
+        }
+        const relative = directoryPath.slice(normalizedPath.length + 1);
+        if (!relative || relative.includes('/')) {
+          continue;
+        }
+        entries.push({
+          path: directoryPath,
+          name: relative,
+          kind: 'directory',
+        });
+      }
+      for (const [filePath, content] of files.entries()) {
+        if (!filePath.startsWith(`${normalizedPath}/`)) {
+          continue;
+        }
+        const relative = filePath.slice(normalizedPath.length + 1);
+        if (!relative || relative.includes('/')) {
+          continue;
+        }
+        entries.push({
+          path: filePath,
+          name: relative,
+          kind: 'file',
+          size: getTextEncoder().encode(content).byteLength,
+        });
+      }
+      return entries.sort((left, right) => left.path.localeCompare(right.path));
+    },
+    async readTextFile(path) {
+      const normalizedPath = normalizePath(path);
+      if (!files.has(normalizedPath)) {
+        const error = new Error(`No such file or directory: ${normalizedPath}`);
+        error.name = 'NotFoundError';
+        throw error;
+      }
+      return files.get(normalizedPath) || '';
+    },
+    async readFile(path) {
+      return getTextEncoder().encode(await this.readTextFile(path));
+    },
+    async writeTextFile(path, text) {
+      const normalizedPath = normalizePath(path);
+      ensureParentDirectories(normalizedPath);
+      files.set(normalizedPath, String(text));
+      return this.stat(normalizedPath);
+    },
+    async writeFile(path, data) {
+      const text =
+        data instanceof Uint8Array
+          ? getTextDecoder().decode(data)
+          : data instanceof ArrayBuffer
+            ? getTextDecoder().decode(new Uint8Array(data))
+            : String(data || '');
+      return this.writeTextFile(path, text);
+    },
+    async deletePath(path, { recursive = false } = {}) {
+      const normalizedPath = normalizePath(path);
+      if (files.delete(normalizedPath)) {
+        return true;
+      }
+      if (!directories.has(normalizedPath)) {
+        const error = new Error(`No such file or directory: ${normalizedPath}`);
+        error.name = 'NotFoundError';
+        throw error;
+      }
+      const childPrefix = `${normalizedPath}/`;
+      const hasChildren =
+        Array.from(files.keys()).some((filePath) => filePath.startsWith(childPrefix)) ||
+        Array.from(directories).some(
+          (directoryPath) => directoryPath !== normalizedPath && directoryPath.startsWith(childPrefix)
+        );
+      if (hasChildren && !recursive) {
+        throw new Error(`Directory not empty: ${normalizedPath}`);
+      }
+      Array.from(files.keys()).forEach((filePath) => {
+        if (filePath.startsWith(childPrefix)) {
+          files.delete(filePath);
+        }
+      });
+      Array.from(directories)
+        .sort((left, right) => right.length - left.length)
+        .forEach((directoryPath) => {
+          if (directoryPath === normalizedPath || directoryPath.startsWith(childPrefix)) {
+            directories.delete(directoryPath);
+          }
+        });
+      directories.add('/workspace');
+      return true;
+    },
+  };
+}
+
 beforeEach(async () => {
   taskListConversation = createConversation({
     id: 'conversation-tasklist',
@@ -138,6 +321,21 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
+  test('adds a shell command discovery instruction', () => {
+    const prompt = buildToolCallingSystemPrompt(
+      {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'parameters',
+      },
+      ['run_shell_command']
+    );
+
+    expect(prompt).toContain(
+      'Commands are GNU/Linux-like but only a subset is implemented. Call it first with an empty arguments object to see the supported commands and placeholder paths.'
+    );
+  });
+
   test('builds the LFM function-style tool-calling prompt', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
@@ -159,6 +357,7 @@ describe('tool-calling prompt builder', () => {
     expect(getToolDisplayName('get_current_date_time')).toBe('Get Date and Time');
     expect(getToolDisplayName('get_user_location')).toBe('Get User Location');
     expect(getToolDisplayName('tasklist')).toBe('Task List Planner');
+    expect(getToolDisplayName('run_shell_command')).toBe('Shell Command Runner');
     expect(getToolDisplayName('lookup_fact')).toBe('Lookup Fact');
   });
 
@@ -172,6 +371,10 @@ describe('tool-calling prompt builder', () => {
         expect.objectContaining({
           name: 'tasklist',
           displayName: 'Task List Planner',
+        }),
+        expect.objectContaining({
+          name: 'run_shell_command',
+          displayName: 'Shell Command Runner',
         }),
       ])
     );
@@ -573,6 +776,74 @@ describe('tool-calling prompt builder', () => {
       '{ "command": "update", "index": 0, "status": 1 }',
     ]);
     expect(result.result.note).toBe('status: 0 = undone, 1 = done.');
+  });
+
+  test('reveals shell command syntax and placeholder commands when called without arguments', async () => {
+    const result = await executeToolCall({
+      name: 'run_shell_command',
+      arguments: {},
+    });
+
+    expect(result.toolName).toBe('run_shell_command');
+    expect(result.result.shellFlavor).toBe('GNU/Linux-like shell subset');
+    expect(result.result.currentWorkingDirectory).toBe('/workspace');
+    expect(result.result.supportedCommands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pwd', usage: 'pwd' }),
+        expect.objectContaining({ name: 'ls', usage: 'ls [-l] [<path>]' }),
+        expect.objectContaining({ name: 'cat', usage: 'cat <file>' }),
+      ])
+    );
+    expect(result.result.limitations).toContain(
+      'Commands are GNU/Linux-like, but only the documented subset is implemented.'
+    );
+  });
+
+  test('executes a shell command against the workspace and returns stdout', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'alpha\nbeta\n',
+        }),
+      }
+    );
+
+    expect(result.toolName).toBe('run_shell_command');
+    expect(result.result).toEqual({
+      shellFlavor: 'GNU/Linux-like shell subset',
+      currentWorkingDirectory: '/workspace',
+      command: 'cat notes.txt',
+      exitCode: 0,
+      stdout: 'alpha\nbeta\n',
+      stderr: '',
+    });
+  });
+
+  test('returns shell-style stderr for unsupported shell commands', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'grep hello notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'hello\n',
+        }),
+      }
+    );
+
+    expect(result.toolName).toBe('run_shell_command');
+    expect(result.result.exitCode).toBe(127);
+    expect(result.result.stdout).toBe('');
+    expect(result.result.stderr).toContain("command 'grep' is not available");
   });
 
   test('creates, lists, updates, and clears tasklist items', async () => {

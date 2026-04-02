@@ -88,6 +88,41 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js).
 
+### `run_shell_command`
+
+- Display name: `Shell Command Runner`
+- Purpose: runs a browser-local GNU/Linux-like shell subset against the app's `/workspace` filesystem abstraction
+- Discovery behavior: when called with an empty arguments object, it returns the supported command list, placeholder path examples, and limitations for the current subset
+- Arguments:
+  - optional `command`
+- Result fields:
+  - `shellFlavor`
+  - `currentWorkingDirectory`
+  - `command`
+  - `exitCode`
+  - `stdout`
+  - `stderr`
+- Current supported command subset:
+  - `pwd`
+  - `ls`
+  - `cat`
+  - `head`
+  - `tail`
+  - `wc`
+  - `mkdir`
+  - `touch`
+  - `cp`
+  - `mv`
+  - `rm`
+  - `echo`
+- Current limits:
+  - commands are GNU/Linux-like, but only this documented subset is implemented
+  - relative paths resolve from `/workspace`
+  - pipes, redirection, globbing, environment variables, and command substitution are not implemented yet
+  - unsupported commands/syntax return shell-style `stderr` text with a non-zero `exitCode`
+
+This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js) and [src/llm/shell-command-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/shell-command-tool.js).
+
 ## Planned capability model
 
 The intended future design separates capability access into three layers with different purposes.

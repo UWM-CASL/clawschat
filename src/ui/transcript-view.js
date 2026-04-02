@@ -359,6 +359,9 @@ export function createTranscriptView(dependencies) {
     if (toolName === 'get_user_location') {
       return 'Checking location';
     }
+    if (toolName === 'run_shell_command') {
+      return 'Running shell command';
+    }
     return `Using ${toolLabel}`;
   }
 
