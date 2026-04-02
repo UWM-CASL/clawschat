@@ -23,7 +23,6 @@ function createPreferencesHarness() {
       <span id="conversationPanelCollapseButtonText"></span>
       <textarea id="defaultSystemPromptInput"></textarea>
       <div id="modelCardList"></div>
-      <div id="modelCardLegend"></div>
       <select id="modelSelect"></select>
       <select id="backendSelect">
         <option value="auto">Auto</option>
@@ -196,10 +195,6 @@ describe('preferences controller', () => {
       'Can use built-in tools',
     ]);
 
-    const legend = harness.document.getElementById('modelCardLegend');
-    expect(legend?.textContent).toContain('Model abilities');
-    expect(legend?.textContent).toContain('Accepts image input');
-    expect(legend?.textContent).not.toContain('Streams replies as they are generated');
     expect(qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')).toBe(
       'Supported languages: English (EN), Chinese (ZH), Spanish (ES), French (FR), German (DE), Japanese (JA), and more.'
     );

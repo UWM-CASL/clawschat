@@ -248,8 +248,6 @@ export function createPreferencesController({
     return formatInteger(roundedEstimate);
   }
 
-  const modelCardLegend = documentRef.getElementById('modelCardLegend');
-
   function getFeatureDefinitions() {
     return [
       {
@@ -289,28 +287,6 @@ export function createPreferencesController({
       }
       return features[feature.key] === true;
     });
-  }
-
-  function renderModelCardLegend() {
-    if (!(modelCardLegend instanceof HTMLElement)) {
-      return;
-    }
-    modelCardLegend.replaceChildren();
-
-    const title = documentRef.createElement('p');
-    title.className = 'model-card-legend-title';
-    title.textContent = 'Model abilities';
-    modelCardLegend.appendChild(title);
-
-    const list = documentRef.createElement('ul');
-    list.className = 'model-card-legend-list';
-    getFeatureDefinitions().forEach((feature) => {
-      const item = documentRef.createElement('li');
-      item.className = 'model-card-legend-item';
-      item.innerHTML = `<i class="bi ${feature.icon}" aria-hidden="true"></i><span>${feature.label}</span>`;
-      list.appendChild(item);
-    });
-    modelCardLegend.appendChild(list);
   }
 
   function buildLanguageSupportText(model) {
@@ -505,7 +481,6 @@ export function createPreferencesController({
 
       modelCardList.appendChild(card);
     });
-    renderModelCardLegend();
     setSelectedModelId(selectedModel, { dispatch: false });
   }
 
