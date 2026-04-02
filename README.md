@@ -182,6 +182,19 @@ Student-facing browser chat UI with local model inference.
     - `forEach` for per-item prompt execution over prepared arrays
     - `join` for merging array outputs into a later prompt or final result
 
+## Security notes
+
+- Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
+- Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
+- Attachment ingestion uses browser-local limits before large files are read into memory:
+  - text files: 5 MB max, truncated to 400,000 characters
+  - images: 15 MB max, 40,000,000 pixels max
+  - PDFs: 20 MB max, truncated to 120,000 characters after extraction
+- The app still does not ship with a CSP. This is a documented hardening gap for a future pass.
+- Model artifacts are still fetched from upstream repositories at runtime and are not revision-pinned yet. That risk is currently accepted.
+
+See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
+
 ## Scripts
 
 - `npm run dev`

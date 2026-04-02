@@ -3,9 +3,12 @@ import { JSDOM } from 'jsdom';
 import {
   FILE_ATTACHMENT_ACCEPT,
   IMAGE_AND_FILE_ATTACHMENT_ACCEPT,
+  MAX_IMAGE_ATTACHMENT_FILE_SIZE_BYTES,
   MAX_PDF_ATTACHMENT_TEXT_CHARS,
+  MAX_TEXT_ATTACHMENT_FILE_SIZE_BYTES,
   buildPdfAttachmentConversion,
   buildTextAttachmentConversion,
+  createComposerAttachmentFromFile,
   formatAttachmentSize,
   getAttachmentButtonAcceptValue,
   getAttachmentIconClass,
@@ -33,18 +36,22 @@ describe('composer-attachments', () => {
       extension: 'md',
       label: 'Markdown file',
     });
-    expect(getSupportedAttachmentMetadata({ name: 'lesson.pdf', type: 'application/pdf' })).toEqual({
-      category: 'pdf',
-      mimeType: 'application/pdf',
-      extension: 'pdf',
-      label: 'PDF document',
-    });
+    expect(getSupportedAttachmentMetadata({ name: 'lesson.pdf', type: 'application/pdf' })).toEqual(
+      {
+        category: 'pdf',
+        mimeType: 'application/pdf',
+        extension: 'pdf',
+        label: 'PDF document',
+      }
+    );
     expect(getSupportedAttachmentMetadata({ name: 'diagram.png', type: 'image/png' })).toEqual({
       category: 'image',
       mimeType: 'image/png',
       extension: 'png',
     });
-    expect(getSupportedAttachmentMetadata({ name: 'archive.zip', type: 'application/zip' })).toBeNull();
+    expect(
+      getSupportedAttachmentMetadata({ name: 'archive.zip', type: 'application/zip' })
+    ).toBeNull();
 
     expect(getAttachmentIconClass({ type: 'image' })).toBe('bi-image');
     expect(getAttachmentIconClass({ extension: 'csv' })).toBe('bi-file-earmark-spreadsheet');
@@ -70,6 +77,20 @@ describe('composer-attachments', () => {
       preferredSource: 'normalizedText',
       documentRole: 'attachment',
     });
+  });
+
+  test('adds a truncation warning for oversized text attachment conversions', () => {
+    const result = buildTextAttachmentConversion({
+      filename: 'lesson.txt',
+      mimeType: 'text/plain',
+      extension: 'txt',
+      text: 'A'.repeat(450000),
+    });
+
+    expect(result.normalizedText).toContain('[Truncated due to attachment length limit.]');
+    expect(result.conversionWarnings).toContain(
+      'Extracted text was truncated to 400,000 characters for local storage and prompt preparation.'
+    );
   });
 
   test('truncates oversized attachment text with a stable marker', () => {
@@ -111,5 +132,31 @@ describe('composer-attachments', () => {
     expect(formatAttachmentSize(850)).toBe('850 B');
     expect(formatAttachmentSize(2048)).toBe('2 KB');
     expect(formatAttachmentSize(3 * 1024 * 1024)).toBe('3.0 MB');
+  });
+
+  test('rejects oversized text attachments before reading them into memory', async () => {
+    await expect(
+      createComposerAttachmentFromFile({
+        name: 'notes.txt',
+        type: 'text/plain',
+        size: MAX_TEXT_ATTACHMENT_FILE_SIZE_BYTES + 1,
+        arrayBuffer: () => {
+          throw new Error('arrayBuffer should not be called');
+        },
+      })
+    ).rejects.toThrow('Text attachments larger than 5 MB are not supported yet.');
+  });
+
+  test('rejects oversized image attachments before reading them into memory', async () => {
+    await expect(
+      createComposerAttachmentFromFile({
+        name: 'photo.png',
+        type: 'image/png',
+        size: MAX_IMAGE_ATTACHMENT_FILE_SIZE_BYTES + 1,
+        arrayBuffer: () => {
+          throw new Error('arrayBuffer should not be called');
+        },
+      })
+    ).rejects.toThrow('Image files larger than 15 MB are not supported yet.');
   });
 });

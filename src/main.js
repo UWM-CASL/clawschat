@@ -136,6 +136,7 @@ const DEFAULT_SYSTEM_PROMPT_STORAGE_KEY = 'conversation-default-system-prompt';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
+const TOOL_CONSENT_STORAGE_KEY = 'tool-consents-v1';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
 const SUPPORTED_BACKEND_PREFERENCES = new Set(['auto', 'webgpu', 'wasm', 'cpu']);
 const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
@@ -337,6 +338,68 @@ function initializeTooltips(root = document) {
   root.querySelectorAll('[data-bs-toggle="tooltip"], [data-icon-tooltip]').forEach((element) => {
     Tooltip.getOrCreateInstance(element, { animation: false });
   });
+}
+
+function readStoredToolConsents(storage = globalThis.localStorage) {
+  try {
+    const raw = storage?.getItem(TOOL_CONSENT_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistToolConsent(toolName, scope = 'default', storage = globalThis.localStorage) {
+  const normalizedToolName = typeof toolName === 'string' ? toolName.trim() : '';
+  const normalizedScope = typeof scope === 'string' && scope.trim() ? scope.trim() : 'default';
+  if (!normalizedToolName || !storage) {
+    return;
+  }
+  try {
+    const stored = readStoredToolConsents(storage);
+    const existingEntry =
+      stored[normalizedToolName] && typeof stored[normalizedToolName] === 'object'
+        ? stored[normalizedToolName]
+        : {};
+    existingEntry[normalizedScope] = true;
+    stored[normalizedToolName] = existingEntry;
+    storage.setItem(TOOL_CONSENT_STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // Ignore persistence failures and fall back to prompting again later.
+  }
+}
+
+function hasStoredToolConsent(toolName, scope = 'default', storage = globalThis.localStorage) {
+  const normalizedToolName = typeof toolName === 'string' ? toolName.trim() : '';
+  const normalizedScope = typeof scope === 'string' && scope.trim() ? scope.trim() : 'default';
+  if (!normalizedToolName || !storage) {
+    return false;
+  }
+  const stored = readStoredToolConsents(storage);
+  return stored?.[normalizedToolName]?.[normalizedScope] === true;
+}
+
+function requestToolConsent({
+  toolName,
+  scope = 'default',
+  title = 'Allow tool use?',
+  reason = '',
+}) {
+  if (hasStoredToolConsent(toolName, scope, localStorage)) {
+    return true;
+  }
+  const detail = typeof reason === 'string' && reason.trim() ? `\n\n${reason.trim()}` : '';
+  const allowed = window.confirm(
+    `${title}\n\nThis prompt is shown once per browser for this tool.${detail}`
+  );
+  if (allowed) {
+    persistToolConsent(toolName, scope, localStorage);
+  }
+  return allowed;
 }
 
 function startUserMessageEditSession(messageId, { branchSourceMessageId = null } = {}) {
@@ -590,7 +653,9 @@ async function handleMessageCopyAction(messageId, copyType) {
   } else if (copyType === 'mathml') {
     if (message.role === 'model') {
       const messageElement = findMessageElement(messageId);
-      const responseElements = Array.from(messageElement?.querySelectorAll('.response-content') || []);
+      const responseElements = Array.from(
+        messageElement?.querySelectorAll('.response-content') || []
+      );
       if (responseElements.length) {
         const mathMlBlocks = [];
         for (const responseElement of responseElements) {
@@ -1442,10 +1507,10 @@ function createConversation(name) {
     startedAt: Date.now(),
   });
   conversation.conversationSystemPrompt = normalizeSystemPrompt(
-    appState.pendingConversationSystemPrompt,
+    appState.pendingConversationSystemPrompt
   );
   conversation.appendConversationSystemPrompt = normalizeConversationPromptMode(
-    appState.pendingAppendConversationSystemPrompt,
+    appState.pendingAppendConversationSystemPrompt
   );
   return conversation;
 }
@@ -2066,9 +2131,7 @@ function updatePreChatActionButtons() {
   const hasExistingConversation = hasConversationHistory(activeConversation);
   const isPreChatAvailable = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
   const canShowPreChatActions =
-    isPreChatAvailable &&
-    !isEngineReady(appState) &&
-    Boolean(activeConversation);
+    isPreChatAvailable && !isEngineReady(appState) && Boolean(activeConversation);
   const isBusy = isUiBusy();
 
   if (preChatActions instanceof HTMLElement) {
@@ -2088,9 +2151,7 @@ function updateComposerVisibility() {
   setRegionVisibility(chatForm, showComposer);
   if (taskListTray instanceof HTMLElement) {
     const showTaskTray =
-      showComposer &&
-      appState.workspaceView === 'chat' &&
-      taskListTray.dataset.hasItems === 'true';
+      showComposer && appState.workspaceView === 'chat' && taskListTray.dataset.hasItems === 'true';
     setRegionVisibility(taskListTray, showTaskTray);
   }
   if (chatForm instanceof HTMLElement) {
@@ -2200,7 +2261,10 @@ function updateActionButtons() {
     imageAttachmentInput.disabled = composerControlsDisabled || isGeneratingResponse(appState);
     imageAttachmentInput.accept = getAttachmentButtonAcceptValue(imageInputSupported);
   }
-  if (!imageInputSupported && getPendingComposerAttachments().some((attachment) => attachment?.type === 'image')) {
+  if (
+    !imageInputSupported &&
+    getPendingComposerAttachments().some((attachment) => attachment?.type === 'image')
+  ) {
     appState.pendingComposerAttachments = getPendingComposerAttachments().filter(
       (attachment) => attachment?.type !== 'image'
     );
@@ -2779,6 +2843,7 @@ const appController = createAppController({
   executeToolCall: (toolCall) =>
     executeToolCall(toolCall, {
       conversation: getActiveConversation(),
+      requestToolConsent,
     }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
   addMessageToConversation,

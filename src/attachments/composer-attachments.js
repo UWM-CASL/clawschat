@@ -14,6 +14,10 @@ export const SUPPORTED_TEXT_ATTACHMENT_TYPES = Object.freeze({
 
 export const FILE_ATTACHMENT_ACCEPT = '.txt,.csv,.md,.html,.htm,.css,.js,.pdf';
 export const IMAGE_AND_FILE_ATTACHMENT_ACCEPT = `image/*,${FILE_ATTACHMENT_ACCEPT}`;
+export const MAX_TEXT_ATTACHMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+export const MAX_TEXT_ATTACHMENT_TEXT_CHARS = 400000;
+export const MAX_IMAGE_ATTACHMENT_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+export const MAX_IMAGE_ATTACHMENT_PIXEL_COUNT = 40000000;
 export const MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_TEXT_CHARS = 120000;
 
@@ -120,7 +124,11 @@ export function getNormalizedTextAttachmentFormat({ mimeType, extension }) {
   if (normalizedMimeType === 'text/markdown' || normalizedExtension === 'md') {
     return 'markdown';
   }
-  if (normalizedMimeType === 'text/html' || normalizedExtension === 'html' || normalizedExtension === 'htm') {
+  if (
+    normalizedMimeType === 'text/html' ||
+    normalizedExtension === 'html' ||
+    normalizedExtension === 'htm'
+  ) {
     return 'markdown';
   }
   if (normalizedMimeType === 'text/csv' || normalizedExtension === 'csv') {
@@ -130,7 +138,8 @@ export function getNormalizedTextAttachmentFormat({ mimeType, extension }) {
 }
 
 export function buildTextFileLlmText({ filename, mimeType, text, conversionNote = '' }) {
-  const normalizedFilename = typeof filename === 'string' && filename.trim() ? filename.trim() : 'file';
+  const normalizedFilename =
+    typeof filename === 'string' && filename.trim() ? filename.trim() : 'file';
   const normalizedMimeType =
     typeof mimeType === 'string' && mimeType.trim() ? mimeType.trim() : 'text/plain';
   const body = normalizeAttachmentText(text);
@@ -155,13 +164,23 @@ export function buildTextAttachmentConversion({ filename, mimeType, extension, t
       normalizedExtension === 'html' ||
       normalizedExtension === 'htm');
   const htmlConversion = isHtmlSource ? convertHtmlToMarkdown(text) : null;
-  const normalizedText = normalizeAttachmentText(
+  const normalizedTextResult = truncateAttachmentText(
     htmlConversion ? htmlConversion.markdown : text,
+    MAX_TEXT_ATTACHMENT_TEXT_CHARS
   );
+  const normalizedText = normalizeAttachmentText(normalizedTextResult.text);
+  const conversionWarnings = Array.isArray(htmlConversion?.warnings)
+    ? [...htmlConversion.warnings]
+    : [];
+  if (normalizedTextResult.wasTruncated) {
+    conversionWarnings.push(
+      `Extracted text was truncated to ${MAX_TEXT_ATTACHMENT_TEXT_CHARS.toLocaleString()} characters for local storage and prompt preparation.`
+    );
+  }
   return {
     normalizedText,
     normalizedFormat,
-    conversionWarnings: Array.isArray(htmlConversion?.warnings) ? htmlConversion.warnings : [],
+    conversionWarnings,
     memoryHint: {
       ingestible: true,
       preferredSource: 'normalizedText',
@@ -171,14 +190,21 @@ export function buildTextAttachmentConversion({ filename, mimeType, extension, t
       filename,
       mimeType,
       text: normalizedText,
-      conversionNote: isHtmlSource ? 'Converted from HTML to Markdown before prompt insertion.' : '',
+      conversionNote: isHtmlSource
+        ? 'Converted from HTML to Markdown before prompt insertion.'
+        : '',
     }),
   };
 }
 
 export function truncateAttachmentText(text, maxChars) {
   const normalizedText = normalizeAttachmentText(text);
-  if (!normalizedText || !Number.isFinite(maxChars) || maxChars <= 0 || normalizedText.length <= maxChars) {
+  if (
+    !normalizedText ||
+    !Number.isFinite(maxChars) ||
+    maxChars <= 0 ||
+    normalizedText.length <= maxChars
+  ) {
     return {
       text: normalizedText,
       wasTruncated: false,
@@ -220,7 +246,7 @@ export function buildPdfFileLlmText({ filename, mimeType, pageCount, body, conve
   const sections = [headerLines.join('\n')];
   if (Array.isArray(conversionWarnings) && conversionWarnings.length) {
     sections.push(
-      ['Extraction warnings:', ...conversionWarnings.map((warning) => `- ${warning}`)].join('\n'),
+      ['Extraction warnings:', ...conversionWarnings.map((warning) => `- ${warning}`)].join('\n')
     );
   }
   sections.push('Extracted contents:');
@@ -238,11 +264,11 @@ export function buildPdfAttachmentConversion({ filename, mimeType, pages, warnin
   const pageCount = Array.isArray(pages) ? pages.length : 0;
   const normalizedTextResult = truncateAttachmentText(
     buildPdfPageText(Array.isArray(pages) ? pages : []),
-    MAX_PDF_ATTACHMENT_TEXT_CHARS,
+    MAX_PDF_ATTACHMENT_TEXT_CHARS
   );
   if (normalizedTextResult.wasTruncated) {
     normalizedWarnings.push(
-      `Extracted PDF text was truncated to ${MAX_PDF_ATTACHMENT_TEXT_CHARS.toLocaleString()} characters for local storage and prompt preparation.`,
+      `Extracted PDF text was truncated to ${MAX_PDF_ATTACHMENT_TEXT_CHARS.toLocaleString()} characters for local storage and prompt preparation.`
     );
   }
   const normalizedText = normalizedTextResult.text;
@@ -268,11 +294,22 @@ export function buildPdfAttachmentConversion({ filename, mimeType, pages, warnin
 }
 
 export async function createComposerAttachmentFromFile(file) {
-  const buffer = await file.arrayBuffer();
   const attachmentMetadata = getSupportedAttachmentMetadata(file);
   if (!attachmentMetadata) {
     throw new Error('Unsupported attachment type.');
   }
+  const fileSize = Number.isFinite(file?.size) ? file.size : 0;
+  if (attachmentMetadata.category === 'image' && fileSize > MAX_IMAGE_ATTACHMENT_FILE_SIZE_BYTES) {
+    throw new Error(
+      `Image files larger than ${Math.round(MAX_IMAGE_ATTACHMENT_FILE_SIZE_BYTES / (1024 * 1024))} MB are not supported yet.`
+    );
+  }
+  if (attachmentMetadata.category === 'file' && fileSize > MAX_TEXT_ATTACHMENT_FILE_SIZE_BYTES) {
+    throw new Error(
+      `Text attachments larger than ${Math.round(MAX_TEXT_ATTACHMENT_FILE_SIZE_BYTES / (1024 * 1024))} MB are not supported yet.`
+    );
+  }
+  const buffer = await file.arrayBuffer();
   const hashValue = await computeSha256Hex(buffer);
   const id = crypto.randomUUID();
   if (attachmentMetadata.category === 'image') {
@@ -280,6 +317,15 @@ export async function createComposerAttachmentFromFile(file) {
     const mimeType = attachmentMetadata.mimeType || 'application/octet-stream';
     const url = `data:${mimeType};base64,${base64}`;
     const dimensions = await loadImageDimensions(url);
+    const pixelCount =
+      Number.isFinite(dimensions.width) && Number.isFinite(dimensions.height)
+        ? dimensions.width * dimensions.height
+        : 0;
+    if (pixelCount > MAX_IMAGE_ATTACHMENT_PIXEL_COUNT) {
+      throw new Error(
+        `Images larger than ${MAX_IMAGE_ATTACHMENT_PIXEL_COUNT.toLocaleString()} pixels are not supported yet.`
+      );
+    }
     return {
       id,
       type: 'image',
@@ -307,7 +353,7 @@ export async function createComposerAttachmentFromFile(file) {
     const fileSize = Number.isFinite(file.size) ? file.size : buffer.byteLength;
     if (fileSize > MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES) {
       throw new Error(
-        `PDF files larger than ${Math.round(MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES / (1024 * 1024))} MB are not supported yet.`,
+        `PDF files larger than ${Math.round(MAX_PDF_ATTACHMENT_FILE_SIZE_BYTES / (1024 * 1024))} MB are not supported yet.`
       );
     }
     const pdfExtraction = await extractPdfText(buffer.slice(0));

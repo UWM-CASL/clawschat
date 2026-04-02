@@ -158,7 +158,9 @@ function buildToolInstructionLines(name, description = '') {
     lines.push('  Use the returned location and coordinate directly in the answer.');
   }
   if (normalizedName === 'tasklist') {
-    lines.push('  If tasklist would help with multi-step work, call it with no arguments first to get its syntax.');
+    lines.push(
+      '  If tasklist would help with multi-step work, call it with no arguments first to get its syntax.'
+    );
   }
   return lines;
 }
@@ -168,18 +170,22 @@ export function buildToolCallingSystemPrompt(
   enabledToolNames = [],
   enabledTools = []
 ) {
-  const toolList = getNormalizedToolList(enabledToolNames).filter((toolName) => toolName !== 'none');
+  const toolList = getNormalizedToolList(enabledToolNames).filter(
+    (toolName) => toolName !== 'none'
+  );
   if (!toolList.length) {
     return '';
   }
   const toolLines = [
     '**Tools available in this conversation:**',
     ...buildEnabledToolInstructions(enabledTools),
-    ...(enabledTools.length ? [] : toolList.flatMap((toolName) => buildToolInstructionLines(toolName))),
+    ...(enabledTools.length
+      ? []
+      : toolList.flatMap((toolName) => buildToolInstructionLines(toolName))),
   ];
-  const toolBehaviorLines = [
-    'After a tool result, continue the work and answer naturally.',
-  ].filter(Boolean);
+  const toolBehaviorLines = ['After a tool result, continue the work and answer naturally.'].filter(
+    Boolean
+  );
   const formatLines = buildToolCallingFormatInstructions(toolCallingConfig);
   return [
     ...toolLines,
@@ -439,7 +445,11 @@ export function sniffToolCalls(rawText, toolCallingConfig) {
 }
 
 function executeGetCurrentDateTime(argumentsValue = {}) {
-  if (argumentsValue && typeof argumentsValue === 'object' && Object.keys(argumentsValue).length > 0) {
+  if (
+    argumentsValue &&
+    typeof argumentsValue === 'object' &&
+    Object.keys(argumentsValue).length > 0
+  ) {
     throw new Error('get_current_date_time does not accept any arguments.');
   }
   const now = new Date();
@@ -484,7 +494,10 @@ function buildTaskListSnapshot(entries = []) {
   }));
 }
 
-function getConversationPathMessages(conversation, leafMessageId = conversation?.activeLeafMessageId) {
+function getConversationPathMessages(
+  conversation,
+  leafMessageId = conversation?.activeLeafMessageId
+) {
   if (!conversation || !leafMessageId || !Array.isArray(conversation.messageNodes)) {
     return [];
   }
@@ -545,9 +558,7 @@ function sanitizeTaskListItemText(value) {
       return code < 32 || code === 127 ? ' ' : character;
     })
     .join('');
-  const normalizedText = withoutControlCharacters
-    .replace(/\s+/g, ' ')
-    .trim();
+  const normalizedText = withoutControlCharacters.replace(/\s+/g, ' ').trim();
   if (!normalizedText) {
     throw new Error('tasklist item must be a non-empty string.');
   }
@@ -584,9 +595,10 @@ function getValidatedTaskListArguments(argumentsValue = {}) {
   if (unexpectedKeys.length) {
     throw new Error(`tasklist does not accept: ${unexpectedKeys.join(', ')}.`);
   }
-  const taskListArguments = /** @type {{command?: unknown; item?: unknown; index?: unknown; status?: unknown}} */ (
-    argumentsValue
-  );
+  const taskListArguments =
+    /** @type {{command?: unknown; item?: unknown; index?: unknown; status?: unknown}} */ (
+      argumentsValue
+    );
   const normalized = {};
   if (taskListArguments.command !== undefined) {
     if (typeof taskListArguments.command !== 'string' || !taskListArguments.command.trim()) {
@@ -606,7 +618,11 @@ function getValidatedTaskListArguments(argumentsValue = {}) {
   }
   if (taskListArguments.index !== undefined) {
     const indexCandidate = taskListArguments.index;
-    if (typeof indexCandidate !== 'number' || !Number.isInteger(indexCandidate) || indexCandidate < 0) {
+    if (
+      typeof indexCandidate !== 'number' ||
+      !Number.isInteger(indexCandidate) ||
+      indexCandidate < 0
+    ) {
       throw new Error('tasklist index must be an integer greater than or equal to 0.');
     }
     normalized.index = indexCandidate;
@@ -772,7 +788,8 @@ function buildFormattedResolvedLocation(address = {}, fallbackDisplayName = '') 
   const adminRegion = address.state || address.region || address.county || '';
   const country = address.country || '';
   const parts = [locality, adminRegion, country].filter(
-    (value, index, values) => typeof value === 'string' && value.trim() && values.indexOf(value) === index
+    (value, index, values) =>
+      typeof value === 'string' && value.trim() && values.indexOf(value) === index
   );
   if (parts.length) {
     return parts.join(', ');
@@ -785,7 +802,8 @@ async function reverseGeocodeCoordinates(latitude, longitude, runtimeContext = {
   if (reverseGeocodeCache.has(cacheKey)) {
     return reverseGeocodeCache.get(cacheKey);
   }
-  const fetchRef = runtimeContext.fetchRef || (typeof fetch === 'function' ? fetch.bind(globalThis) : null);
+  const fetchRef =
+    runtimeContext.fetchRef || (typeof fetch === 'function' ? fetch.bind(globalThis) : null);
   if (typeof fetchRef !== 'function') {
     return null;
   }
@@ -815,7 +833,8 @@ async function reverseGeocodeCoordinates(latitude, longitude, runtimeContext = {
       locality: getReadableLocality(address) || null,
       state: typeof address.state === 'string' ? address.state : null,
       country: typeof address.country === 'string' ? address.country : null,
-      countryCode: typeof address.country_code === 'string' ? address.country_code.toUpperCase() : null,
+      countryCode:
+        typeof address.country_code === 'string' ? address.country_code.toUpperCase() : null,
       postcode: typeof address.postcode === 'string' ? address.postcode : null,
     };
     reverseGeocodeCache.set(cacheKey, result);
@@ -831,12 +850,25 @@ function buildApproximateLocationLabel(navigatorRef) {
     (typeof navigatorRef?.language === 'string' ? navigatorRef.language : '') ||
     'en-US';
   const localeParts = String(locale).split(/[-_]/);
-  const regionCode = localeParts.length > 1 ? localeParts[localeParts.length - 1].toUpperCase() : null;
+  const regionCode =
+    localeParts.length > 1 ? localeParts[localeParts.length - 1].toUpperCase() : null;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const timeZoneParts = String(timeZone).split('/');
-  const timeZoneArea = timeZoneParts.length > 1 ? timeZoneParts[timeZoneParts.length - 1] : timeZoneParts[0];
+  const timeZoneArea =
+    timeZoneParts.length > 1 ? timeZoneParts[timeZoneParts.length - 1] : timeZoneParts[0];
   const approximateArea = timeZoneArea ? timeZoneArea.replace(/_/g, ' ') : 'Unknown area';
   return regionCode ? `${approximateArea}, ${regionCode}` : approximateArea;
+}
+
+async function requestSensitiveToolConsent(toolName, runtimeContext = {}, details = {}) {
+  if (typeof runtimeContext.requestToolConsent !== 'function') {
+    return true;
+  }
+  const result = await runtimeContext.requestToolConsent({
+    toolName,
+    ...details,
+  });
+  return result !== false;
 }
 
 async function executeGetUserLocation(argumentsValue = {}, runtimeContext = {}) {
@@ -844,6 +876,22 @@ async function executeGetUserLocation(argumentsValue = {}, runtimeContext = {}) 
   const navigatorRef =
     runtimeContext.navigatorRef ||
     (typeof navigator !== 'undefined' && navigator ? navigator : null);
+  const hasPreciseLocationConsent = await requestSensitiveToolConsent(
+    'get_user_location',
+    runtimeContext,
+    {
+      scope: 'precise-location',
+      title: 'Allow precise location tool use?',
+      reason:
+        'The location tool can access precise browser location, may use that location in later tool calls, and may send coordinates to OpenStreetMap for reverse geocoding.',
+    }
+  );
+  if (!hasPreciseLocationConsent) {
+    return {
+      location: buildApproximateLocationLabel(navigatorRef),
+      coordinate: null,
+    };
+  }
   if (!navigatorRef) {
     return {
       location: buildApproximateLocationLabel(null),
@@ -869,7 +917,8 @@ async function executeGetUserLocation(argumentsValue = {}, runtimeContext = {}) 
     const longitude = Number(position?.coords?.longitude);
     const resolvedLocation = await reverseGeocodeCoordinates(latitude, longitude, runtimeContext);
     const location =
-      typeof resolvedLocation?.formattedLocation === 'string' && resolvedLocation.formattedLocation.trim()
+      typeof resolvedLocation?.formattedLocation === 'string' &&
+      resolvedLocation.formattedLocation.trim()
         ? resolvedLocation.formattedLocation.trim()
         : `${latitude}, ${longitude}`;
     return {
@@ -893,7 +942,9 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
   }
   const toolName = typeof toolCall.name === 'string' ? toolCall.name.trim() : '';
   const argumentsValue =
-    toolCall.arguments && typeof toolCall.arguments === 'object' && !Array.isArray(toolCall.arguments)
+    toolCall.arguments &&
+    typeof toolCall.arguments === 'object' &&
+    !Array.isArray(toolCall.arguments)
       ? toolCall.arguments
       : {};
   if (toolName === 'get_current_date_time') {

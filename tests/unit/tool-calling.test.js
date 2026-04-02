@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   buildToolCallingSystemPrompt,
   executeToolCall,
@@ -6,7 +6,10 @@ import {
   getEnabledToolDefinitions,
   sniffToolCalls,
 } from '../../src/llm/tool-calling.js';
-import { addMessageToConversation, createConversation } from '../../src/state/conversation-model.js';
+import {
+  addMessageToConversation,
+  createConversation,
+} from '../../src/state/conversation-model.js';
 
 let taskListConversation;
 
@@ -14,14 +17,17 @@ beforeEach(async () => {
   taskListConversation = createConversation({
     id: 'conversation-tasklist',
   });
-  await executeToolCall({
-    name: 'tasklist',
-    arguments: {
-      command: 'clear',
+  await executeToolCall(
+    {
+      name: 'tasklist',
+      arguments: {
+        command: 'clear',
+      },
     },
-  }, {
-    conversation: taskListConversation,
-  });
+    {
+      conversation: taskListConversation,
+    }
+  );
 });
 
 function appendTaskListToolResult(conversation, toolArguments, result) {
@@ -103,9 +109,7 @@ describe('tool-calling prompt builder', () => {
       ['get_user_location']
     );
 
-    expect(prompt).toContain(
-      'Use the returned location and coordinate directly in the answer.'
-    );
+    expect(prompt).toContain('Use the returned location and coordinate directly in the answer.');
     expect(prompt).not.toContain(
       '**Tool behavior:**\n- Use the returned location and coordinate directly in the answer.'
     );
@@ -140,9 +144,7 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain('Wrap the call in <|tool_call_start|>[ and ]<|tool_call_end|>.');
-    expect(prompt).toContain(
-      'Shape inside the wrapper: tool_name(arg1="value1", arg2="value2").'
-    );
+    expect(prompt).toContain('Shape inside the wrapper: tool_name(arg1="value1", arg2="value2").');
   });
 
   test('returns a friendly tool display name', () => {
@@ -219,13 +221,16 @@ describe('tool-calling prompt builder', () => {
 
   test('sniffs tagged json tool calls', () => {
     expect(
-      sniffToolCalls('<tool_call>\n{"name":"lookup_fact","arguments":{"topic":"stars"}}\n</tool_call>', {
-        format: 'tagged-json',
-        nameKey: 'name',
-        argumentsKey: 'arguments',
-        openTag: '<tool_call>',
-        closeTag: '</tool_call>',
-      })
+      sniffToolCalls(
+        '<tool_call>\n{"name":"lookup_fact","arguments":{"topic":"stars"}}\n</tool_call>',
+        {
+          format: 'tagged-json',
+          nameKey: 'name',
+          argumentsKey: 'arguments',
+          openTag: '<tool_call>',
+          closeTag: '</tool_call>',
+        }
+      )
     ).toEqual([
       {
         name: 'lookup_fact',
@@ -260,11 +265,14 @@ describe('tool-calling prompt builder', () => {
 
   test('sniffs special-token function calls', () => {
     expect(
-      sniffToolCalls('<|tool_call_start|>[get_weather(location="Milwaukee, WI", unit="fahrenheit")]<|tool_call_end|>', {
-        format: 'special-token-call',
-        callOpen: '<|tool_call_start|>[',
-        callClose: ']<|tool_call_end|>',
-      })
+      sniffToolCalls(
+        '<|tool_call_start|>[get_weather(location="Milwaukee, WI", unit="fahrenheit")]<|tool_call_end|>',
+        {
+          format: 'special-token-call',
+          callOpen: '<|tool_call_start|>[',
+          callClose: ']<|tool_call_end|>',
+        }
+      )
     ).toEqual([
       {
         name: 'get_weather',
@@ -425,6 +433,40 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.location).toContain('US');
   });
 
+  test('falls back to an approximate location when first-use consent is denied', async () => {
+    const getCurrentPosition = vi.fn();
+    const fetchRef = vi.fn();
+    const requestToolConsent = vi.fn(() => false);
+    const result = await executeToolCall(
+      {
+        name: 'get_user_location',
+        arguments: {},
+      },
+      {
+        requestToolConsent,
+        navigatorRef: {
+          language: 'en-US',
+          languages: ['en-US'],
+          geolocation: {
+            getCurrentPosition,
+          },
+        },
+        fetchRef,
+      }
+    );
+
+    expect(requestToolConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'get_user_location',
+        scope: 'precise-location',
+      })
+    );
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    expect(fetchRef).not.toHaveBeenCalled();
+    expect(result.result.coordinate).toBeNull();
+    expect(result.result.location).toContain('US');
+  });
+
   test('keeps coordinates when reverse geocoding is unavailable', async () => {
     const result = await executeToolCall(
       {
@@ -526,15 +568,18 @@ describe('tool-calling prompt builder', () => {
   });
 
   test('creates, lists, updates, and clears tasklist items', async () => {
-    const added = await executeToolCall({
-      name: 'tasklist',
-      arguments: {
-        command: 'new',
-        item: 'Draft release notes',
+    const added = await executeToolCall(
+      {
+        name: 'tasklist',
+        arguments: {
+          command: 'new',
+          item: 'Draft release notes',
+        },
       },
-    }, {
-      conversation: taskListConversation,
-    });
+      {
+        conversation: taskListConversation,
+      }
+    );
     expect(added.result).toEqual({
       items: [
         {
@@ -553,16 +598,19 @@ describe('tool-calling prompt builder', () => {
       added.result
     );
 
-    const updated = await executeToolCall({
-      name: 'tasklist',
-      arguments: {
-        command: 'update',
-        index: 0,
-        status: 1,
+    const updated = await executeToolCall(
+      {
+        name: 'tasklist',
+        arguments: {
+          command: 'update',
+          index: 0,
+          status: 1,
+        },
       },
-    }, {
-      conversation: taskListConversation,
-    });
+      {
+        conversation: taskListConversation,
+      }
+    );
     expect(updated.result).toEqual({
       items: [
         {
@@ -582,14 +630,17 @@ describe('tool-calling prompt builder', () => {
       updated.result
     );
 
-    const listed = await executeToolCall({
-      name: 'tasklist',
-      arguments: {
-        command: 'list',
+    const listed = await executeToolCall(
+      {
+        name: 'tasklist',
+        arguments: {
+          command: 'list',
+        },
       },
-    }, {
-      conversation: taskListConversation,
-    });
+      {
+        conversation: taskListConversation,
+      }
+    );
     expect(listed.result).toEqual({
       items: [
         {
@@ -600,29 +651,35 @@ describe('tool-calling prompt builder', () => {
       ],
     });
 
-    const cleared = await executeToolCall({
-      name: 'tasklist',
-      arguments: {
-        command: 'clear',
+    const cleared = await executeToolCall(
+      {
+        name: 'tasklist',
+        arguments: {
+          command: 'clear',
+        },
       },
-    }, {
-      conversation: taskListConversation,
-    });
+      {
+        conversation: taskListConversation,
+      }
+    );
     expect(cleared.result).toEqual({
       items: [],
     });
   });
 
   test('sanitizes tasklist item whitespace before storing', async () => {
-    const added = await executeToolCall({
-      name: 'tasklist',
-      arguments: {
-        command: 'new',
-        item: '  Draft\n\nrelease\t notes  ',
+    const added = await executeToolCall(
+      {
+        name: 'tasklist',
+        arguments: {
+          command: 'new',
+          item: '  Draft\n\nrelease\t notes  ',
+        },
       },
-    }, {
-      conversation: taskListConversation,
-    });
+      {
+        conversation: taskListConversation,
+      }
+    );
 
     expect(added.result).toEqual({
       items: [
@@ -637,29 +694,35 @@ describe('tool-calling prompt builder', () => {
 
   test('rejects fenced code blocks in tasklist items', async () => {
     await expect(
-      executeToolCall({
-        name: 'tasklist',
-        arguments: {
-          command: 'new',
-          item: '```js const x = 1; ```',
+      executeToolCall(
+        {
+          name: 'tasklist',
+          arguments: {
+            command: 'new',
+            item: '```js const x = 1; ```',
+          },
         },
-      }, {
-        conversation: taskListConversation,
-      })
+        {
+          conversation: taskListConversation,
+        }
+      )
     ).rejects.toThrow('tasklist item must be plain language, not a fenced code block.');
   });
 
   test('rejects json-style tool calls in tasklist items', async () => {
     await expect(
-      executeToolCall({
-        name: 'tasklist',
-        arguments: {
-          command: 'new',
-          item: '{"name":"get_current_date_time","parameters":{}}',
+      executeToolCall(
+        {
+          name: 'tasklist',
+          arguments: {
+            command: 'new',
+            item: '{"name":"get_current_date_time","parameters":{}}',
+          },
         },
-      }, {
-        conversation: taskListConversation,
-      })
+        {
+          conversation: taskListConversation,
+        }
+      )
     ).rejects.toThrow('tasklist item must be plain language, not a JSON tool call.');
   });
 });

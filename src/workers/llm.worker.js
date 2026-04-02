@@ -3,8 +3,6 @@ import {
   sanitizeGenerationConfig,
 } from '../config/generation-config.js';
 
-const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.0-next.7';
-
 const WORKER_GENERATION_LIMITS = {
   defaultMaxOutputTokens: 1024,
   maxOutputTokens: Number.MAX_SAFE_INTEGER,
@@ -65,7 +63,7 @@ async function loadTransformers() {
   if (cachedModule) {
     return cachedModule;
   }
-  cachedModule = await import(/* @vite-ignore */ TRANSFORMERS_CDN);
+  cachedModule = await import('@huggingface/transformers');
   return cachedModule;
 }
 
@@ -142,7 +140,11 @@ function normalizeRuntimeConfig(rawRuntime) {
   let dtype = '';
   if (typeof rawRuntime?.dtype === 'string') {
     dtype = rawRuntime.dtype.trim();
-  } else if (rawRuntime?.dtype && typeof rawRuntime.dtype === 'object' && !Array.isArray(rawRuntime.dtype)) {
+  } else if (
+    rawRuntime?.dtype &&
+    typeof rawRuntime.dtype === 'object' &&
+    !Array.isArray(rawRuntime.dtype)
+  ) {
     const entries = Object.entries(rawRuntime.dtype)
       .map(([key, value]) => {
         const normalizedKey = typeof key === 'string' ? key.trim() : '';
@@ -281,7 +283,8 @@ function resolvePrompt(rawPrompt) {
         if (!message || typeof message !== 'object') {
           return null;
         }
-        const roleCandidate = typeof message.role === 'string' ? message.role.trim().toLowerCase() : '';
+        const roleCandidate =
+          typeof message.role === 'string' ? message.role.trim().toLowerCase() : '';
         const content = normalizePromptContent(message.content);
         if (!content) {
           return null;
@@ -314,7 +317,9 @@ function resolvePrompt(rawPrompt) {
 function promptContainsImageParts(prompt) {
   return Array.isArray(prompt)
     ? prompt.some((message) =>
-        Array.isArray(message?.content) ? message.content.some((part) => part?.type === 'image') : false,
+        Array.isArray(message?.content)
+          ? message.content.some((part) => part?.type === 'image')
+          : false
       )
     : false;
 }
@@ -330,7 +335,9 @@ async function initialize(payload) {
   const runtime = normalizeRuntimeConfig(payload.runtime);
   const attempts = getBackendAttemptOrder(backendPreference, runtime);
   const errors = [];
-  const navigatorLike = /** @type {any} */ (typeof navigator !== 'undefined' ? navigator : undefined);
+  const navigatorLike = /** @type {any} */ (
+    typeof navigator !== 'undefined' ? navigator : undefined
+  );
   const navigatorGpu = navigatorLike?.gpu;
 
   if (runtime.requiresWebGpu && attempts.length === 0) {
@@ -490,7 +497,7 @@ async function initialize(payload) {
       const isUnauthorized = /unauthorized|401|403/i.test(rawMessage);
       if (isUnauthorized) {
         errors.push(
-          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-onnx-web, or self-host pinned model files for static delivery.)`,
+          `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/Llama-3.2-3B-Instruct-onnx-web, or self-host pinned model files for static delivery.)`
         );
       } else {
         errors.push(`${backend.toUpperCase()}: ${rawMessage}`);
@@ -523,11 +530,15 @@ async function generate(payload) {
   try {
     let streamedText = '';
     const formattedPrompt = resolvePrompt(prompt);
-    const requestGenerationConfig = normalizeGenerationConfig(payload.generationConfig || generationConfig);
+    const requestGenerationConfig = normalizeGenerationConfig(
+      payload.generationConfig || generationConfig
+    );
     generationConfig = requestGenerationConfig;
     const runtime = normalizeRuntimeConfig(payload.runtime);
     if (promptContainsImageParts(formattedPrompt) && !runtime.multimodalGeneration) {
-      throw new Error('Image attachments are not yet wired to the selected model runtime in this app.');
+      throw new Error(
+        'Image attachments are not yet wired to the selected model runtime in this app.'
+      );
     }
     if (promptContainsImageParts(formattedPrompt) && !runtime.imageInput) {
       throw new Error('The selected model does not support image inputs in this app.');
@@ -581,7 +592,7 @@ async function generate(payload) {
         });
         const decoded = processor.batch_decode(
           output.slice(null, [modelInputs.input_ids.dims.at(-1), null]),
-          { skip_special_tokens: true },
+          { skip_special_tokens: true }
         );
         streamedText = decoded?.[0] || '';
         self.postMessage({

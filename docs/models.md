@@ -69,8 +69,10 @@ Current supported models in Settings:
 
 Notes:
 
+- Transformers.js is loaded from the locally installed package and bundled into the app build.
 - The model is downloaded at runtime by Transformers.js and cached in-browser for reuse.
 - Model assets are not committed to this repository.
+- Model artifacts are not revision-pinned yet; this is a documented accepted risk for now.
 - The pre-chat picker presents each model as a single-select card with icon-only ability badges, language tags, and short-term memory shown as tokens plus a rough word estimate rounded to the nearest 100.
 - Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
 - Settings fields for maximum output/context tokens are numeric, step in 8, and disabled until a model is loaded.
