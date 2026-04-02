@@ -645,7 +645,16 @@
 }
 
 .model-card-languages {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   color: var(--ink-strong);
+}
+
+.model-card-languages .bi-translate {
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+  line-height: 1;
 }
 
 .model-card-language-list {

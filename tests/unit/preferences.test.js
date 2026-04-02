@@ -171,11 +171,13 @@ describe('preferences controller', () => {
     expect(cards.length).toBeGreaterThanOrEqual(5);
 
     const qwenCard = cards.find((card) => card.textContent?.includes('Qwen3 0.6B'));
-    expect(qwenCard?.textContent).toContain('Short-term memory: 40,960 tokens');
-    expect(qwenCard?.textContent).toContain('about 30,720 words');
-    expect(qwenCard?.textContent).toContain('Languages:');
+    expect(qwenCard?.textContent).toContain('40,960 tokens');
+    expect(qwenCard?.textContent).toContain('about 30,700 words');
     expect(qwenCard?.textContent).toContain('EN');
     expect(qwenCard?.textContent).toContain('ZH');
+    expect(qwenCard?.textContent).toContain('ES');
+    expect(qwenCard?.textContent).toContain('FR');
+    expect(qwenCard?.textContent).not.toContain('DE');
     expect(qwenCard?.textContent).toContain('and more');
     expect(qwenCard?.textContent).not.toContain('onnx-community/Qwen3-0.6B-ONNX');
     expect(
@@ -198,8 +200,11 @@ describe('preferences controller', () => {
     expect(legend?.textContent).toContain('Model abilities');
     expect(legend?.textContent).toContain('Accepts image input');
     expect(legend?.textContent).not.toContain('Streams replies as they are generated');
-    expect(qwenCard?.querySelector('.model-card-languages')?.getAttribute('aria-label')).toBe(
+    expect(qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')).toBe(
       'Supported languages: English (EN), Chinese (ZH), Spanish (ES), French (FR), German (DE), Japanese (JA), and more.'
+    );
+    expect(qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('title')).toBe(
+      'English (EN), Chinese (ZH), Spanish (ES), French (FR), German (DE), Japanese (JA), and more.'
     );
     expect(
       /** @type {HTMLAnchorElement | null} */ (qwenCard?.querySelector('.model-card-language-overflow'))?.href

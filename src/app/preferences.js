@@ -331,15 +331,22 @@ export function createPreferencesController({
     if (!tags.length) {
       return null;
     }
-    const visibleTagCount = 6;
+    const visibleTagCount = 4;
     const languages = documentRef.createElement('p');
     languages.className = 'model-card-languages';
 
+    const languageSupportText = buildLanguageSupportText(model);
+    const ariaLabel = shouldShowLanguageOverflow(model, visibleTagCount)
+      ? `Supported languages: ${languageSupportText}, and more.`
+      : `Supported languages: ${languageSupportText}`;
+    const tooltipText = ariaLabel.replace(/^Supported languages:\s*/, '');
+
     const icon = documentRef.createElement('i');
     icon.className = 'bi bi-translate';
-    icon.setAttribute('aria-hidden', 'true');
+    icon.setAttribute('role', 'img');
+    icon.setAttribute('aria-label', ariaLabel);
+    icon.title = tooltipText;
     languages.appendChild(icon);
-    languages.append(' Languages: ');
 
     const list = documentRef.createElement('span');
     list.className = 'model-card-language-list';
@@ -366,12 +373,6 @@ export function createPreferencesController({
       languages.appendChild(overflowLink);
     }
 
-    const languageSupportText = buildLanguageSupportText(model);
-    const ariaLabel = shouldShowLanguageOverflow(model, visibleTagCount)
-      ? `Supported languages: ${languageSupportText}, and more.`
-      : `Supported languages: ${languageSupportText}`;
-    languages.title = ariaLabel.replace(/^Supported languages:\s*/, '');
-    languages.setAttribute('aria-label', ariaLabel);
     return languages;
   }
 
