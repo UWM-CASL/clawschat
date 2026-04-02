@@ -164,8 +164,8 @@ Current behavior:
 - narration emitted before the first tool call remains visible in the model card
 - the first complete tool call detected in that streamed turn interrupts generation immediately
 - the model does not keep speaking past that intercepted tool call until the tool result is returned
-- the tool request is shown inline on that same model card
-- the tool result is shown inline under that same model card once execution completes
+- the model card renders thinking, narration, tool request/result, and any resumed narration in the order they occurred within that turn
+- intermediate `tool` and continuation `model` nodes stay in conversation state for execution and export, but the transcript folds them into the originating model card instead of showing standalone rows
 
 This keeps the visible transcript aligned with agent-style execution: tool use happens at the point where the model decided it needed the tool, not as a later detached transcript node.
 

@@ -293,6 +293,31 @@ export function createTranscriptView(dependencies) {
       .join('\n\n');
   }
 
+  function getModelTurnMessages(conversation, rootModelMessage) {
+    if (!conversation || rootModelMessage?.role !== 'model') {
+      return [];
+    }
+    const pathMessages = getConversationPathMessages(conversation);
+    const startIndex = pathMessages.findIndex((message) => message?.id === rootModelMessage.id);
+    if (startIndex < 0) {
+      return [rootModelMessage];
+    }
+    const turnMessages = [];
+    for (let index = startIndex; index < pathMessages.length; index += 1) {
+      const message = pathMessages[index];
+      if (!message) {
+        continue;
+      }
+      if (index > startIndex && message.role === 'user') {
+        break;
+      }
+      if (message.role === 'model' || message.role === 'tool') {
+        turnMessages.push(message);
+      }
+    }
+    return turnMessages;
+  }
+
   function getToolCallActionLabel(toolCall) {
     const toolName = typeof toolCall?.name === 'string' ? toolCall.name.trim() : '';
     const toolLabel = toolName ? resolveToolDisplayName(toolName) : 'Tool';
@@ -343,77 +368,145 @@ export function createTranscriptView(dependencies) {
     return narration.replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  function setModelToolCallContent(message, refs) {
-    if (!refs) {
-      return;
-    }
-    const toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : [];
-    const hasToolCalls = toolCalls.length > 0;
-    refs.toolCallRegion.classList.toggle('d-none', !hasToolCalls);
-    const narrationText = getToolCallNarrationText(message);
-    refs.responseRegion.classList.toggle('d-none', hasToolCalls && !narrationText);
-    if (!hasToolCalls) {
-      refs.toolCallRequest.textContent = '';
-      refs.toolCallResult.textContent = '';
-      refs.toolCallResultSection.hidden = true;
-      return;
-    }
-
-    const isExpanded = refs.toolCallToggle.getAttribute('aria-expanded') === 'true';
-    const primaryToolName =
-      typeof toolCalls[0]?.name === 'string' && toolCalls[0].name.trim()
-        ? toolCalls[0].name.trim()
-        : '';
-    const toolLabel = primaryToolName ? resolveToolDisplayName(primaryToolName) : 'Unknown Tool';
-    const actionLabel = getToolCallActionLabel(toolCalls[0]);
-    refs.toolCallToggle.textContent = `Tool action: ${actionLabel}`;
-    refs.toolCallToggle.setAttribute('aria-label', `${actionLabel}: ${toolLabel}`);
-    refs.toolCallToggle.setAttribute('aria-expanded', String(isExpanded));
-    refs.toolCallBody.hidden = !isExpanded;
-    refs.toolCallRequest.textContent = toolCalls
-      .map(formatToolCallText)
-      .filter(Boolean)
-      .join('\n\n');
-
-    const toolResultText = formatToolResultText(
-      getInlineToolResultMessages(getActiveConversation(), message)
-    );
-    refs.toolCallResult.textContent = toolResultText;
-    refs.toolCallResultSection.hidden = !toolResultText;
-  }
-
   function setModelBubbleContent(message, refs) {
     if (!refs) {
       return;
     }
-    const responseContent =
-      Array.isArray(message.toolCalls) && message.toolCalls.length > 0
-        ? getToolCallNarrationText(message)
-        : String(message.response || message.text || '');
-    const shouldShowPendingResponse = !message.isResponseComplete && !responseContent.trim();
+    const conversation = getActiveConversation();
+    const turnMessages = getModelTurnMessages(conversation, message);
+    const timeline = refs.timeline;
+    timeline.replaceChildren();
 
-    const hasThinking = Boolean(message.hasThinking || message.thoughts?.trim());
-    const isExpanded = refs.thinkingToggle.getAttribute('aria-expanded') === 'true';
-    const thinkingLabel = message.isThinkingComplete
-      ? isExpanded
-        ? 'Done thinking. Hide thoughts.'
-        : 'Done thinking. View thoughts.'
-      : 'Thinking';
+    let hasMathMlCopyAction = false;
+    turnMessages.forEach((turnMessage) => {
+      if (turnMessage.role !== 'model') {
+        return;
+      }
 
-    refs.thinkingRegion.classList.toggle('d-none', !hasThinking);
-    refs.thinkingToggle.textContent = thinkingLabel;
-    refs.thinkingToggle.setAttribute('aria-expanded', String(isExpanded));
-    refs.thinkingCopyButton.disabled = !hasThinking || !message.thoughts?.trim();
-    /** @type {HTMLElement} */ (refs.thinkingBody).hidden = !hasThinking || !isExpanded;
-    refs.thoughtsText.textContent = message.thoughts || '';
-    refs.waitMessage.textContent = 'Please wait';
-    refs.responseRegion.classList.toggle('is-response-pending', shouldShowPendingResponse);
-    refs.responseText.innerHTML = renderModelMarkdown(responseContent);
-    const hasMathMlCopyAction = canShowMathMlCopyAction(responseContent);
+      const hasThinking = Boolean(turnMessage.hasThinking || turnMessage.thoughts?.trim());
+      if (hasThinking) {
+        const isExpanded = refs.thinkingExpansion.has(turnMessage.id)
+          ? refs.thinkingExpansion.get(turnMessage.id) === true
+          : getShowThinkingByDefault();
+        const thinkingLabel = turnMessage.isThinkingComplete
+          ? isExpanded
+            ? 'Done thinking. Hide thoughts.'
+            : 'Done thinking. View thoughts.'
+          : 'Thinking';
+
+        const thinkingRegion = documentRef.createElement('section');
+        thinkingRegion.className = 'thoughts-region';
+        const heading = documentRef.createElement('h3');
+        heading.className = 'visually-hidden';
+        heading.textContent = 'Thoughts';
+        const toolbar = documentRef.createElement('div');
+        toolbar.className = 'thoughts-toolbar';
+        const toggle = documentRef.createElement('a');
+        toggle.href = '#';
+        toggle.className = 'thinking-toggle';
+        toggle.textContent = thinkingLabel;
+        toggle.setAttribute('aria-expanded', String(isExpanded));
+        toggle.dataset.thinkingMessageId = turnMessage.id;
+        const copyButton = documentRef.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'btn btn-sm btn-link thoughts-copy-btn';
+        copyButton.dataset.messageId = turnMessage.id;
+        copyButton.dataset.copyType = 'thoughts';
+        copyButton.setAttribute('aria-label', 'Copy thoughts');
+        copyButton.setAttribute('aria-keyshortcuts', 'Shift+C');
+        copyButton.setAttribute('data-bs-toggle', 'tooltip');
+        copyButton.setAttribute('data-bs-title', 'Copy thoughts (Shift+C)');
+        copyButton.disabled = !turnMessage.thoughts?.trim();
+        copyButton.innerHTML =
+          '<i class="bi bi-copy" aria-hidden="true"></i><span class="visually-hidden">Copy thoughts</span>';
+        toolbar.append(toggle, copyButton);
+        const body = documentRef.createElement('p');
+        body.className = 'thoughts-content';
+        body.hidden = !isExpanded;
+        body.textContent = turnMessage.thoughts || '';
+        thinkingRegion.append(heading, toolbar, body);
+        timeline.appendChild(thinkingRegion);
+      }
+
+      const responseContent =
+        Array.isArray(turnMessage.toolCalls) && turnMessage.toolCalls.length > 0
+          ? getToolCallNarrationText(turnMessage)
+          : String(turnMessage.response || turnMessage.text || '');
+      const shouldShowPendingResponse = !turnMessage.isResponseComplete && !responseContent.trim();
+      if (shouldShowPendingResponse || responseContent.trim()) {
+        const responseRegion = documentRef.createElement('section');
+        responseRegion.className = 'response-region';
+        responseRegion.classList.toggle('is-response-pending', shouldShowPendingResponse);
+        const heading = documentRef.createElement('h3');
+        heading.className = 'visually-hidden';
+        heading.textContent = 'Response';
+        const waitMessage = documentRef.createElement('p');
+        waitMessage.className = 'fix-wait-message mb-0';
+        waitMessage.setAttribute('aria-live', 'off');
+        waitMessage.textContent = 'Please wait';
+        const responseText = documentRef.createElement('div');
+        responseText.className = 'response-content';
+        responseText.innerHTML = renderModelMarkdown(responseContent);
+        responseRegion.append(heading, waitMessage, responseText);
+        timeline.appendChild(responseRegion);
+        scheduleMathTypeset(responseText, { immediate: Boolean(turnMessage.isResponseComplete) });
+        hasMathMlCopyAction ||= canShowMathMlCopyAction(responseContent);
+      }
+
+      const toolCalls = Array.isArray(turnMessage.toolCalls) ? turnMessage.toolCalls : [];
+      if (toolCalls.length) {
+        const isExpanded = refs.toolExpansion.get(turnMessage.id) === true;
+        const primaryToolName =
+          typeof toolCalls[0]?.name === 'string' && toolCalls[0].name.trim()
+            ? toolCalls[0].name.trim()
+            : '';
+        const toolLabel = primaryToolName ? resolveToolDisplayName(primaryToolName) : 'Unknown Tool';
+        const actionLabel = getToolCallActionLabel(toolCalls[0]);
+        const toolResultText = formatToolResultText(
+          getInlineToolResultMessages(conversation, turnMessage)
+        );
+
+        const toolCallRegion = documentRef.createElement('section');
+        toolCallRegion.className = 'tool-call-region';
+        const heading = documentRef.createElement('h3');
+        heading.className = 'visually-hidden';
+        heading.textContent = 'Tool call';
+        const toggle = documentRef.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'btn btn-sm tool-call-toggle';
+        toggle.textContent = `Tool action: ${actionLabel}`;
+        toggle.setAttribute('aria-label', `${actionLabel}: ${toolLabel}`);
+        toggle.setAttribute('aria-expanded', String(isExpanded));
+        toggle.dataset.toolMessageId = turnMessage.id;
+        const body = documentRef.createElement('div');
+        body.className = 'tool-call-body mt-2';
+        body.hidden = !isExpanded;
+        const requestLabel = documentRef.createElement('p');
+        requestLabel.className = 'mb-1 fw-semibold';
+        requestLabel.textContent = 'Request';
+        const requestPanel = documentRef.createElement('pre');
+        requestPanel.className = 'tool-call-panel tool-call-request mb-2';
+        requestPanel.textContent = toolCalls.map(formatToolCallText).filter(Boolean).join('\n\n');
+        body.append(requestLabel, requestPanel);
+        if (toolResultText) {
+          const resultSection = documentRef.createElement('section');
+          resultSection.className = 'tool-call-result-section';
+          const resultLabel = documentRef.createElement('p');
+          resultLabel.className = 'mb-1 fw-semibold';
+          resultLabel.textContent = 'Response';
+          const resultPanel = documentRef.createElement('pre');
+          resultPanel.className = 'tool-call-panel tool-call-result mb-0';
+          resultPanel.textContent = toolResultText;
+          resultSection.append(resultLabel, resultPanel);
+          body.appendChild(resultSection);
+        }
+        toolCallRegion.append(heading, toggle, body);
+        timeline.appendChild(toolCallRegion);
+      }
+    });
+
     refs.copyMathMlButton.classList.toggle('d-none', !hasMathMlCopyAction);
     refs.copyMathMlButton.disabled = !hasMathMlCopyAction;
-    setModelToolCallContent(message, refs);
-    scheduleMathTypeset(refs.responseText, { immediate: Boolean(message.isResponseComplete) });
   }
 
   function refreshModelThinkingVisibility() {
@@ -457,49 +550,7 @@ export function createTranscriptView(dependencies) {
         <h3 class="visually-hidden">${cardHeading}</h3>
         <p class="message-speaker">${message.speaker}</p>
         <div class="message-bubble">
-          <section class="response-region">
-            <h3 class="visually-hidden">Response</h3>
-            <p class="fix-wait-message mb-0" aria-live="off">Please wait</p>
-            <div class="response-content"></div>
-          </section>
-          <section class="thoughts-region d-none">
-            <h3 class="visually-hidden">Thoughts</h3>
-            <div class="thoughts-toolbar">
-              <a href="#" class="thinking-toggle" aria-expanded="false">Thinking</a>
-              <button
-                type="button"
-                class="btn btn-sm btn-link thoughts-copy-btn"
-                data-message-id="${message.id}"
-                aria-label="Copy thoughts"
-                aria-keyshortcuts="Shift+C"
-                data-copy-type="thoughts"
-                data-bs-toggle="tooltip"
-                data-bs-title="Copy thoughts (Shift+C)"
-              >
-                <i class="bi bi-copy" aria-hidden="true"></i>
-                <span class="visually-hidden">Copy thoughts</span>
-              </button>
-            </div>
-            <p class="thoughts-content" hidden></p>
-          </section>
-          <section class="tool-call-region d-none">
-            <h3 class="visually-hidden">Tool call</h3>
-            <button
-              type="button"
-              class="btn btn-sm tool-call-toggle"
-              aria-expanded="false"
-            >
-              Tool action
-            </button>
-            <div class="tool-call-body mt-2" hidden>
-              <p class="mb-1 fw-semibold">Request</p>
-              <pre class="tool-call-panel tool-call-request mb-2"></pre>
-              <section class="tool-call-result-section" hidden>
-                <p class="mb-1 fw-semibold">Response</p>
-                <pre class="tool-call-panel tool-call-result mb-0"></pre>
-              </section>
-            </div>
-          </section>
+          <div class="model-turn-timeline"></div>
         </div>
         <section class="response-actions">
           <button
@@ -585,69 +636,43 @@ export function createTranscriptView(dependencies) {
       if (responseActions) {
         responseActions.classList.toggle('d-none', !message.isResponseComplete);
       }
-      const thinkingRegion = item.querySelector('.thoughts-region');
-      const thinkingToggle = item.querySelector('.thinking-toggle');
-      const thinkingCopyButton = item.querySelector('.thoughts-copy-btn');
-      const thinkingBody = item.querySelector('.thoughts-content');
-      const thoughtsText = item.querySelector('.thoughts-content');
-      const toolCallRegion = item.querySelector('.tool-call-region');
-      const toolCallToggle = item.querySelector('.tool-call-toggle');
-      const toolCallBody = item.querySelector('.tool-call-body');
-      const toolCallRequest = item.querySelector('.tool-call-request');
-      const toolCallResultSection = item.querySelector('.tool-call-result-section');
-      const toolCallResult = item.querySelector('.tool-call-result');
-      const responseRegion = item.querySelector('.response-region');
-      const waitMessage = item.querySelector('.fix-wait-message');
-      const responseText = item.querySelector('.response-content');
+      const timeline = item.querySelector('.model-turn-timeline');
       const copyMathMlButton = item.querySelector('.copy-mathml-btn');
-      if (
-        thinkingRegion &&
-        thinkingToggle &&
-        thinkingCopyButton &&
-        thinkingBody &&
-        thoughtsText &&
-        toolCallRegion &&
-        toolCallToggle &&
-        toolCallBody &&
-        toolCallRequest &&
-        toolCallResultSection &&
-        toolCallResult &&
-        responseRegion &&
-        waitMessage &&
-        responseText &&
-        copyMathMlButton instanceof view.HTMLButtonElement
-      ) {
+      if (timeline && copyMathMlButton instanceof view.HTMLButtonElement) {
         const refs = {
-          thinkingRegion,
-          thinkingToggle,
-          thinkingCopyButton,
-          thinkingBody,
-          thoughtsText,
-          toolCallRegion,
-          toolCallToggle,
-          toolCallBody,
-          toolCallRequest,
-          toolCallResultSection,
-          toolCallResult,
-          responseRegion,
-          waitMessage,
-          responseText,
+          timeline,
           copyMathMlButton,
+          thinkingExpansion: new Map(),
+          toolExpansion: new Map(),
         };
-        const showThinkingByDefault = getShowThinkingByDefault();
-        thinkingToggle.setAttribute('aria-expanded', String(showThinkingByDefault));
-        /** @type {HTMLElement} */ (thinkingBody).hidden = !showThinkingByDefault;
-        thinkingToggle.addEventListener('click', (event) => {
-          event.preventDefault();
-          const expanded = thinkingToggle.getAttribute('aria-expanded') === 'true';
-          thinkingToggle.setAttribute('aria-expanded', String(!expanded));
-          /** @type {HTMLElement} */ (thinkingBody).hidden = expanded;
-          setModelBubbleContent(message, refs);
-        });
-        toolCallToggle.addEventListener('click', () => {
-          const expanded = toolCallToggle.getAttribute('aria-expanded') === 'true';
-          toolCallToggle.setAttribute('aria-expanded', String(!expanded));
-          toolCallBody.hidden = expanded;
+        timeline.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof view.Element)) {
+            return;
+          }
+          const thinkingToggle = target.closest('.thinking-toggle');
+          if (thinkingToggle instanceof view.HTMLAnchorElement) {
+            event.preventDefault();
+            const thinkingMessageId = thinkingToggle.dataset.thinkingMessageId || '';
+            if (thinkingMessageId) {
+              const currentValue = refs.thinkingExpansion.get(thinkingMessageId);
+              const nextValue =
+                typeof currentValue === 'boolean'
+                  ? !currentValue
+                  : !getShowThinkingByDefault();
+              refs.thinkingExpansion.set(thinkingMessageId, nextValue);
+              setModelBubbleContent(message, refs);
+            }
+            return;
+          }
+          const toolCallToggle = target.closest('.tool-call-toggle');
+          if (toolCallToggle instanceof view.HTMLButtonElement) {
+            const toolMessageId = toolCallToggle.dataset.toolMessageId || '';
+            if (toolMessageId) {
+              refs.toolExpansion.set(toolMessageId, !(refs.toolExpansion.get(toolMessageId) === true));
+              setModelBubbleContent(message, refs);
+            }
+          }
         });
         setModelBubbleContent(message, refs);
         /** @type {any} */ (item)._modelBubbleRefs = refs;
@@ -944,20 +969,12 @@ export function createTranscriptView(dependencies) {
       updateTranscriptNavigationButtonVisibility();
       return;
     }
-    const suppressedToolMessageIds = new Set(
-      getConversationPathMessages(conversation)
-        .filter(
-          (message) =>
-            message?.role === 'model' &&
-            Array.isArray(message.toolCalls) &&
-            message.toolCalls.length
-        )
-        .flatMap((message) =>
-          getInlineToolResultMessages(conversation, message).map((toolMessage) => toolMessage.id)
-        )
-    );
-    getConversationPathMessages(conversation).forEach((message) => {
-      if (message?.role === 'tool' && suppressedToolMessageIds.has(message.id)) {
+    const pathMessages = getConversationPathMessages(conversation);
+    pathMessages.forEach((message, index) => {
+      if (message?.role === 'tool') {
+        return;
+      }
+      if (message?.role === 'model' && index > 0 && pathMessages[index - 1]?.role === 'tool') {
         return;
       }
       addMessageElement(message, { scroll: false });

@@ -103,7 +103,7 @@ Student-facing browser chat UI with local model inference.
   - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), the conversation's `model`, `temperature`, optional `systemPrompt` (when present on that conversation), optional `toolCalling` metadata when tool calling is enabled at export time, and an `exchanges` array containing per-exchange `heading`, entered/generated/tool-result timestamps, model `toolCalls`, and tool-result metadata.
   - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, the conversation's model, temperature), optional tool-calling metadata when enabled at export time, optional `## System prompt` section (when present), and one section per exchange including model tool-call metadata and tool-result details when present.
 - Model load progress UI collapses after successful initialization.
-- Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in a collapsible "Thinking" section during streaming.
+- Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in collapsible "Thinking" sections at the point they occurred within the model turn during streaming.
 - Model responses are rendered as Markdown (via `markdown-it`) in the transcript.
 - `Settings -> Conversation -> Render MathML from LaTeX` controls whether LaTeX-delimited math is rendered in the transcript with MathJax (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`).
 - When `Render MathML from LaTeX` is enabled, the effective system prompt adds math-formatting guidance telling the model to format math in LaTeX with proper delimiters.
@@ -115,7 +115,7 @@ Student-facing browser chat UI with local model inference.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
 - Tool-calling behavior, transcript presentation, export semantics, the current built-in tool catalog, and the planned function-call/MCP/`SKILL.md` capability model are documented in `docs/tools.md`.
 - The current built-in tool catalog includes date/time lookup, user location lookup, and a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch.
-- When a model emits a complete tool call during streaming, generation is interrupted immediately, the tool executes before the turn continues, and the tool request/result stay inline on that same model response card instead of rendering as a separate transcript node.
+- When a model emits a complete tool call during streaming, generation is interrupted immediately, the tool executes before the turn continues, and the visible transcript folds that tool request/result plus any resumed narration back into the same model response card in the order they occurred instead of rendering separate transcript nodes.
 - The active conversation's sidebar kebab menu includes `Edit conversation system prompt`:
   - Set optional per-conversation instructions.
   - `Append after default prompt` is enabled by default; when enabled, the conversation prompt is appended after the conversation's captured default prompt.

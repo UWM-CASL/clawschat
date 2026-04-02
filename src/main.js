@@ -807,18 +807,38 @@ async function handleMessageCopyAction(messageId, copyType) {
   let textToCopy = '';
   let copiedStatus = 'Copied to clipboard.';
   let emptyStatus = 'Nothing available to copy.';
+  const getModelTurnMessages = (rootMessageId) => {
+    const pathMessages = getConversationPathMessages(activeConversation);
+    const startIndex = pathMessages.findIndex((candidate) => candidate?.id === rootMessageId);
+    if (startIndex < 0) {
+      return [];
+    }
+    const turnMessages = [];
+    for (let index = startIndex; index < pathMessages.length; index += 1) {
+      const candidate = pathMessages[index];
+      if (!candidate) {
+        continue;
+      }
+      if (index > startIndex && candidate.role === 'user') {
+        break;
+      }
+      if (candidate.role === 'model' || candidate.role === 'tool') {
+        turnMessages.push(candidate);
+      }
+    }
+    return turnMessages;
+  };
   if (copyType === 'thoughts') {
     textToCopy = message.role === 'model' ? String(message.thoughts || '') : '';
   } else if (copyType === 'response') {
     if (message.role === 'model') {
-      const toolResultTexts = Array.isArray(message.childIds)
-        ? message.childIds
-            .map((childId) => getMessageNodeById(activeConversation, childId))
-            .filter((childMessage) => childMessage?.role === 'tool')
-            .map((toolMessage) => String(toolMessage.toolResult || toolMessage.text || '').trim())
-            .filter(Boolean)
-        : [];
-      textToCopy = [String(message.response || message.text || '').trim(), ...toolResultTexts]
+      const turnMessages = getModelTurnMessages(message.id);
+      textToCopy = turnMessages
+        .map((turnMessage) =>
+          turnMessage.role === 'tool'
+            ? String(turnMessage.toolResult || turnMessage.text || '').trim()
+            : String(turnMessage.response || turnMessage.text || '').trim()
+        )
         .filter(Boolean)
         .join('\n\n');
     } else {
@@ -827,10 +847,20 @@ async function handleMessageCopyAction(messageId, copyType) {
   } else if (copyType === 'mathml') {
     if (message.role === 'model') {
       const messageElement = findMessageElement(messageId);
-      const responseElement = messageElement?.querySelector('.response-content');
-      if (responseElement instanceof HTMLElement) {
-        await typesetMathInElement(responseElement);
-        textToCopy = extractMathMlFromElement(responseElement);
+      const responseElements = Array.from(messageElement?.querySelectorAll('.response-content') || []);
+      if (responseElements.length) {
+        const mathMlBlocks = [];
+        for (const responseElement of responseElements) {
+          if (!(responseElement instanceof HTMLElement)) {
+            continue;
+          }
+          await typesetMathInElement(responseElement);
+          const mathMl = extractMathMlFromElement(responseElement);
+          if (mathMl) {
+            mathMlBlocks.push(mathMl);
+          }
+        }
+        textToCopy = mathMlBlocks.join('\n\n');
       }
     }
     copiedStatus = 'MathML copied to clipboard.';

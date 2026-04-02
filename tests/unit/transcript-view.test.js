@@ -377,7 +377,7 @@ describe('transcript-view', () => {
     expect(toggle?.textContent).toContain('Tool action: Using Get Weather');
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
     toggle?.dispatchEvent(new harness.document.defaultView.Event('click', { bubbles: true }));
-    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(harness.container.querySelector('.tool-call-toggle')?.getAttribute('aria-expanded')).toBe('true');
     expect(harness.container.querySelector('.tool-call-request')?.textContent).toContain(
       '"name": "get_weather"'
     );
@@ -465,6 +465,117 @@ describe('transcript-view', () => {
       responseRegion?.compareDocumentPosition(toolCallRegion) &
         harness.document.defaultView.Node.DOCUMENT_POSITION_FOLLOWING
     ).not.toBe(0);
+  });
+
+  test('folds tool execution and continued model output into one visible turn in order', () => {
+    const harness = createViewHarness();
+    harness.conversation.messageNodes[1].response = 'I need to check the weather first.';
+    harness.conversation.messageNodes[1].text = 'I need to check the weather first.';
+    harness.conversation.messageNodes[1].toolCalls = [
+      {
+        name: 'get_weather',
+        arguments: { location: 'Milwaukee, WI' },
+        rawText: '{"name":"get_weather","arguments":{"location":"Milwaukee, WI"}}',
+      },
+    ];
+    harness.conversation.messageNodes[1].childIds = ['tool-1'];
+    harness.conversation.messageNodes[1].thoughts = 'Checking whether a tool is needed.';
+    harness.conversation.messageNodes[1].hasThinking = true;
+    harness.conversation.messageNodes[1].isThinkingComplete = true;
+
+    const toolMessage = /** @type {any} */ ({
+      id: 'tool-1',
+      role: 'tool',
+      speaker: 'Tool',
+      text: '{"temperature":72,"summary":"72 F and sunny."}',
+      toolName: 'get_weather',
+      toolResult: '{"temperature":72,"summary":"72 F and sunny."}',
+      parentId: 'model-1',
+      childIds: ['model-2'],
+    });
+    const continuedModelMessage = /** @type {any} */ ({
+      id: 'model-2',
+      role: 'model',
+      speaker: 'Model',
+      text: 'It is 72 F and sunny.',
+      response: 'It is 72 F and sunny.',
+      thoughts: 'Summarizing the tool result.',
+      hasThinking: true,
+      isThinkingComplete: true,
+      isResponseComplete: true,
+      parentId: 'tool-1',
+      childIds: [],
+      toolCalls: [],
+    });
+    harness.conversation.messageNodes.push(toolMessage, continuedModelMessage);
+    harness.conversation.activeLeafMessageId = 'model-2';
+
+    const view = createTranscriptView({
+      container: harness.container,
+      getActiveConversation: () => harness.conversation,
+      getConversationPathMessages: (conversation) => conversation.messageNodes,
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
+      getModelVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      getUserVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      renderModelMarkdown: (content) => `<p>${content}</p>`,
+      scheduleMathTypeset: vi.fn(),
+      getToolDisplayName: (toolName) => (toolName === 'get_weather' ? 'Get Weather' : toolName),
+      getShowThinkingByDefault: () => false,
+      getActiveUserEditMessageId: () => null,
+      getControlsState: () => ({
+        isGenerating: false,
+        isLoadingModel: false,
+        isRunningOrchestration: false,
+        isSwitchingVariant: false,
+      }),
+      getEmptyStateVisible: () => false,
+      initializeTooltips: vi.fn(),
+      disposeTooltips: vi.fn(),
+      applyVariantCardSignals: vi.fn(),
+      applyFixCardSignals: vi.fn(),
+      scrollTranscriptToBottom: vi.fn(),
+      updateTranscriptNavigationButtonVisibility: vi.fn(),
+      cancelUserMessageEdit: vi.fn(),
+      saveUserMessageEdit: vi.fn(),
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    expect(harness.container.querySelectorAll('.message-row')).toHaveLength(2);
+    expect(harness.container.querySelectorAll('.message-row.model-message')).toHaveLength(1);
+    expect(harness.container.querySelectorAll('.tool-message')).toHaveLength(0);
+    expect(harness.container.querySelectorAll('.thoughts-region')).toHaveLength(2);
+    expect(harness.container.querySelectorAll('.response-region')).toHaveLength(2);
+
+    const bubble = harness.container.querySelector('.model-message .message-bubble');
+    const orderedSections = Array.from(bubble?.children || []).map((element) => element.className);
+    expect(orderedSections[0]).toContain('model-turn-timeline');
+
+    const timelineSections = Array.from(
+      harness.container.querySelectorAll('.model-message .model-turn-timeline > *')
+    );
+    expect(timelineSections[0]?.className).toContain('thoughts-region');
+    expect(timelineSections[1]?.className).toContain('response-region');
+    expect(timelineSections[2]?.className).toContain('tool-call-region');
+    expect(timelineSections[3]?.className).toContain('thoughts-region');
+    expect(timelineSections[4]?.className).toContain('response-region');
+
+    expect(timelineSections[1]?.textContent).toContain('I need to check the weather first.');
+    expect(timelineSections[2]?.textContent).toContain('Tool action: Using Get Weather');
+    expect(timelineSections[4]?.textContent).toContain('It is 72 F and sunny.');
   });
 
   test('toggles model-visible text for a file attachment', () => {
