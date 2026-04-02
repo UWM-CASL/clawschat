@@ -76,7 +76,7 @@ export function createAppController(dependencies) {
   const streamUpdateIntervalMs =
     Number.isFinite(dependencies?.streamUpdateIntervalMs) && dependencies.streamUpdateIntervalMs >= 0
       ? Math.max(0, Math.trunc(dependencies.streamUpdateIntervalMs))
-      : 50;
+      : 120;
 
   function shouldDisposeEngineBeforeInit(nextConfig = {}) {
     const nextModelId = nextConfig.modelId
