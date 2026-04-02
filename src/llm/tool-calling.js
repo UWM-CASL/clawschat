@@ -5,7 +5,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'get_current_date_time',
     displayName: 'Get Date and Time',
     description:
-      'Returns the current local date and time for this browser session, plus a UTC ISO timestamp and timezone name.',
+      'Returns the current local date and time, a UTC timestamp and timezone name.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -17,7 +17,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'get_user_location',
     displayName: 'Get User Location',
     description:
-      'Returns a location label and coordinates from the browser geolocation API. Falls back to a coarse location label when permission is denied, unavailable, or times out.',
+      'Returns the user\'s location label and coordinates, or a general location if permission unavailable.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -35,7 +35,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'tasklist',
     displayName: 'Task List Planner',
     description:
-      'Manages a browser-local task list for multi-step work. If you need its command syntax, call it once with an empty arguments object.',
+      'Manage a task list for multi-step work. Call with no arguments for tool syntax',
     enabled: true,
     parameters: {
       type: 'object',
@@ -63,7 +63,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'run_shell_command',
     displayName: 'Shell Command Runner',
     description:
-      'Runs a browser-local GNU/Linux-like shell command subset against /workspace. Call it once with an empty arguments object to inspect the supported command list and placeholder paths.',
+      'Passes a shell command to an emulated Linux shell starting in /workspace. Call with no arguments for syntax and commands.',
     enabled: true,
     parameters: {
       type: 'object',
