@@ -275,7 +275,17 @@ export function createTranscriptView(dependencies) {
     }
     if (normalizedText.startsWith('{') && normalizedText.endsWith('}')) {
       try {
-        return JSON.stringify(JSON.parse(normalizedText), null, 2);
+        const parsed = JSON.parse(normalizedText);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          !Array.isArray(parsed) &&
+          typeof parsed.body === 'string' &&
+          typeof parsed.status === 'boolean'
+        ) {
+          return parsed.body.trim();
+        }
+        return JSON.stringify(parsed, null, 2);
       } catch {
         return normalizedText;
       }

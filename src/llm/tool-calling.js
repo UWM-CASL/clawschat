@@ -1,4 +1,4 @@
-import { executeShellCommandTool } from './shell-command-tool.js';
+import { buildShellToolResponseEnvelope, executeShellCommandTool } from './shell-command-tool.js';
 
 export const TOOL_DEFINITIONS = Object.freeze([
   {
@@ -1056,11 +1056,15 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
   }
   if (toolName === 'run_shell_command') {
     const result = await executeShellCommandTool(argumentsValue, runtimeContext);
+    const responseEnvelope =
+      result?.responseEnvelope && typeof result.responseEnvelope === 'object'
+        ? result.responseEnvelope
+        : buildShellToolResponseEnvelope(result);
     return {
       toolName,
       arguments: argumentsValue,
       result,
-      resultText: JSON.stringify(result),
+      resultText: JSON.stringify(responseEnvelope),
     };
   }
   throw new Error(`Unknown tool: ${toolName}`);

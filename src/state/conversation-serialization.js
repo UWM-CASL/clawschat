@@ -264,6 +264,12 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
       !Array.isArray(rawMessage.toolArguments)
         ? rawMessage.toolArguments
         : {};
+    message.toolResultData =
+      rawMessage.toolResultData &&
+      typeof rawMessage.toolResultData === 'object' &&
+      !Array.isArray(rawMessage.toolResultData)
+        ? rawMessage.toolResultData
+        : undefined;
     message.toolResult = String(rawMessage.toolResult || text);
     message.isToolResultComplete = Boolean(rawMessage.isToolResultComplete ?? true);
     message.text = message.toolResult;
@@ -422,6 +428,10 @@ function serializeConversationMessage(message) {
     toolArguments:
       message.toolArguments && typeof message.toolArguments === 'object'
         ? message.toolArguments
+        : undefined,
+    toolResultData:
+      message.toolResultData && typeof message.toolResultData === 'object'
+        ? message.toolResultData
         : undefined,
     toolResult: typeof message.toolResult === 'string' ? message.toolResult : undefined,
     isToolResultComplete: message.role === 'tool' ? Boolean(message.isToolResultComplete ?? true) : undefined,

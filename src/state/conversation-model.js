@@ -819,6 +819,12 @@ export function addMessageToConversation(conversation, role, text, options = {})
       options.toolArguments && typeof options.toolArguments === 'object' && !Array.isArray(options.toolArguments)
         ? options.toolArguments
         : {};
+    message.toolResultData =
+      options.toolResultData &&
+      typeof options.toolResultData === 'object' &&
+      !Array.isArray(options.toolResultData)
+        ? options.toolResultData
+        : undefined;
     message.toolResult = normalizedText;
     message.isToolResultComplete = true;
     message.content = {

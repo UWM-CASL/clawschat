@@ -595,6 +595,12 @@ async function encodeMessageRecord(message, conversationId, sortOrder) {
       !Array.isArray(message.toolArguments)
         ? message.toolArguments
         : undefined,
+    toolResultData:
+      message.toolResultData &&
+      typeof message.toolResultData === 'object' &&
+      !Array.isArray(message.toolResultData)
+        ? message.toolResultData
+        : undefined,
     toolResult: await encodeTextValue(
       typeof message.toolResult === 'string' ? message.toolResult : '',
     ),
@@ -701,6 +707,9 @@ async function decodeMessageRecord(record) {
   }
   if (record.toolArguments !== undefined) {
     decodedMessage.toolArguments = record.toolArguments;
+  }
+  if (record.toolResultData !== undefined) {
+    decodedMessage.toolResultData = record.toolResultData;
   }
   if (record.isToolResultComplete !== undefined) {
     decodedMessage.isToolResultComplete = Boolean(record.isToolResultComplete);

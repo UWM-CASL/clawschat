@@ -218,6 +218,12 @@ export function createAppController(dependencies) {
           parentId: parentMessageId,
           toolName: executionResult.toolName,
           toolArguments: executionResult.arguments,
+          toolResultData:
+            executionResult.toolName === 'run_shell_command' &&
+            executionResult.result &&
+            typeof executionResult.result === 'object'
+              ? executionResult.result
+              : undefined,
         },
       );
       parentMessageId = toolMessage.id;

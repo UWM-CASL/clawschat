@@ -92,11 +92,14 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 
 - Display name: `Shell Command Runner`
 - Purpose: runs a browser-local GNU/Linux-like shell subset against the app's `/workspace` filesystem abstraction
-- Discovery behavior: when called with an empty arguments object, it returns the supported command list, placeholder path examples, and limitations for the current subset
+- Discovery behavior: when called with an empty arguments object, it returns a compact response envelope whose `body` is a human-readable summary of the supported command list, placeholder path examples, and limitations
 - Uploaded-file awareness: text-backed attachment prompt text can include the exact `/workspace/...` path for uploaded files so the model can reuse that path directly with this tool
 - Arguments:
   - optional `command`
-- Result fields:
+- Tool-call payload returned to the model:
+  - `status`
+  - `body`
+- Internal app metadata preserved for the terminal/session UI:
   - `shellFlavor`
   - `currentWorkingDirectory`
   - `command`

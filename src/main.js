@@ -1528,6 +1528,9 @@ function getConversationWorkspaceFileSystem(conversationOrId = getActiveConversa
 }
 
 function parseShellToolResult(message) {
+  if (message?.toolResultData && typeof message.toolResultData === 'object') {
+    return message.toolResultData;
+  }
   const rawResult =
     typeof message?.toolResult === 'string'
       ? message.toolResult
