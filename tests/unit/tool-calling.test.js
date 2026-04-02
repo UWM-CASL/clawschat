@@ -817,6 +817,10 @@ describe('tool-calling prompt builder', () => {
           usage: 'grep [-i] [-n] [-v] [-c] [-l] [-F] <pattern> <file>...',
         }),
         expect.objectContaining({
+          name: 'sed',
+          usage: "sed [-n] [-i] '<script>' <file>",
+        }),
+        expect.objectContaining({
           name: 'file',
           usage: 'file <path>...',
         }),
@@ -846,6 +850,9 @@ describe('tool-calling prompt builder', () => {
     );
     expect(result.result.limitations).toContain(
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.'
+    );
+    expect(result.result.limitations).toContain(
+      'sed supports a single sed-like script with addresses N, N,M, /regex/, and $, plus commands p, d, and s///g, with optional -n and -i.'
     );
     expect(result.result.limitations).toContain(
       'file reports a small deterministic set of directory, signature, extension, and text-vs-binary classifications.'
@@ -1334,7 +1341,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'sed -n 1p notes.txt',
+          command: 'awk "{print $1}" notes.txt',
         },
       },
       {
@@ -1347,7 +1354,7 @@ describe('tool-calling prompt builder', () => {
     expect(result.toolName).toBe('run_shell_command');
     expect(result.result.exitCode).toBe(127);
     expect(result.result.stdout).toBe('');
-    expect(result.result.stderr).toContain("command 'sed' is not available");
+    expect(result.result.stderr).toContain("command 'awk' is not available");
   });
 
   test('changes and reuses the conversation working directory for shell commands', async () => {
@@ -1797,6 +1804,120 @@ describe('tool-calling prompt builder', () => {
       '/workspace/a.txt:target',
       '/workspace/b.txt:target',
     ]);
+  });
+
+  test('supports sed -n with line ranges and print', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'alpha\nbeta\ngamma\ndelta\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: "sed -n '2,3p' notes.txt",
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toBe('beta\ngamma\n');
+  });
+
+  test('supports sed delete by regex address', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'alpha\nbeta\ngamma\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: "sed '/beta/d' notes.txt",
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toBe('alpha\ngamma\n');
+  });
+
+  test('supports sed substitution over the default output stream', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'beta beta\ngamma\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: "sed 's/beta/delta/g' notes.txt",
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.stdout).toBe('delta delta\ngamma\n');
+  });
+
+  test('supports sed -i for in-place edits', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'alpha\nbeta\ngamma\n',
+    });
+
+    const editResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: "sed -i '2s/beta/delta/' notes.txt",
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    const readBackResult = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(editResult.result.stdout).toBe('');
+    expect(readBackResult.result.stdout).toBe('alpha\ndelta\ngamma\n');
+  });
+
+  test('returns a shell-style sed error for invalid scripts', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/notes.txt': 'alpha\nbeta\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: "sed 'q' notes.txt",
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.result.exitCode).toBe(2);
+    expect(result.result.stderr).toContain("sed: unsupported sed script 'q'.");
   });
 
   test('supports file for directories and common text formats', async () => {

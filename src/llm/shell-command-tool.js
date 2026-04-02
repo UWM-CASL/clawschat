@@ -158,6 +158,11 @@ const SHELL_COMMANDS = Object.freeze([
     description: 'Search text files under /workspace.',
   },
   {
+    name: 'sed',
+    usage: "sed [-n] [-i] '<script>' <file>",
+    description: 'Run a single sed-like print, delete, or substitute command on a text file.',
+  },
+  {
     name: 'file',
     usage: 'file <path>...',
     description: 'Describe a file or directory under /workspace.',
@@ -1446,6 +1451,273 @@ function isLikelyReadableText(text) {
   return true;
 }
 
+function parseSedDelimitedSection(script, startIndex, delimiter, label) {
+  let value = '';
+  let escaped = false;
+
+  for (let index = startIndex; index < script.length; index += 1) {
+    const character = script[index];
+    if (escaped) {
+      value += character === delimiter ? character : `\\${character}`;
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === delimiter) {
+      return {
+        value,
+        nextIndex: index + 1,
+      };
+    }
+    value += character;
+  }
+
+  throw new Error(`unterminated ${label}.`);
+}
+
+function parseSedAddressUnit(script, startIndex) {
+  const character = script[startIndex];
+  if (!character) {
+    return null;
+  }
+  if (character === '$') {
+    return {
+      address: {
+        type: 'last-line',
+      },
+      nextIndex: startIndex + 1,
+    };
+  }
+  if (/\d/.test(character)) {
+    let endIndex = startIndex + 1;
+    while (endIndex < script.length && /\d/.test(script[endIndex])) {
+      endIndex += 1;
+    }
+    return {
+      address: {
+        type: 'line-number',
+        value: Number.parseInt(script.slice(startIndex, endIndex), 10),
+      },
+      nextIndex: endIndex,
+    };
+  }
+  if (character === '/') {
+    const regexSection = parseSedDelimitedSection(script, startIndex + 1, '/', 'address regex');
+    if (!regexSection.value) {
+      throw new Error('address regex cannot be empty.');
+    }
+    let regex;
+    try {
+      regex = new RegExp(regexSection.value);
+    } catch (error) {
+      throw new Error(
+        `invalid address regex: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    return {
+      address: {
+        type: 'regex',
+        value: regex,
+      },
+      nextIndex: regexSection.nextIndex,
+    };
+  }
+  return null;
+}
+
+function parseSedSubstituteCommand(script, startIndex) {
+  if (script[startIndex] !== 's') {
+    return null;
+  }
+  const delimiter = script[startIndex + 1];
+  if (!delimiter) {
+    throw new Error('substitute command requires a delimiter.');
+  }
+  const patternSection = parseSedDelimitedSection(
+    script,
+    startIndex + 2,
+    delimiter,
+    'substitute pattern'
+  );
+  if (!patternSection.value) {
+    throw new Error('substitute pattern cannot be empty.');
+  }
+  const replacementSection = parseSedDelimitedSection(
+    script,
+    patternSection.nextIndex,
+    delimiter,
+    'substitute replacement'
+  );
+  const flagsText = script.slice(replacementSection.nextIndex).trim();
+  if (flagsText && flagsText !== 'g') {
+    throw new Error(`unsupported substitute flags '${flagsText}'.`);
+  }
+
+  let regex;
+  try {
+    regex = new RegExp(patternSection.value, flagsText === 'g' ? 'g' : '');
+  } catch (error) {
+    throw new Error(
+      `invalid substitute regex: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  return {
+    command: {
+      type: 'substitute',
+      regex,
+      replacement: replacementSection.value,
+      global: flagsText === 'g',
+    },
+    nextIndex: script.length,
+  };
+}
+
+function parseSedScript(script) {
+  const normalizedScript = String(script || '').trim();
+  if (!normalizedScript) {
+    throw new Error('script must be a non-empty string.');
+  }
+
+  let cursor = 0;
+  const firstAddress = parseSedAddressUnit(normalizedScript, cursor);
+  let address = null;
+
+  if (firstAddress) {
+    cursor = firstAddress.nextIndex;
+    if (normalizedScript[cursor] === ',') {
+      const secondAddress = parseSedAddressUnit(normalizedScript, cursor + 1);
+      if (!secondAddress) {
+        throw new Error('range address is missing its end selector.');
+      }
+      address = {
+        type: 'range',
+        start: firstAddress.address,
+        end: secondAddress.address,
+      };
+      cursor = secondAddress.nextIndex;
+    } else {
+      address = firstAddress.address;
+    }
+  }
+
+  const remainingScript = normalizedScript.slice(cursor).trim();
+  if (!remainingScript) {
+    throw new Error('script is missing a command.');
+  }
+
+  if (remainingScript === 'p' || remainingScript === 'd') {
+    return {
+      address,
+      command: {
+        type: remainingScript === 'p' ? 'print' : 'delete',
+      },
+    };
+  }
+
+  const substituteCommand = parseSedSubstituteCommand(remainingScript, 0);
+  if (substituteCommand) {
+    return {
+      address,
+      command: substituteCommand.command,
+    };
+  }
+
+  throw new Error(`unsupported sed script '${normalizedScript}'.`);
+}
+
+function matchSedAddressUnit(address, lineText, lineNumber, totalLineCount) {
+  if (!address || typeof address !== 'object') {
+    return true;
+  }
+  if (address.type === 'line-number') {
+    return lineNumber === address.value;
+  }
+  if (address.type === 'last-line') {
+    return lineNumber === totalLineCount;
+  }
+  if (address.type === 'regex') {
+    return address.value.test(lineText);
+  }
+  return false;
+}
+
+function createSedAddressMatcher(address, totalLineCount) {
+  if (!address) {
+    return () => true;
+  }
+  if (address.type !== 'range') {
+    return (lineText, lineNumber) =>
+      matchSedAddressUnit(address, lineText, lineNumber, totalLineCount);
+  }
+
+  let inRange = false;
+  return (lineText, lineNumber) => {
+    if (!inRange) {
+      const startMatched = matchSedAddressUnit(
+        address.start,
+        lineText,
+        lineNumber,
+        totalLineCount
+      );
+      if (!startMatched) {
+        return false;
+      }
+      const endMatched = matchSedAddressUnit(
+        address.end,
+        lineText,
+        lineNumber,
+        totalLineCount
+      );
+      inRange = !endMatched;
+      return true;
+    }
+
+    const endMatched = matchSedAddressUnit(address.end, lineText, lineNumber, totalLineCount);
+    if (endMatched) {
+      inRange = false;
+    }
+    return true;
+  };
+}
+
+function applySedReplacement(replacement, matchedText) {
+  const normalizedReplacement = String(replacement || '');
+  let output = '';
+  let escaped = false;
+
+  for (const character of normalizedReplacement) {
+    if (escaped) {
+      output += character;
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === '&') {
+      output += matchedText;
+      continue;
+    }
+    output += character;
+  }
+
+  if (escaped) {
+    output += '\\';
+  }
+  return output;
+}
+
+function executeSedSubstitute(lineText, command) {
+  return String(lineText || '').replace(command.regex, (matchedText) =>
+    applySedReplacement(command.replacement, matchedText)
+  );
+}
+
 function describeFileBytes(path, bytes) {
   const normalizedBytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(0);
   if (normalizedBytes.byteLength === 0) {
@@ -2558,6 +2830,127 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
+async function runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+  if (!args.length) {
+    return createShellError(
+      commandText,
+      'sed',
+      'expected a script and one file path.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  let suppressDefaultOutput = false;
+  let inPlace = false;
+  const positional = [];
+
+  for (const argument of args) {
+    if (argument === '--') {
+      continue;
+    }
+    if (argument === '-n') {
+      suppressDefaultOutput = true;
+      continue;
+    }
+    if (argument === '-i') {
+      inPlace = true;
+      continue;
+    }
+    if (argument.startsWith('-') && argument !== '-') {
+      return createShellError(
+        commandText,
+        'sed',
+        `unsupported option ${argument}.`,
+        2,
+        currentWorkingDirectory
+      );
+    }
+    positional.push(argument);
+  }
+
+  if (positional.length !== 2) {
+    return createShellError(
+      commandText,
+      'sed',
+      'expected exactly one script and one file path.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  let parsedScript;
+  try {
+    parsedScript = parseSedScript(positional[0]);
+  } catch (error) {
+    return createShellError(
+      commandText,
+      'sed',
+      error instanceof Error ? error.message : String(error),
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  const fileResult = await readWorkspaceTextFile(
+    'sed',
+    commandText,
+    positional[1],
+    workspaceFileSystem,
+    currentWorkingDirectory
+  );
+  if (fileResult.error) {
+    return fileResult.error;
+  }
+
+  const { lines, trailingNewline } = splitShellTextIntoLines(fileResult.text);
+  const matchAddress = createSedAddressMatcher(parsedScript.address, lines.length);
+  const outputLines = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const lineText = lines[index];
+    const lineNumber = index + 1;
+    const addressMatched = matchAddress(lineText, lineNumber);
+
+    if (parsedScript.command.type === 'print') {
+      if (addressMatched) {
+        outputLines.push(lineText);
+      } else if (!suppressDefaultOutput) {
+        outputLines.push(lineText);
+      }
+      continue;
+    }
+
+    if (parsedScript.command.type === 'delete') {
+      if (!addressMatched && !suppressDefaultOutput) {
+        outputLines.push(lineText);
+      }
+      continue;
+    }
+
+    const nextLineText =
+      parsedScript.command.type === 'substitute' && addressMatched
+        ? executeSedSubstitute(lineText, parsedScript.command)
+        : lineText;
+    if (!suppressDefaultOutput) {
+      outputLines.push(nextLineText);
+    }
+  }
+
+  const outputText = outputLines.length ? joinShellLines(outputLines, trailingNewline) : '';
+  if (inPlace) {
+    await workspaceFileSystem.writeTextFile(fileResult.path, outputText);
+    return createShellResult(commandText, {
+      currentWorkingDirectory,
+    });
+  }
+
+  return createShellResult(commandText, {
+    stdout: outputText,
+    currentWorkingDirectory,
+  });
+}
+
 async function runFile(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
     return createShellError(
@@ -2732,6 +3125,8 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'head -n 20 /workspace/<file>',
       'find /workspace -name "*.txt"',
       'grep -n "term" /workspace/<file>',
+      "sed -n '2,4p' /workspace/<file>",
+      "sed -i 's/old/new/g' /workspace/<file>",
       'file /workspace/<file>',
       'diff -u /workspace/<left-file> /workspace/<right-file>',
       'mkdir -p /workspace/<directory>',
@@ -2742,6 +3137,7 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'Commands are GNU/Linux-like, but only the documented subset is implemented.',
       'Relative paths resolve from the current working directory.',
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.',
+      'sed supports a single sed-like script with addresses N, N,M, /regex/, and $, plus commands p, d, and s///g, with optional -n and -i.',
       'file reports a small deterministic set of directory, signature, extension, and text-vs-binary classifications.',
       'diff is line-based and emits unified-style emulated output rather than full GNU diff compatibility.',
       'Pipes, redirection, globbing, command substitution, and full shell expansion semantics are not supported.',
@@ -2940,6 +3336,9 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
   }
   if (commandName === 'grep') {
     return runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  }
+  if (commandName === 'sed') {
+    return runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory);
   }
   if (commandName === 'file') {
     return runFile(commandText, args, workspaceFileSystem, currentWorkingDirectory);
