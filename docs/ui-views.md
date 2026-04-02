@@ -16,6 +16,10 @@ Rendering-heavy DOM code is now split into small view modules under `src/ui/`.
   - bottom-of-chat task list tray derived from the latest `tasklist` tool result on the visible branch
   - compact and expanded tray states
   - visual sorting that keeps completed items below pending items without changing LLM-facing state
+- `src/ui/terminal-view.js`
+  - read-only xterm rendering for browser-local shell tool activity
+  - rebuilds terminal output from the active conversation's visible shell-tool history
+  - keeps the live prompt/cursor visible and resizes to the split workspace panel
 
 ## Boundary
 

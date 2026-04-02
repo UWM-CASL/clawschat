@@ -4041,54 +4041,86 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
   }
 
   const commandText = normalizedArguments.command;
+  if (typeof runtimeContext?.onShellCommandStart === 'function') {
+    runtimeContext.onShellCommandStart({
+      command: commandText,
+      currentWorkingDirectory,
+    });
+  }
   const workspaceFileSystem = runtimeContext?.workspaceFileSystem;
   if (!workspaceFileSystem) {
-    return createShellError(
+    const result = createShellError(
       commandText,
       'shell',
       'workspace filesystem is unavailable in this browser session.',
       1,
       currentWorkingDirectory
     );
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
 
   if (hasUnsupportedShellSyntax(commandText)) {
-    return createShellError(
+    const result = createShellError(
       commandText,
       'shell',
       'pipelines, redirection, command chaining, and substitutions are not supported in this subset.',
       2,
       currentWorkingDirectory
     );
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
 
   let tokens;
   try {
     tokens = tokenizeShellCommand(commandText);
   } catch (error) {
-    return createShellError(
+    const result = createShellError(
       commandText,
       'shell',
       error instanceof Error ? error.message : String(error),
       2,
       currentWorkingDirectory
     );
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
   if (!tokens.length) {
-    return createShellError(commandText, 'shell', 'command is empty.', 2, currentWorkingDirectory);
+    const result = createShellError(
+      commandText,
+      'shell',
+      'command is empty.',
+      2,
+      currentWorkingDirectory
+    );
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
 
   const assignmentMatch =
     tokens.length === 1 ? tokens[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
   if (assignmentMatch) {
     if (isReadonlyShellVariable(assignmentMatch[1])) {
-      return createShellError(
+      const result = createShellError(
         commandText,
         'shell',
         `cannot overwrite readonly variable '${assignmentMatch[1]}'.`,
         1,
         currentWorkingDirectory
       );
+      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+        runtimeContext.onShellCommandComplete(result);
+      }
+      return result;
     }
     try {
       setShellVariable(
@@ -4097,162 +4129,148 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
         expandShellToken(assignmentMatch[2], runtimeContext, currentWorkingDirectory)
       );
     } catch (error) {
-      return createShellError(
+      const result = createShellError(
         commandText,
         'shell',
         error instanceof Error ? error.message : String(error),
         1,
         currentWorkingDirectory
       );
+      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+        runtimeContext.onShellCommandComplete(result);
+      }
+      return result;
     }
-    return createShellResult(commandText, {
+    const result = createShellResult(commandText, {
       currentWorkingDirectory,
     });
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
 
   const expandedTokens = expandShellTokens(tokens, runtimeContext, currentWorkingDirectory);
   if (expandedTokens.length > MAX_SHELL_TOKENS) {
-    return createShellError(
+    const result = createShellError(
       commandText,
       'shell',
       `command expands to too many tokens; limit is ${MAX_SHELL_TOKENS}.`,
       2,
       currentWorkingDirectory
     );
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
   if (!expandedTokens.length) {
-    return createShellError(
+    const result = createShellError(
       commandText,
       'shell',
       'command is empty after expansion.',
       2,
       currentWorkingDirectory
     );
+    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+      runtimeContext.onShellCommandComplete(result);
+    }
+    return result;
   }
   const [commandName, ...args] = expandedTokens;
+  let result;
   if (commandName === 'pwd') {
-    return runPwd(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'basename') {
-    return runBasename(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'dirname') {
-    return runDirname(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'printf') {
-    return runPrintf(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'true') {
-    return runTrue(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'false') {
-    return runFalse(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'cd') {
-    return runCd(commandText, args, workspaceFileSystem, runtimeContext, currentWorkingDirectory);
-  }
-  if (commandName === 'echo') {
-    return runEcho(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'set') {
-    return runSet(commandText, args, runtimeContext, currentWorkingDirectory);
-  }
-  if (commandName === 'unset') {
-    return runUnset(commandText, args, runtimeContext, currentWorkingDirectory);
-  }
-  if (commandName === 'which') {
-    return runWhich(commandText, args, currentWorkingDirectory);
-  }
-  if (commandName === 'ls') {
-    return runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'cat') {
-    return runCat(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'head') {
-    return runHead(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'tail') {
-    return runTail(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'wc') {
-    return runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'sort') {
-    return runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'uniq') {
-    return runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'cut') {
-    return runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'paste') {
-    return runPaste(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'join') {
-    return runJoin(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'column') {
-    return runColumn(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'tr') {
-    return runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'nl') {
-    return runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'rmdir') {
-    return runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'mkdir') {
-    return runMkdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'mktemp') {
-    return runMktemp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'touch') {
-    return runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'cp') {
-    return runCp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'mv') {
-    return runMv(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'rm') {
-    return runRm(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'find') {
-    return runFind(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'grep') {
-    return runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'sed') {
-    return runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'file') {
-    return runFile(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'diff') {
-    return runDiff(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  }
-  if (commandName === 'curl') {
-    return runCurl(
+    result = runPwd(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'basename') {
+    result = runBasename(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'dirname') {
+    result = runDirname(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'printf') {
+    result = runPrintf(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'true') {
+    result = runTrue(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'false') {
+    result = runFalse(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'cd') {
+    result = runCd(commandText, args, workspaceFileSystem, runtimeContext, currentWorkingDirectory);
+  } else if (commandName === 'echo') {
+    result = runEcho(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'set') {
+    result = runSet(commandText, args, runtimeContext, currentWorkingDirectory);
+  } else if (commandName === 'unset') {
+    result = runUnset(commandText, args, runtimeContext, currentWorkingDirectory);
+  } else if (commandName === 'which') {
+    result = runWhich(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'ls') {
+    result = runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'cat') {
+    result = runCat(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'head') {
+    result = runHead(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'tail') {
+    result = runTail(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'wc') {
+    result = runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'sort') {
+    result = runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'uniq') {
+    result = runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'cut') {
+    result = runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'paste') {
+    result = runPaste(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'join') {
+    result = runJoin(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'column') {
+    result = runColumn(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'tr') {
+    result = runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'nl') {
+    result = runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'rmdir') {
+    result = runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'mkdir') {
+    result = runMkdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'mktemp') {
+    result = runMktemp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'touch') {
+    result = runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'cp') {
+    result = runCp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'mv') {
+    result = runMv(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'rm') {
+    result = runRm(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'find') {
+    result = runFind(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'grep') {
+    result = runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'sed') {
+    result = runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'file') {
+    result = runFile(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'diff') {
+    result = runDiff(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'curl') {
+    result = runCurl(
       commandText,
       args,
       workspaceFileSystem,
       runtimeContext,
       currentWorkingDirectory
     );
+  } else {
+    result = createShellError(
+      commandText,
+      'shell',
+      `command '${commandName}' is not available. Call run_shell_command with {} to inspect the supported subset.`,
+      127,
+      currentWorkingDirectory
+    );
   }
-
-  return createShellError(
-    commandText,
-    'shell',
-    `command '${commandName}' is not available. Call run_shell_command with {} to inspect the supported subset.`,
-    127,
-    currentWorkingDirectory
-  );
+  const resolvedResult = await result;
+  if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+    runtimeContext.onShellCommandComplete(resolvedResult);
+  }
+  return resolvedResult;
 }

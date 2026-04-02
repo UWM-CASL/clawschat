@@ -30,6 +30,7 @@ export function createRoutingShell({
   updateComposerVisibility,
   updateChatTitleEditorVisibility,
   updateTranscriptNavigationButtonVisibility,
+  updateTerminalVisibility = () => {},
   updateActionButtons,
   updatePreChatStatusHint,
   updatePreChatActionButtons,
@@ -143,6 +144,7 @@ export function createRoutingShell({
       setRegionVisibility(topBar, true);
       setActiveSettingsTab(appState.activeSettingsTab);
       updateSkipLinkVisibility();
+      updateTerminalVisibility();
       if (topBar instanceof HTMLElement) {
         topBar.setAttribute('aria-label', 'Settings');
         topBar.classList.toggle('top-bar-actions-only', !workspaceStarted);
@@ -197,6 +199,7 @@ export function createRoutingShell({
     }
     updateChatTitleEditorVisibility();
     updateTranscriptNavigationButtonVisibility();
+    updateTerminalVisibility();
     updateActionButtons();
     updatePreChatStatusHint();
     updatePreChatActionButtons();

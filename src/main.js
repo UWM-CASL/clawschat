@@ -93,12 +93,15 @@ import {
   buildConversationStateSnapshot,
 } from './state/conversation-serialization.js';
 import {
+  clearTerminalDismissal,
   clearUserMessageEditState,
+  closeTerminal,
   createAppState,
   findConversationById as selectConversationById,
   getActiveConversation as selectActiveConversation,
   getActiveUserEditMessageId,
   getCurrentViewRoute as selectCurrentViewRoute,
+  hasDismissedTerminalForConversation,
   hasConversationHistory as selectHasConversationHistory,
   hasSelectedConversationWithHistory as selectHasSelectedConversationWithHistory,
   hasStartedWorkspace as selectHasStartedWorkspace,
@@ -106,11 +109,13 @@ import {
   isEngineBusy,
   isEngineReady,
   isGeneratingResponse,
+  isTerminalOpenForConversation,
   isMessageEditActive,
   isOrchestrationRunningState,
   isSettingsView,
   isVariantSwitchingState,
   isLoadingModelState,
+  openTerminalForConversation,
   setPreparingNewConversation,
   setChatTitleEditing,
   setChatWorkspaceStarted,
@@ -123,6 +128,7 @@ import {
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 import { renderConversationListView } from './ui/conversation-list-view.js';
 import { createTranscriptView } from './ui/transcript-view.js';
+import { createTerminalView } from './ui/terminal-view.js';
 import { renderTaskListTray } from './ui/task-list-tray.js';
 import {
   createConversationWorkspaceFileSystem,
@@ -273,6 +279,9 @@ const closeSettingsButton = document.getElementById('closeSettingsButton');
 const enableSingleKeyShortcutsToggle = document.getElementById('enableSingleKeyShortcutsToggle');
 const transcriptViewSelect = document.getElementById('transcriptViewSelect');
 const settingsPage = document.getElementById('settingsPage');
+const terminalPanel = document.getElementById('terminalPanel');
+const terminalHost = document.getElementById('terminalHost');
+const closeTerminalButton = document.getElementById('closeTerminalButton');
 const settingsTabContainer = document.querySelector('.settings-tabs');
 const settingsTabButtons = settingsTabContainer
   ? settingsTabContainer.querySelectorAll('[data-settings-tab]')
@@ -1518,6 +1527,93 @@ function getConversationWorkspaceFileSystem(conversationOrId = getActiveConversa
   return conversationWorkspaceFileSystems.get(conversationId) || null;
 }
 
+function parseShellToolResult(message) {
+  const rawResult =
+    typeof message?.toolResult === 'string'
+      ? message.toolResult
+      : typeof message?.text === 'string'
+        ? message.text
+        : '';
+  if (!rawResult.trim()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(rawResult);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function getShellTerminalEntries(conversation) {
+  if (!conversation) {
+    return [];
+  }
+  return getConversationPathMessages(conversation)
+    .filter((message) => message?.role === 'tool' && message.toolName === 'run_shell_command')
+    .map((message) => {
+      const result = parseShellToolResult(message);
+      return {
+        command:
+          typeof message?.toolArguments?.command === 'string' && message.toolArguments.command.trim()
+            ? message.toolArguments.command.trim()
+            : typeof result?.command === 'string' && result.command.trim()
+              ? result.command.trim()
+              : '',
+        currentWorkingDirectory:
+          typeof result?.currentWorkingDirectory === 'string' && result.currentWorkingDirectory.trim()
+            ? result.currentWorkingDirectory.trim()
+            : typeof conversation?.currentWorkingDirectory === 'string' &&
+                conversation.currentWorkingDirectory.trim()
+              ? conversation.currentWorkingDirectory.trim()
+              : '/workspace',
+        exitCode: Number.isFinite(result?.exitCode) ? Number(result.exitCode) : 0,
+        stdout: typeof result?.stdout === 'string' ? result.stdout : '',
+        stderr: typeof result?.stderr === 'string' ? result.stderr : '',
+      };
+    })
+    .filter((entry) => entry.command);
+}
+
+function getTerminalSessionForConversation(conversation = getActiveConversation()) {
+  const entries = getShellTerminalEntries(conversation);
+  const pendingEntry =
+    appState.pendingShellCommand &&
+    conversation?.id &&
+    appState.pendingShellCommand.conversationId === conversation.id
+      ? appState.pendingShellCommand
+      : null;
+
+  if (pendingEntry && entries.length > pendingEntry.historyCount) {
+    appState.pendingShellCommand = null;
+    return getTerminalSessionForConversation(conversation);
+  }
+
+  const currentWorkingDirectory =
+    typeof pendingEntry?.currentWorkingDirectory === 'string' && pendingEntry.currentWorkingDirectory.trim()
+      ? pendingEntry.currentWorkingDirectory.trim()
+      : typeof entries[entries.length - 1]?.currentWorkingDirectory === 'string' &&
+          entries[entries.length - 1].currentWorkingDirectory.trim()
+        ? entries[entries.length - 1].currentWorkingDirectory.trim()
+        : typeof conversation?.currentWorkingDirectory === 'string' &&
+            conversation.currentWorkingDirectory.trim()
+          ? conversation.currentWorkingDirectory.trim()
+          : '/workspace';
+
+  return {
+    currentWorkingDirectory,
+    entries,
+    hasVisibleContent: entries.length > 0 || Boolean(pendingEntry?.command),
+    pendingEntry:
+      pendingEntry && typeof pendingEntry.command === 'string' && pendingEntry.command.trim()
+        ? {
+            command: pendingEntry.command.trim(),
+            currentWorkingDirectory,
+          }
+        : null,
+  };
+}
+
 function isModelTurnComplete(conversation, rootModelMessage) {
   if (!conversation || rootModelMessage?.role !== 'model') {
     return false;
@@ -1788,6 +1884,74 @@ const transcriptView = createTranscriptView({
   cancelUserMessageEdit,
   saveUserMessageEdit,
 });
+
+const terminalView = createTerminalView({
+  panel: terminalPanel,
+  host: terminalHost,
+});
+
+function renderTerminalForActiveConversation() {
+  const activeConversation = getActiveConversation();
+  const session = getTerminalSessionForConversation(activeConversation);
+  const shouldShowTerminal =
+    !isSettingsView(appState) &&
+    Boolean(activeConversation?.id) &&
+    session.hasVisibleContent &&
+    (isTerminalOpenForConversation(appState, activeConversation.id) ||
+      (!hasDismissedTerminalForConversation(appState, activeConversation.id) &&
+        session.entries.length > 0));
+
+  if (
+    activeConversation?.id &&
+    session.hasVisibleContent &&
+    !hasDismissedTerminalForConversation(appState, activeConversation.id)
+  ) {
+    openTerminalForConversation(appState, activeConversation.id);
+  }
+
+  if (!shouldShowTerminal) {
+    if (!session.hasVisibleContent) {
+      closeTerminal(appState, { conversationId: activeConversation?.id || null });
+    }
+    document.body.classList.remove('terminal-open');
+    terminalView.setVisible(false);
+    return;
+  }
+
+  document.body.classList.add('terminal-open');
+  terminalView.setVisible(true);
+  terminalView.renderSession(session);
+}
+
+if (closeTerminalButton instanceof HTMLButtonElement) {
+  closeTerminalButton.addEventListener('click', () => {
+    const activeConversation = getActiveConversation();
+    closeTerminal(appState, {
+      conversationId: activeConversation?.id || null,
+      dismissed: true,
+    });
+    renderTerminalForActiveConversation();
+  });
+}
+
+function handleShellCommandStart({ command = '', currentWorkingDirectory = '/workspace' } = {}) {
+  const activeConversation = getActiveConversation();
+  if (!activeConversation?.id || !String(command || '').trim()) {
+    return;
+  }
+  clearTerminalDismissal(appState, activeConversation.id);
+  appState.pendingShellCommand = {
+    command: String(command || '').trim(),
+    conversationId: activeConversation.id,
+    currentWorkingDirectory:
+      typeof currentWorkingDirectory === 'string' && currentWorkingDirectory.trim()
+        ? currentWorkingDirectory.trim()
+        : '/workspace',
+    historyCount: getShellTerminalEntries(activeConversation).length,
+  };
+  openTerminalForConversation(appState, activeConversation.id);
+  renderTerminalForActiveConversation();
+}
 
 function renderConversationList() {
   if (!conversationList) {
@@ -2101,6 +2265,7 @@ function updateTranscriptNavigationButtonVisibility() {
 function renderTranscript(options = {}) {
   transcriptView.renderTranscript(options);
   renderActiveTaskListTray();
+  renderTerminalForActiveConversation();
 }
 
 function renderActiveTaskListTray() {
@@ -2787,6 +2952,7 @@ const routingShell = createRoutingShell({
   updateComposerVisibility,
   updateChatTitleEditorVisibility,
   updateTranscriptNavigationButtonVisibility,
+  updateTerminalVisibility: renderTerminalForActiveConversation,
   updateActionButtons,
   updatePreChatStatusHint,
   updatePreChatActionButtons,
@@ -2940,6 +3106,7 @@ const appController = createAppController({
     executeToolCall(toolCall, {
       conversation: getActiveConversation(),
       requestToolConsent,
+      onShellCommandStart: handleShellCommandStart,
       workspaceFileSystem: getConversationWorkspaceFileSystem(),
     }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,

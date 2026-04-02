@@ -205,7 +205,9 @@
         </aside>
 
         <main id="mainContent" class="main-column" tabindex="-1">
-          <section class="chat-main" aria-label="Chat workspace">
+          <div id="chatWorkspaceLayout" class="chat-workspace-layout">
+            <div id="chatWorkspacePrimary" class="chat-workspace-primary">
+              <section class="chat-main" aria-label="Chat workspace">
             <section
               id="homePanel"
               class="welcome-panel card shadow-sm mb-3 home-panel"
@@ -372,14 +374,14 @@
               <ol id="chatTranscript" class="chat-transcript"></ol>
               <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
             </section>
-          </section>
-          <section
-            id="taskListTray"
-            class="task-list-tray d-none"
-            aria-live="off"
-          ></section>
+              </section>
+              <section
+                id="taskListTray"
+                class="task-list-tray d-none"
+                aria-live="off"
+              ></section>
 
-          <form class="composer" aria-label="Message input">
+              <form class="composer" aria-label="Message input">
             <label class="visually-hidden" for="messageInput">Message input</label>
             <input
               id="imageAttachmentInput"
@@ -448,7 +450,39 @@
                 <span class="visually-hidden">Send message</span>
               </button>
             </div>
-          </form>
+              </form>
+            </div>
+            <aside
+              id="terminalPanel"
+              class="terminal-panel d-none"
+              aria-labelledby="terminalPanelTitle"
+            >
+              <div class="terminal-panel-header">
+                <div>
+                  <h2 id="terminalPanelTitle" class="terminal-panel-title">Shell terminal</h2>
+                  <p id="terminalPanelDescription" class="terminal-panel-description mb-0">
+                    Read-only view of LLM shell tool calls and output.
+                  </p>
+                </div>
+                <button
+                  id="closeTerminalButton"
+                  type="button"
+                  class="btn icon-button terminal-close-button"
+                  aria-label="Close shell terminal"
+                >
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                  <span class="visually-hidden">Close shell terminal</span>
+                </button>
+              </div>
+              <div
+                id="terminalHost"
+                class="terminal-host"
+                role="img"
+                aria-label="Shell terminal output"
+                aria-describedby="terminalPanelDescription"
+              ></div>
+            </aside>
+          </div>
           <section
             id="settingsPage"
             class="settings-page d-none"

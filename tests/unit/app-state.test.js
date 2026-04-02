@@ -4,13 +4,18 @@ import {
   INTERACTION_MODES,
   ORCHESTRATION_STATUSES,
   WORKSPACE_VIEWS,
+  clearTerminalDismissal,
   clearUserMessageEditState,
+  closeTerminal,
   createAppState,
   deriveEnginePhase,
   findConversationById,
   getActiveConversation,
   getCurrentViewRoute,
+  hasDismissedTerminalForConversation,
   hasSelectedConversationWithHistory,
+  isTerminalOpenForConversation,
+  openTerminalForConversation,
   refreshWorkspaceView,
   setChatTitleEditing,
   setGenerating,
@@ -43,6 +48,8 @@ describe('app-state', () => {
     expect(state.workspaceView).toBe(WORKSPACE_VIEWS.HOME);
     expect(state.interactionMode).toBe(INTERACTION_MODES.NONE);
     expect(state.orchestrationStatus).toBe(ORCHESTRATION_STATUSES.IDLE);
+    expect(state.terminalOpenConversationId).toBeNull();
+    expect(state.terminalDismissedConversationIds).toEqual(new Set());
   });
 
   test('returns active and selected conversations through selectors', () => {
@@ -204,5 +211,25 @@ describe('app-state', () => {
     setModelReady(state, true);
     setPreparingNewConversation(state, true);
     expect(state.workspaceView).toBe(WORKSPACE_VIEWS.PRECHAT);
+  });
+
+  test('tracks terminal open and dismissed state per conversation', () => {
+    const state = createAppState({
+      activeGenerationConfig: {},
+    });
+
+    openTerminalForConversation(state, 'conversation-1');
+    expect(isTerminalOpenForConversation(state, 'conversation-1')).toBe(true);
+    expect(hasDismissedTerminalForConversation(state, 'conversation-1')).toBe(false);
+
+    closeTerminal(state, {
+      conversationId: 'conversation-1',
+      dismissed: true,
+    });
+    expect(isTerminalOpenForConversation(state, 'conversation-1')).toBe(false);
+    expect(hasDismissedTerminalForConversation(state, 'conversation-1')).toBe(true);
+
+    clearTerminalDismissal(state, 'conversation-1');
+    expect(hasDismissedTerminalForConversation(state, 'conversation-1')).toBe(false);
   });
 });

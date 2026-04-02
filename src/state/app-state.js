@@ -89,7 +89,75 @@ export function createAppState({
     lastKeyboardShortcutsTrigger: null,
     lastConversationSystemPromptTrigger: null,
     lastConversationTitleTrigger: null,
+    terminalOpenConversationId: null,
+    terminalDismissedConversationIds: new Set(),
+    pendingShellCommand: null,
   };
+}
+
+export function isTerminalOpen(state) {
+  return (
+    typeof state?.terminalOpenConversationId === 'string' && state.terminalOpenConversationId.trim()
+  );
+}
+
+export function isTerminalOpenForConversation(state, conversationId) {
+  const normalizedConversationId =
+    typeof conversationId === 'string' ? conversationId.trim() : '';
+  if (!normalizedConversationId) {
+    return false;
+  }
+  return state?.terminalOpenConversationId === normalizedConversationId;
+}
+
+export function hasDismissedTerminalForConversation(state, conversationId) {
+  const normalizedConversationId =
+    typeof conversationId === 'string' ? conversationId.trim() : '';
+  if (!normalizedConversationId) {
+    return false;
+  }
+  return state?.terminalDismissedConversationIds instanceof Set
+    ? state.terminalDismissedConversationIds.has(normalizedConversationId)
+    : false;
+}
+
+export function clearTerminalDismissal(state, conversationId) {
+  const normalizedConversationId =
+    typeof conversationId === 'string' ? conversationId.trim() : '';
+  if (!normalizedConversationId) {
+    return false;
+  }
+  if (!(state?.terminalDismissedConversationIds instanceof Set)) {
+    state.terminalDismissedConversationIds = new Set();
+  }
+  return state.terminalDismissedConversationIds.delete(normalizedConversationId);
+}
+
+export function openTerminalForConversation(state, conversationId) {
+  const normalizedConversationId =
+    typeof conversationId === 'string' ? conversationId.trim() : '';
+  if (!normalizedConversationId) {
+    state.terminalOpenConversationId = null;
+    return null;
+  }
+  clearTerminalDismissal(state, normalizedConversationId);
+  state.terminalOpenConversationId = normalizedConversationId;
+  return state.terminalOpenConversationId;
+}
+
+export function closeTerminal(state, { conversationId = null, dismissed = false } = {}) {
+  const normalizedConversationId =
+    typeof conversationId === 'string' ? conversationId.trim() : '';
+  if (dismissed && normalizedConversationId) {
+    if (!(state?.terminalDismissedConversationIds instanceof Set)) {
+      state.terminalDismissedConversationIds = new Set();
+    }
+    state.terminalDismissedConversationIds.add(normalizedConversationId);
+  }
+  if (!normalizedConversationId || state?.terminalOpenConversationId === normalizedConversationId) {
+    state.terminalOpenConversationId = null;
+  }
+  return state?.terminalOpenConversationId || null;
 }
 
 export function deriveEnginePhase(state) {

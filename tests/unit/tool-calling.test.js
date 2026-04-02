@@ -339,6 +339,39 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
+  test('notifies shell callbacks when run_shell_command executes', async () => {
+    const onShellCommandStart = vi.fn();
+    const onShellCommandComplete = vi.fn();
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'pwd',
+        },
+      },
+      {
+        onShellCommandStart,
+        onShellCommandComplete,
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(onShellCommandStart).toHaveBeenCalledWith({
+      command: 'pwd',
+      currentWorkingDirectory: '/workspace',
+    });
+    expect(onShellCommandComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'pwd',
+        currentWorkingDirectory: '/workspace',
+        exitCode: 0,
+        stdout: '/workspace',
+      })
+    );
+    expect(result.result.stdout).toBe('/workspace');
+  });
+
   test('builds the LFM function-style tool-calling prompt', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
