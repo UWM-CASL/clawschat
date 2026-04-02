@@ -229,6 +229,11 @@ describe('composer-events', () => {
     await new Promise((resolve) => harness.dom.window.setTimeout(resolve, 0));
 
     expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenCalledTimes(2);
+    expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenNthCalledWith(
+      1,
+      expect.any(harness.dom.window.File),
+      { attachmentMode: 'reference' },
+    );
     expect(harness.appState.pendingComposerAttachments).toEqual([
       expect.objectContaining({ filename: 'index.html', type: 'file' }),
       expect.objectContaining({ filename: 'photo.png', type: 'image' }),
@@ -263,6 +268,10 @@ describe('composer-events', () => {
     await new Promise((resolve) => harness.dom.window.setTimeout(resolve, 0));
 
     expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenCalledTimes(1);
+    expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenCalledWith(
+      expect.any(harness.dom.window.File),
+      { attachmentMode: '' },
+    );
     expect(harness.appState.pendingComposerAttachments).toEqual([
       expect.objectContaining({ filename: 'lesson.pdf', type: 'file', extension: 'pdf' }),
     ]);
@@ -369,6 +378,10 @@ describe('composer-events', () => {
     await new Promise((resolve) => harness.dom.window.setTimeout(resolve, 0));
 
     expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenCalledTimes(1);
+    expect(harness.deps.createComposerAttachmentFromFile).toHaveBeenCalledWith(
+      expect.any(harness.dom.window.File),
+      { attachmentMode: 'workWith' },
+    );
     expect(harness.appState.pendingComposerAttachments).toEqual([
       expect.objectContaining({ filename: 'site.css', type: 'file' }),
     ]);

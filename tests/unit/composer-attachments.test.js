@@ -87,6 +87,27 @@ describe('composer-attachments', () => {
     });
   });
 
+  test('formats work-with text attachment conversions without including contents in llm text', () => {
+    const result = buildTextAttachmentConversion({
+      filename: 'lesson.html',
+      mimeType: 'text/html',
+      extension: 'html',
+      text: '<h1>Lesson</h1><p>Line one.</p>',
+      workspacePath: '/workspace/lesson.html',
+      attachmentMode: 'workWith',
+    });
+
+    expect(result.normalizedFormat).toBe('markdown');
+    expect(result.normalizedText).toContain('# Lesson');
+    expect(result.llmText).toContain('Workspace path: /workspace/lesson.html');
+    expect(result.llmText).toContain(
+      'This file is available to inspect or modify with run_shell_command.'
+    );
+    expect(result.llmText).not.toContain('Converted from HTML to Markdown before prompt insertion.');
+    expect(result.llmText).not.toContain('Contents:');
+    expect(result.llmText).not.toContain('# Lesson');
+  });
+
   test('adds a truncation warning for oversized text attachment conversions', () => {
     const result = buildTextAttachmentConversion({
       filename: 'lesson.txt',
@@ -138,6 +159,23 @@ describe('composer-attachments', () => {
       preferredSource: 'llmText',
       documentRole: 'attachment',
     });
+  });
+
+  test('formats work-with pdf conversions without including extracted contents in llm text', () => {
+    const result = buildPdfAttachmentConversion({
+      filename: 'lesson.pdf',
+      mimeType: 'application/pdf',
+      pages: [{ pageNumber: 1, text: 'Intro' }],
+      warnings: ['Scanned figures were skipped.'],
+      workspacePath: '/workspace/lesson.pdf',
+      attachmentMode: 'workWith',
+    });
+
+    expect(result.normalizedText).toContain('Page 1\nIntro');
+    expect(result.llmText).toContain('Attached PDF: lesson.pdf');
+    expect(result.llmText).toContain('Workspace path: /workspace/lesson.pdf');
+    expect(result.llmText).not.toContain('Extracted contents:');
+    expect(result.llmText).not.toContain('Page 1\nIntro');
   });
 
   test('formats attachment sizes for compact UI display', () => {

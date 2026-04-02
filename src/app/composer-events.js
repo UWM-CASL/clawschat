@@ -157,7 +157,11 @@ export function bindComposerEvents({
       }
       try {
         const nextAttachments = await Promise.all(
-          allowedFiles.map((file) => createComposerAttachmentFromFile(file))
+          allowedFiles.map((file) =>
+            createComposerAttachmentFromFile(file, {
+              attachmentMode,
+            })
+          )
         );
         appState.pendingComposerAttachments = [
           ...getPendingComposerAttachments(),

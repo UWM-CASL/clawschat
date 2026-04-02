@@ -73,3 +73,49 @@ test('pdf attachment is added to the prompt and transcript', async ({ page }) =>
   expect(userPrompt?.content).toContain('Workspace path: /workspace/lesson.pdf');
   expect(userPrompt?.content).toContain('Mock extracted PDF text.');
 });
+
+test('work-with html attachment only exposes workspace availability to the model', async ({
+  page,
+}) => {
+  await page.locator('#addImagesButton').click();
+  await page.locator('#attachWorkWithMenuItem').click();
+
+  await page.evaluate(async () => {
+    const file = new window.File(
+      ['<html><body><main><h1>Canvas</h1><p>Hidden body text</p></main></body></html>'],
+      'canvas.html',
+      { type: 'text/html' }
+    );
+    const input = /** @type {HTMLInputElement | null} */ (
+      document.getElementById('imageAttachmentInput')
+    );
+    if (!input) {
+      throw new Error('Attachment input not found.');
+    }
+    const transfer = new window.DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  await page.locator('#messageInput').fill('How many links are in this html?');
+  await page.locator('#sendButton').click();
+
+  await page.locator('.message-row.user-message .message-file-toggle').click();
+  const preview = page.locator('.message-row.user-message .message-file-preview-text');
+  await expect(preview).toContainText('Workspace path: /workspace/canvas.html');
+  await expect(preview).not.toContainText('Contents:');
+  await expect(preview).not.toContainText('Hidden body text');
+
+  const promptShape = await page.evaluate(() => {
+    const payloads = Array.isArray(/** @type {any} */ (window).__mockWorkerGeneratePayloads)
+      ? /** @type {any} */ (window).__mockWorkerGeneratePayloads
+      : [];
+    return payloads[0];
+  });
+  const userPrompt = promptShape.find((entry) => entry?.role === 'user');
+  expect(userPrompt?.content).toContain('Workspace path: /workspace/canvas.html');
+  expect(userPrompt?.content).not.toContain('Contents:');
+  expect(userPrompt?.content).not.toContain('Hidden body text');
+});

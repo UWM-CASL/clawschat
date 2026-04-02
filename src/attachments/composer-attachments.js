@@ -150,6 +150,32 @@ function buildAttachmentWorkspaceLines(workspacePath) {
   ];
 }
 
+function normalizeAttachmentMode(attachmentMode) {
+  return attachmentMode === 'workWith' ? 'workWith' : 'reference';
+}
+
+function buildWorkspaceOnlyLlmText({ filename, mimeType, workspacePath = '', kind = 'file' }) {
+  const normalizedFilename =
+    typeof filename === 'string' && filename.trim()
+      ? filename.trim()
+      : kind === 'pdf'
+        ? 'document.pdf'
+        : 'file';
+  const normalizedMimeType =
+    typeof mimeType === 'string' && mimeType.trim()
+      ? mimeType.trim()
+      : kind === 'pdf'
+        ? 'application/pdf'
+        : 'text/plain';
+  return [
+    kind === 'pdf' ? `Attached PDF: ${normalizedFilename}` : `Attached file: ${normalizedFilename}`,
+    `MIME type: ${normalizedMimeType}`,
+    ...buildAttachmentWorkspaceLines(workspacePath),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function buildTextFileLlmText({
   filename,
   mimeType,
@@ -180,7 +206,9 @@ export function buildTextAttachmentConversion({
   extension,
   text,
   workspacePath = '',
+  attachmentMode = 'reference',
 }) {
+  const normalizedAttachmentMode = normalizeAttachmentMode(attachmentMode);
   const normalizedFormat = getNormalizedTextAttachmentFormat({ mimeType, extension });
   const normalizedMimeType = typeof mimeType === 'string' ? mimeType.trim().toLowerCase() : '';
   const normalizedExtension = typeof extension === 'string' ? extension.trim().toLowerCase() : '';
@@ -212,15 +240,22 @@ export function buildTextAttachmentConversion({
       preferredSource: 'normalizedText',
       documentRole: 'attachment',
     },
-    llmText: buildTextFileLlmText({
-      filename,
-      mimeType,
-      text: normalizedText,
-      workspacePath,
-      conversionNote: isHtmlSource
-        ? 'Converted from HTML to Markdown before prompt insertion.'
-        : '',
-    }),
+    llmText:
+      normalizedAttachmentMode === 'workWith'
+        ? buildWorkspaceOnlyLlmText({
+            filename,
+            mimeType,
+            workspacePath,
+          })
+        : buildTextFileLlmText({
+            filename,
+            mimeType,
+            text: normalizedText,
+            workspacePath,
+            conversionNote: isHtmlSource
+              ? 'Converted from HTML to Markdown before prompt insertion.'
+              : '',
+          }),
   };
 }
 
@@ -295,7 +330,9 @@ export function buildPdfAttachmentConversion({
   pages,
   warnings,
   workspacePath = '',
+  attachmentMode = 'reference',
 }) {
+  const normalizedAttachmentMode = normalizeAttachmentMode(attachmentMode);
   const normalizedWarnings = Array.isArray(warnings)
     ? warnings
         .filter((warning) => typeof warning === 'string')
@@ -330,13 +367,22 @@ export function buildPdfAttachmentConversion({
       preferredSource: 'llmText',
       documentRole: 'attachment',
     },
-    llmText,
+    llmText:
+      normalizedAttachmentMode === 'workWith'
+        ? buildWorkspaceOnlyLlmText({
+            filename,
+            mimeType,
+            workspacePath,
+            kind: 'pdf',
+          })
+        : llmText,
     pageCount,
   };
 }
 
 export async function createComposerAttachmentFromFile(file, options = {}) {
   const workspaceFileSystem = options?.workspaceFileSystem;
+  const attachmentMode = normalizeAttachmentMode(options?.attachmentMode);
   const attachmentMetadata = getSupportedAttachmentMetadata(file);
   if (!attachmentMetadata) {
     throw new Error('Unsupported attachment type.');
@@ -413,6 +459,7 @@ export async function createComposerAttachmentFromFile(file, options = {}) {
       pages: pdfExtraction.pages,
       warnings: pdfExtraction.warnings,
       workspacePath: storedWorkspaceFile?.path,
+      attachmentMode,
     });
     text = conversion.normalizedText;
   } else {
@@ -423,6 +470,7 @@ export async function createComposerAttachmentFromFile(file, options = {}) {
       extension,
       text,
       workspacePath: storedWorkspaceFile?.path,
+      attachmentMode,
     });
   }
   return {

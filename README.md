@@ -82,6 +82,7 @@ Student-facing browser chat UI with local model inference.
   - The `+` composer control opens an attachment menu with `Attach for Reference` and `Attach to Work With`.
   - `Attach for Reference` targets the current curated document formats, including images plus `.txt`, `.csv`, `.md`, `.html`, `.htm`, `.css`, `.js`, and `.pdf`.
   - `Attach to Work With` opens an unfiltered picker, while the current ingestion pipeline still accepts the same supported attachment formats underneath.
+  - `Attach to Work With` stages supported text-backed files into `/workspace` and tells the model the workspace path, but does not include the extracted file body in the prompt by default.
   - Images can be attached from either menu path when the selected model supports image input.
   - Text attachments currently support `.txt`, `.csv`, `.md`, `.html`, `.htm`, `.css`, and `.js` files.
   - HTML attachments (`.html`, `.htm`) are converted locally into Markdown before they are added to the user prompt.

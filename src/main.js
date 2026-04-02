@@ -3367,8 +3367,9 @@ bindComposerEvents({
   updateWelcomePanelVisibility,
   getPendingComposerAttachments,
   selectedModelSupportsImageInput,
-  createComposerAttachmentFromFile: (file) =>
+  createComposerAttachmentFromFile: (file, options = {}) =>
     createComposerAttachmentFromFile(file, {
+      ...options,
       workspaceFileSystem:
         getConversationWorkspaceFileSystem() ||
         getConversationWorkspaceFileSystem(reservePendingConversationId()),
