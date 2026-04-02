@@ -27,6 +27,27 @@ test('@a11y onboarding screen has no wcag2a/2aa violations', async ({ page }) =>
   await expectNoCriticalA11yViolations(page);
 });
 
+test('@a11y skip links focus visible app regions', async ({ page }) => {
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to application controls' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#topBar')).toBeFocused();
+
+  await page.getByRole('button', { name: 'Start a conversation' }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+
+  await page.getByRole('link', { name: 'Skip to conversations' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#conversationPanel')).toBeFocused();
+
+  await page.getByRole('link', { name: 'Skip to message input' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#messageInput')).toBeFocused();
+});
+
 test('@a11y chat screen has transcript semantics and no wcag2a/2aa violations', async ({
   page,
 }) => {
@@ -46,6 +67,19 @@ test('@a11y chat screen has transcript semantics and no wcag2a/2aa violations', 
   );
   await expect(page.locator('form.composer')).toHaveAttribute('aria-label', 'Message input');
   await expect(page.locator('#chatTranscript')).not.toHaveAttribute('aria-live', /.+/);
+  await expectNoCriticalA11yViolations(page);
+});
+
+test('@a11y help page has skip links, headings, and no wcag2a/2aa violations', async ({ page }) => {
+  await page.goto('/help.html');
+
+  await expect(page.getByRole('main', { name: 'ClawsChat Help' })).toBeVisible();
+  await page.getByRole('link', { name: 'Skip to keyboard shortcuts' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#helpKeyboardShortcutsSection')).toBeFocused();
+  await page.getByRole('link', { name: 'Skip to accessibility guidance' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#helpAccessibilitySection')).toBeFocused();
   await expectNoCriticalA11yViolations(page);
 });
 

@@ -33,6 +33,7 @@ export function createRoutingShell({
   updateActionButtons,
   updatePreChatStatusHint,
   updatePreChatActionButtons,
+  updateSkipLinkVisibility = () => {},
   playEntranceAnimation,
 }) {
   function getRouteFromHash(hashValue = windowRef.location.hash) {
@@ -141,6 +142,7 @@ export function createRoutingShell({
       setRegionVisibility(chatForm, false);
       setRegionVisibility(topBar, true);
       setActiveSettingsTab(appState.activeSettingsTab);
+      updateSkipLinkVisibility();
       if (topBar instanceof HTMLElement) {
         topBar.setAttribute('aria-label', 'Settings');
         topBar.classList.toggle('top-bar-actions-only', !workspaceStarted);
@@ -156,6 +158,7 @@ export function createRoutingShell({
       topBar.classList.toggle('top-bar-actions-only', !workspaceStarted);
     }
     updateWelcomePanelVisibility({ syncRoute: false });
+    updateSkipLinkVisibility();
     if (syncRoute) {
       syncRouteToCurrentView({ replace: replaceRoute });
     }
@@ -197,6 +200,7 @@ export function createRoutingShell({
     updateActionButtons();
     updatePreChatStatusHint();
     updatePreChatActionButtons();
+    updateSkipLinkVisibility();
     if (appState.currentWorkspaceView !== previousView) {
       if (showPreChat) {
         playEntranceAnimation(preChatPanel);

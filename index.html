@@ -6,12 +6,57 @@
     <title>ClawsChat</title>
   </head>
   <body class="app-body">
+    <nav class="skip-links" aria-label="Skip links">
+      <a class="skip-link" href="#mainContent" data-skip-target="mainContent">
+        Skip to main content
+      </a>
+      <a class="skip-link" href="#topBar" data-skip-target="topBar">
+        Skip to application controls
+      </a>
+      <a
+        class="skip-link"
+        href="#conversationPanel"
+        data-skip-target="conversationPanel"
+        data-skip-scope="workspace"
+      >
+        Skip to conversations
+      </a>
+      <a
+        class="skip-link"
+        href="#chatTranscriptStart"
+        data-skip-target="chatTranscriptStart"
+        data-skip-scope="chat"
+      >
+        Skip to chat transcript
+      </a>
+      <a
+        class="skip-link"
+        href="#messageInput"
+        data-skip-target="messageInput"
+        data-skip-scope="workspace"
+      >
+        Skip to message input
+      </a>
+      <a
+        class="skip-link"
+        href="#settingsPage"
+        data-skip-target="settingsPage"
+        data-skip-scope="settings"
+      >
+        Skip to settings
+      </a>
+    </nav>
     <div class="app-shell">
       <div class="app-chrome">
         <div class="app-frame-header">
           <h1 class="app-window-title">ClawsChat</h1>
         </div>
-        <header id="topBar" class="top-bar" aria-label="Application controls">
+        <header
+          id="topBar"
+          class="top-bar"
+          aria-label="Application controls"
+          tabindex="-1"
+        >
           <div class="top-bar-sidebar-spacer d-none d-md-block" aria-hidden="true"></div>
           <div class="top-bar-main">
             <div class="top-bar-start">
@@ -159,8 +204,8 @@
           </button>
         </aside>
 
-        <div class="main-column">
-          <main class="chat-main">
+        <main id="mainContent" class="main-column" tabindex="-1">
+          <section class="chat-main" aria-label="Chat workspace">
             <section
               id="homePanel"
               class="welcome-panel card shadow-sm mb-3 home-panel"
@@ -327,7 +372,7 @@
               <ol id="chatTranscript" class="chat-transcript"></ol>
               <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
             </section>
-          </main>
+          </section>
           <section
             id="taskListTray"
             class="task-list-tray d-none"
@@ -408,6 +453,7 @@
             id="settingsPage"
             class="settings-page d-none"
             aria-labelledby="settingsPageTitle"
+            tabindex="-1"
           >
             <div class="settings-page-inner">
               <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
@@ -781,7 +827,7 @@
               </a>
             </div>
           </footer>
-        </div>
+        </main>
       </div>
       <footer class="app-footer" aria-label="Application footer">
         <p class="app-version mb-0">
@@ -829,8 +875,10 @@
           </div>
           <div class="modal-body">
             <p id="keyboardShortcutsModalHelp" class="text-body-secondary">
-              Global shortcuts work anywhere unless a dialog is open. Message shortcuts work when
-              focus is inside a message card.
+              Global shortcuts work anywhere unless a dialog is open. Focused transcript shortcuts
+              work when focus is inside a message card and
+              <strong>Enable single-key transcript shortcuts</strong> is turned on in
+              <strong>Settings</strong> → <strong>Conversation</strong>.
             </p>
             <div class="table-responsive">
               <table class="table align-middle mb-0">
@@ -863,6 +911,10 @@
                   <tr>
                     <td>Send message</td>
                     <td><kbd>Enter</kbd></td>
+                  </tr>
+                  <tr>
+                    <td>Insert a new line in message input</td>
+                    <td><kbd>Shift</kbd>+<kbd>Enter</kbd></td>
                   </tr>
                   <tr>
                     <td>Stop generating</td>

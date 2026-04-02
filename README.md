@@ -24,6 +24,7 @@ Student-facing browser chat UI with local model inference.
   - Browser back/forward navigation follows those screen transitions.
 - Header actions include a `Help` button that opens `help.html` in the current tab with student-focused guidance and a back button to return to the last chat.
 - Header actions include a `Keyboard shortcuts` button (`Ctrl+/`) so users can discover available keyboard actions.
+- Keyboard users get route-safe skip links that jump to the visible main content, application controls, conversations, transcript, composer, and settings regions without breaking hash-based routing.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
 - The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
 - `Settings -> Conversation` includes:
@@ -127,6 +128,7 @@ Student-facing browser chat UI with local model inference.
 - Math-rendered model responses also expose a dedicated `Copy MathML` action for the rendered MathML.
 - The Thinking section includes a dedicated copy action to copy thoughts only.
 - Keyboard shortcuts cover the primary workspace actions (start/new conversation, help, settings, send/stop, load model, downloads, transcript jumps) plus focused transcript actions (edit, branch, regenerate, fix, copy, and branch/response variant navigation).
+- The keyboard shortcuts dialog and `help.html` keep the global and focused transcript shortcut tables aligned, including the `Shift+Enter` composer newline behavior and the setting that can disable single-key transcript shortcuts.
 - Composer keyboard behavior uses `Enter` to send and `Shift+Enter` to insert a new line.
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.
 - Each model response includes a `Fix` button (wrench icon). `Fix` now runs a multi-step orchestration from `src/config/orchestrations/fix-response.json` (critique -> revise -> validate) before streaming a corrected variant at that turn.

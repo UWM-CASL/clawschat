@@ -120,6 +120,44 @@
         padding: 0.75rem 0 1.5rem;
       }
 
+      .skip-links {
+        position: fixed;
+        top: 0.75rem;
+        left: 0.75rem;
+        z-index: 20;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        max-width: calc(100vw - 1.5rem);
+      }
+
+      .skip-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.5rem;
+        padding: 0.55rem 0.9rem;
+        border: 1px solid var(--focus-ring);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--surface) 97%, transparent);
+        color: var(--ink-strong);
+        font-weight: 700;
+        text-decoration: none;
+        box-shadow: var(--shadow-ambient);
+        transform: translateY(-220%);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          transform 160ms ease,
+          opacity 160ms ease;
+      }
+
+      .skip-links:focus-within .skip-link {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
       .app-frame-header {
         padding: 0.35rem 1rem 0.1rem;
       }
@@ -325,6 +363,18 @@
       }
 
       @media (max-width: 575.98px) {
+        .skip-links {
+          top: 0.5rem;
+          left: 0.5rem;
+          right: 0.5rem;
+          max-width: none;
+        }
+
+        .skip-link {
+          width: 100%;
+          justify-content: flex-start;
+        }
+
         .help-shell {
           width: min(100% - 1rem, 920px);
           padding-top: 0.55rem;
@@ -358,9 +408,29 @@
     </style>
   </head>
   <body>
-    <main class="help-shell" aria-labelledby="helpTitle">
+    <nav class="skip-links" aria-label="Skip links">
+      <a class="skip-link" href="#helpMainContent" data-skip-target="helpMainContent">
+        Skip to main help content
+      </a>
+      <a class="skip-link" href="#helpTopics" data-skip-target="helpTopics">Skip to help topics</a>
+      <a
+        class="skip-link"
+        href="#helpKeyboardShortcutsSection"
+        data-skip-target="helpKeyboardShortcutsSection"
+      >
+        Skip to keyboard shortcuts
+      </a>
+      <a
+        class="skip-link"
+        href="#helpAccessibilitySection"
+        data-skip-target="helpAccessibilitySection"
+      >
+        Skip to accessibility guidance
+      </a>
+    </nav>
+    <main id="helpMainContent" class="help-shell" aria-labelledby="helpTitle" tabindex="-1">
       <div class="app-frame-header">
-        <h1 class="app-window-title">ClawsChat</h1>
+        <p class="app-window-title">ClawsChat</p>
       </div>
       <section class="help-card">
         <div class="hero">
@@ -393,7 +463,7 @@
           </p>
         </div>
 
-        <section class="accordion" aria-label="Help topics">
+        <section id="helpTopics" class="accordion" aria-label="Help topics" tabindex="-1">
           <details class="accordion-item" open>
             <summary>Start a conversation</summary>
             <div class="accordion-body">
@@ -497,9 +567,10 @@
           </details>
 
           <details class="accordion-item">
-            <summary>Keyboard shortcuts</summary>
+            <summary id="helpKeyboardShortcuts">Keyboard shortcuts</summary>
             <div class="accordion-body">
-              <h2>Global shortcuts</h2>
+              <h2 id="helpKeyboardShortcutsSection" tabindex="-1">Keyboard shortcuts</h2>
+              <h3>Global shortcuts</h3>
               <table class="shortcut-table">
                 <tbody>
                   <tr>
@@ -521,6 +592,10 @@
                   <tr>
                     <th scope="row">Send message</th>
                     <td><kbd>Enter</kbd></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Insert a new line in message input</th>
+                    <td><kbd>Shift</kbd>+<kbd>Enter</kbd></td>
                   </tr>
                   <tr>
                     <th scope="row">Stop generating</th>
@@ -557,7 +632,7 @@
                 </tbody>
               </table>
 
-              <h2>Focused transcript shortcuts</h2>
+              <h3>Focused transcript shortcuts</h3>
               <table class="shortcut-table">
                 <tbody>
                   <tr>
@@ -602,13 +677,23 @@
                   </tr>
                 </tbody>
               </table>
+              <p class="callout">
+                Focused transcript shortcuts work when focus is inside a message card and
+                <strong>Enable single-key transcript shortcuts</strong> is on in
+                <strong>Settings</strong> → <strong>Conversation</strong>.
+              </p>
             </div>
           </details>
 
           <details class="accordion-item">
-            <summary>Accessibility and focus behavior</summary>
+            <summary id="helpAccessibility">Accessibility and focus behavior</summary>
             <div class="accordion-body">
+              <h2 id="helpAccessibilitySection" tabindex="-1">Accessibility and focus behavior</h2>
               <ul class="stack-list">
+                <li>
+                  Hidden skip links appear on keyboard focus so you can jump straight to help
+                  topics, keyboard shortcuts, or accessibility guidance.
+                </li>
                 <li>All primary controls can be reached with keyboard navigation.</li>
                 <li>Dialogs and panels close with <kbd>Escape</kbd> and return focus sensibly.</li>
                 <li>The transcript has clear speaker labels for user and model messages.</li>
@@ -675,6 +760,7 @@
 
     <script>
       const backToChatButton = document.getElementById('backToChatButton');
+      const skipLinks = Array.from(document.querySelectorAll('.skip-link[data-skip-target]'));
 
       if (backToChatButton instanceof HTMLButtonElement) {
         backToChatButton.addEventListener('click', () => {
@@ -685,6 +771,26 @@
           window.location.href = './#/chat';
         });
       }
+
+      skipLinks.forEach((link) => {
+        if (!(link instanceof HTMLAnchorElement)) {
+          return;
+        }
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const targetId = link.dataset.skipTarget;
+          if (!targetId) {
+            return;
+          }
+          const target = document.getElementById(targetId);
+          if (!(target instanceof HTMLElement)) {
+            return;
+          }
+          target.closest('details')?.setAttribute('open', '');
+          target.focus({ preventScroll: true });
+          target.scrollIntoView({ block: 'start' });
+        });
+      });
     </script>
   </body>
 </html>

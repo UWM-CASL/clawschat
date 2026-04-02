@@ -119,6 +119,10 @@ test('keyboard shortcuts open shortcut help, send, and open settings', async ({ 
   await page.keyboard.up('Control');
   const shortcutsDialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(shortcutsDialog).toBeVisible();
+  await expect(shortcutsDialog).toContainText('Insert a new line in message input');
+  await expect(shortcutsDialog).toContainText(
+    'Enable single-key transcript shortcuts'
+  );
   await shortcutsDialog.getByRole('button', { name: 'Close keyboard shortcuts' }).click();
   await expect(shortcutsDialog).toBeHidden();
 

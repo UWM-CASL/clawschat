@@ -198,6 +198,7 @@ const topPHelp = document.getElementById('topPHelp');
 const statusRegion = document.getElementById('statusRegion');
 const statusRegionHeading = document.getElementById('statusRegionHeading');
 const statusRegionMessage = document.getElementById('statusRegionMessage');
+const skipLinkElements = Array.from(document.querySelectorAll('.skip-link[data-skip-target]'));
 const startConversationButton = document.getElementById('startConversationButton');
 const debugInfo = document.getElementById('debugInfo');
 const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
@@ -1966,6 +1967,41 @@ function focusTranscriptBoundary(boundary, { align = 'start' } = {}) {
   scrollElementIntoAccessibleView(boundary, { align });
 }
 
+function updateSkipLinkVisibility() {
+  skipLinkElements.forEach((link) => {
+    if (!(link instanceof HTMLElement)) {
+      return;
+    }
+    const scope = String(link.dataset.skipScope || 'always').trim().toLowerCase();
+    let visible = true;
+    if (scope === 'workspace') {
+      visible = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
+    } else if (scope === 'chat') {
+      visible = appState.workspaceView === ROUTE_CHAT;
+    } else if (scope === 'settings') {
+      visible = isSettingsView(appState);
+    }
+    link.hidden = !visible;
+  });
+}
+
+function focusSkipTarget(targetId) {
+  const target = document.getElementById(targetId);
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target === messageInput && target instanceof HTMLTextAreaElement) {
+    target.focus();
+    scrollElementIntoAccessibleView(target, { align: 'end' });
+    return true;
+  }
+  target.focus({ preventScroll: true });
+  scrollElementIntoAccessibleView(target, {
+    align: targetId === 'chatTranscriptStart' ? 'start' : 'center',
+  });
+  return true;
+}
+
 function stepTranscriptNavigation(role, direction) {
   const target = findTranscriptStepTarget(role, direction);
   if (!(target instanceof HTMLElement)) {
@@ -2695,6 +2731,7 @@ const routingShell = createRoutingShell({
   updateActionButtons,
   updatePreChatStatusHint,
   updatePreChatActionButtons,
+  updateSkipLinkVisibility,
   playEntranceAnimation,
 });
 
@@ -2982,6 +3019,20 @@ renderComposerAttachments();
 updateActionButtons();
 setActiveSettingsTab(appState.activeSettingsTab);
 updateWelcomePanelVisibility();
+skipLinkElements.forEach((link) => {
+  if (!(link instanceof HTMLElement)) {
+    return;
+  }
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    const targetId = link.dataset.skipTarget;
+    if (!targetId) {
+      return;
+    }
+    focusSkipTarget(targetId);
+  });
+});
+updateSkipLinkVisibility();
 applyRouteFromHash();
 void restoreConversationStateFromStorage();
 
