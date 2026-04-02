@@ -158,6 +158,23 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js) and [src/llm/shell-command-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/shell-command-tool.js).
 
+### Standard for future shell commands
+
+Any new command added to `run_shell_command` should meet the same baseline as the current subset.
+
+- Keep the command browser-local and restricted to the injected workspace filesystem abstraction. Do not bypass that layer and do not access OPFS handles directly from the command implementation.
+- Preserve the `/workspace` boundary. Relative paths must resolve from the conversation-local working directory, and path traversal outside `/workspace` must fail with a shell-style error.
+- Reuse the shell entry sanitizing rules. New behavior must continue to reject oversized command text, control characters, fenced code blocks, and nested tool-call-shaped payloads before execution.
+- Return deterministic `stdout`, `stderr`, and `exitCode` values. Do not leak raw exceptions to the tool result when a shell-style error message can be returned instead.
+- Match the subset model, not full GNU behavior. If compatibility is partial, document the exact supported flags and edge cases in this file and in the usage payload exposed by the tool.
+- Prefer explicit option parsing and explicit arity checks. Unsupported flags or malformed operands should fail early with a non-zero exit code.
+- Treat destructive behavior conservatively. Commands that write, move, or delete must guard against same-path no-op corruption, root-directory deletion, and other ambiguous filesystem targets.
+- Keep variable semantics narrow and predictable. Escaped or single-quoted `$` text should stay literal, and empty expansion must not silently create dangerous default operands.
+- Keep output stable for LLM consumption. Avoid timestamps, nondeterministic formatting, or environment-dependent details unless the command is specifically about those values.
+- Add focused unit tests for the happy path, invalid options, missing-path behavior, boundary enforcement, and at least one LLM-shaped malformed input case.
+- Update the `supportedCommands`, examples, and limitations returned by the tool whenever the shell subset changes.
+- Update [README.md](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/README.md) and this document when the supported shell surface or its guarantees change.
+
 ## Planned capability model
 
 The intended future design separates capability access into three layers with different purposes.
