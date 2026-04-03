@@ -3963,7 +3963,7 @@ showProgressRegion(false);
 renderComposerAttachments();
 updateActionButtons();
 setActiveSettingsTab(appState.activeSettingsTab);
-updateWelcomePanelVisibility();
+updateWelcomePanelVisibility({ syncRoute: false });
 skipLinkElements.forEach((link) => {
   if (!(link instanceof HTMLElement)) {
     return;

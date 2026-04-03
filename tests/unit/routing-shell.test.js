@@ -136,4 +136,13 @@ describe('routing-shell', () => {
     harness.shell.syncRouteToCurrentView({ replace: true });
     expect(harness.window.location.hash).toBe('#/chat/conversation-2/system-prompt');
   });
+
+  test('can update welcome visibility without overwriting an existing hash', () => {
+    const harness = createRoutingHarness();
+
+    harness.window.location.hash = '#/chat/conversation-2';
+    harness.shell.updateWelcomePanelVisibility({ syncRoute: false });
+
+    expect(harness.window.location.hash).toBe('#/chat/conversation-2');
+  });
 });
