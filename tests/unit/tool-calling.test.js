@@ -371,6 +371,22 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
+  test('adds a web lookup instruction', () => {
+    const prompt = buildToolCallingSystemPrompt(
+      {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'parameters',
+      },
+      ['web_lookup']
+    );
+
+    expect(prompt).toContain(
+      '- web_lookup: Pass {"input":"https://..."} to fetch a page and return a preview.'
+    );
+    expect(prompt).not.toContain('Returns a concise extracted preview, not raw HTML.');
+  });
+
   test('adds a shell command discovery instruction', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
@@ -487,6 +503,7 @@ describe('tool-calling prompt builder', () => {
     expect(getToolDisplayName('get_current_date_time')).toBe('Get Date and Time');
     expect(getToolDisplayName('get_user_location')).toBe('Get User Location');
     expect(getToolDisplayName('tasklist')).toBe('Task List Planner');
+    expect(getToolDisplayName('web_lookup')).toBe('Web Lookup');
     expect(getToolDisplayName('write_python_file')).toBe('Write Python File');
     expect(getToolDisplayName('run_shell_command')).toBe('Shell Command Runner');
     expect(getToolDisplayName('lookup_fact')).toBe('Lookup Fact');
@@ -502,6 +519,10 @@ describe('tool-calling prompt builder', () => {
         expect.objectContaining({
           name: 'tasklist',
           displayName: 'Task List Planner',
+        }),
+        expect.objectContaining({
+          name: 'web_lookup',
+          displayName: 'Web Lookup',
         }),
         expect.objectContaining({
           name: 'write_python_file',
@@ -3220,6 +3241,128 @@ describe('tool-calling prompt builder', () => {
 
     expect(result.result.exitCode).toBe(0);
     expect(result.result.stdout).toBe('alpha\nbeta\n');
+  });
+
+  test('supports web_lookup for HTML page previews', async () => {
+    const fetchRef = vi.fn(async (url, init = {}) => {
+      expect(url).toBe('https://example.com/lesson');
+      expect(init).toMatchObject({
+        method: 'GET',
+        body: null,
+      });
+      const headers =
+        init.headers instanceof globalThis.Headers
+          ? init.headers
+          : new globalThis.Headers(init.headers);
+      expect(headers.get('Accept')).toContain('text/html');
+      return new globalThis.Response(
+        [
+          '<!doctype html>',
+          '<html>',
+          '<head>',
+          '<title>Example Lesson</title>',
+          '<meta name="description" content="Student-facing lesson page.">',
+          '</head>',
+          '<body>',
+          '<header>Ignore me</header>',
+          '<main>',
+          '<h1>Lesson overview</h1>',
+          '<p>First paragraph.</p>',
+          '<p>Second paragraph.</p>',
+          '</main>',
+          '<script>console.log("ignore");</script>',
+          '</body>',
+          '</html>',
+        ].join(''),
+        {
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+          },
+        }
+      );
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'web_lookup',
+        arguments: {
+          input: 'https://example.com/lesson',
+        },
+      },
+      {
+        fetchRef,
+      }
+    );
+
+    expect(result.result.status).toBe('successful');
+    expect(result.result.body).toContain('- MIME type: text/html; charset=utf-8');
+    expect(result.result.body).toContain('- Title: Example Lesson');
+    expect(result.result.body).toContain('## Summary');
+    expect(result.result.body).toContain('Student-facing lesson page.');
+    expect(result.result.body).toContain('First paragraph.');
+    expect(result.result.body).toContain('Second paragraph.');
+    expect(result.result.body).not.toContain('console.log');
+    expect(result.result.message).toBeUndefined();
+  });
+
+  test('rejects non-url input for web_lookup until search is implemented', async () => {
+    const result = await executeToolCall({
+        name: 'web_lookup',
+        arguments: {
+          input: 'latest news about europa',
+        },
+      })
+    ;
+
+    expect(result.result).toEqual({
+      status: 'failed',
+      body:
+        'web_lookup currently supports only direct https URLs. Search queries are not implemented yet.',
+      message:
+        'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+    });
+    expect(result.resultText).toBe(
+      JSON.stringify({
+        status: 'failed',
+        body:
+          'web_lookup currently supports only direct https URLs. Search queries are not implemented yet.',
+        message:
+          'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+      })
+    );
+  });
+
+  test('rejects http input for web_lookup', async () => {
+    const result = await executeToolCall({
+      name: 'web_lookup',
+      arguments: {
+        input: 'http://example.com/article',
+      },
+    });
+
+    expect(result.result).toEqual({
+      status: 'failed',
+      body:
+        'web_lookup currently supports only direct https URLs. Search queries are not implemented yet.',
+      message:
+        'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+    });
+  });
+
+  test('returns a failed envelope when web_lookup input is missing', async () => {
+    const result = await executeToolCall({
+      name: 'web_lookup',
+      arguments: {},
+    });
+
+    expect(result.result).toEqual({
+      status: 'failed',
+      body: 'web_lookup input must be a non-empty string.',
+      message:
+        'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+    });
   });
 
   test('supports curl -I for response headers', async () => {

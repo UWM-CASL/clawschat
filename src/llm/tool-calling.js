@@ -1,5 +1,6 @@
 import { executeWritePythonFileTool } from './python-tool.js';
 import { buildShellToolResponseEnvelope, executeShellCommandTool } from './shell-command-tool.js';
+import { executeWebLookupTool } from './web-tool.js';
 
 export const TOOL_DEFINITIONS = Object.freeze([
   {
@@ -56,6 +57,22 @@ export const TOOL_DEFINITIONS = Object.freeze([
           enum: [0, 1],
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'web_lookup',
+    displayName: 'Web Lookup',
+    description: 'Pass {"input":"https://..."} to fetch a page and return a preview.',
+    enabled: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        input: {
+          type: 'string',
+        },
+      },
+      required: ['input'],
       additionalProperties: false,
     },
   },
@@ -256,7 +273,13 @@ export function buildToolCallingSystemPrompt(
     ...buildEnabledToolInstructions(enabledTools),
     ...(enabledTools.length
       ? []
-      : toolList.flatMap((toolName) => buildToolInstructionLines(toolName))),
+      : toolList.flatMap((toolName) => {
+          const definition = getToolDefinitionByName(toolName);
+          return buildToolInstructionLines(
+            toolName,
+            typeof definition?.description === 'string' ? definition.description : ''
+          );
+        })),
   ];
   const toolBehaviorLines = ['After a tool result, continue the work and answer naturally.'].filter(
     Boolean
@@ -953,7 +976,7 @@ function sanitizeTaskListItemText(value) {
   if (
     /^<tool_call>[\s\S]*<\/tool_call>$/i.test(normalizedText) ||
     /^<\|tool_call_start\|>[\s\S]*<\|tool_call_end\|>$/i.test(normalizedText) ||
-    /^<\|tool_call\>[\s\S]*<tool_call\|>$/i.test(normalizedText)
+    /^<\|tool_call>[\s\S]*<tool_call\|>$/i.test(normalizedText)
   ) {
     throw new Error('tasklist item must be plain language, not a tool call block.');
   }
@@ -1350,6 +1373,15 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
   }
   if (toolName === 'tasklist') {
     const result = executeTaskList(argumentsValue, runtimeContext);
+    return {
+      toolName,
+      arguments: argumentsValue,
+      result,
+      resultText: JSON.stringify(result),
+    };
+  }
+  if (toolName === 'web_lookup') {
+    const result = await executeWebLookupTool(argumentsValue, runtimeContext);
     return {
       toolName,
       arguments: argumentsValue,
