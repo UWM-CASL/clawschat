@@ -10,6 +10,21 @@ const MAX_SHELL_COMMAND_LENGTH = 2_000;
 const MAX_SHELL_TOKENS = 128;
 const MAX_SHELL_VARIABLE_VALUE_LENGTH = 512;
 const SHELL_LITERAL_DOLLAR_PLACEHOLDER = String.fromCharCode(0x1d);
+const PIPELINE_SAFE_COMMAND_NAMES = new Set([
+  'printf',
+  'echo',
+  'cat',
+  'head',
+  'tail',
+  'wc',
+  'sort',
+  'uniq',
+  'cut',
+  'tr',
+  'nl',
+  'grep',
+  'sed',
+]);
 const FILE_EXTENSION_DESCRIPTIONS = Object.freeze({
   txt: 'text',
   md: 'Markdown text',
@@ -538,7 +553,59 @@ function tokenizeShellCommand(command) {
   return tokens;
 }
 
-function hasUnsupportedShellSyntax(command) {
+function splitShellPipelineSegments(command) {
+  const text = toShellText(command);
+  const segments = [];
+  let current = '';
+  let quote = '';
+  let escaping = false;
+
+  for (const character of text) {
+    if (escaping) {
+      current += character;
+      escaping = false;
+      continue;
+    }
+    if (character === '\\' && quote !== "'") {
+      current += character;
+      escaping = true;
+      continue;
+    }
+    if ((character === '"' || character === "'") && !quote) {
+      current += character;
+      quote = character;
+      continue;
+    }
+    if (character === quote) {
+      current += character;
+      quote = '';
+      continue;
+    }
+    if (!quote && character === '|') {
+      const segment = current.trim();
+      if (!segment) {
+        throw new Error('pipeline segments cannot be empty.');
+      }
+      segments.push(segment);
+      current = '';
+      continue;
+    }
+    current += character;
+  }
+
+  if (escaping || quote) {
+    throw new Error('unterminated escape or quote.');
+  }
+
+  const finalSegment = current.trim();
+  if (!finalSegment) {
+    throw new Error('pipeline segments cannot be empty.');
+  }
+  segments.push(finalSegment);
+  return segments;
+}
+
+function hasUnsupportedShellSyntax(command, { allowPipes = false } = {}) {
   const text = toShellText(command);
   let quote = '';
   let escaping = false;
@@ -569,13 +636,15 @@ function hasUnsupportedShellSyntax(command) {
       continue;
     }
     if (
-      character === '|' ||
       character === ';' ||
       character === '&' ||
       character === '`' ||
       character === '>' ||
       character === '<'
     ) {
+      return true;
+    }
+    if (character === '|' && !allowPipes) {
       return true;
     }
     if (character === '$' && text[index + 1] === '(') {
@@ -1021,7 +1090,7 @@ async function resolveOutputPath(
   return normalizedDestination;
 }
 
-function parseLineCountArguments(commandName, args) {
+function parseLineCountArguments(commandName, args, { allowPathless = false } = {}) {
   if (!args.length) {
     return {
       count: 10,
@@ -1042,6 +1111,12 @@ function parseLineCountArguments(commandName, args) {
   }
   if (!Number.isInteger(count) || count < 0) {
     throw new Error(`${commandName}: line count must be a non-negative integer.`);
+  }
+  if (!remaining.length && allowPathless) {
+    return {
+      count,
+      path: null,
+    };
   }
   if (remaining.length !== 1) {
     throw new Error(`${commandName}: expected exactly one file path.`);
@@ -1491,6 +1566,10 @@ async function readWorkspaceTextFile(
   };
 }
 
+function hasPipelineStdin(stdinText) {
+  return stdinText !== null && stdinText !== undefined;
+}
+
 function isBlankCatLine(line) {
   return line.trim() === '';
 }
@@ -1527,10 +1606,13 @@ function formatCatText(text, { numberAllLines = false, numberNonBlankLines = fal
   return trailingNewline ? `${outputText}\n` : outputText;
 }
 
-async function runCat(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
-  if (!args.length) {
-    return createShellError(commandText, 'cat', 'expected at least one file path.', 2, currentWorkingDirectory);
-  }
+async function runCat(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let numberAllLines = false;
   let numberNonBlankLines = false;
   let squeezeBlank = false;
@@ -1576,10 +1658,13 @@ async function runCat(commandText, args, workspaceFileSystem, currentWorkingDire
     filePaths.push(argument);
   }
 
-  if (!filePaths.length) {
+  if (!filePaths.length && !hasPipelineStdin(stdinText)) {
     return createShellError(commandText, 'cat', 'expected at least one file path.', 2, currentWorkingDirectory);
   }
   const chunks = [];
+  if (!filePaths.length) {
+    chunks.push(String(stdinText ?? ''));
+  }
   for (const rawPath of filePaths) {
     const fileResult = await readWorkspaceTextFile(
       'cat',
@@ -1604,75 +1689,103 @@ async function runCat(commandText, args, workspaceFileSystem, currentWorkingDire
   });
 }
 
-async function runHead(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+async function runHead(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let parsedArguments;
   try {
-    parsedArguments = parseLineCountArguments('head', args);
+    parsedArguments = parseLineCountArguments('head', args, {
+      allowPathless: hasPipelineStdin(stdinText),
+    });
   } catch (error) {
     return createShellError(commandText, 'head', error instanceof Error ? error.message : String(error), 2, currentWorkingDirectory);
   }
-  const fileResult = await readWorkspaceTextFile(
-    'head',
-    commandText,
-    parsedArguments.path,
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
-  if (fileResult.error) {
-    return fileResult.error;
+  const sourceText =
+    parsedArguments.path === null
+      ? String(stdinText ?? '')
+      : (
+          await readWorkspaceTextFile(
+            'head',
+            commandText,
+            parsedArguments.path,
+            workspaceFileSystem,
+            currentWorkingDirectory
+          )
+        );
+  if (sourceText?.error) {
+    return sourceText.error;
   }
-  const lines = fileResult.text.split(/\r?\n/);
+  const lines = String(parsedArguments.path === null ? sourceText : sourceText.text).split(/\r?\n/);
   return createShellResult(commandText, {
     stdout: lines.slice(0, parsedArguments.count).join('\n'),
     currentWorkingDirectory,
   });
 }
 
-async function runTail(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+async function runTail(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let parsedArguments;
   try {
-    parsedArguments = parseLineCountArguments('tail', args);
+    parsedArguments = parseLineCountArguments('tail', args, {
+      allowPathless: hasPipelineStdin(stdinText),
+    });
   } catch (error) {
     return createShellError(commandText, 'tail', error instanceof Error ? error.message : String(error), 2, currentWorkingDirectory);
   }
-  const fileResult = await readWorkspaceTextFile(
-    'tail',
-    commandText,
-    parsedArguments.path,
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
-  if (fileResult.error) {
-    return fileResult.error;
+  const sourceText =
+    parsedArguments.path === null
+      ? String(stdinText ?? '')
+      : (
+          await readWorkspaceTextFile(
+            'tail',
+            commandText,
+            parsedArguments.path,
+            workspaceFileSystem,
+            currentWorkingDirectory
+          )
+        );
+  if (sourceText?.error) {
+    return sourceText.error;
   }
-  const lines = fileResult.text.split(/\r?\n/);
+  const lines = String(parsedArguments.path === null ? sourceText : sourceText.text).split(/\r?\n/);
   return createShellResult(commandText, {
     stdout: lines.slice(Math.max(0, lines.length - parsedArguments.count)).join('\n'),
     currentWorkingDirectory,
   });
 }
 
-async function runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
-  if (!args.length) {
-    return createShellError(commandText, 'wc', 'expected one file path.', 2, currentWorkingDirectory);
-  }
-
+async function runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   let mode = 'all';
   const remaining = [...args];
   if (remaining[0]?.startsWith('-')) {
     mode = remaining.shift();
   }
-  if (remaining.length !== 1) {
+  const useStdin = remaining.length === 0 && hasPipelineStdin(stdinText);
+  if (!useStdin && remaining.length !== 1) {
     return createShellError(commandText, 'wc', 'expected one file path.', 2, currentWorkingDirectory);
   }
 
-  const fileResult = await readWorkspaceTextFile(
-    'wc',
-    commandText,
-    remaining[0],
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
+  const fileResult = useStdin
+    ? {
+        path: '',
+        text: String(stdinText ?? ''),
+      }
+    : await readWorkspaceTextFile(
+        'wc',
+        commandText,
+        remaining[0],
+        workspaceFileSystem,
+        currentWorkingDirectory
+      );
   if (fileResult.error) {
     return fileResult.error;
   }
@@ -1680,16 +1793,17 @@ async function runWc(commandText, args, workspaceFileSystem, currentWorkingDirec
   const lineCount = countLines(fileResult.text);
   const wordCount = countWords(fileResult.text);
   const byteCount = getTextEncoder().encode(fileResult.text).byteLength;
+  const targetSuffix = fileResult.path ? ` ${fileResult.path}` : '';
   let stdout = '';
 
   if (mode === '-l') {
-    stdout = `${lineCount} ${fileResult.path}`;
+    stdout = `${lineCount}${targetSuffix}`;
   } else if (mode === '-w') {
-    stdout = `${wordCount} ${fileResult.path}`;
+    stdout = `${wordCount}${targetSuffix}`;
   } else if (mode === '-c') {
-    stdout = `${byteCount} ${fileResult.path}`;
+    stdout = `${byteCount}${targetSuffix}`;
   } else if (mode === 'all') {
-    stdout = `${lineCount} ${wordCount} ${byteCount} ${fileResult.path}`;
+    stdout = `${lineCount} ${wordCount} ${byteCount}${targetSuffix}`;
   } else {
     return createShellError(commandText, 'wc', `unsupported option ${mode}.`, 2, currentWorkingDirectory);
   }
@@ -2311,11 +2425,7 @@ function translateCharacters(text, sourceSet, targetSet) {
   }).join('');
 }
 
-async function runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
-  if (!args.length) {
-    return createShellError(commandText, 'sort', 'expected at least one file path.', 2, currentWorkingDirectory);
-  }
-
+async function runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   let reverse = false;
   let numeric = false;
   const filePaths = [];
@@ -2341,12 +2451,17 @@ async function runSort(commandText, args, workspaceFileSystem, currentWorkingDir
     filePaths.push(argument);
   }
 
-  if (!filePaths.length) {
+  if (!filePaths.length && !hasPipelineStdin(stdinText)) {
     return createShellError(commandText, 'sort', 'expected at least one file path.', 2, currentWorkingDirectory);
   }
 
   const allLines = [];
   let trailingNewline = false;
+  if (!filePaths.length) {
+    const lineResult = splitShellTextIntoLines(String(stdinText ?? ''));
+    allLines.push(...lineResult.lines);
+    trailingNewline = lineResult.trailingNewline;
+  }
   for (const rawPath of filePaths) {
     const fileResult = await readWorkspaceTextFile(
       'sort',
@@ -2383,11 +2498,7 @@ async function runSort(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
-  if (!args.length) {
-    return createShellError(commandText, 'uniq', 'expected one file path.', 2, currentWorkingDirectory);
-  }
-
+async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   let countMode = false;
   const filePaths = [];
 
@@ -2408,17 +2519,23 @@ async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDir
     filePaths.push(argument);
   }
 
-  if (filePaths.length !== 1) {
+  const useStdin = filePaths.length === 0 && hasPipelineStdin(stdinText);
+  if (!useStdin && filePaths.length !== 1) {
     return createShellError(commandText, 'uniq', 'expected exactly one file path.', 2, currentWorkingDirectory);
   }
 
-  const fileResult = await readWorkspaceTextFile(
-    'uniq',
-    commandText,
-    filePaths[0],
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
+  const fileResult = useStdin
+    ? {
+        path: '',
+        text: String(stdinText ?? ''),
+      }
+    : await readWorkspaceTextFile(
+        'uniq',
+        commandText,
+        filePaths[0],
+        workspaceFileSystem,
+        currentWorkingDirectory
+      );
   if (fileResult.error) {
     return fileResult.error;
   }
@@ -2457,7 +2574,7 @@ async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+async function runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   if (!args.length) {
     return createShellError(commandText, 'cut', 'expected options and one file path.', 2, currentWorkingDirectory);
   }
@@ -2487,7 +2604,8 @@ async function runCut(commandText, args, workspaceFileSystem, currentWorkingDire
   if (!fieldSpec) {
     return createShellError(commandText, 'cut', 'option -f requires a field list.', 2, currentWorkingDirectory);
   }
-  if (filePaths.length !== 1) {
+  const useStdin = filePaths.length === 0 && hasPipelineStdin(stdinText);
+  if (!useStdin && filePaths.length !== 1) {
     return createShellError(commandText, 'cut', 'expected exactly one file path.', 2, currentWorkingDirectory);
   }
 
@@ -2504,13 +2622,18 @@ async function runCut(commandText, args, workspaceFileSystem, currentWorkingDire
     );
   }
 
-  const fileResult = await readWorkspaceTextFile(
-    'cut',
-    commandText,
-    filePaths[0],
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
+  const fileResult = useStdin
+    ? {
+        path: '',
+        text: String(stdinText ?? ''),
+      }
+    : await readWorkspaceTextFile(
+        'cut',
+        commandText,
+        filePaths[0],
+        workspaceFileSystem,
+        currentWorkingDirectory
+      );
   if (fileResult.error) {
     return fileResult.error;
   }
@@ -2846,7 +2969,7 @@ async function runColumn(commandText, args, workspaceFileSystem, currentWorkingD
   });
 }
 
-async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   if (!args.length) {
     return createShellError(commandText, 'tr', 'expected character sets and one file path.', 2, currentWorkingDirectory);
   }
@@ -2865,7 +2988,9 @@ async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirec
     positional.push(argument);
   }
 
-  if (deleteMode ? positional.length !== 2 : positional.length !== 3) {
+  const useStdin =
+    (deleteMode ? positional.length === 1 : positional.length === 2) && hasPipelineStdin(stdinText);
+  if (!useStdin && (deleteMode ? positional.length !== 2 : positional.length !== 3)) {
     return createShellError(
       commandText,
       'tr',
@@ -2879,13 +3004,18 @@ async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirec
 
   const [set1, set2OrPath, maybePath] = positional;
   const filePath = deleteMode ? set2OrPath : maybePath;
-  const fileResult = await readWorkspaceTextFile(
-    'tr',
-    commandText,
-    filePath,
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
+  const fileResult = useStdin
+    ? {
+        path: '',
+        text: String(stdinText ?? ''),
+      }
+    : await readWorkspaceTextFile(
+        'tr',
+        commandText,
+        filePath,
+        workspaceFileSystem,
+        currentWorkingDirectory
+      );
   if (fileResult.error) {
     return fileResult.error;
   }
@@ -2902,17 +3032,23 @@ async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirec
   });
 }
 
-async function runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
-  if (args.length !== 1) {
+async function runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+  const useStdin = args.length === 0 && hasPipelineStdin(stdinText);
+  if (!useStdin && args.length !== 1) {
     return createShellError(commandText, 'nl', 'expected exactly one file path.', 2, currentWorkingDirectory);
   }
-  const fileResult = await readWorkspaceTextFile(
-    'nl',
-    commandText,
-    args[0],
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
+  const fileResult = useStdin
+    ? {
+        path: '',
+        text: String(stdinText ?? ''),
+      }
+    : await readWorkspaceTextFile(
+        'nl',
+        commandText,
+        args[0],
+        workspaceFileSystem,
+        currentWorkingDirectory
+      );
   if (fileResult.error) {
     return fileResult.error;
   }
@@ -3424,7 +3560,7 @@ async function runFind(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   let ignoreCase = false;
   let showLineNumbers = false;
   let invertMatch = false;
@@ -3470,7 +3606,7 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
     positional.push(argument);
   }
 
-  if (positional.length < 2) {
+  if (positional.length < 1 || (positional.length < 2 && !hasPipelineStdin(stdinText))) {
     return createShellError(
       commandText,
       'grep',
@@ -3499,15 +3635,23 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
 
   const multipleFiles = rawPaths.length > 1;
   const outputs = [];
+  const targets = rawPaths.length
+    ? rawPaths.map((rawPath) => ({ rawPath, stdin: false }))
+    : [{ rawPath: '', stdin: true }];
 
-  for (const rawPath of rawPaths) {
-    const fileResult = await readWorkspaceTextFile(
-      'grep',
-      commandText,
-      rawPath,
-      workspaceFileSystem,
-      currentWorkingDirectory
-    );
+  for (const target of targets) {
+    const fileResult = target.stdin
+      ? {
+          path: '',
+          text: String(stdinText ?? ''),
+        }
+      : await readWorkspaceTextFile(
+          'grep',
+          commandText,
+          target.rawPath,
+          workspaceFileSystem,
+          currentWorkingDirectory
+        );
     if (fileResult.error) {
       return fileResult.error;
     }
@@ -3541,14 +3685,14 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
     }
 
     if (listMatchingFiles) {
-      if (matchCount > 0) {
+      if (matchCount > 0 && normalizedPath) {
         outputs.push(normalizedPath);
       }
       continue;
     }
 
     if (countOnly) {
-      outputs.push(multipleFiles ? `${normalizedPath}:${matchCount}` : String(matchCount));
+      outputs.push(multipleFiles && normalizedPath ? `${normalizedPath}:${matchCount}` : String(matchCount));
       continue;
     }
 
@@ -3561,7 +3705,7 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
+async function runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
   if (!args.length) {
     return createShellError(
       commandText,
@@ -3600,7 +3744,8 @@ async function runSed(commandText, args, workspaceFileSystem, currentWorkingDire
     positional.push(argument);
   }
 
-  if (positional.length !== 2) {
+  const useStdin = positional.length === 1 && hasPipelineStdin(stdinText);
+  if (!useStdin && positional.length !== 2) {
     return createShellError(
       commandText,
       'sed',
@@ -3623,13 +3768,28 @@ async function runSed(commandText, args, workspaceFileSystem, currentWorkingDire
     );
   }
 
-  const fileResult = await readWorkspaceTextFile(
-    'sed',
-    commandText,
-    positional[1],
-    workspaceFileSystem,
-    currentWorkingDirectory
-  );
+  if (inPlace && useStdin) {
+    return createShellError(
+      commandText,
+      'sed',
+      'cannot use -i when reading from pipeline input.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  const fileResult = useStdin
+    ? {
+        path: '',
+        text: String(stdinText ?? ''),
+      }
+    : await readWorkspaceTextFile(
+        'sed',
+        commandText,
+        positional[1],
+        workspaceFileSystem,
+        currentWorkingDirectory
+      );
   if (fileResult.error) {
     return fileResult.error;
   }
@@ -3986,6 +4146,7 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'head -n 20 /workspace/<file>',
       'find /workspace -name "*.txt"',
       'grep -n "term" /workspace/<file>',
+      'cat /workspace/<file> | grep "term" | wc -l',
       "sed -n '2,4p' /workspace/<file>",
       "sed -i 's/old/new/g' /workspace/<file>",
       'file /workspace/<file>',
@@ -3998,20 +4159,14 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'cp /workspace/<source-file> /workspace/<destination-file>',
     ],
     limitations: [
-      'Only one command runs per tool call.',
+      'One command or one text pipeline runs per tool call.',
       'Commands are GNU/Linux-like, but only the documented subset is implemented.',
       `Command text must be plain shell input, ${MAX_SHELL_COMMAND_LENGTH} characters or fewer, and free of control characters.`,
       'Relative paths resolve from the current working directory.',
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.',
-      'paste merges text files line-by-line, with optional -d delimiters.',
-      'join supports two-file joins with optional -1, -2, and -t field-selection flags.',
-      'column focuses on table alignment, especially with -t and optional -s separators.',
-      'sed supports a single sed-like script with addresses N, N,M, /regex/, and $, plus commands p, d, and s///g, with optional -n and -i.',
-      'file reports a small deterministic set of directory, signature, extension, and text-vs-binary classifications.',
-      'diff is line-based and emits unified-style emulated output rather than full GNU diff compatibility.',
-      'curl uses the browser fetch API, so CORS, browser-managed redirects, and forbidden request headers still apply.',
-      'curl supports URL, -I, -X, repeated -H, -d, and -o only; -o writes the response bytes to a file under /workspace.',
-      'Pipes, redirection, globbing, command substitution, and full shell expansion semantics are not supported.',
+      'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed.',
+      'Unsupported syntax: ;, &&, redirection, substitution, globbing.',
+      'paste, join, column, file, diff, and curl are partial GNU/Linux-like subsets.',
       'Unsupported commands or syntax return stderr text and a non-zero exit code.',
     ],
     placeholders: [
@@ -4082,6 +4237,250 @@ function getValidatedShellToolArguments(argumentsValue = {}) {
   };
 }
 
+function normalizeShellResultForCommand(result, commandText) {
+  return {
+    ...result,
+    command: commandText,
+  };
+}
+
+async function executeSingleShellCommand(
+  commandText,
+  tokens,
+  workspaceFileSystem,
+  runtimeContext,
+  currentWorkingDirectory,
+  { stdinText = null, pipelineMode = false } = {}
+) {
+  const assignmentMatch =
+    tokens.length === 1 ? tokens[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
+  if (assignmentMatch) {
+    if (pipelineMode) {
+      return createShellError(
+        commandText,
+        'shell',
+        'variable assignment is not supported inside pipelines.',
+        2,
+        currentWorkingDirectory
+      );
+    }
+    if (isReadonlyShellVariable(assignmentMatch[1])) {
+      return createShellError(
+        commandText,
+        'shell',
+        `cannot overwrite readonly variable '${assignmentMatch[1]}'.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+    try {
+      setShellVariable(
+        runtimeContext,
+        assignmentMatch[1],
+        expandShellToken(assignmentMatch[2], runtimeContext, currentWorkingDirectory)
+      );
+    } catch (error) {
+      return createShellError(
+        commandText,
+        'shell',
+        error instanceof Error ? error.message : String(error),
+        1,
+        currentWorkingDirectory
+      );
+    }
+    return createShellResult(commandText, {
+      currentWorkingDirectory,
+    });
+  }
+
+  const expandedTokens = expandShellTokens(tokens, runtimeContext, currentWorkingDirectory);
+  if (expandedTokens.length > MAX_SHELL_TOKENS) {
+    return createShellError(
+      commandText,
+      'shell',
+      `command expands to too many tokens; limit is ${MAX_SHELL_TOKENS}.`,
+      2,
+      currentWorkingDirectory
+    );
+  }
+  if (!expandedTokens.length) {
+    return createShellError(
+      commandText,
+      'shell',
+      'command is empty after expansion.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  const [commandName, ...args] = expandedTokens;
+  if (pipelineMode && !PIPELINE_SAFE_COMMAND_NAMES.has(commandName)) {
+    return createShellError(
+      commandText,
+      commandName,
+      'this command is not supported inside pipelines.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  let result;
+  if (commandName === 'pwd') {
+    result = runPwd(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'basename') {
+    result = runBasename(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'dirname') {
+    result = runDirname(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'printf') {
+    result = runPrintf(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'true') {
+    result = runTrue(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'false') {
+    result = runFalse(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'cd') {
+    result = runCd(commandText, args, workspaceFileSystem, runtimeContext, currentWorkingDirectory);
+  } else if (commandName === 'echo') {
+    result = runEcho(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'set') {
+    result = runSet(commandText, args, runtimeContext, currentWorkingDirectory);
+  } else if (commandName === 'unset') {
+    result = runUnset(commandText, args, runtimeContext, currentWorkingDirectory);
+  } else if (commandName === 'which') {
+    result = runWhich(commandText, args, currentWorkingDirectory);
+  } else if (commandName === 'ls') {
+    result = runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'cat') {
+    result = runCat(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'head') {
+    result = runHead(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'tail') {
+    result = runTail(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'wc') {
+    result = runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'sort') {
+    result = runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'uniq') {
+    result = runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'cut') {
+    result = runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'paste') {
+    result = runPaste(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'join') {
+    result = runJoin(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'column') {
+    result = runColumn(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'tr') {
+    result = runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'nl') {
+    result = runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'rmdir') {
+    result = runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'mkdir') {
+    result = runMkdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'mktemp') {
+    result = runMktemp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'touch') {
+    result = runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'cp') {
+    result = runCp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'mv') {
+    result = runMv(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'rm') {
+    result = runRm(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'find') {
+    result = runFind(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'grep') {
+    result = runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'sed') {
+    result = runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText);
+  } else if (commandName === 'file') {
+    result = runFile(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'diff') {
+    result = runDiff(commandText, args, workspaceFileSystem, currentWorkingDirectory);
+  } else if (commandName === 'curl') {
+    result = runCurl(
+      commandText,
+      args,
+      workspaceFileSystem,
+      runtimeContext,
+      currentWorkingDirectory
+    );
+  } else {
+    result = createShellError(
+      commandText,
+      'shell',
+      `command '${commandName}' is not available. Call run_shell_command with {} to inspect the supported subset.`,
+      127,
+      currentWorkingDirectory
+    );
+  }
+  return await result;
+}
+
+async function executeShellPipeline(
+  commandText,
+  workspaceFileSystem,
+  runtimeContext,
+  currentWorkingDirectory
+) {
+  let segments;
+  try {
+    segments = splitShellPipelineSegments(commandText);
+  } catch (error) {
+    return createShellError(
+      commandText,
+      'shell',
+      error instanceof Error ? error.message : String(error),
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  let stdinText = null;
+  let latestResult = createShellResult(commandText, {
+    currentWorkingDirectory,
+  });
+  for (const segmentText of segments) {
+    let tokens;
+    try {
+      tokens = tokenizeShellCommand(segmentText);
+    } catch (error) {
+      return createShellError(
+        commandText,
+        'shell',
+        error instanceof Error ? error.message : String(error),
+        2,
+        currentWorkingDirectory
+      );
+    }
+    if (!tokens.length) {
+      return createShellError(
+        commandText,
+        'shell',
+        'command is empty.',
+        2,
+        currentWorkingDirectory
+      );
+    }
+    latestResult = await executeSingleShellCommand(
+      segmentText,
+      tokens,
+      workspaceFileSystem,
+      runtimeContext,
+      currentWorkingDirectory,
+      {
+        stdinText,
+        pipelineMode: true,
+      }
+    );
+    if (latestResult.exitCode !== 0) {
+      return normalizeShellResultForCommand(latestResult, commandText);
+    }
+    stdinText = latestResult.stdout;
+  }
+  return normalizeShellResultForCommand(latestResult, commandText);
+}
+
 export async function executeShellCommandTool(argumentsValue = {}, runtimeContext = {}) {
   const normalizedArguments = /** @type {{command?: string}} */ (
     getValidatedShellToolArguments(argumentsValue)
@@ -4113,11 +4512,14 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
     return result;
   }
 
-  if (hasUnsupportedShellSyntax(commandText)) {
+  const hasPipeline = commandText.includes('|');
+  if (hasUnsupportedShellSyntax(commandText, { allowPipes: hasPipeline })) {
     const result = createShellError(
       commandText,
       'shell',
-      'pipelines, redirection, command chaining, and substitutions are not supported in this subset.',
+      hasPipeline
+        ? 'redirection, command chaining, and substitutions are not supported in this subset.'
+        : 'pipelines, redirection, command chaining, and substitutions are not supported in this subset.',
       2,
       currentWorkingDirectory
     );
@@ -4127,199 +4529,52 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
     return result;
   }
 
-  let tokens;
-  try {
-    tokens = tokenizeShellCommand(commandText);
-  } catch (error) {
-    const result = createShellError(
+  let resolvedResult;
+  if (hasPipeline) {
+    resolvedResult = await executeShellPipeline(
       commandText,
-      'shell',
-      error instanceof Error ? error.message : String(error),
-      2,
-      currentWorkingDirectory
-    );
-    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-      runtimeContext.onShellCommandComplete(result);
-    }
-    return result;
-  }
-  if (!tokens.length) {
-    const result = createShellError(
-      commandText,
-      'shell',
-      'command is empty.',
-      2,
-      currentWorkingDirectory
-    );
-    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-      runtimeContext.onShellCommandComplete(result);
-    }
-    return result;
-  }
-
-  const assignmentMatch =
-    tokens.length === 1 ? tokens[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
-  if (assignmentMatch) {
-    if (isReadonlyShellVariable(assignmentMatch[1])) {
-      const result = createShellError(
-        commandText,
-        'shell',
-        `cannot overwrite readonly variable '${assignmentMatch[1]}'.`,
-        1,
-        currentWorkingDirectory
-      );
-      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-        runtimeContext.onShellCommandComplete(result);
-      }
-      return result;
-    }
-    try {
-      setShellVariable(
-        runtimeContext,
-        assignmentMatch[1],
-        expandShellToken(assignmentMatch[2], runtimeContext, currentWorkingDirectory)
-      );
-    } catch (error) {
-      const result = createShellError(
-        commandText,
-        'shell',
-        error instanceof Error ? error.message : String(error),
-        1,
-        currentWorkingDirectory
-      );
-      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-        runtimeContext.onShellCommandComplete(result);
-      }
-      return result;
-    }
-    const result = createShellResult(commandText, {
-      currentWorkingDirectory,
-    });
-    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-      runtimeContext.onShellCommandComplete(result);
-    }
-    return result;
-  }
-
-  const expandedTokens = expandShellTokens(tokens, runtimeContext, currentWorkingDirectory);
-  if (expandedTokens.length > MAX_SHELL_TOKENS) {
-    const result = createShellError(
-      commandText,
-      'shell',
-      `command expands to too many tokens; limit is ${MAX_SHELL_TOKENS}.`,
-      2,
-      currentWorkingDirectory
-    );
-    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-      runtimeContext.onShellCommandComplete(result);
-    }
-    return result;
-  }
-  if (!expandedTokens.length) {
-    const result = createShellError(
-      commandText,
-      'shell',
-      'command is empty after expansion.',
-      2,
-      currentWorkingDirectory
-    );
-    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-      runtimeContext.onShellCommandComplete(result);
-    }
-    return result;
-  }
-  const [commandName, ...args] = expandedTokens;
-  let result;
-  if (commandName === 'pwd') {
-    result = runPwd(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'basename') {
-    result = runBasename(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'dirname') {
-    result = runDirname(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'printf') {
-    result = runPrintf(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'true') {
-    result = runTrue(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'false') {
-    result = runFalse(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'cd') {
-    result = runCd(commandText, args, workspaceFileSystem, runtimeContext, currentWorkingDirectory);
-  } else if (commandName === 'echo') {
-    result = runEcho(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'set') {
-    result = runSet(commandText, args, runtimeContext, currentWorkingDirectory);
-  } else if (commandName === 'unset') {
-    result = runUnset(commandText, args, runtimeContext, currentWorkingDirectory);
-  } else if (commandName === 'which') {
-    result = runWhich(commandText, args, currentWorkingDirectory);
-  } else if (commandName === 'ls') {
-    result = runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'cat') {
-    result = runCat(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'head') {
-    result = runHead(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'tail') {
-    result = runTail(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'wc') {
-    result = runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'sort') {
-    result = runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'uniq') {
-    result = runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'cut') {
-    result = runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'paste') {
-    result = runPaste(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'join') {
-    result = runJoin(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'column') {
-    result = runColumn(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'tr') {
-    result = runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'nl') {
-    result = runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'rmdir') {
-    result = runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'mkdir') {
-    result = runMkdir(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'mktemp') {
-    result = runMktemp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'touch') {
-    result = runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'cp') {
-    result = runCp(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'mv') {
-    result = runMv(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'rm') {
-    result = runRm(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'find') {
-    result = runFind(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'grep') {
-    result = runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'sed') {
-    result = runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'file') {
-    result = runFile(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'diff') {
-    result = runDiff(commandText, args, workspaceFileSystem, currentWorkingDirectory);
-  } else if (commandName === 'curl') {
-    result = runCurl(
-      commandText,
-      args,
       workspaceFileSystem,
       runtimeContext,
       currentWorkingDirectory
     );
   } else {
-    result = createShellError(
+    let tokens;
+    try {
+      tokens = tokenizeShellCommand(commandText);
+    } catch (error) {
+      const result = createShellError(
+        commandText,
+        'shell',
+        error instanceof Error ? error.message : String(error),
+        2,
+        currentWorkingDirectory
+      );
+      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+        runtimeContext.onShellCommandComplete(result);
+      }
+      return result;
+    }
+    if (!tokens.length) {
+      const result = createShellError(
+        commandText,
+        'shell',
+        'command is empty.',
+        2,
+        currentWorkingDirectory
+      );
+      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
+        runtimeContext.onShellCommandComplete(result);
+      }
+      return result;
+    }
+    resolvedResult = await executeSingleShellCommand(
       commandText,
-      'shell',
-      `command '${commandName}' is not available. Call run_shell_command with {} to inspect the supported subset.`,
-      127,
+      tokens,
+      workspaceFileSystem,
+      runtimeContext,
       currentWorkingDirectory
     );
   }
-  const resolvedResult = await result;
   if (typeof runtimeContext?.onShellCommandComplete === 'function') {
     runtimeContext.onShellCommandComplete(resolvedResult);
   }

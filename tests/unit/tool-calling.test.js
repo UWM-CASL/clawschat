@@ -1014,25 +1014,13 @@ describe('tool-calling prompt builder', () => {
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.'
     );
     expect(result.result.limitations).toContain(
-      'paste merges text files line-by-line, with optional -d delimiters.'
+      'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed.'
     );
     expect(result.result.limitations).toContain(
-      'join supports two-file joins with optional -1, -2, and -t field-selection flags.'
+      'Unsupported syntax: ;, &&, redirection, substitution, globbing.'
     );
     expect(result.result.limitations).toContain(
-      'column focuses on table alignment, especially with -t and optional -s separators.'
-    );
-    expect(result.result.limitations).toContain(
-      'sed supports a single sed-like script with addresses N, N,M, /regex/, and $, plus commands p, d, and s///g, with optional -n and -i.'
-    );
-    expect(result.result.limitations).toContain(
-      'file reports a small deterministic set of directory, signature, extension, and text-vs-binary classifications.'
-    );
-    expect(result.result.limitations).toContain(
-      'diff is line-based and emits unified-style emulated output rather than full GNU diff compatibility.'
-    );
-    expect(result.result.limitations).toContain(
-      'curl uses the browser fetch API, so CORS, browser-managed redirects, and forbidden request headers still apply.'
+      'paste, join, column, file, diff, and curl are partial GNU/Linux-like subsets.'
     );
   });
 
@@ -1872,6 +1860,69 @@ describe('tool-calling prompt builder', () => {
       stdout: 'chapter one',
       stderr: '',
     });
+  });
+
+  test('supports text pipelines across stdin-aware shell commands', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cat notes.txt | grep beta | wc -w',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/notes.txt': 'alpha\nbeta\ngamma\n',
+        }),
+      }
+    );
+
+    expect(result.result).toEqual({
+      shellFlavor: 'GNU/Linux-like shell subset',
+      currentWorkingDirectory: '/workspace',
+      command: 'cat notes.txt | grep beta | wc -w',
+      exitCode: 0,
+      stdout: '1',
+      stderr: '',
+    });
+  });
+
+  test('rejects non-pipeline-safe commands inside pipelines', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'cd coursework | cat notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem({
+          '/workspace/coursework/notes.txt': 'chapter one',
+        }),
+      }
+    );
+
+    expect(result.result.exitCode).toBe(2);
+    expect(result.result.stderr).toContain('cd: this command is not supported inside pipelines.');
+  });
+
+  test('continues rejecting command chaining with semicolons', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo hello; pwd',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.result.exitCode).toBe(2);
+    expect(result.result.stderr).toContain(
+      'pipelines, redirection, command chaining, and substitutions are not supported'
+    );
   });
 
   test('supports minimal shell variables with assignment and expansion', async () => {

@@ -173,7 +173,8 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `diff` is line-based and emits unified-style emulated output rather than full GNU diff compatibility
   - `curl` uses the browser fetch API, so CORS, browser-managed redirects, and forbidden request headers still apply
   - `curl -o` writes response bytes to a file under `/workspace`; without `-o`, response bytes are decoded as UTF-8 text for `stdout`
-  - pipes, redirection, globbing, command substitution, and full shell expansion semantics are not implemented yet
+  - `|` is supported for `printf`, `echo`, `cat`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `nl`, `grep`, and `sed`
+  - `;`, `&&`, redirection, substitution, and globbing are not implemented
   - unsupported commands/syntax return shell-style `stderr` text with a non-zero `exitCode`
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js) and [src/llm/shell-command-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/shell-command-tool.js).
