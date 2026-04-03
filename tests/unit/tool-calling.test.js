@@ -339,7 +339,7 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      "Commands are GNU/Linux-like but only a subset is implemented. Call it first with an empty arguments object for this model's tool-call format to see the supported commands and placeholder paths."
+      "Commands are GNU/Linux-like but only a subset is implemented. Pass shell text in \"cmd\". Call it first with an empty arguments object for this model's tool-call format to see the supported commands and placeholder paths."
     );
   });
 
@@ -351,7 +351,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'pwd',
+          cmd: 'pwd',
         },
       },
       {
@@ -599,6 +599,29 @@ describe('tool-calling prompt builder', () => {
         },
         rawText:
           '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        format: 'json',
+      },
+    ]);
+  });
+
+  test('sniffs a run_shell_command json tool call when the shell field is cmd', () => {
+    expect(
+      sniffToolCalls(
+        '{"name":"run_shell_command","parameters":{"cmd":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        }
+      )
+    ).toEqual([
+      {
+        name: 'run_shell_command',
+        arguments: {
+          cmd: 'grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l',
+        },
+        rawText:
+          '{"name":"run_shell_command","parameters":{"cmd":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
         format: 'json',
       },
     ]);
@@ -1024,6 +1047,35 @@ describe('tool-calling prompt builder', () => {
     ).rejects.toThrow('run_shell_command command must be plain shell text, not a fenced code block.');
   });
 
+  test('accepts cmd as the preferred run_shell_command argument name', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          cmd: 'pwd',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.toolName).toBe('run_shell_command');
+    expect(result.result.stdout).toBe('/workspace');
+  });
+
+  test('rejects run_shell_command calls that send both cmd and command', async () => {
+    await expect(
+      executeToolCall({
+        name: 'run_shell_command',
+        arguments: {
+          cmd: 'pwd',
+          command: 'ls',
+        },
+      })
+    ).rejects.toThrow('run_shell_command accepts either cmd or command, not both.');
+  });
+
   test('rejects nested json tool calls in shell commands', async () => {
     await expect(
       executeToolCall({
@@ -1062,6 +1114,9 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.toolName).toBe('run_shell_command');
+    expect(result.arguments).toEqual({
+      command: 'cat notes.txt',
+    });
     expect(result.result).toEqual({
       shellFlavor: 'GNU/Linux-like shell subset',
       currentWorkingDirectory: '/workspace',

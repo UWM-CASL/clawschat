@@ -1747,13 +1747,16 @@ function getShellTerminalEntries(conversation) {
     .filter((message) => message?.role === 'tool' && message.toolName === 'run_shell_command')
     .map((message) => {
       const result = parseShellToolResult(message);
+      const recordedCommand =
+        typeof message?.toolArguments?.cmd === 'string' && message.toolArguments.cmd.trim()
+          ? message.toolArguments.cmd.trim()
+          : typeof message?.toolArguments?.command === 'string' && message.toolArguments.command.trim()
+            ? message.toolArguments.command.trim()
+            : '';
       return {
         command:
-          typeof message?.toolArguments?.command === 'string' && message.toolArguments.command.trim()
-            ? message.toolArguments.command.trim()
-            : typeof result?.command === 'string' && result.command.trim()
-              ? result.command.trim()
-              : '',
+          recordedCommand ||
+          (typeof result?.command === 'string' && result.command.trim() ? result.command.trim() : ''),
         currentWorkingDirectory:
           typeof result?.currentWorkingDirectory === 'string' && result.currentWorkingDirectory.trim()
             ? result.currentWorkingDirectory.trim()

@@ -290,7 +290,7 @@ Notes:
 
 Per-model limits and defaults:
 
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}`, no thinking tags
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"cmd":"..."}` inside `parameters`, no thinking tags
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
 - Both Llama entries use the published `model_q4f16` web export and enable `useExternalDataFormat: true` for `.onnx_data` loading.
 - `onnx-community/Qwen3-0.6B-ONNX`: runtime dtype `q4f16`, max context `40960`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, feature flags `thinking` and `toolCalling`, tool call format `<tool_call>{"name":"tool_name","arguments":{...}}</tool_call>`, thinking tags `<think>` / `</think>`, thinking control `{ runtimeParameter: "enable_thinking", enabledInstruction: "/think", disabledInstruction: "/no_think" }`

@@ -125,6 +125,7 @@ Student-facing browser chat UI with local model inference.
 - Tool-calling behavior, transcript presentation, export semantics, the current built-in tool catalog, and the planned function-call/MCP/`SKILL.md` capability model are documented in `docs/tools.md`.
 - The current built-in tool catalog includes date/time lookup, user location lookup, a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch, and a browser-local `run_shell_command` tool that exposes a documented GNU/Linux-like command subset over `/workspace`.
   - The shell tool keeps a conversation-local current working directory, defaults it to `/workspace`, and resolves relative paths from that pointer.
+  - `run_shell_command` now documents `cmd` as its preferred shell-text argument and still accepts legacy `command` for compatibility.
   - Shell-command input is sanitized before execution: oversized commands, control characters, fenced blocks, and nested tool-call payloads are rejected.
   - Shell-tool responses exposed to the model and transcript use a compact `{"status":"success"|"failed","body":"..."}` envelope, and the `body` is plain human-readable text rather than a schema dump.
   - When `run_shell_command` is invoked, an embedded read-only xterm terminal opens on the right side of the chat workspace, shows the shell prompt plus command/output, and can be manually closed until the next shell command reopens it.

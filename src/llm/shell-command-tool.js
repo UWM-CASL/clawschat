@@ -249,7 +249,8 @@ function formatShellCommandUsageBody(currentWorkingDirectory = WORKSPACE_ROOT_PA
   return [
     `Current working directory: ${currentWorkingDirectory}`,
     `Supported commands: ${SHELL_COMMANDS.map((command) => command.name).join(', ')}`,
-    'Call again with {"command":"..."}',
+    'Call again with {"cmd":"..."}',
+    'Legacy {"command":"..."} is still accepted.',
   ].join('\n');
 }
 
@@ -4060,20 +4061,24 @@ function getValidatedShellToolArguments(argumentsValue = {}) {
   if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) {
     throw new Error('run_shell_command arguments must be an object.');
   }
-  const shellArguments = /** @type {{command?: unknown}} */ (argumentsValue);
-  const supportedKeys = new Set(['command']);
+  const shellArguments = /** @type {{cmd?: unknown; command?: unknown}} */ (argumentsValue);
+  const supportedKeys = new Set(['cmd', 'command']);
   const unexpectedKeys = Object.keys(argumentsValue).filter((key) => !supportedKeys.has(key));
   if (unexpectedKeys.length) {
     throw new Error(`run_shell_command does not accept: ${unexpectedKeys.join(', ')}.`);
   }
-  if (shellArguments.command === undefined) {
+  if (shellArguments.cmd !== undefined && shellArguments.command !== undefined) {
+    throw new Error('run_shell_command accepts either cmd or command, not both.');
+  }
+  const commandValue = shellArguments.cmd !== undefined ? shellArguments.cmd : shellArguments.command;
+  if (commandValue === undefined) {
     return {};
   }
-  if (typeof shellArguments.command !== 'string') {
+  if (typeof commandValue !== 'string') {
     throw new Error('run_shell_command command must be a non-empty string.');
   }
   return {
-    command: sanitizeShellCommandText(shellArguments.command),
+    command: sanitizeShellCommandText(commandValue),
   };
 }
 

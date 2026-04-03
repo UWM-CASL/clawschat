@@ -63,12 +63,12 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'run_shell_command',
     displayName: 'Shell Command Runner',
     description:
-      'Passes a shell command to an emulated Linux shell starting in /workspace. Call with an empty arguments object to get syntax and supported commands.',
+      'Passes a shell command to an emulated Linux shell starting in /workspace. Prefer {"cmd":"..."} for the shell text. Call with an empty arguments object to get syntax and supported commands.',
     enabled: true,
     parameters: {
       type: 'object',
       properties: {
-        command: {
+        cmd: {
           type: 'string',
         },
       },
@@ -191,7 +191,7 @@ function buildToolInstructionLines(name, description = '') {
   }
   if (normalizedName === 'run_shell_command') {
     lines.push(
-      '  Commands are GNU/Linux-like but only a subset is implemented. Call it first with an empty arguments object for this model\'s tool-call format to see the supported commands and placeholder paths.'
+      '  Commands are GNU/Linux-like but only a subset is implemented. Pass shell text in "cmd". Call it first with an empty arguments object for this model\'s tool-call format to see the supported commands and placeholder paths.'
     );
     lines.push(
       '  Uploaded attachments may already be available under /workspace, and user messages can include their exact workspace paths.'
@@ -313,7 +313,7 @@ function detectLooseShellCommandToolCall(objectText, toolCallingConfig) {
   if (!normalizedArgumentsText) {
     return normalizeDetectedToolCall(toolName, {}, objectText, toolCallingConfig.format);
   }
-  const commandKeyMatch = normalizedArgumentsText.match(/^"command"\s*:\s*"/);
+  const commandKeyMatch = normalizedArgumentsText.match(/^"(cmd|command)"\s*:\s*"/);
   if (!commandKeyMatch) {
     return null;
   }
@@ -330,7 +330,7 @@ function detectLooseShellCommandToolCall(objectText, toolCallingConfig) {
   return normalizeDetectedToolCall(
     toolName,
     {
-      command: commandValue,
+      [commandKeyMatch[1]]: commandValue,
     },
     objectText,
     toolCallingConfig.format
