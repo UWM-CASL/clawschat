@@ -59,49 +59,147 @@ function createViewHarness() {
   };
 }
 
+function createDefaultTranscriptView(harness, overrides = {}) {
+  return createTranscriptView({
+    container: harness.container,
+    getActiveConversation: () => harness.conversation,
+    getConversationPathMessages: (conversation) => conversation.messageNodes,
+    getConversationCardHeading: (_conversation, message) =>
+      message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
+    getModelVariantState: () => ({
+      index: 0,
+      total: 1,
+      hasVariants: false,
+      canGoPrev: false,
+      canGoNext: false,
+    }),
+    getUserVariantState: () => ({
+      index: 0,
+      total: 1,
+      hasVariants: false,
+      canGoPrev: false,
+      canGoNext: false,
+    }),
+    renderModelMarkdown: (content) => `<p>${content}</p>`,
+    scheduleMathTypeset: vi.fn(),
+    getToolDisplayName: (toolName) => toolName,
+    getShowThinkingByDefault: () => false,
+    getActiveUserEditMessageId: () => null,
+    getControlsState: () => ({
+      isGenerating: false,
+      isLoadingModel: false,
+      isRunningOrchestration: false,
+      isSwitchingVariant: false,
+    }),
+    getEmptyStateVisible: () => false,
+    initializeTooltips: vi.fn(),
+    disposeTooltips: vi.fn(),
+    applyVariantCardSignals: vi.fn(),
+    applyFixCardSignals: vi.fn(),
+    scrollTranscriptToBottom: vi.fn(),
+    updateTranscriptNavigationButtonVisibility: vi.fn(),
+    cancelUserMessageEdit: vi.fn(),
+    saveUserMessageEdit: vi.fn(),
+    ...overrides,
+  });
+}
+
 describe('transcript-view', () => {
+  test('window-renders long transcripts and swaps the mounted range on scroll', () => {
+    const dom = new JSDOM('<div id="chatMain"><ul id="chatTranscript"></ul></div>');
+    const document = dom.window.document;
+    globalThis.document = document;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    globalThis.Element = dom.window.Element;
+
+    const scrollContainer = document.getElementById('chatMain');
+    const container = document.getElementById('chatTranscript');
+    const conversation = {
+      id: 'conversation-long',
+      activeLeafMessageId: 'model-159',
+      messageNodes: Array.from({ length: 160 }, (_value, index) => ({
+        id: index % 2 === 0 ? `user-${index}` : `model-${index}`,
+        role: index % 2 === 0 ? 'user' : 'model',
+        speaker: index % 2 === 0 ? 'User' : 'Model',
+        text: `Message ${index}`,
+        response: index % 2 === 0 ? undefined : `Message ${index}`,
+        thoughts: '',
+        hasThinking: false,
+        isThinkingComplete: false,
+        isResponseComplete: true,
+        createdAt: Date.UTC(2026, 0, 2, 3, 4, index),
+      })),
+    };
+
+    Object.defineProperty(scrollContainer, 'clientHeight', {
+      value: 800,
+      configurable: true,
+    });
+    scrollContainer.scrollTop = 24000;
+    scrollContainer.getBoundingClientRect = () => ({
+      top: 0,
+      bottom: 800,
+      left: 0,
+      right: 900,
+      width: 900,
+      height: 800,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+    container.getBoundingClientRect = () => ({
+      top: -scrollContainer.scrollTop,
+      bottom: 0,
+      left: 0,
+      right: 900,
+      width: 900,
+      height: 0,
+      x: 0,
+      y: -scrollContainer.scrollTop,
+      toJSON() {},
+    });
+
+    const view = createDefaultTranscriptView(
+      {
+        document,
+        container,
+        conversation,
+      },
+      {
+        scrollContainer,
+        windowRef: {
+          requestAnimationFrame(callback) {
+            callback();
+            return 1;
+          },
+          ResizeObserver: class MockResizeObserver {
+            observe() {}
+            disconnect() {}
+          },
+        },
+      }
+    );
+
+    view.renderTranscript();
+
+    expect(container.querySelectorAll('.message-row').length).toBeLessThan(
+      conversation.messageNodes.length
+    );
+    expect(container.querySelectorAll('.transcript-window-spacer')).toHaveLength(2);
+    expect(container.querySelector('[data-message-id="model-159"]')).not.toBeNull();
+    expect(container.querySelector('[data-message-id="user-0"]')).toBeNull();
+
+    scrollContainer.scrollTop = 0;
+    scrollContainer.dispatchEvent(new dom.window.Event('scroll'));
+
+    expect(container.querySelector('[data-message-id="user-0"]')).not.toBeNull();
+    expect(container.querySelector('[data-message-id="model-159"]')).toBeNull();
+  });
+
   test('renders transcript messages and empty state', () => {
     const harness = createViewHarness();
-    const view = createTranscriptView({
-      container: harness.container,
-      getActiveConversation: () => harness.conversation,
-      getConversationPathMessages: (conversation) => conversation.messageNodes,
-      getConversationCardHeading: (_conversation, message) =>
-        message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
-      getModelVariantState: () => ({
-        index: 0,
-        total: 1,
-        hasVariants: false,
-        canGoPrev: false,
-        canGoNext: false,
-      }),
-      getUserVariantState: () => ({
-        index: 0,
-        total: 1,
-        hasVariants: false,
-        canGoPrev: false,
-        canGoNext: false,
-      }),
-      renderModelMarkdown: (content) => `<p>${content}</p>`,
-      scheduleMathTypeset: vi.fn(),
+    const view = createDefaultTranscriptView(harness, {
       getToolDisplayName: (toolName) => (toolName === 'get_weather' ? 'Get Weather' : toolName),
-      getShowThinkingByDefault: () => false,
-      getActiveUserEditMessageId: () => null,
-      getControlsState: () => ({
-        isGenerating: false,
-        isLoadingModel: false,
-        isRunningOrchestration: false,
-        isSwitchingVariant: false,
-      }),
-      getEmptyStateVisible: () => false,
-      initializeTooltips: vi.fn(),
-      disposeTooltips: vi.fn(),
-      applyVariantCardSignals: vi.fn(),
-      applyFixCardSignals: vi.fn(),
-      scrollTranscriptToBottom: vi.fn(),
-      updateTranscriptNavigationButtonVisibility: vi.fn(),
-      cancelUserMessageEdit: vi.fn(),
-      saveUserMessageEdit: vi.fn(),
     });
 
     view.renderTranscript({ scrollToBottom: false });

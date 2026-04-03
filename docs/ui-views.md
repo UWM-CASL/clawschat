@@ -8,6 +8,7 @@ Rendering-heavy DOM code is now split into small view modules under `src/ui/`.
   - transcript message rendering
   - user attachment rendering for images and text-backed files, including image attachments from either composer menu path, HTML-to-Markdown reference imports, and parser-derived PDF text attachments
   - per-message DOM updates for model and user rows
+  - long-transcript windowing with spacer-backed scroll preservation so older rows can drop out of the DOM until the user scrolls back
   - inline rendering for emitted tool calls and tool results inside the originating model card
   - transcript empty state
 - `src/ui/conversation-list-view.js`

@@ -75,6 +75,7 @@ Student-facing browser chat UI with local model inference.
 - The transcript includes helper links at both the start and end to jump to the transcript start, transcript end, or message input.
 - The transcript includes a note that each exchange has a heading so assistive technologies can index the conversation structure.
 - The transcript shows a simple local date/time stamp above each visible user and model exchange.
+- Long transcripts use a spacer-backed sliding render window so older exchanges can scroll back into view without keeping the entire conversation mounted in the DOM.
 - Conversations are persisted locally in browser IndexedDB and restored on reload.
 - Legacy conversation snapshots are migrated automatically into the current normalized IndexedDB layout on load.
 - Saved conversation state includes stable IDs and forward-compatible metadata for future export/import:

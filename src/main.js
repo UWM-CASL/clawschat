@@ -2442,6 +2442,7 @@ function branchFromUserMessage(messageId) {
 
 const transcriptView = createTranscriptView({
   container: chatTranscript,
+  scrollContainer: chatMain,
   getActiveConversation,
   getConversationPathMessages,
   getConversationCardHeading,

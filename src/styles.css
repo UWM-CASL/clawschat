@@ -934,6 +934,13 @@
   padding: 0;
 }
 
+.transcript-window-spacer {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
 .transcript-step-nav {
   position: fixed;
   right: var(--floating-controls-right-offset);

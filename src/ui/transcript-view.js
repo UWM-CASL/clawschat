@@ -1,6 +1,7 @@
 export function createTranscriptView(dependencies) {
   const {
     container,
+    scrollContainer,
     getActiveConversation,
     getConversationPathMessages,
     getConversationCardHeading,
@@ -22,15 +23,26 @@ export function createTranscriptView(dependencies) {
     updateTranscriptNavigationButtonVisibility,
     cancelUserMessageEdit,
     saveUserMessageEdit,
+    windowRef,
   } = dependencies;
   const documentRef = container?.ownerDocument || document;
   const view = documentRef.defaultView || window;
+  const runtimeWindow = windowRef || view;
+  const transcriptScrollContainer =
+    scrollContainer instanceof view.HTMLElement ? scrollContainer : null;
   const canShowMathMlCopyAction =
     typeof shouldShowMathMlCopyAction === 'function' ? shouldShowMathMlCopyAction : () => false;
   const resolveToolDisplayName =
     typeof getToolDisplayName === 'function'
       ? getToolDisplayName
       : (toolName) => String(toolName || 'Unknown Tool');
+  const TRANSCRIPT_WINDOWING_TRIGGER_COUNT = 120;
+  const TRANSCRIPT_WINDOWING_MIN_ROWS = 48;
+  const TRANSCRIPT_WINDOWING_OVERSCAN_PX = 1200;
+  const DEFAULT_MESSAGE_HEIGHT = 220;
+  const DEFAULT_MODEL_MESSAGE_HEIGHT = 260;
+  const DEFAULT_USER_MESSAGE_HEIGHT = 160;
+  const DEFAULT_ATTACHMENT_MESSAGE_HEIGHT = 220;
   const transcriptTimestampFormatter = new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
     month: 'short',
@@ -49,6 +61,323 @@ export function createTranscriptView(dependencies) {
       return '';
     }
   }
+
+  const messageHeightById = new Map();
+  let visibleMessages = [];
+  let isWindowedTranscript = false;
+  let renderedRangeStart = 0;
+  let renderedRangeEnd = 0;
+  let isRenderingWindowRange = false;
+  let topSpacer = null;
+  let bottomSpacer = null;
+  let scrollSyncFrameRequested = false;
+  let pendingStickToBottomSync = false;
+  const resizeObserver =
+    typeof runtimeWindow.ResizeObserver === 'function'
+      ? new runtimeWindow.ResizeObserver((entries) => {
+          let changed = false;
+          entries.forEach((entry) => {
+            const target = entry?.target;
+            if (!(target instanceof view.HTMLElement)) {
+              return;
+            }
+            const messageId = target.dataset.messageId || '';
+            const nextHeight =
+              Number(entry.contentRect?.height) || target.getBoundingClientRect().height || 0;
+            if (!messageId || !Number.isFinite(nextHeight) || nextHeight <= 0) {
+              return;
+            }
+            if (messageHeightById.get(messageId) === nextHeight) {
+              return;
+            }
+            messageHeightById.set(messageId, nextHeight);
+            changed = true;
+          });
+          if (changed) {
+            scheduleWindowSync();
+          }
+        })
+      : null;
+
+  function getAnimationFrameScheduler() {
+    if (typeof runtimeWindow.requestAnimationFrame === 'function') {
+      return runtimeWindow.requestAnimationFrame.bind(runtimeWindow);
+    }
+    return (callback) => runtimeWindow.setTimeout(callback, 0);
+  }
+
+  function createSpacer(height) {
+    const spacer = documentRef.createElement('li');
+    spacer.className = 'transcript-window-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.height = `${Math.max(0, Math.round(height))}px`;
+    return spacer;
+  }
+
+  function setSpacerHeight(spacer, height) {
+    if (!(spacer instanceof view.HTMLElement)) {
+      return;
+    }
+    spacer.style.height = `${Math.max(0, Math.round(height))}px`;
+  }
+
+  function getRenderableMessages(conversation) {
+    if (!conversation) {
+      return [];
+    }
+    const pathMessages = getConversationPathMessages(conversation);
+    return pathMessages.filter((message, index) => {
+      if (message?.role === 'tool') {
+        return false;
+      }
+      if (message?.role === 'model' && index > 0 && pathMessages[index - 1]?.role === 'tool') {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function shouldWindowTranscript(messages) {
+    return Boolean(
+      transcriptScrollContainer &&
+        Array.isArray(messages) &&
+        messages.length > TRANSCRIPT_WINDOWING_TRIGGER_COUNT
+    );
+  }
+
+  function getEstimatedMessageHeight(message) {
+    const cachedHeight = messageHeightById.get(message?.id);
+    if (Number.isFinite(cachedHeight) && cachedHeight > 0) {
+      return cachedHeight;
+    }
+    if (message?.role === 'model') {
+      return DEFAULT_MODEL_MESSAGE_HEIGHT;
+    }
+    if (message?.role === 'user') {
+      return getUserAttachmentCount(message) > 0
+        ? DEFAULT_ATTACHMENT_MESSAGE_HEIGHT
+        : DEFAULT_USER_MESSAGE_HEIGHT;
+    }
+    return DEFAULT_MESSAGE_HEIGHT;
+  }
+
+  function buildHeightPrefix(messages) {
+    const prefix = [0];
+    messages.forEach((message) => {
+      prefix.push(prefix[prefix.length - 1] + getEstimatedMessageHeight(message));
+    });
+    return prefix;
+  }
+
+  function findMessageIndexAtOffset(prefix, offset) {
+    if (!Array.isArray(prefix) || prefix.length <= 1) {
+      return 0;
+    }
+    const normalizedOffset = Math.max(0, Number(offset) || 0);
+    let low = 0;
+    let high = prefix.length - 1;
+    while (low < high) {
+      const mid = Math.floor((low + high + 1) / 2);
+      if (prefix[mid] <= normalizedOffset) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return Math.min(low, prefix.length - 2);
+  }
+
+  function clampWindowRange(start, end, total) {
+    let normalizedStart = Math.max(0, Math.min(Number(start) || 0, total));
+    let normalizedEnd = Math.max(normalizedStart, Math.min(Number(end) || 0, total));
+    const minimumCount = Math.min(total, TRANSCRIPT_WINDOWING_MIN_ROWS);
+    const currentCount = normalizedEnd - normalizedStart;
+    if (currentCount < minimumCount) {
+      const deficit = minimumCount - currentCount;
+      const expandBefore = Math.min(normalizedStart, Math.floor(deficit / 2));
+      const expandAfter = Math.min(total - normalizedEnd, deficit - expandBefore);
+      normalizedStart -= expandBefore;
+      normalizedEnd += expandAfter;
+      const remaining = minimumCount - (normalizedEnd - normalizedStart);
+      if (remaining > 0) {
+        normalizedStart = Math.max(0, normalizedStart - remaining);
+        normalizedEnd = Math.min(total, normalizedEnd + remaining);
+      }
+    }
+    return {
+      start: normalizedStart,
+      end: normalizedEnd,
+    };
+  }
+
+  function getTranscriptViewportBounds() {
+    if (!(container instanceof view.HTMLElement) || !(transcriptScrollContainer instanceof view.HTMLElement)) {
+      return {
+        top: 0,
+        bottom: 0,
+        height: 0,
+      };
+    }
+    const containerRect = container.getBoundingClientRect();
+    const scrollRect = transcriptScrollContainer.getBoundingClientRect();
+    const transcriptTop =
+      transcriptScrollContainer.scrollTop + (containerRect.top - scrollRect.top);
+    const viewportTop = Math.max(0, transcriptScrollContainer.scrollTop - transcriptTop);
+    const viewportHeight = transcriptScrollContainer.clientHeight || Math.max(0, scrollRect.height);
+    return {
+      top: viewportTop,
+      bottom: viewportTop + viewportHeight,
+      height: viewportHeight,
+    };
+  }
+
+  function getWindowRange(messages, { stickToBottom = false } = {}) {
+    const total = Array.isArray(messages) ? messages.length : 0;
+    const prefix = buildHeightPrefix(messages);
+    if (!total) {
+      return {
+        start: 0,
+        end: 0,
+        totalHeight: 0,
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+      };
+    }
+
+    let range;
+    if (stickToBottom) {
+      range = clampWindowRange(total - TRANSCRIPT_WINDOWING_MIN_ROWS, total, total);
+    } else {
+      const viewport = getTranscriptViewportBounds();
+      const overscan = Math.max(TRANSCRIPT_WINDOWING_OVERSCAN_PX, viewport.height);
+      const start = findMessageIndexAtOffset(prefix, viewport.top - overscan);
+      const end = Math.min(total, findMessageIndexAtOffset(prefix, viewport.bottom + overscan) + 1);
+      range = clampWindowRange(start, end, total);
+    }
+
+    return {
+      start: range.start,
+      end: range.end,
+      totalHeight: prefix[total],
+      topSpacerHeight: prefix[range.start],
+      bottomSpacerHeight: prefix[total] - prefix[range.end],
+    };
+  }
+
+  function measureMessageElement(item, { scheduleSync = false } = {}) {
+    if (!(item instanceof view.HTMLElement)) {
+      return;
+    }
+    const messageId = item.dataset.messageId || '';
+    if (!messageId) {
+      return;
+    }
+    const nextHeight = item.getBoundingClientRect().height || item.offsetHeight || 0;
+    if (!Number.isFinite(nextHeight) || nextHeight <= 0) {
+      return;
+    }
+    if (messageHeightById.get(messageId) === nextHeight) {
+      return;
+    }
+    messageHeightById.set(messageId, nextHeight);
+    if (scheduleSync) {
+      scheduleWindowSync();
+    }
+  }
+
+  function observeMessageElement(item) {
+    if (!(item instanceof view.HTMLElement)) {
+      return;
+    }
+    resizeObserver?.observe(item);
+    measureMessageElement(item, {
+      scheduleSync: false,
+    });
+  }
+
+  function resetWindowingState() {
+    isWindowedTranscript = false;
+    visibleMessages = [];
+    renderedRangeStart = 0;
+    renderedRangeEnd = 0;
+    isRenderingWindowRange = false;
+    topSpacer = null;
+    bottomSpacer = null;
+  }
+
+  function renderMessageRange(messages, range) {
+    if (!container) {
+      return;
+    }
+    disposeTooltips(container);
+    container.replaceChildren();
+    topSpacer = createSpacer(range.topSpacerHeight);
+    bottomSpacer = createSpacer(range.bottomSpacerHeight);
+    container.appendChild(topSpacer);
+    isRenderingWindowRange = true;
+    for (let index = range.start; index < range.end; index += 1) {
+      addMessageElement(messages[index], {
+        scroll: false,
+      });
+    }
+    isRenderingWindowRange = false;
+    container.appendChild(bottomSpacer);
+    renderedRangeStart = range.start;
+    renderedRangeEnd = range.end;
+  }
+
+  function syncWindowedTranscript({ stickToBottom = false, force = false } = {}) {
+    if (!isWindowedTranscript || !container) {
+      return;
+    }
+    const range = getWindowRange(visibleMessages, {
+      stickToBottom,
+    });
+    const needsFullRerender =
+      force ||
+      !(topSpacer instanceof view.HTMLElement) ||
+      !(bottomSpacer instanceof view.HTMLElement) ||
+      range.start !== renderedRangeStart ||
+      range.end !== renderedRangeEnd;
+    if (needsFullRerender) {
+      renderMessageRange(visibleMessages, range);
+    } else {
+      setSpacerHeight(topSpacer, range.topSpacerHeight);
+      setSpacerHeight(bottomSpacer, range.bottomSpacerHeight);
+    }
+    updateTranscriptNavigationButtonVisibility();
+  }
+
+  function scheduleWindowSync({ stickToBottom = false } = {}) {
+    if (!isWindowedTranscript) {
+      return;
+    }
+    if (stickToBottom) {
+      pendingStickToBottomSync = true;
+    }
+    if (scrollSyncFrameRequested) {
+      return;
+    }
+    scrollSyncFrameRequested = true;
+    getAnimationFrameScheduler()(() => {
+      scrollSyncFrameRequested = false;
+      const shouldStickToBottom = pendingStickToBottomSync;
+      pendingStickToBottomSync = false;
+      syncWindowedTranscript({
+        stickToBottom: shouldStickToBottom,
+      });
+    });
+  }
+
+  transcriptScrollContainer?.addEventListener(
+    'scroll',
+    () => {
+      scheduleWindowSync();
+    },
+    {
+      passive: true,
+    }
+  );
 
   function buildMessageMetaMarkup(message) {
     const timestamp = formatTranscriptTimestamp(message?.createdAt);
@@ -695,6 +1024,12 @@ export function createTranscriptView(dependencies) {
     if (!container) {
       return null;
     }
+    if (isWindowedTranscript && !isRenderingWindowRange) {
+      renderTranscript({
+        scrollToBottom: options.scroll !== false,
+      });
+      return findMessageElement(message?.id || '');
+    }
     const shouldScroll = options.scroll !== false;
     const activeConversation = getActiveConversation();
     const cardHeading = getConversationCardHeading(activeConversation, message);
@@ -1024,6 +1359,7 @@ export function createTranscriptView(dependencies) {
       }
     }
     container.appendChild(item);
+    observeMessageElement(item);
     initializeTooltips(item);
     if (shouldScroll) {
       scrollTranscriptToBottom();
@@ -1065,6 +1401,9 @@ export function createTranscriptView(dependencies) {
     applyVariantCardSignals(item, variantState);
     applyFixCardSignals(item, message);
     setModelBubbleContent(message, /** @type {any} */ (item)._modelBubbleRefs || null);
+    measureMessageElement(item, {
+      scheduleSync: true,
+    });
   }
 
   function updateUserMessageElement(message, item) {
@@ -1113,6 +1452,9 @@ export function createTranscriptView(dependencies) {
       refs.variantNext.disabled = controlsDisabled || !variantState.canGoNext || isEditing;
     }
     applyVariantCardSignals(item, variantState);
+    measureMessageElement(item, {
+      scheduleSync: true,
+    });
   }
 
   function renderTranscript(options = {}) {
@@ -1120,11 +1462,12 @@ export function createTranscriptView(dependencies) {
       return;
     }
     const shouldScrollToBottom = options.scrollToBottom !== false;
-    disposeTooltips(container);
-    container.replaceChildren();
     const conversation = getActiveConversation();
     const showEmptyState = getEmptyStateVisible();
     if (!conversation) {
+      disposeTooltips(container);
+      container.replaceChildren();
+      resetWindowingState();
       if (showEmptyState) {
         const emptyItem = documentRef.createElement('li');
         emptyItem.className = 'transcript-empty-state text-body-secondary';
@@ -1135,14 +1478,26 @@ export function createTranscriptView(dependencies) {
       updateTranscriptNavigationButtonVisibility();
       return;
     }
-    const pathMessages = getConversationPathMessages(conversation);
-    pathMessages.forEach((message, index) => {
-      if (message?.role === 'tool') {
+    const messages = getRenderableMessages(conversation);
+    visibleMessages = messages;
+    if (shouldWindowTranscript(messages)) {
+      isWindowedTranscript = true;
+      syncWindowedTranscript({
+        stickToBottom: shouldScrollToBottom,
+        force: true,
+      });
+      if (shouldScrollToBottom) {
+        scrollTranscriptToBottom();
         return;
       }
-      if (message?.role === 'model' && index > 0 && pathMessages[index - 1]?.role === 'tool') {
-        return;
-      }
+      updateTranscriptNavigationButtonVisibility();
+      return;
+    }
+
+    disposeTooltips(container);
+    container.replaceChildren();
+    resetWindowingState();
+    messages.forEach((message) => {
       addMessageElement(message, { scroll: false });
     });
     if (shouldScrollToBottom) {
