@@ -156,20 +156,14 @@ Student-facing browser chat UI with local model inference.
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
   - Uses the published `q4f16` web export.
-- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
-  - Uses the published `q4f16` web export.
 - `onnx-community/Qwen3-0.6B-ONNX`
   - Uses the model card's WebGPU-recommended `q4f16` runtime.
   - Uses the model card's recommended sampling defaults: temperature `0.6`, top-k `20`, top-p `0.95`.
   - Does not force Qwen thinking mode on by default.
-- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
-  - Uses ONNX `q4` weights.
-  - Requires WebGPU for browser inference, so it is unavailable when WebGPU is unavailable or when `WASM only` is selected.
-- `onnx-community/gemma-3n-E2B-it-ONNX`
-  - Supports text output with image, audio, and video inputs.
-  - Image attachments are routed through a multimodal worker path.
-  - Audio/video UI is not wired yet.
-  - Requires WebGPU in this app.
+- Hidden legacy/replacement model definitions remain in config so stored conversations and model-specific behaviors still resolve correctly:
+  - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+  - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
+  - `onnx-community/gemma-3n-E2B-it-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `onnx-community/Qwen3.5-2B-ONNX` -> `onnx-community/Qwen3-0.6B-ONNX`
@@ -179,6 +173,7 @@ Student-facing browser chat UI with local model inference.
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 - Model support configuration lives in `src/config/models.json`:
 - `models`: options shown in the pre-chat model card picker
+- `models[].hidden`: optional flag that keeps a model supported internally while removing its card and picker option
 - `models[].displayName`: friendly name shown on the card
 - `models[].languageSupport`: user-facing language tags shown on the card, with a publisher-linked `and more` suffix when needed
 - `models[].repositoryUrl`: model details link used from the card footer

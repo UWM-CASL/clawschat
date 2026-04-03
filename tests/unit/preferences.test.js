@@ -167,7 +167,7 @@ describe('preferences controller', () => {
     harness.controller.populateModelSelect();
 
     const cards = Array.from(modelCardList.querySelectorAll('.model-card'));
-    expect(cards.length).toBeGreaterThanOrEqual(5);
+    expect(cards.length).toBe(2);
 
     const qwenCard = cards.find((card) => card.textContent?.includes('Qwen3 0.6B'));
     expect(qwenCard?.textContent).toContain('40,960 tokens');
