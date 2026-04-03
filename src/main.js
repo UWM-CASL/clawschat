@@ -1780,18 +1780,39 @@ function getTerminalSessionForConversation(conversation = getActiveConversation(
     appState.pendingShellCommand.conversationId === conversation.id
       ? appState.pendingShellCommand
       : null;
+  const completedEntry =
+    appState.completedShellCommand &&
+    conversation?.id &&
+    appState.completedShellCommand.conversationId === conversation.id
+      ? appState.completedShellCommand
+      : null;
 
   if (pendingEntry && entries.length > pendingEntry.historyCount) {
     appState.pendingShellCommand = null;
     return getTerminalSessionForConversation(conversation);
   }
+  if (completedEntry && entries.length > completedEntry.historyCount) {
+    appState.completedShellCommand = null;
+    return getTerminalSessionForConversation(conversation);
+  }
+
+  const visibleEntries =
+    completedEntry && completedEntry.command && entries.length === completedEntry.historyCount
+      ? entries.concat({
+          command: completedEntry.command,
+          currentWorkingDirectory: completedEntry.currentWorkingDirectory,
+          exitCode: completedEntry.exitCode,
+          stdout: completedEntry.stdout,
+          stderr: completedEntry.stderr,
+        })
+      : entries;
 
   const currentWorkingDirectory =
     typeof pendingEntry?.currentWorkingDirectory === 'string' && pendingEntry.currentWorkingDirectory.trim()
       ? pendingEntry.currentWorkingDirectory.trim()
-      : typeof entries[entries.length - 1]?.currentWorkingDirectory === 'string' &&
-          entries[entries.length - 1].currentWorkingDirectory.trim()
-        ? entries[entries.length - 1].currentWorkingDirectory.trim()
+      : typeof visibleEntries[visibleEntries.length - 1]?.currentWorkingDirectory === 'string' &&
+          visibleEntries[visibleEntries.length - 1].currentWorkingDirectory.trim()
+        ? visibleEntries[visibleEntries.length - 1].currentWorkingDirectory.trim()
         : typeof conversation?.currentWorkingDirectory === 'string' &&
             conversation.currentWorkingDirectory.trim()
           ? conversation.currentWorkingDirectory.trim()
@@ -1799,8 +1820,8 @@ function getTerminalSessionForConversation(conversation = getActiveConversation(
 
   return {
     currentWorkingDirectory,
-    entries,
-    hasVisibleContent: entries.length > 0 || Boolean(pendingEntry?.command),
+    entries: visibleEntries,
+    hasVisibleContent: visibleEntries.length > 0 || Boolean(pendingEntry?.command),
     pendingEntry:
       pendingEntry && typeof pendingEntry.command === 'string' && pendingEntry.command.trim()
         ? {
@@ -1808,6 +1829,9 @@ function getTerminalSessionForConversation(conversation = getActiveConversation(
             currentWorkingDirectory,
           }
         : null,
+    sessionKey: `${conversation?.id || 'none'}:${conversation?.activeLeafMessageId || 'root'}:${
+      visibleEntries.length
+    }:${pendingEntry?.command || ''}:${completedEntry?.command || ''}`,
   };
 }
 
@@ -2153,6 +2177,7 @@ function handleShellCommandStart({ command = '', currentWorkingDirectory = '/wor
     return;
   }
   clearTerminalDismissal(appState, activeConversation.id);
+  appState.completedShellCommand = null;
   appState.pendingShellCommand = {
     command: String(command || '').trim(),
     conversationId: activeConversation.id,
@@ -2163,6 +2188,37 @@ function handleShellCommandStart({ command = '', currentWorkingDirectory = '/wor
     historyCount: getShellTerminalEntries(activeConversation).length,
   };
   openTerminalForConversation(appState, activeConversation.id);
+  renderTerminalForActiveConversation();
+}
+
+function handleShellCommandComplete({
+  command = '',
+  currentWorkingDirectory = '/workspace',
+  exitCode = 0,
+  stdout = '',
+  stderr = '',
+} = {}) {
+  const activeConversation = getActiveConversation();
+  const pendingConversationId =
+    typeof appState.pendingShellCommand?.conversationId === 'string'
+      ? appState.pendingShellCommand.conversationId
+      : activeConversation?.id || null;
+  if (!pendingConversationId || !String(command || '').trim()) {
+    return;
+  }
+  const pendingConversation = findConversationById(appState, pendingConversationId);
+  appState.completedShellCommand = {
+    command: String(command || '').trim(),
+    conversationId: pendingConversationId,
+    currentWorkingDirectory:
+      typeof currentWorkingDirectory === 'string' && currentWorkingDirectory.trim()
+        ? currentWorkingDirectory.trim()
+        : '/workspace',
+    exitCode: Number.isFinite(exitCode) ? Number(exitCode) : 0,
+    stdout: typeof stdout === 'string' ? stdout : '',
+    stderr: typeof stderr === 'string' ? stderr : '',
+    historyCount: pendingConversation ? getShellTerminalEntries(pendingConversation).length : 0,
+  };
   renderTerminalForActiveConversation();
 }
 
@@ -3352,8 +3408,9 @@ const appController = createAppController({
       conversation: getActiveConversation(),
       requestToolConsent,
       onShellCommandStart: handleShellCommandStart,
-        workspaceFileSystem: getConversationWorkspaceFileSystem(),
-      }),
+      onShellCommandComplete: handleShellCommandComplete,
+      workspaceFileSystem: getConversationWorkspaceFileSystem(),
+    }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
   getRuntimeConfigForConversation: (conversation) => buildConversationRuntimeConfig(conversation),
   addMessageToConversation,

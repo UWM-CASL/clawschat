@@ -14,6 +14,40 @@ function ensureTrailingNewline(text) {
   return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
 }
 
+function getEntryFingerprint(entry = {}) {
+  return JSON.stringify({
+    command: typeof entry.command === 'string' ? entry.command : '',
+    currentWorkingDirectory:
+      typeof entry.currentWorkingDirectory === 'string' ? entry.currentWorkingDirectory : '',
+    stdout: typeof entry.stdout === 'string' ? entry.stdout : '',
+    stderr: typeof entry.stderr === 'string' ? entry.stderr : '',
+    exitCode: Number.isFinite(entry.exitCode) ? Number(entry.exitCode) : 0,
+  });
+}
+
+function getSessionFingerprint({
+  sessionKey = '',
+  entries = [],
+  pendingEntry = null,
+  currentWorkingDirectory = '/workspace',
+} = {}) {
+  return JSON.stringify({
+    sessionKey,
+    entryCount: entries.length,
+    lastEntry: entries.length ? getEntryFingerprint(entries[entries.length - 1]) : '',
+    pendingEntry: pendingEntry
+      ? {
+          command: typeof pendingEntry.command === 'string' ? pendingEntry.command : '',
+          currentWorkingDirectory:
+            typeof pendingEntry.currentWorkingDirectory === 'string'
+              ? pendingEntry.currentWorkingDirectory
+              : '',
+        }
+      : null,
+    currentWorkingDirectory,
+  });
+}
+
 export function createTerminalView({
   panel,
   host,
@@ -58,40 +92,59 @@ export function createTerminalView({
   terminal.loadAddon(fitAddon);
   terminal.open(host);
 
+  let fitFrameRequested = false;
+  let isVisible = !(panel instanceof HTMLElement) || !panel.classList.contains('d-none');
+  let lastSessionFingerprint = '';
+
+  function scheduleFit() {
+    if (!isVisible || fitFrameRequested) {
+      return;
+    }
+    fitFrameRequested = true;
+    windowRef.requestAnimationFrame(() => {
+      fitFrameRequested = false;
+      fitAddon.fit();
+      terminal.scrollToBottom();
+    });
+  }
+
   const resizeObserver =
     typeof windowRef.ResizeObserver === 'function'
       ? new windowRef.ResizeObserver(() => {
-          if (panel instanceof HTMLElement && !panel.classList.contains('d-none')) {
-            fitAddon.fit();
-          }
+          scheduleFit();
         })
       : null;
   resizeObserver?.observe(host);
 
-  let lastSerializedSession = '';
-
   function setVisible(visible) {
+    if (visible === isVisible) {
+      return;
+    }
+    isVisible = visible;
     if (panel instanceof HTMLElement) {
       panel.classList.toggle('d-none', !visible);
     }
     if (visible) {
-      windowRef.requestAnimationFrame(() => {
-        fitAddon.fit();
-        terminal.scrollToBottom();
-      });
+      scheduleFit();
     }
   }
 
-  function renderSession({ entries = [], pendingEntry = null, currentWorkingDirectory = '/workspace' } = {}) {
-    const serializableSession = JSON.stringify({
+  function renderSession({
+    sessionKey = '',
+    entries = [],
+    pendingEntry = null,
+    currentWorkingDirectory = '/workspace',
+  } = {}) {
+    const sessionFingerprint = getSessionFingerprint({
+      sessionKey,
       entries,
       pendingEntry,
       currentWorkingDirectory,
     });
-    if (serializableSession === lastSerializedSession) {
+    if (sessionFingerprint === lastSessionFingerprint) {
       return;
     }
-    lastSerializedSession = serializableSession;
+    lastSessionFingerprint = sessionFingerprint;
 
     terminal.reset();
     const prompt = formatPrompt(currentWorkingDirectory);
@@ -119,7 +172,6 @@ export function createTerminalView({
 
     terminal.write(prompt);
     terminal.scrollToBottom();
-    fitAddon.fit();
   }
 
   function dispose() {

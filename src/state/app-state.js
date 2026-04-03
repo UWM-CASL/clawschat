@@ -94,6 +94,7 @@ export function createAppState({
     terminalOpenConversationId: null,
     terminalDismissedConversationIds: new Set(),
     pendingShellCommand: null,
+    completedShellCommand: null,
   };
 }
 
