@@ -341,9 +341,7 @@ describe('tool-calling prompt builder', () => {
       ['run_shell_command']
     );
 
-    expect(prompt).toContain(
-      'Commands are GNU/Linux-like but only a subset is implemented. Pass shell text in "cmd". Call it first with an empty arguments object for this model\'s tool-call format to see the supported commands and placeholder paths.'
-    );
+    expect(prompt).toContain('Files are in /workspace.');
     expect(prompt).toContain(
       'The shell subset includes python /workspace/script.py and python -c "<code>". Prefer write_python_file plus python /workspace/script.py for larger scripts.'
     );
@@ -360,7 +358,7 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      'Use this for non-trivial Python source. Write a /workspace/*.py file here, then run it with run_shell_command and a python command.'
+      'Use to write longer Python scripts.'
     );
   });
 

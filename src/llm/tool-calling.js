@@ -62,8 +62,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
   {
     name: 'write_python_file',
     displayName: 'Write Python File',
-    description:
-      'Writes Python source to a .py file under /workspace. Use this for larger scripts, then run them with run_shell_command and a python command.',
+    description: 'Writes Python source code to a .py file under /workspace; use to write longer scripts.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -211,14 +210,10 @@ function buildToolInstructionLines(name, description = '') {
     );
   }
   if (normalizedName === 'write_python_file') {
-    lines.push(
-      '  Use this for non-trivial Python source. Write a /workspace/*.py file here, then run it with run_shell_command and a python command.'
-    );
+    lines.push('  Use to write longer Python scripts.');
   }
   if (normalizedName === 'run_shell_command') {
-    lines.push(
-      '  Commands are GNU/Linux-like but only a subset is implemented. Pass shell text in "cmd". Call it first with an empty arguments object for this model\'s tool-call format to see the supported commands and placeholder paths.'
-    );
+    lines.push('  Files are in /workspace.');
     lines.push(
       '  Uploaded attachments may already be available under /workspace, and user messages can include their exact workspace paths.'
     );

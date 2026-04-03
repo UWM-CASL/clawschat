@@ -101,8 +101,8 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 ### `write_python_file`
 
 - Display name: `Write Python File`
-- Purpose: writes larger Python source into a `.py` file under `/workspace`
-- Intended workflow: use this tool for non-trivial scripts, then run the saved file through `run_shell_command` with a `python /workspace/...` command
+- Purpose: writes Python source code to a `.py` file under `/workspace`
+- Intended workflow: use this tool for longer scripts
 - Arguments:
   - required `path`
   - required `source`
@@ -125,6 +125,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 - Purpose: runs a browser-local GNU/Linux-like shell subset against the app's `/workspace` filesystem abstraction
 - Discovery behavior: when called with the model's tool-input key set to `{}`, it returns a compact response envelope whose `body` is a short human-readable list of the supported command names
 - Preferred argument: pass shell text as `cmd`; legacy `command` is still accepted for backward compatibility
+- Python path: the shell subset supports `python /workspace/script.py` and short `python -c "..."`; prefer `write_python_file` plus `python /workspace/script.py` for larger scripts
 - Uploaded-file awareness: text-backed attachment prompt text can include the exact `/workspace/...` path for uploaded files so the model can reuse that path directly with this tool
 - Attachment naming behavior: uploaded attachments are renamed up front to lowercase shell-safe filenames, and the visible attachment label matches the `/workspace/...` basename exposed to the model
 - Arguments:
