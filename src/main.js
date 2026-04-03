@@ -23,6 +23,7 @@ import { createTranscriptActions } from './app/transcript-actions.js';
 import { bindTranscriptEvents } from './app/transcript-events.js';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
+import { PythonRuntimeClient } from './llm/python-runtime-client.js';
 import {
   buildLanguagePreferencePrompt,
   buildMathRenderingFeaturePrompt,
@@ -301,6 +302,7 @@ const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const engine = new LLMEngineClient();
+const pythonRuntime = new PythonRuntimeClient();
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
 const markdown = new MarkdownIt({
@@ -1216,9 +1218,7 @@ function getLanguageSupportForModel(modelId) {
 
 function getConversationLanguagePreference(conversation) {
   return normalizeConversationLanguagePreference(
-    conversation
-      ? conversation.languagePreference
-      : appState.pendingConversationLanguagePreference
+    conversation ? conversation.languagePreference : appState.pendingConversationLanguagePreference
   );
 }
 
@@ -1228,9 +1228,7 @@ function getConversationThinkingEnabled(conversation) {
     : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
   const defaultEnabled = getThinkingControlForModel(modelId)?.defaultEnabled !== false;
   return normalizeConversationThinkingEnabled(
-    conversation
-      ? conversation.thinkingEnabled
-      : appState.pendingConversationThinkingEnabled,
+    conversation ? conversation.thinkingEnabled : appState.pendingConversationThinkingEnabled,
     defaultEnabled
   );
 }
@@ -1265,9 +1263,7 @@ function getOptionalFeatureSystemPromptSection(modelId, conversation = null) {
     buildMathRenderingFeaturePrompt({ renderMathMl: appState.renderMathMl }),
     buildLanguagePreferencePrompt({
       languageName:
-        languagePreference === 'auto'
-          ? ''
-          : getSelectedLanguageMetadata(languagePreference).name,
+        languagePreference === 'auto' ? '' : getSelectedLanguageMetadata(languagePreference).name,
     }),
     buildThinkingModePrompt({
       enabled: getConversationThinkingEnabled(conversation),
@@ -1505,22 +1501,22 @@ function buildUserMessageAttachmentPayload(attachments) {
   const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
   const contentParts = normalizedAttachments.map((attachment) => ({
     ...(attachment.type === 'image'
-        ? {
-            type: 'image',
-            artifactId: attachment.id,
-            mimeType: attachment.mimeType,
-            base64: attachment.data,
-            url: attachment.url,
-            filename: attachment.filename,
-            width: attachment.width,
-            height: attachment.height,
-            alt: attachment.alt,
-            workspacePath: attachment.workspacePath,
-          }
-        : {
-            type: 'file',
-            artifactId: attachment.id,
-            mimeType: attachment.mimeType,
+      ? {
+          type: 'image',
+          artifactId: attachment.id,
+          mimeType: attachment.mimeType,
+          base64: attachment.data,
+          url: attachment.url,
+          filename: attachment.filename,
+          width: attachment.width,
+          height: attachment.height,
+          alt: attachment.alt,
+          workspacePath: attachment.workspacePath,
+        }
+      : {
+          type: 'file',
+          artifactId: attachment.id,
+          mimeType: attachment.mimeType,
           filename: attachment.filename,
           extension: attachment.extension,
           size: attachment.size,
@@ -1531,13 +1527,13 @@ function buildUserMessageAttachmentPayload(attachments) {
           conversionWarnings: Array.isArray(attachment.conversionWarnings)
             ? attachment.conversionWarnings
             : [],
-            memoryHint:
-              attachment.memoryHint && typeof attachment.memoryHint === 'object'
-                ? attachment.memoryHint
-                : undefined,
-            llmText: attachment.llmText,
-            workspacePath: attachment.workspacePath,
-          }),
+          memoryHint:
+            attachment.memoryHint && typeof attachment.memoryHint === 'object'
+              ? attachment.memoryHint
+              : undefined,
+          llmText: attachment.llmText,
+          workspacePath: attachment.workspacePath,
+        }),
   }));
   const artifactRefs = normalizedAttachments.map((attachment) => ({
     id: attachment.id,
@@ -1714,21 +1710,19 @@ function getConversationWorkspaceFileSystem(conversationOrId = getActiveConversa
   if (!conversationWorkspaceFileSystems.has(conversationId)) {
     conversationWorkspaceFileSystems.set(
       conversationId,
-      createConversationWorkspaceFileSystem(workspaceFileSystem, conversationId),
+      createConversationWorkspaceFileSystem(workspaceFileSystem, conversationId)
     );
   }
   return conversationWorkspaceFileSystems.get(conversationId) || null;
 }
 
 async function deleteConversationStorage(conversationId) {
-  const normalizedConversationId =
-    typeof conversationId === 'string' ? conversationId.trim() : '';
+  const normalizedConversationId = typeof conversationId === 'string' ? conversationId.trim() : '';
   if (!normalizedConversationId) {
     return;
   }
-  const conversationWorkspaceFileSystem = getConversationWorkspaceFileSystem(
-    normalizedConversationId,
-  );
+  const conversationWorkspaceFileSystem =
+    getConversationWorkspaceFileSystem(normalizedConversationId);
   if (!conversationWorkspaceFileSystem?.backingRootPath) {
     conversationWorkspaceFileSystems.delete(normalizedConversationId);
     return;
@@ -1765,26 +1759,72 @@ function parseShellToolResult(message) {
   }
 }
 
+function parsePythonWriteToolResult(message) {
+  const rawResult =
+    typeof message?.toolResult === 'string'
+      ? message.toolResult
+      : typeof message?.text === 'string'
+        ? message.text
+        : '';
+  if (!rawResult.trim()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(rawResult);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function getShellTerminalEntries(conversation) {
   if (!conversation) {
     return [];
   }
   return getConversationPathMessages(conversation)
-    .filter((message) => message?.role === 'tool' && message.toolName === 'run_shell_command')
+    .filter(
+      (message) =>
+        message?.role === 'tool' &&
+        (message.toolName === 'run_shell_command' || message.toolName === 'write_python_file')
+    )
     .map((message) => {
+      if (message.toolName === 'write_python_file') {
+        const result = parsePythonWriteToolResult(message);
+        const recordedPath =
+          typeof message?.toolArguments?.path === 'string' && message.toolArguments.path.trim()
+            ? message.toolArguments.path.trim()
+            : typeof result?.path === 'string' && result.path.trim()
+              ? result.path.trim()
+              : '/workspace/script.py';
+        const preview = typeof result?.preview === 'string' ? result.preview : '';
+        const lineCount = Number.isFinite(result?.lines) ? Number(result.lines) : 0;
+        const byteCount = Number.isFinite(result?.bytes) ? Number(result.bytes) : 0;
+        return {
+          command: `write_python_file ${recordedPath}`,
+          currentWorkingDirectory:
+            recordedPath.slice(0, recordedPath.lastIndexOf('/')) || '/workspace',
+          exitCode: 0,
+          stdout: `${typeof result?.message === 'string' ? result.message : `Python file written to ${recordedPath}.`}\n${lineCount ? `${lineCount} line${lineCount === 1 ? '' : 's'}` : '0 lines'}${byteCount ? `, ${byteCount} bytes` : ''}${preview ? `\n${preview}` : ''}`,
+          stderr: '',
+        };
+      }
       const result = parseShellToolResult(message);
       const recordedCommand =
         typeof message?.toolArguments?.cmd === 'string' && message.toolArguments.cmd.trim()
           ? message.toolArguments.cmd.trim()
-          : typeof message?.toolArguments?.command === 'string' && message.toolArguments.command.trim()
+          : typeof message?.toolArguments?.command === 'string' &&
+              message.toolArguments.command.trim()
             ? message.toolArguments.command.trim()
             : '';
       return {
         command:
           recordedCommand ||
-          (typeof result?.command === 'string' && result.command.trim() ? result.command.trim() : ''),
+          (typeof result?.command === 'string' && result.command.trim()
+            ? result.command.trim()
+            : ''),
         currentWorkingDirectory:
-          typeof result?.currentWorkingDirectory === 'string' && result.currentWorkingDirectory.trim()
+          typeof result?.currentWorkingDirectory === 'string' &&
+          result.currentWorkingDirectory.trim()
             ? result.currentWorkingDirectory.trim()
             : typeof conversation?.currentWorkingDirectory === 'string' &&
                 conversation.currentWorkingDirectory.trim()
@@ -1834,7 +1874,8 @@ function getTerminalSessionForConversation(conversation = getActiveConversation(
       : entries;
 
   const currentWorkingDirectory =
-    typeof pendingEntry?.currentWorkingDirectory === 'string' && pendingEntry.currentWorkingDirectory.trim()
+    typeof pendingEntry?.currentWorkingDirectory === 'string' &&
+    pendingEntry.currentWorkingDirectory.trim()
       ? pendingEntry.currentWorkingDirectory.trim()
       : typeof visibleEntries[visibleEntries.length - 1]?.currentWorkingDirectory === 'string' &&
           visibleEntries[visibleEntries.length - 1].currentWorkingDirectory.trim()
@@ -1899,7 +1940,7 @@ function createConversationId() {
 function isConversationSystemPromptModalVisible() {
   return Boolean(
     conversationSystemPromptModal instanceof HTMLElement &&
-      conversationSystemPromptModal.classList.contains('show')
+    conversationSystemPromptModal.classList.contains('show')
   );
 }
 
@@ -1921,7 +1962,9 @@ function buildRouteHash(targetRoute) {
 }
 
 function parseAppRouteFromHash(hashValue = window.location.hash) {
-  const normalized = String(hashValue || '').replace(/^#\/?/, '').trim();
+  const normalized = String(hashValue || '')
+    .replace(/^#\/?/, '')
+    .trim();
   const segments = normalized
     .split('/')
     .map((segment) => segment.trim())
@@ -2559,7 +2602,9 @@ function updateSkipLinkVisibility() {
     if (!(link instanceof HTMLElement)) {
       return;
     }
-    const scope = String(link.dataset.skipScope || 'always').trim().toLowerCase();
+    const scope = String(link.dataset.skipScope || 'always')
+      .trim()
+      .toLowerCase();
     let visible = true;
     if (scope === 'workspace') {
       visible = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
@@ -2865,7 +2910,11 @@ function applyAppRouteFromHash() {
 
   routingShell.applyRouteFromHash();
 
-  if (routeState.showSystemPrompt && routeState.conversationId && findConversationById(routeState.conversationId)) {
+  if (
+    routeState.showSystemPrompt &&
+    routeState.conversationId &&
+    findConversationById(routeState.conversationId)
+  ) {
     if (!isConversationSystemPromptModalVisible()) {
       beginConversationSystemPromptEdit();
     }
@@ -2875,7 +2924,10 @@ function applyAppRouteFromHash() {
   closeConversationSystemPromptModal();
 }
 
-function setActiveConversationById(conversationId, { syncRoute = true, replaceRoute = false } = {}) {
+function setActiveConversationById(
+  conversationId,
+  { syncRoute = true, replaceRoute = false } = {}
+) {
   if (appState.activeConversationId === conversationId) {
     if (syncRoute) {
       syncRouteToCurrentState({ replace: replaceRoute });
@@ -3379,11 +3431,8 @@ const routingShell = createRoutingShell({
   playEntranceAnimation,
 });
 
-const {
-  setActiveSettingsTab,
-  setSettingsPageVisibility,
-  updateWelcomePanelVisibility,
-} = routingShell;
+const { setActiveSettingsTab, setSettingsPageVisibility, updateWelcomePanelVisibility } =
+  routingShell;
 
 const preferencesController = createPreferencesController({
   appState,
@@ -3561,6 +3610,7 @@ const appController = createAppController({
       requestToolConsent,
       onShellCommandStart: handleShellCommandStart,
       onShellCommandComplete: handleShellCommandComplete,
+      pythonExecutor: pythonRuntime,
       workspaceFileSystem: getConversationWorkspaceFileSystem(),
     }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
@@ -3917,6 +3967,7 @@ bindShellEvents({
   applyRouteFromHash: applyAppRouteFromHash,
   persistConversationStateNow,
   disposeEngine: () => engine.dispose(),
+  disposePythonRuntime: () => pythonRuntime.dispose(),
   preChatEditConversationSystemPromptBtn,
   beginConversationSystemPromptEdit,
   preChatLoadModelBtn,

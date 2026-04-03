@@ -128,7 +128,7 @@ Student-facing browser chat UI with local model inference.
 - The effective system prompt also appends conversation-level language steering when a response language is selected and model-specific thinking-mode switch instructions when the selected model exposes them.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
 - Tool-calling behavior, transcript presentation, export semantics, the current built-in tool catalog, and the planned function-call/MCP/`SKILL.md` capability model are documented in `docs/tools.md`.
-- The current built-in tool catalog includes date/time lookup, user location lookup, a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch, and a browser-local `run_shell_command` tool that exposes a documented GNU/Linux-like command subset over `/workspace`.
+- The current built-in tool catalog includes date/time lookup, user location lookup, a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch, a `write_python_file` tool for larger `/workspace/*.py` scripts, and a browser-local `run_shell_command` tool that exposes a documented GNU/Linux-like command subset over `/workspace`.
   - The shell tool keeps a conversation-local current working directory, defaults it to `/workspace`, and resolves relative paths from that pointer.
   - `run_shell_command` now documents `cmd` as its preferred shell-text argument and still accepts legacy `command` for compatibility.
   - Shell-command input is sanitized before execution: oversized commands, control characters, fenced blocks, and nested tool-call payloads are rejected.
@@ -141,6 +141,8 @@ Student-facing browser chat UI with local model inference.
   - The shell subset includes a basic `file` command that classifies directories plus common text and binary file types under `/workspace`.
   - The shell subset includes a line-based `diff` command with unified-style emulated output for comparing two text files under `/workspace`.
   - The shell subset includes a browser-backed `curl` subset for `URL`, `-I`, `-X`, repeated `-H`, `-d`, and `/workspace`-bounded `-o`.
+  - The shell subset includes a delegated `python` command for `python /workspace/script.py` and short `python -c "..."` execution through a browser-local Pyodide worker.
+  - Larger Python source is expected to flow through `write_python_file`, which also mirrors a meaningful file-write entry into the read-only terminal before later `python` execution appears there.
   - The shell subset now supports text-only `|` pipelines for a small stdin-aware command subset, while command chaining such as `;` and `&&` remains unsupported.
 - When a model emits a complete tool call during streaming, generation is interrupted immediately, the tool executes before the turn continues, and the visible transcript folds that tool request/result plus any resumed narration back into the same model response card in the order they occurred instead of rendering separate transcript nodes.
 - The active conversation's sidebar kebab menu includes `Edit conversation system prompt`:
@@ -209,6 +211,7 @@ Student-facing browser chat UI with local model inference.
 
 - Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
 - Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
+- Browser-local Python execution currently loads Pyodide assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
 - Attachment ingestion uses browser-local limits before large files are read into memory:
   - text files: 5 MB max, truncated to 400,000 characters
   - images: 15 MB max, 40,000,000 pixels max

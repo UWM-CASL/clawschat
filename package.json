@@ -35,7 +35,8 @@
     "bootstrap-icons": "^1.13.1",
     "markdown-it": "^14.1.1",
     "mathjax": "^3.2.2",
-    "pdfjs-dist": "^5.6.205"
+    "pdfjs-dist": "^5.6.205",
+    "pyodide": "^0.29.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",

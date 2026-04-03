@@ -98,6 +98,27 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js).
 
+### `write_python_file`
+
+- Display name: `Write Python File`
+- Purpose: writes larger Python source into a `.py` file under `/workspace`
+- Intended workflow: use this tool for non-trivial scripts, then run the saved file through `run_shell_command` with a `python /workspace/...` command
+- Arguments:
+  - required `path`
+  - required `source`
+- Result fields:
+  - `path`
+  - `bytes`
+  - `lines`
+  - `preview`
+  - `message`
+- Input guardrails:
+  - `path` must stay under `/workspace` and end in `.py`
+  - `source` must be non-empty and capped for prompt/tool payload sanity
+- Terminal behavior: each successful write is mirrored into the read-only xterm session as a synthetic file-write command plus a short preview so the user can see that Python source was created before execution
+
+This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js) and [src/llm/python-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/python-tool.js).
+
 ### `run_shell_command`
 
 - Display name: `Shell Command Runner`
@@ -153,6 +174,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `file` with basic directory, signature, extension, and text-vs-binary classification
   - `diff` with `-u` unified-style emulated output
   - `curl` with `URL`, `-I`, `-X`, repeated `-H`, `-d`, and `-o`
+  - `python` with `/workspace/<script>.py` or short `-c` execution
   - `echo`
   - `set`
   - `unset`
@@ -173,11 +195,14 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `diff` is line-based and emits unified-style emulated output rather than full GNU diff compatibility
   - `curl` uses the browser fetch API, so CORS, browser-managed redirects, and forbidden request headers still apply
   - `curl -o` writes response bytes to a file under `/workspace`; without `-o`, response bytes are decoded as UTF-8 text for `stdout`
+  - `python` delegates to a browser-local Pyodide worker and mirrors its output back into shell-style `stdout`, `stderr`, and `exitCode`
+  - `python -c` is intentionally small and should be treated as a short-snippet path; larger code should be written with `write_python_file` and then executed by path
+  - interactive `python` with no script or `-c` is not supported
   - `|` is supported for `printf`, `echo`, `cat`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `nl`, `grep`, and `sed`
   - `;`, `&&`, redirection, substitution, and globbing are not implemented
   - unsupported commands/syntax return shell-style `stderr` text with a non-zero `exitCode`
 
-This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js) and [src/llm/shell-command-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/shell-command-tool.js).
+This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js), [src/llm/shell-command-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/shell-command-tool.js), [src/llm/python-tool.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/python-tool.js), [src/llm/python-runtime-client.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/python-runtime-client.js), and [src/workers/python.worker.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/workers/python.worker.js).
 
 ### Standard for future shell commands
 
@@ -314,6 +339,7 @@ Current behavior:
 - the model card renders thinking, narration, tool request/result, and any resumed narration in the order they occurred within that turn
 - intermediate `tool` and continuation `model` nodes stay in conversation state for execution and export, but the transcript folds them into the originating model card instead of showing standalone rows
 - `run_shell_command` also mirrors its visible branch history into a read-only xterm terminal panel that opens on demand, shows prompt + command + output, and can be dismissed until the next shell command reopens it
+- `write_python_file` mirrors successful writes into that same terminal history as synthetic file-write entries so Python creation and later `python ...` execution appear in a coherent order
 
 This keeps the visible transcript aligned with agent-style execution: tool use happens at the point where the model decided it needed the tool, not as a later detached transcript node.
 

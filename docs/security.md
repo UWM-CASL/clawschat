@@ -8,6 +8,7 @@ This document tracks security hardening decisions and known gaps that should sta
 - After the user grants that consent, the app may reuse precise location in later tool calls.
 - If the user declines precise location consent, the location tool falls back to a coarse locale/timezone-derived label with no coordinates.
 - Transformers.js is loaded from the locally installed package and bundled with the app build instead of being imported from a CDN at runtime.
+- Browser-local Python execution currently loads Pyodide runtime assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
 - Attachment ingestion applies per-type limits before large files are read into memory:
   - text files: 5 MB max, truncated to 400,000 characters for storage and prompt preparation
   - images: 15 MB max and 40,000,000 pixels max

@@ -1,7 +1,4 @@
-import {
-  normalizeWorkspacePath,
-  WORKSPACE_ROOT_PATH,
-} from '../workspace/workspace-file-system.js';
+import { normalizeWorkspacePath, WORKSPACE_ROOT_PATH } from '../workspace/workspace-file-system.js';
 
 const SHELL_FLAVOR = 'GNU/Linux-like shell subset';
 const MAX_DIFF_MATRIX_CELLS = 1_000_000;
@@ -212,6 +209,11 @@ const SHELL_COMMANDS = Object.freeze([
     description: 'Fetch a URL with the browser network stack and optional workspace output.',
   },
   {
+    name: 'python',
+    usage: 'python <script.py> [<argument>...] | python -c "<code>" [<argument>...]',
+    description: 'Run browser-local Python against the workspace through the Pyodide runtime.',
+  },
+  {
     name: 'echo',
     usage: 'echo <text>',
     description: 'Print text to stdout.',
@@ -243,12 +245,7 @@ function getUtf8TextDecoder(options = {}) {
 
 function createShellResult(
   command,
-  {
-    exitCode = 0,
-    stdout = '',
-    stderr = '',
-    currentWorkingDirectory = WORKSPACE_ROOT_PATH,
-  } = {}
+  { exitCode = 0, stdout = '', stderr = '', currentWorkingDirectory = WORKSPACE_ROOT_PATH } = {}
 ) {
   return {
     shellFlavor: SHELL_FLAVOR,
@@ -391,46 +388,50 @@ function fillMktempTemplate(templatePath) {
     throw new Error("template must end with at least 3 consecutive 'X' characters.");
   }
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const replacement = Array.from({ length: lastRun[0].length }, () =>
-    alphabet[Math.floor(Math.random() * alphabet.length)]
+  const replacement = Array.from(
+    { length: lastRun[0].length },
+    () => alphabet[Math.floor(Math.random() * alphabet.length)]
   ).join('');
   return `${template.slice(0, -lastRun[0].length)}${replacement}`;
 }
 
 function decodePrintfEscapes(text) {
-  return String(text || '').replace(/\\([\\abfnrtv]|x[0-9A-Fa-f]{2}|0[0-7]{0,2}|.)/g, (match, escape) => {
-    if (escape === 'a') {
-      return '\x07';
+  return String(text || '').replace(
+    /\\([\\abfnrtv]|x[0-9A-Fa-f]{2}|0[0-7]{0,2}|.)/g,
+    (match, escape) => {
+      if (escape === 'a') {
+        return '\x07';
+      }
+      if (escape === 'b') {
+        return '\b';
+      }
+      if (escape === 'f') {
+        return '\f';
+      }
+      if (escape === 'n') {
+        return '\n';
+      }
+      if (escape === 'r') {
+        return '\r';
+      }
+      if (escape === 't') {
+        return '\t';
+      }
+      if (escape === 'v') {
+        return '\v';
+      }
+      if (escape === '\\') {
+        return '\\';
+      }
+      if (/^x[0-9A-Fa-f]{2}$/.test(escape)) {
+        return String.fromCharCode(Number.parseInt(escape.slice(1), 16));
+      }
+      if (/^0[0-7]{0,2}$/.test(escape)) {
+        return String.fromCharCode(Number.parseInt(escape, 8));
+      }
+      return match.slice(1);
     }
-    if (escape === 'b') {
-      return '\b';
-    }
-    if (escape === 'f') {
-      return '\f';
-    }
-    if (escape === 'n') {
-      return '\n';
-    }
-    if (escape === 'r') {
-      return '\r';
-    }
-    if (escape === 't') {
-      return '\t';
-    }
-    if (escape === 'v') {
-      return '\v';
-    }
-    if (escape === '\\') {
-      return '\\';
-    }
-    if (/^x[0-9A-Fa-f]{2}$/.test(escape)) {
-      return String.fromCharCode(Number.parseInt(escape.slice(1), 16));
-    }
-    if (/^0[0-7]{0,2}$/.test(escape)) {
-      return String.fromCharCode(Number.parseInt(escape, 8));
-    }
-    return match.slice(1);
-  });
+  );
 }
 
 function formatPrintfDirective(specifier, value) {
@@ -676,7 +677,9 @@ function escapeRegExp(value) {
 }
 
 function normalizeCurlHeaderName(name) {
-  return String(name || '').trim().toLowerCase();
+  return String(name || '')
+    .trim()
+    .toLowerCase();
 }
 
 function isForbiddenBrowserRequestHeader(name) {
@@ -758,7 +761,9 @@ function parseCurlArguments(args) {
       if (index >= args.length) {
         throw new Error('-X requires an HTTP method.');
       }
-      options.method = String(args[index] || '').trim().toUpperCase();
+      options.method = String(args[index] || '')
+        .trim()
+        .toUpperCase();
       if (!options.method) {
         throw new Error('-X requires a non-empty HTTP method.');
       }
@@ -835,7 +840,9 @@ function compileGrepPattern(pattern, { ignoreCase = false, fixedStrings = false 
     return {
       test: (line) =>
         ignoreCase
-          ? String(line || '').toLowerCase().includes(normalizedPattern.toLowerCase())
+          ? String(line || '')
+              .toLowerCase()
+              .includes(normalizedPattern.toLowerCase())
           : String(line || '').includes(normalizedPattern),
     };
   }
@@ -877,24 +884,14 @@ async function listDirectoryRecursively(
       continue;
     }
     sections.push(
-      ...(await listDirectoryRecursively(
-        workspaceFileSystem,
-        entry.path,
-        options,
-        seenDirectories
-      ))
+      ...(await listDirectoryRecursively(workspaceFileSystem, entry.path, options, seenDirectories))
     );
   }
 
   return sections;
 }
 
-async function walkWorkspaceTree(
-  workspaceFileSystem,
-  rootPath,
-  visit,
-  depth = 0
-) {
+async function walkWorkspaceTree(workspaceFileSystem, rootPath, visit, depth = 0) {
   const stat = await workspaceFileSystem.stat(rootPath);
   await visit(stat, depth);
   if (stat.kind !== 'directory') {
@@ -974,7 +971,11 @@ function getShellVariables(runtimeContext = {}) {
   return rawVariables;
 }
 
-function getShellVariableValue(name, runtimeContext = {}, currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
+function getShellVariableValue(
+  name,
+  runtimeContext = {},
+  currentWorkingDirectory = WORKSPACE_ROOT_PATH
+) {
   if (name === 'PWD') {
     return currentWorkingDirectory;
   }
@@ -1003,18 +1004,26 @@ function unsetShellVariable(runtimeContext = {}, name) {
   delete variables[name];
 }
 
-function expandShellToken(token, runtimeContext = {}, currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
+function expandShellToken(
+  token,
+  runtimeContext = {},
+  currentWorkingDirectory = WORKSPACE_ROOT_PATH
+) {
   return String(token || '')
     .replace(
       /\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/g,
       (_match, shortName, bracedName) =>
-        getShellVariableValue(shortName || bracedName, runtimeContext, currentWorkingDirectory),
+        getShellVariableValue(shortName || bracedName, runtimeContext, currentWorkingDirectory)
     )
     .split(SHELL_LITERAL_DOLLAR_PLACEHOLDER)
     .join('$');
 }
 
-function expandShellTokens(tokens, runtimeContext = {}, currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
+function expandShellTokens(
+  tokens,
+  runtimeContext = {},
+  currentWorkingDirectory = WORKSPACE_ROOT_PATH
+) {
   return Array.isArray(tokens)
     ? tokens
         .map((token) => expandShellToken(token, runtimeContext, currentWorkingDirectory))
@@ -1044,10 +1053,14 @@ function resolveWorkspacePath(
     slashNormalized.startsWith('/') ||
     slashNormalized === 'workspace' ||
     slashNormalized.startsWith('workspace/');
-  const seedPath = isAbsolute ? WORKSPACE_ROOT_PATH : workspaceFileSystem.normalizePath(currentWorkingDirectory);
+  const seedPath = isAbsolute
+    ? WORKSPACE_ROOT_PATH
+    : workspaceFileSystem.normalizePath(currentWorkingDirectory);
   const seedSegments = seedPath.split('/').filter(Boolean);
   const candidateSegments = isAbsolute
-    ? (slashNormalized.startsWith('/') ? slashNormalized : `/${slashNormalized}`).split('/').filter(Boolean)
+    ? (slashNormalized.startsWith('/') ? slashNormalized : `/${slashNormalized}`)
+        .split('/')
+        .filter(Boolean)
     : slashNormalized.split('/').filter(Boolean);
 
   const normalizedSegments = isAbsolute ? [] : [...seedSegments];
@@ -1232,7 +1245,13 @@ async function runFalse(commandText, args, currentWorkingDirectory) {
   });
 }
 
-async function runCd(commandText, args, workspaceFileSystem, runtimeContext, currentWorkingDirectory) {
+async function runCd(
+  commandText,
+  args,
+  workspaceFileSystem,
+  runtimeContext,
+  currentWorkingDirectory
+) {
   if (args.length > 1) {
     return createShellError(
       commandText,
@@ -1295,17 +1314,15 @@ async function runSet(commandText, args, runtimeContext, currentWorkingDirectory
     const userVariables = Object.entries(getShellVariables(runtimeContext))
       .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
       .map(([name, value]) => `${name}=${value}`);
-    const builtinVariables = [
-      `PWD=${currentWorkingDirectory}`,
-      `WORKSPACE=${WORKSPACE_ROOT_PATH}`,
-    ];
+    const builtinVariables = [`PWD=${currentWorkingDirectory}`, `WORKSPACE=${WORKSPACE_ROOT_PATH}`];
     return createShellResult(commandText, {
       stdout: [...builtinVariables, ...userVariables].join('\n'),
       currentWorkingDirectory,
     });
   }
 
-  const assignmentMatch = args.length === 1 ? args[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
+  const assignmentMatch =
+    args.length === 1 ? args[0].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) : null;
   const variableName = assignmentMatch ? assignmentMatch[1] : args[0];
   const variableValue = assignmentMatch ? assignmentMatch[2] : args.slice(1).join(' ');
 
@@ -1355,7 +1372,13 @@ async function runSet(commandText, args, runtimeContext, currentWorkingDirectory
 
 async function runUnset(commandText, args, runtimeContext, currentWorkingDirectory) {
   if (!args.length) {
-    return createShellError(commandText, 'unset', 'expected at least one variable name.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'unset',
+      'expected at least one variable name.',
+      2,
+      currentWorkingDirectory
+    );
   }
   for (const variableName of args) {
     if (!isValidShellVariableName(variableName)) {
@@ -1439,7 +1462,13 @@ async function runLs(commandText, args, workspaceFileSystem, currentWorkingDirec
         if (flag === 'a') {
           continue;
         }
-        return createShellError(commandText, 'ls', `unsupported option -${flag}.`, 2, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'ls',
+          `unsupported option -${flag}.`,
+          2,
+          currentWorkingDirectory
+        );
       }
       continue;
     }
@@ -1482,7 +1511,11 @@ async function runLs(commandText, args, workspaceFileSystem, currentWorkingDirec
     let section = '';
     if (stat.kind === 'directory' && !listDirectoriesThemselves) {
       if (recursive) {
-        const sections = await listDirectoryRecursively(workspaceFileSystem, normalizedPath, listOptions);
+        const sections = await listDirectoryRecursively(
+          workspaceFileSystem,
+          normalizedPath,
+          listOptions
+        );
         section = sections
           .map(({ path, lines }) => `${path}:\n${lines.join('\n')}`.trimEnd())
           .join('\n\n');
@@ -1574,7 +1607,10 @@ function isBlankCatLine(line) {
   return line.trim() === '';
 }
 
-function formatCatText(text, { numberAllLines = false, numberNonBlankLines = false, squeezeBlank = false } = {}) {
+function formatCatText(
+  text,
+  { numberAllLines = false, numberNonBlankLines = false, squeezeBlank = false } = {}
+) {
   const normalizedText = String(text || '');
   const trailingNewline = /\r?\n$/.test(normalizedText);
   const lines = normalizedText.split(/\r?\n/);
@@ -1635,7 +1671,13 @@ async function runCat(
       continue;
     }
     if (argument.startsWith('--')) {
-      return createShellError(commandText, 'cat', `unrecognized option '${argument}'.`, 2, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'cat',
+        `unrecognized option '${argument}'.`,
+        2,
+        currentWorkingDirectory
+      );
     }
     if (argument.startsWith('-') && argument !== '-') {
       for (const flag of argument.slice(1)) {
@@ -1651,7 +1693,13 @@ async function runCat(
           squeezeBlank = true;
           continue;
         }
-        return createShellError(commandText, 'cat', `invalid option -- '${flag}'.`, 2, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'cat',
+          `invalid option -- '${flag}'.`,
+          2,
+          currentWorkingDirectory
+        );
       }
       continue;
     }
@@ -1659,7 +1707,13 @@ async function runCat(
   }
 
   if (!filePaths.length && !hasPipelineStdin(stdinText)) {
-    return createShellError(commandText, 'cat', 'expected at least one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cat',
+      'expected at least one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   const chunks = [];
   if (!filePaths.length) {
@@ -1702,19 +1756,23 @@ async function runHead(
       allowPathless: hasPipelineStdin(stdinText),
     });
   } catch (error) {
-    return createShellError(commandText, 'head', error instanceof Error ? error.message : String(error), 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'head',
+      error instanceof Error ? error.message : String(error),
+      2,
+      currentWorkingDirectory
+    );
   }
   const sourceText =
     parsedArguments.path === null
       ? String(stdinText ?? '')
-      : (
-          await readWorkspaceTextFile(
-            'head',
-            commandText,
-            parsedArguments.path,
-            workspaceFileSystem,
-            currentWorkingDirectory
-          )
+      : await readWorkspaceTextFile(
+          'head',
+          commandText,
+          parsedArguments.path,
+          workspaceFileSystem,
+          currentWorkingDirectory
         );
   if (sourceText?.error) {
     return sourceText.error;
@@ -1739,19 +1797,23 @@ async function runTail(
       allowPathless: hasPipelineStdin(stdinText),
     });
   } catch (error) {
-    return createShellError(commandText, 'tail', error instanceof Error ? error.message : String(error), 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'tail',
+      error instanceof Error ? error.message : String(error),
+      2,
+      currentWorkingDirectory
+    );
   }
   const sourceText =
     parsedArguments.path === null
       ? String(stdinText ?? '')
-      : (
-          await readWorkspaceTextFile(
-            'tail',
-            commandText,
-            parsedArguments.path,
-            workspaceFileSystem,
-            currentWorkingDirectory
-          )
+      : await readWorkspaceTextFile(
+          'tail',
+          commandText,
+          parsedArguments.path,
+          workspaceFileSystem,
+          currentWorkingDirectory
         );
   if (sourceText?.error) {
     return sourceText.error;
@@ -1763,7 +1825,13 @@ async function runTail(
   });
 }
 
-async function runWc(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runWc(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let mode = 'all';
   const remaining = [...args];
   if (remaining[0]?.startsWith('-')) {
@@ -1771,7 +1839,13 @@ async function runWc(commandText, args, workspaceFileSystem, currentWorkingDirec
   }
   const useStdin = remaining.length === 0 && hasPipelineStdin(stdinText);
   if (!useStdin && remaining.length !== 1) {
-    return createShellError(commandText, 'wc', 'expected one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'wc',
+      'expected one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   const fileResult = useStdin
@@ -1805,7 +1879,13 @@ async function runWc(commandText, args, workspaceFileSystem, currentWorkingDirec
   } else if (mode === 'all') {
     stdout = `${lineCount} ${wordCount} ${byteCount}${targetSuffix}`;
   } else {
-    return createShellError(commandText, 'wc', `unsupported option ${mode}.`, 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'wc',
+      `unsupported option ${mode}.`,
+      2,
+      currentWorkingDirectory
+    );
   }
 
   return createShellResult(commandText, { stdout, currentWorkingDirectory });
@@ -2098,21 +2178,11 @@ function createSedAddressMatcher(address, totalLineCount) {
   let inRange = false;
   return (lineText, lineNumber) => {
     if (!inRange) {
-      const startMatched = matchSedAddressUnit(
-        address.start,
-        lineText,
-        lineNumber,
-        totalLineCount
-      );
+      const startMatched = matchSedAddressUnit(address.start, lineText, lineNumber, totalLineCount);
       if (!startMatched) {
         return false;
       }
-      const endMatched = matchSedAddressUnit(
-        address.end,
-        lineText,
-        lineNumber,
-        totalLineCount
-      );
+      const endMatched = matchSedAddressUnit(address.end, lineText, lineNumber, totalLineCount);
       inRange = !endMatched;
       return true;
     }
@@ -2195,8 +2265,7 @@ function describeFileBytes(path, bytes) {
 function buildDiffLineOperations(leftLines, rightLines) {
   const normalizedLeftLines = Array.isArray(leftLines) ? leftLines : [];
   const normalizedRightLines = Array.isArray(rightLines) ? rightLines : [];
-  const matrixCellCount =
-    (normalizedLeftLines.length + 1) * (normalizedRightLines.length + 1);
+  const matrixCellCount = (normalizedLeftLines.length + 1) * (normalizedRightLines.length + 1);
   if (matrixCellCount > MAX_DIFF_MATRIX_CELLS) {
     return null;
   }
@@ -2207,11 +2276,7 @@ function buildDiffLineOperations(leftLines, rightLines) {
   );
 
   for (let leftIndex = normalizedLeftLines.length - 1; leftIndex >= 0; leftIndex -= 1) {
-    for (
-      let rightIndex = normalizedRightLines.length - 1;
-      rightIndex >= 0;
-      rightIndex -= 1
-    ) {
+    for (let rightIndex = normalizedRightLines.length - 1; rightIndex >= 0; rightIndex -= 1) {
       lcsLengths[leftIndex][rightIndex] =
         normalizedLeftLines[leftIndex] === normalizedRightLines[rightIndex]
           ? lcsLengths[leftIndex + 1][rightIndex + 1] + 1
@@ -2304,18 +2369,12 @@ function buildUnifiedDiffHunks(operations, contextLineCount = DEFAULT_DIFF_CONTE
 
   const hunks = [];
   let hunkStart = Math.max(0, changeIndexes[0] - contextLineCount);
-  let hunkEnd = Math.min(
-    normalizedOperations.length,
-    changeIndexes[0] + contextLineCount + 1
-  );
+  let hunkEnd = Math.min(normalizedOperations.length, changeIndexes[0] + contextLineCount + 1);
 
   for (let index = 1; index < changeIndexes.length; index += 1) {
     const nextChangeIndex = changeIndexes[index];
     const nextStart = Math.max(0, nextChangeIndex - contextLineCount);
-    const nextEnd = Math.min(
-      normalizedOperations.length,
-      nextChangeIndex + contextLineCount + 1
-    );
+    const nextEnd = Math.min(normalizedOperations.length, nextChangeIndex + contextLineCount + 1);
     if (nextStart <= hunkEnd) {
       hunkEnd = Math.max(hunkEnd, nextEnd);
       continue;
@@ -2335,15 +2394,9 @@ function buildUnifiedDiffHunks(operations, contextLineCount = DEFAULT_DIFF_CONTE
       rightIndexBefore: 0,
     };
     return {
-      leftStartLine: getUnifiedDiffStartLine(
-        firstOperation.leftIndexBefore,
-        leftLineCount
-      ),
+      leftStartLine: getUnifiedDiffStartLine(firstOperation.leftIndexBefore, leftLineCount),
       leftLineCount,
-      rightStartLine: getUnifiedDiffStartLine(
-        firstOperation.rightIndexBefore,
-        rightLineCount
-      ),
+      rightStartLine: getUnifiedDiffStartLine(firstOperation.rightIndexBefore, rightLineCount),
       rightLineCount,
       lines: slice.map((operation) => {
         if (operation.type === 'delete') {
@@ -2425,7 +2478,13 @@ function translateCharacters(text, sourceSet, targetSet) {
   }).join('');
 }
 
-async function runSort(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runSort(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let reverse = false;
   let numeric = false;
   const filePaths = [];
@@ -2444,7 +2503,13 @@ async function runSort(commandText, args, workspaceFileSystem, currentWorkingDir
           numeric = true;
           continue;
         }
-        return createShellError(commandText, 'sort', `unsupported option -${flag}.`, 2, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'sort',
+          `unsupported option -${flag}.`,
+          2,
+          currentWorkingDirectory
+        );
       }
       continue;
     }
@@ -2452,7 +2517,13 @@ async function runSort(commandText, args, workspaceFileSystem, currentWorkingDir
   }
 
   if (!filePaths.length && !hasPipelineStdin(stdinText)) {
-    return createShellError(commandText, 'sort', 'expected at least one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'sort',
+      'expected at least one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   const allLines = [];
@@ -2498,7 +2569,13 @@ async function runSort(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runUniq(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let countMode = false;
   const filePaths = [];
 
@@ -2512,7 +2589,13 @@ async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDir
           countMode = true;
           continue;
         }
-        return createShellError(commandText, 'uniq', `unsupported option -${flag}.`, 2, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'uniq',
+          `unsupported option -${flag}.`,
+          2,
+          currentWorkingDirectory
+        );
       }
       continue;
     }
@@ -2521,7 +2604,13 @@ async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDir
 
   const useStdin = filePaths.length === 0 && hasPipelineStdin(stdinText);
   if (!useStdin && filePaths.length !== 1) {
-    return createShellError(commandText, 'uniq', 'expected exactly one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'uniq',
+      'expected exactly one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   const fileResult = useStdin
@@ -2549,7 +2638,9 @@ async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDir
     if (previousLine === null) {
       return;
     }
-    outputLines.push(countMode ? `${String(count).padStart(7, ' ')} ${previousLine}` : previousLine);
+    outputLines.push(
+      countMode ? `${String(count).padStart(7, ' ')} ${previousLine}` : previousLine
+    );
   };
 
   for (const line of lines) {
@@ -2574,9 +2665,21 @@ async function runUniq(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runCut(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runCut(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   if (!args.length) {
-    return createShellError(commandText, 'cut', 'expected options and one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cut',
+      'expected options and one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   let delimiter = '\t';
@@ -2596,17 +2699,35 @@ async function runCut(commandText, args, workspaceFileSystem, currentWorkingDire
       continue;
     }
     if (argument.startsWith('-') && argument !== '-') {
-      return createShellError(commandText, 'cut', `unsupported option ${argument}.`, 2, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'cut',
+        `unsupported option ${argument}.`,
+        2,
+        currentWorkingDirectory
+      );
     }
     filePaths.push(argument);
   }
 
   if (!fieldSpec) {
-    return createShellError(commandText, 'cut', 'option -f requires a field list.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cut',
+      'option -f requires a field list.',
+      2,
+      currentWorkingDirectory
+    );
   }
   const useStdin = filePaths.length === 0 && hasPipelineStdin(stdinText);
   if (!useStdin && filePaths.length !== 1) {
-    return createShellError(commandText, 'cut', 'expected exactly one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cut',
+      'expected exactly one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   let fields;
@@ -2714,10 +2835,7 @@ async function runPaste(commandText, args, workspaceFileSystem, currentWorkingDi
     trailingNewline = trailingNewline || lineResult.trailingNewline;
   }
 
-  const rowCount = fileLines.reduce(
-    (maximum, lines) => Math.max(maximum, lines.length),
-    0
-  );
+  const rowCount = fileLines.reduce((maximum, lines) => Math.max(maximum, lines.length), 0);
   const outputLines = [];
 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
@@ -2860,21 +2978,14 @@ async function runJoin(commandText, args, workspaceFileSystem, currentWorkingDir
     }
     const rightMatches = rightEntriesByKey.get(joinKey) || [];
     for (const rightFields of rightMatches) {
-      const leftRemainder = leftFields.filter(
-        (_field, index) => index !== leftFieldIndex - 1
-      );
-      const rightRemainder = rightFields.filter(
-        (_field, index) => index !== rightFieldIndex - 1
-      );
+      const leftRemainder = leftFields.filter((_field, index) => index !== leftFieldIndex - 1);
+      const rightRemainder = rightFields.filter((_field, index) => index !== rightFieldIndex - 1);
       outputLines.push([joinKey, ...leftRemainder, ...rightRemainder].join(separator));
     }
   }
 
   return createShellResult(commandText, {
-    stdout: joinShellLines(
-      outputLines,
-      leftLines.trailingNewline || rightLines.trailingNewline
-    ),
+    stdout: joinShellLines(outputLines, leftLines.trailingNewline || rightLines.trailingNewline),
     currentWorkingDirectory,
   });
 }
@@ -2942,10 +3053,7 @@ async function runColumn(commandText, args, workspaceFileSystem, currentWorkingD
   const rows = lines.map((line) => splitFieldsForShellTable(line, separator));
   const columnCount = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
   const widths = Array.from({ length: columnCount }, (_, columnIndex) =>
-    rows.reduce(
-      (maximum, row) => Math.max(maximum, String(row[columnIndex] ?? '').length),
-      0
-    )
+    rows.reduce((maximum, row) => Math.max(maximum, String(row[columnIndex] ?? '').length), 0)
   );
 
   const outputLines = rows.map((row) => {
@@ -2969,9 +3077,21 @@ async function runColumn(commandText, args, workspaceFileSystem, currentWorkingD
   });
 }
 
-async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runTr(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   if (!args.length) {
-    return createShellError(commandText, 'tr', 'expected character sets and one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'tr',
+      'expected character sets and one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   let deleteMode = false;
@@ -2983,7 +3103,13 @@ async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirec
       continue;
     }
     if (argument.startsWith('-') && argument !== '-') {
-      return createShellError(commandText, 'tr', `unsupported option ${argument}.`, 2, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'tr',
+        `unsupported option ${argument}.`,
+        2,
+        currentWorkingDirectory
+      );
     }
     positional.push(argument);
   }
@@ -3032,10 +3158,22 @@ async function runTr(commandText, args, workspaceFileSystem, currentWorkingDirec
   });
 }
 
-async function runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runNl(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   const useStdin = args.length === 0 && hasPipelineStdin(stdinText);
   if (!useStdin && args.length !== 1) {
-    return createShellError(commandText, 'nl', 'expected exactly one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'nl',
+      'expected exactly one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   const fileResult = useStdin
     ? {
@@ -3063,7 +3201,13 @@ async function runNl(commandText, args, workspaceFileSystem, currentWorkingDirec
 
 async function runMkdir(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
-    return createShellError(commandText, 'mkdir', 'expected at least one directory path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'mkdir',
+      'expected at least one directory path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   const directoryArgs = [];
   for (const argument of args) {
@@ -3071,12 +3215,24 @@ async function runMkdir(commandText, args, workspaceFileSystem, currentWorkingDi
       continue;
     }
     if (argument.startsWith('-') && argument !== '-') {
-      return createShellError(commandText, 'mkdir', `unsupported option ${argument}.`, 2, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'mkdir',
+        `unsupported option ${argument}.`,
+        2,
+        currentWorkingDirectory
+      );
     }
     directoryArgs.push(argument);
   }
   if (!directoryArgs.length) {
-    return createShellError(commandText, 'mkdir', 'expected at least one directory path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'mkdir',
+      'expected at least one directory path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   for (const rawPath of directoryArgs) {
     try {
@@ -3098,7 +3254,13 @@ async function runMkdir(commandText, args, workspaceFileSystem, currentWorkingDi
 
 async function runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
-    return createShellError(commandText, 'rmdir', 'expected at least one directory path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'rmdir',
+      'expected at least one directory path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   for (const rawPath of args) {
     let normalizedPath;
@@ -3157,13 +3319,25 @@ async function runMktemp(commandText, args, workspaceFileSystem, currentWorkingD
       continue;
     }
     if (argument.startsWith('-') && argument !== '-') {
-      return createShellError(commandText, 'mktemp', `unsupported option ${argument}.`, 2, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'mktemp',
+        `unsupported option ${argument}.`,
+        2,
+        currentWorkingDirectory
+      );
     }
     positionalArgs.push(argument);
   }
 
   if (positionalArgs.length > 1) {
-    return createShellError(commandText, 'mktemp', 'expected zero or one template path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'mktemp',
+      'expected zero or one template path.',
+      2,
+      currentWorkingDirectory
+    );
   }
 
   const templatePath = getMktempTemplatePath(positionalArgs[0], currentWorkingDirectory);
@@ -3219,7 +3393,13 @@ async function runMktemp(commandText, args, workspaceFileSystem, currentWorkingD
 
 async function runTouch(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
-    return createShellError(commandText, 'touch', 'expected at least one file path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'touch',
+      'expected at least one file path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   for (const rawPath of args) {
     let normalizedPath;
@@ -3236,7 +3416,13 @@ async function runTouch(commandText, args, workspaceFileSystem, currentWorkingDi
     }
     const stat = await safeStat(workspaceFileSystem, normalizedPath);
     if (stat?.kind === 'directory') {
-      return createShellError(commandText, 'touch', `'${rawPath}' is a directory.`, 1, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'touch',
+        `'${rawPath}' is a directory.`,
+        1,
+        currentWorkingDirectory
+      );
     }
     if (!stat) {
       await workspaceFileSystem.writeTextFile(normalizedPath, '');
@@ -3247,7 +3433,13 @@ async function runTouch(commandText, args, workspaceFileSystem, currentWorkingDi
 
 async function runCp(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (args.length !== 2) {
-    return createShellError(commandText, 'cp', 'expected a source path and a destination path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cp',
+      'expected a source path and a destination path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   let sourcePath;
   try {
@@ -3263,10 +3455,22 @@ async function runCp(commandText, args, workspaceFileSystem, currentWorkingDirec
   }
   const sourceStat = await safeStat(workspaceFileSystem, sourcePath);
   if (!sourceStat) {
-    return createShellError(commandText, 'cp', `cannot stat '${args[0]}': No such file or directory.`, 1, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cp',
+      `cannot stat '${args[0]}': No such file or directory.`,
+      1,
+      currentWorkingDirectory
+    );
   }
   if (sourceStat.kind !== 'file') {
-    return createShellError(commandText, 'cp', 'only file copies are supported in this subset.', 1, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'cp',
+      'only file copies are supported in this subset.',
+      1,
+      currentWorkingDirectory
+    );
   }
   let destinationPath;
   try {
@@ -3314,7 +3518,13 @@ async function runCp(commandText, args, workspaceFileSystem, currentWorkingDirec
 
 async function runMv(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (args.length !== 2) {
-    return createShellError(commandText, 'mv', 'expected a source path and a destination path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'mv',
+      'expected a source path and a destination path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   let sourcePath;
   try {
@@ -3330,10 +3540,22 @@ async function runMv(commandText, args, workspaceFileSystem, currentWorkingDirec
   }
   const sourceStat = await safeStat(workspaceFileSystem, sourcePath);
   if (!sourceStat) {
-    return createShellError(commandText, 'mv', `cannot stat '${args[0]}': No such file or directory.`, 1, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'mv',
+      `cannot stat '${args[0]}': No such file or directory.`,
+      1,
+      currentWorkingDirectory
+    );
   }
   if (sourceStat.kind !== 'file') {
-    return createShellError(commandText, 'mv', 'only file moves are supported in this subset.', 1, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'mv',
+      'only file moves are supported in this subset.',
+      1,
+      currentWorkingDirectory
+    );
   }
   let destinationPath;
   try {
@@ -3382,7 +3604,13 @@ async function runMv(commandText, args, workspaceFileSystem, currentWorkingDirec
 
 async function runRm(commandText, args, workspaceFileSystem, currentWorkingDirectory) {
   if (!args.length) {
-    return createShellError(commandText, 'rm', 'expected at least one path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'rm',
+      'expected at least one path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   let recursive = false;
   let force = false;
@@ -3398,14 +3626,26 @@ async function runRm(commandText, args, workspaceFileSystem, currentWorkingDirec
           force = true;
           continue;
         }
-        return createShellError(commandText, 'rm', `unsupported option -${flag}.`, 2, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'rm',
+          `unsupported option -${flag}.`,
+          2,
+          currentWorkingDirectory
+        );
       }
       continue;
     }
     paths.push(argument);
   }
   if (!paths.length) {
-    return createShellError(commandText, 'rm', 'expected at least one path.', 2, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'rm',
+      'expected at least one path.',
+      2,
+      currentWorkingDirectory
+    );
   }
   for (const rawPath of paths) {
     let normalizedPath;
@@ -3425,10 +3665,22 @@ async function runRm(commandText, args, workspaceFileSystem, currentWorkingDirec
       if (force) {
         continue;
       }
-      return createShellError(commandText, 'rm', `cannot remove '${rawPath}': No such file or directory.`, 1, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'rm',
+        `cannot remove '${rawPath}': No such file or directory.`,
+        1,
+        currentWorkingDirectory
+      );
     }
     if (stat.kind === 'directory' && !recursive) {
-      return createShellError(commandText, 'rm', `cannot remove '${rawPath}': Is a directory.`, 1, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'rm',
+        `cannot remove '${rawPath}': Is a directory.`,
+        1,
+        currentWorkingDirectory
+      );
     }
     try {
       await workspaceFileSystem.deletePath(normalizedPath, { recursive });
@@ -3461,7 +3713,13 @@ async function runFind(commandText, args, workspaceFileSystem, currentWorkingDir
     if (argument === '-name') {
       const value = args[index + 1];
       if (!value) {
-        return createShellError(commandText, 'find', 'missing argument to `-name`.', 1, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'find',
+          'missing argument to `-name`.',
+          1,
+          currentWorkingDirectory
+        );
       }
       namePattern = compileFindNamePattern(value);
       index += 1;
@@ -3470,7 +3728,13 @@ async function runFind(commandText, args, workspaceFileSystem, currentWorkingDir
     if (argument === '-type') {
       const value = args[index + 1];
       if (value !== 'f' && value !== 'd') {
-        return createShellError(commandText, 'find', 'argument to `-type` must be `f` or `d`.', 1, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'find',
+          'argument to `-type` must be `f` or `d`.',
+          1,
+          currentWorkingDirectory
+        );
       }
       entryType = value;
       index += 1;
@@ -3497,22 +3761,44 @@ async function runFind(commandText, args, workspaceFileSystem, currentWorkingDir
       continue;
     }
     if (argument.startsWith('-')) {
-      return createShellError(commandText, 'find', `unknown predicate \`${argument}\`.`, 1, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'find',
+        `unknown predicate \`${argument}\`.`,
+        1,
+        currentWorkingDirectory
+      );
     }
     if (seenExplicitPath) {
-      return createShellError(commandText, 'find', `unexpected path \`${argument}\`.`, 1, currentWorkingDirectory);
+      return createShellError(
+        commandText,
+        'find',
+        `unexpected path \`${argument}\`.`,
+        1,
+        currentWorkingDirectory
+      );
     }
     searchPath = argument;
     seenExplicitPath = true;
   }
 
   if (minDepth > maxDepth) {
-    return createShellError(commandText, 'find', '`-mindepth` cannot be greater than `-maxdepth`.', 1, currentWorkingDirectory);
+    return createShellError(
+      commandText,
+      'find',
+      '`-mindepth` cannot be greater than `-maxdepth`.',
+      1,
+      currentWorkingDirectory
+    );
   }
 
   let normalizedSearchPath;
   try {
-    normalizedSearchPath = resolveWorkspacePath(workspaceFileSystem, searchPath, currentWorkingDirectory);
+    normalizedSearchPath = resolveWorkspacePath(
+      workspaceFileSystem,
+      searchPath,
+      currentWorkingDirectory
+    );
   } catch (error) {
     return createShellError(
       commandText,
@@ -3560,7 +3846,13 @@ async function runFind(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runGrep(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   let ignoreCase = false;
   let showLineNumbers = false;
   let invertMatch = false;
@@ -3599,7 +3891,13 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
           fixedStrings = true;
           continue;
         }
-        return createShellError(commandText, 'grep', `invalid option -- '${flag}'.`, 2, currentWorkingDirectory);
+        return createShellError(
+          commandText,
+          'grep',
+          `invalid option -- '${flag}'.`,
+          2,
+          currentWorkingDirectory
+        );
       }
       continue;
     }
@@ -3692,7 +3990,9 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
     }
 
     if (countOnly) {
-      outputs.push(multipleFiles && normalizedPath ? `${normalizedPath}:${matchCount}` : String(matchCount));
+      outputs.push(
+        multipleFiles && normalizedPath ? `${normalizedPath}:${matchCount}` : String(matchCount)
+      );
       continue;
     }
 
@@ -3705,7 +4005,13 @@ async function runGrep(commandText, args, workspaceFileSystem, currentWorkingDir
   });
 }
 
-async function runSed(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText = null) {
+async function runSed(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText = null
+) {
   if (!args.length) {
     return createShellError(
       commandText,
@@ -4022,7 +4328,9 @@ async function runCurl(
     );
   }
 
-  const method = options.method || (options.includeHeadersOnly ? 'HEAD' : options.body !== null ? 'POST' : 'GET');
+  const method =
+    options.method ||
+    (options.includeHeadersOnly ? 'HEAD' : options.body !== null ? 'POST' : 'GET');
   if ((method === 'GET' || method === 'HEAD') && options.body !== null) {
     return createShellError(
       commandText,
@@ -4056,7 +4364,10 @@ async function runCurl(
     );
   }
 
-  const headerOutput = [formatCurlStatusLine(response), ...formatCurlHeaderLines(response.headers)].join('\n');
+  const headerOutput = [
+    formatCurlStatusLine(response),
+    ...formatCurlHeaderLines(response.headers),
+  ].join('\n');
   if (options.includeHeadersOnly) {
     return createShellResult(commandText, {
       stdout: headerOutput,
@@ -4155,6 +4466,8 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'curl -I https://example.com/data.txt',
       'curl -X POST -H "Content-Type: application/json" -d \'{"topic":"planets"}\' https://example.com/api',
       'curl -o /workspace/download.bin https://example.com/file.bin',
+      'python /workspace/script.py',
+      'python -c "print(2 + 2)"',
       'mkdir -p /workspace/<directory>',
       'cp /workspace/<source-file> /workspace/<destination-file>',
     ],
@@ -4166,7 +4479,7 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.',
       'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed.',
       'Unsupported syntax: ;, &&, redirection, substitution, globbing.',
-      'paste, join, column, file, diff, and curl are partial GNU/Linux-like subsets.',
+      'paste, join, column, file, diff, curl, and python are partial GNU/Linux-like subsets.',
       'Unsupported commands or syntax return stderr text and a non-zero exit code.',
     ],
     placeholders: [
@@ -4225,7 +4538,8 @@ function getValidatedShellToolArguments(argumentsValue = {}) {
   if (shellArguments.cmd !== undefined && shellArguments.command !== undefined) {
     throw new Error('run_shell_command accepts either cmd or command, not both.');
   }
-  const commandValue = shellArguments.cmd !== undefined ? shellArguments.cmd : shellArguments.command;
+  const commandValue =
+    shellArguments.cmd !== undefined ? shellArguments.cmd : shellArguments.command;
   if (commandValue === undefined) {
     return {};
   }
@@ -4399,6 +4713,15 @@ async function executeSingleShellCommand(
     result = runDiff(commandText, args, workspaceFileSystem, currentWorkingDirectory);
   } else if (commandName === 'curl') {
     result = runCurl(
+      commandText,
+      args,
+      workspaceFileSystem,
+      runtimeContext,
+      currentWorkingDirectory
+    );
+  } else if (commandName === 'python') {
+    const pythonToolModule = await import('./python-tool.js');
+    result = pythonToolModule.executePythonShellCommand(
       commandText,
       args,
       workspaceFileSystem,

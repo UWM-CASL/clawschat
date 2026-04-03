@@ -1,11 +1,11 @@
+import { executeWritePythonFileTool } from './python-tool.js';
 import { buildShellToolResponseEnvelope, executeShellCommandTool } from './shell-command-tool.js';
 
 export const TOOL_DEFINITIONS = Object.freeze([
   {
     name: 'get_current_date_time',
     displayName: 'Get Date and Time',
-    description:
-      'Returns the current local date and time, a UTC timestamp and timezone name.',
+    description: 'Returns the current local date and time, a UTC timestamp and timezone name.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -17,7 +17,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'get_user_location',
     displayName: 'Get User Location',
     description:
-      'Returns the user\'s location label and coordinates, or a general location if permission unavailable.',
+      "Returns the user's location label and coordinates, or a general location if permission unavailable.",
     enabled: true,
     parameters: {
       type: 'object',
@@ -56,6 +56,26 @@ export const TOOL_DEFINITIONS = Object.freeze([
           enum: [0, 1],
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'write_python_file',
+    displayName: 'Write Python File',
+    description:
+      'Writes Python source to a .py file under /workspace. Use this for larger scripts, then run them with run_shell_command and a python command.',
+    enabled: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+        },
+        source: {
+          type: 'string',
+        },
+      },
+      required: ['path', 'source'],
       additionalProperties: false,
     },
   },
@@ -130,7 +150,8 @@ function buildToolCallingFormatInstructions(toolCallingConfig) {
   if (!toolCallingConfig || typeof toolCallingConfig !== 'object') {
     return [];
   }
-  const nameKey = typeof toolCallingConfig.nameKey === 'string' ? toolCallingConfig.nameKey : 'name';
+  const nameKey =
+    typeof toolCallingConfig.nameKey === 'string' ? toolCallingConfig.nameKey : 'name';
   const argumentsKey =
     typeof toolCallingConfig.argumentsKey === 'string'
       ? toolCallingConfig.argumentsKey
@@ -186,7 +207,12 @@ function buildToolInstructionLines(name, description = '') {
   }
   if (normalizedName === 'tasklist') {
     lines.push(
-      '  If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model\'s tool-call format.'
+      "  If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model's tool-call format."
+    );
+  }
+  if (normalizedName === 'write_python_file') {
+    lines.push(
+      '  Use this for non-trivial Python source. Write a /workspace/*.py file here, then run it with run_shell_command and a python command.'
     );
   }
   if (normalizedName === 'run_shell_command') {
@@ -195,6 +221,9 @@ function buildToolInstructionLines(name, description = '') {
     );
     lines.push(
       '  Uploaded attachments may already be available under /workspace, and user messages can include their exact workspace paths.'
+    );
+    lines.push(
+      '  The shell subset includes python /workspace/script.py and python -c "<code>". Prefer write_python_file plus python /workspace/script.py for larger scripts.'
     );
   }
   return lines;
@@ -294,9 +323,12 @@ function detectLooseShellCommandToolCall(objectText, toolCallingConfig) {
   if (!toolCallingConfig || typeof toolCallingConfig !== 'object') {
     return null;
   }
-  const nameKey = typeof toolCallingConfig.nameKey === 'string' ? toolCallingConfig.nameKey : 'name';
+  const nameKey =
+    typeof toolCallingConfig.nameKey === 'string' ? toolCallingConfig.nameKey : 'name';
   const argumentsKey =
-    typeof toolCallingConfig.argumentsKey === 'string' ? toolCallingConfig.argumentsKey : 'arguments';
+    typeof toolCallingConfig.argumentsKey === 'string'
+      ? toolCallingConfig.argumentsKey
+      : 'arguments';
   const topLevelMatch = String(objectText || '').match(
     new RegExp(
       `^\\{\\s*"${nameKey}"\\s*:\\s*"([^"]+)"\\s*,\\s*"${argumentsKey}"\\s*:\\s*\\{([\\s\\S]*)\\}\\s*\\}$`
@@ -1054,6 +1086,15 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
   }
   if (toolName === 'tasklist') {
     const result = executeTaskList(argumentsValue, runtimeContext);
+    return {
+      toolName,
+      arguments: argumentsValue,
+      result,
+      resultText: JSON.stringify(result),
+    };
+  }
+  if (toolName === 'write_python_file') {
+    const result = await executeWritePythonFileTool(argumentsValue, runtimeContext);
     return {
       toolName,
       arguments: argumentsValue,

@@ -159,14 +159,14 @@ function createMockWorkspaceFileSystem(initialFiles = {}) {
             : String(data || '');
       return this.writeTextFile(path, text);
     },
-      async deletePath(path, { recursive = false } = {}) {
-        const normalizedPath = normalizePath(path);
-        if (normalizedPath === '/workspace') {
-          throw new Error('Deleting /workspace is not allowed.');
-        }
-        if (files.delete(normalizedPath)) {
-          return true;
-        }
+    async deletePath(path, { recursive = false } = {}) {
+      const normalizedPath = normalizePath(path);
+      if (normalizedPath === '/workspace') {
+        throw new Error('Deleting /workspace is not allowed.');
+      }
+      if (files.delete(normalizedPath)) {
+        return true;
+      }
       if (!directories.has(normalizedPath)) {
         const error = new Error(`No such file or directory: ${normalizedPath}`);
         error.name = 'NotFoundError';
@@ -176,7 +176,8 @@ function createMockWorkspaceFileSystem(initialFiles = {}) {
       const hasChildren =
         Array.from(files.keys()).some((filePath) => filePath.startsWith(childPrefix)) ||
         Array.from(directories).some(
-          (directoryPath) => directoryPath !== normalizedPath && directoryPath.startsWith(childPrefix)
+          (directoryPath) =>
+            directoryPath !== normalizedPath && directoryPath.startsWith(childPrefix)
         );
       if (hasChildren && !recursive) {
         throw new Error(`Directory not empty: ${normalizedPath}`);
@@ -265,7 +266,9 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain('\n\n**Tool behavior:**');
     expect(prompt).toContain('\n\n**Tool call format:**');
     expect(prompt).toContain('After a tool result, continue the work and answer naturally.');
-    expect(prompt).toContain('When you call a tool, output exactly one JSON object and nothing else.');
+    expect(prompt).toContain(
+      'When you call a tool, output exactly one JSON object and nothing else.'
+    );
     expect(prompt).toContain('Shape: {"name":"<tool-name>","parameters":{...}}.');
     expect(prompt).toContain(
       'Use an empty "parameters" object ({"parameters":{}}) only when the tool takes no inputs'
@@ -339,7 +342,25 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      "Commands are GNU/Linux-like but only a subset is implemented. Pass shell text in \"cmd\". Call it first with an empty arguments object for this model's tool-call format to see the supported commands and placeholder paths."
+      'Commands are GNU/Linux-like but only a subset is implemented. Pass shell text in "cmd". Call it first with an empty arguments object for this model\'s tool-call format to see the supported commands and placeholder paths.'
+    );
+    expect(prompt).toContain(
+      'The shell subset includes python /workspace/script.py and python -c "<code>". Prefer write_python_file plus python /workspace/script.py for larger scripts.'
+    );
+  });
+
+  test('adds a python file writing instruction', () => {
+    const prompt = buildToolCallingSystemPrompt(
+      {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'parameters',
+      },
+      ['write_python_file']
+    );
+
+    expect(prompt).toContain(
+      'Use this for non-trivial Python source. Write a /workspace/*.py file here, then run it with run_shell_command and a python command.'
     );
   });
 
@@ -397,6 +418,7 @@ describe('tool-calling prompt builder', () => {
     expect(getToolDisplayName('get_current_date_time')).toBe('Get Date and Time');
     expect(getToolDisplayName('get_user_location')).toBe('Get User Location');
     expect(getToolDisplayName('tasklist')).toBe('Task List Planner');
+    expect(getToolDisplayName('write_python_file')).toBe('Write Python File');
     expect(getToolDisplayName('run_shell_command')).toBe('Shell Command Runner');
     expect(getToolDisplayName('lookup_fact')).toBe('Lookup Fact');
   });
@@ -411,6 +433,10 @@ describe('tool-calling prompt builder', () => {
         expect.objectContaining({
           name: 'tasklist',
           displayName: 'Task List Planner',
+        }),
+        expect.objectContaining({
+          name: 'write_python_file',
+          displayName: 'Write Python File',
         }),
         expect.objectContaining({
           name: 'run_shell_command',
@@ -999,6 +1025,10 @@ describe('tool-calling prompt builder', () => {
           name: 'which',
           usage: 'which <command>...',
         }),
+        expect.objectContaining({
+          name: 'python',
+          usage: 'python <script.py> [<argument>...] | python -c "<code>" [<argument>...]',
+        }),
       ])
     );
     expect(result.result.limitations).toContain(
@@ -1020,8 +1050,56 @@ describe('tool-calling prompt builder', () => {
       'Unsupported syntax: ;, &&, redirection, substitution, globbing.'
     );
     expect(result.result.limitations).toContain(
-      'paste, join, column, file, diff, and curl are partial GNU/Linux-like subsets.'
+      'paste, join, column, file, diff, curl, and python are partial GNU/Linux-like subsets.'
     );
+  });
+
+  test('writes python source to a workspace file', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem();
+    const onPythonFileWrite = vi.fn();
+
+    const result = await executeToolCall(
+      {
+        name: 'write_python_file',
+        arguments: {
+          path: '/workspace/tools/script.py',
+          source: 'print("hello")\n',
+        },
+      },
+      {
+        onPythonFileWrite,
+        workspaceFileSystem,
+      }
+    );
+
+    expect(result.toolName).toBe('write_python_file');
+    expect(result.result.path).toBe('/workspace/tools/script.py');
+    expect(await workspaceFileSystem.readTextFile('/workspace/tools/script.py')).toBe(
+      'print("hello")\n'
+    );
+    expect(onPythonFileWrite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/workspace/tools/script.py',
+        currentWorkingDirectory: '/workspace/tools',
+      })
+    );
+  });
+
+  test('rejects non-python paths in write_python_file', async () => {
+    await expect(
+      executeToolCall(
+        {
+          name: 'write_python_file',
+          arguments: {
+            path: '/workspace/tools/script.txt',
+            source: 'print("hello")\n',
+          },
+        },
+        {
+          workspaceFileSystem: createMockWorkspaceFileSystem(),
+        }
+      )
+    ).rejects.toThrow('write_python_file path must end in .py under /workspace.');
   });
 
   test('rejects fenced code blocks in shell commands', async () => {
@@ -1032,7 +1110,9 @@ describe('tool-calling prompt builder', () => {
           command: '```sh ls```',
         },
       })
-    ).rejects.toThrow('run_shell_command command must be plain shell text, not a fenced code block.');
+    ).rejects.toThrow(
+      'run_shell_command command must be plain shell text, not a fenced code block.'
+    );
   });
 
   test('accepts cmd as the preferred run_shell_command argument name', async () => {
@@ -1314,6 +1394,105 @@ describe('tool-calling prompt builder', () => {
     });
   });
 
+  test('delegates python file execution through the python runtime', async () => {
+    const pythonExecutor = {
+      execute: vi.fn(async ({ argv, mode, path }) => ({
+        shellFlavor: 'GNU/Linux-like shell subset',
+        command: argv.join(' '),
+        currentWorkingDirectory: '/workspace',
+        exitCode: 0,
+        stdout: `ran ${mode}:${path}`,
+        stderr: '',
+      })),
+    };
+    const workspaceFileSystem = createMockWorkspaceFileSystem({
+      '/workspace/script.py': 'print("hi")\n',
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'python /workspace/script.py',
+        },
+      },
+      {
+        pythonExecutor,
+        workspaceFileSystem,
+      }
+    );
+
+    expect(pythonExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        argv: ['python', '/workspace/script.py'],
+        mode: 'file',
+        path: '/workspace/script.py',
+      })
+    );
+    expect(result.result.stdout).toBe('ran file:/workspace/script.py');
+  });
+
+  test('delegates python -c execution through the python runtime', async () => {
+    const pythonExecutor = {
+      execute: vi.fn(async ({ argv, mode, code }) => ({
+        shellFlavor: 'GNU/Linux-like shell subset',
+        command: argv.join(' '),
+        currentWorkingDirectory: '/workspace',
+        exitCode: 0,
+        stdout: `ran ${mode}:${code}`,
+        stderr: '',
+      })),
+    };
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'python -c "print(2 + 2)"',
+        },
+      },
+      {
+        pythonExecutor,
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(pythonExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        argv: ['python', '-c', 'print(2 + 2)'],
+        mode: 'code',
+        code: 'print(2 + 2)',
+      })
+    );
+    expect(result.result.stdout).toBe('ran code:print(2 + 2)');
+  });
+
+  test('returns a shell-style error when python interactive mode is requested', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          command: 'python',
+        },
+      },
+      {
+        pythonExecutor: {
+          execute: vi.fn(),
+        },
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.result).toEqual({
+      shellFlavor: 'GNU/Linux-like shell subset',
+      currentWorkingDirectory: '/workspace',
+      command: 'python',
+      exitCode: 2,
+      stdout: '',
+      stderr: 'python: interactive mode is not supported in this shell subset.',
+    });
+  });
+
   test('supports rmdir for empty directories only', async () => {
     const workspaceFileSystem = createMockWorkspaceFileSystem({
       '/workspace/full/file.txt': 'alpha',
@@ -1416,7 +1595,9 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.result.exitCode).toBe(1);
-    expect(result.result.stderr).toBe("cp: 'notes.txt' and './notes.txt' resolve to the same file.");
+    expect(result.result.stderr).toBe(
+      "cp: 'notes.txt' and './notes.txt' resolve to the same file."
+    );
     await expect(workspaceFileSystem.readTextFile('/workspace/notes.txt')).resolves.toBe('alpha\n');
   });
 
@@ -2386,9 +2567,7 @@ describe('tool-calling prompt builder', () => {
       }
     );
 
-    expect(result.result.stdout.split('\n')).toEqual([
-      '/workspace/summary.txt',
-    ]);
+    expect(result.result.stdout.split('\n')).toEqual(['/workspace/summary.txt']);
   });
 
   test('prefixes grep output with file names for multiple files', async () => {
@@ -2601,7 +2780,9 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.result.exitCode).toBe(1);
-    expect(result.result.stderr).toBe("file: cannot open 'missing.txt': No such file or directory.");
+    expect(result.result.stderr).toBe(
+      "file: cannot open 'missing.txt': No such file or directory."
+    );
   });
 
   test('supports diff with unified-style emulated output', async () => {
@@ -2675,7 +2856,9 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.result.exitCode).toBe(1);
-    expect(result.result.stderr).toBe("diff: cannot open 'missing.txt': No such file or directory.");
+    expect(result.result.stderr).toBe(
+      "diff: cannot open 'missing.txt': No such file or directory."
+    );
   });
 
   test('supports curl URL with the default GET method', async () => {
@@ -2741,9 +2924,7 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.result.exitCode).toBe(0);
-    expect(result.result.stdout).toBe(
-      'HTTP 204 No Content\ncontent-type: text/plain\nx-test: yes'
-    );
+    expect(result.result.stdout).toBe('HTTP 204 No Content\ncontent-type: text/plain\nx-test: yes');
   });
 
   test('supports curl -X, repeated -H, and -d', async () => {

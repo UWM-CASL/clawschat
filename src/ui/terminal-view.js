@@ -3,7 +3,9 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 
 function normalizeTerminalText(value) {
-  return String(value || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
 }
 
 function ensureTrailingNewline(text) {
@@ -48,6 +50,14 @@ function getSessionFingerprint({
   });
 }
 
+/**
+ * @param {{
+ *   panel?: HTMLElement | null;
+ *   host?: HTMLElement | null;
+ *   formatPrompt?: (currentWorkingDirectory: string) => string;
+ *   windowRef?: { requestAnimationFrame: (callback: (time: number) => void) => number; ResizeObserver?: any };
+ * }} options
+ */
 export function createTerminalView({
   panel,
   host,

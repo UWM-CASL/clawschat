@@ -28,6 +28,7 @@ export function bindShellEvents({
   applyRouteFromHash,
   persistConversationStateNow,
   disposeEngine,
+  disposePythonRuntime = () => {},
   preChatEditConversationSystemPromptBtn,
   beginConversationSystemPromptEdit,
   preChatLoadModelBtn,
@@ -134,6 +135,7 @@ export function bindShellEvents({
     }
     void persistConversationStateNow();
     disposeEngine();
+    disposePythonRuntime();
   });
 
   if (preChatEditConversationSystemPromptBtn instanceof HTMLButtonElement) {
