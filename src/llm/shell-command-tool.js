@@ -318,6 +318,25 @@ function createShellError(
   });
 }
 
+function createRetryableShellError(
+  command,
+  commandName,
+  message,
+  retryMessage,
+  exitCode = 1,
+  currentWorkingDirectory = WORKSPACE_ROOT_PATH
+) {
+  const normalizedRetryMessage =
+    typeof retryMessage === 'string' && retryMessage.trim() ? retryMessage.trim() : '';
+  return createShellError(
+    command,
+    commandName,
+    normalizedRetryMessage ? `${message}\n${normalizedRetryMessage}` : message,
+    exitCode,
+    currentWorkingDirectory
+  );
+}
+
 function toShellText(value) {
   if (value === null || value === undefined) {
     return '';
@@ -4743,20 +4762,12 @@ async function executeShellPipeline(
   commandText,
   workspaceFileSystem,
   runtimeContext,
-  currentWorkingDirectory
+  currentWorkingDirectory,
+  preSplitSegments = null
 ) {
-  let segments;
-  try {
-    segments = splitShellPipelineSegments(commandText);
-  } catch (error) {
-    return createShellError(
-      commandText,
-      'shell',
-      error instanceof Error ? error.message : String(error),
-      2,
-      currentWorkingDirectory
-    );
-  }
+  const segments = Array.isArray(preSplitSegments)
+    ? preSplitSegments
+    : splitShellPipelineSegments(commandText);
 
   let stdinText = null;
   let latestResult = createShellResult(commandText, {
@@ -4813,12 +4824,6 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
   }
 
   const commandText = normalizedArguments.command;
-  if (typeof runtimeContext?.onShellCommandStart === 'function') {
-    runtimeContext.onShellCommandStart({
-      command: commandText,
-      currentWorkingDirectory,
-    });
-  }
   const workspaceFileSystem = runtimeContext?.workspaceFileSystem;
   if (!workspaceFileSystem) {
     const result = createShellError(
@@ -4836,67 +4841,80 @@ export async function executeShellCommandTool(argumentsValue = {}, runtimeContex
 
   const hasPipeline = commandText.includes('|');
   if (hasUnsupportedShellSyntax(commandText, { allowPipes: hasPipeline })) {
-    const result = createShellError(
+    return createRetryableShellError(
       commandText,
       'shell',
       hasPipeline
         ? 'redirection, command chaining, and substitutions are not supported in this subset.'
         : 'pipelines, redirection, command chaining, and substitutions are not supported in this subset.',
+      'The shell command could not be parsed in this shell subset. Please try again with a single supported command.',
       2,
       currentWorkingDirectory
     );
-    if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-      runtimeContext.onShellCommandComplete(result);
-    }
-    return result;
   }
 
-  let resolvedResult;
+  let preparedTokens = null;
+  let preparedSegments = null;
   if (hasPipeline) {
-    resolvedResult = await executeShellPipeline(
-      commandText,
-      workspaceFileSystem,
-      runtimeContext,
-      currentWorkingDirectory
-    );
-  } else {
-    let tokens;
     try {
-      tokens = tokenizeShellCommand(commandText);
+      preparedSegments = splitShellPipelineSegments(commandText);
     } catch (error) {
-      const result = createShellError(
+      return createRetryableShellError(
         commandText,
         'shell',
         error instanceof Error ? error.message : String(error),
+        'The shell command could not be parsed. Please try again with balanced quotes and escapes.',
         2,
         currentWorkingDirectory
       );
-      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-        runtimeContext.onShellCommandComplete(result);
-      }
-      return result;
     }
-    if (!tokens.length) {
-      const result = createShellError(
+  } else {
+    try {
+      preparedTokens = tokenizeShellCommand(commandText);
+    } catch (error) {
+      return createRetryableShellError(
+        commandText,
+        'shell',
+        error instanceof Error ? error.message : String(error),
+        'The shell command could not be parsed. Please try again with balanced quotes and escapes.',
+        2,
+        currentWorkingDirectory
+      );
+    }
+    if (!preparedTokens.length) {
+      return createRetryableShellError(
         commandText,
         'shell',
         'command is empty.',
+        'The shell command could not be parsed. Please try again with a non-empty supported command.',
         2,
         currentWorkingDirectory
       );
-      if (typeof runtimeContext?.onShellCommandComplete === 'function') {
-        runtimeContext.onShellCommandComplete(result);
-      }
-      return result;
     }
-    resolvedResult = await executeSingleShellCommand(
-      commandText,
-      tokens,
-      workspaceFileSystem,
-      runtimeContext,
-      currentWorkingDirectory
-    );
   }
+
+  if (typeof runtimeContext?.onShellCommandStart === 'function') {
+    runtimeContext.onShellCommandStart({
+      command: commandText,
+      currentWorkingDirectory,
+    });
+  }
+
+  const resolvedResult = hasPipeline
+    ? await executeShellPipeline(
+        commandText,
+        workspaceFileSystem,
+        runtimeContext,
+        currentWorkingDirectory,
+        preparedSegments
+      )
+    : await executeSingleShellCommand(
+        commandText,
+        preparedTokens,
+        workspaceFileSystem,
+        runtimeContext,
+        currentWorkingDirectory
+      );
   if (typeof runtimeContext?.onShellCommandComplete === 'function') {
     runtimeContext.onShellCommandComplete(resolvedResult);
   }

@@ -396,6 +396,37 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.stdout).toBe('/workspace');
   });
 
+  test('does not notify shell callbacks when run_shell_command fails before execution starts', async () => {
+    const onShellCommandStart = vi.fn();
+    const onShellCommandComplete = vi.fn();
+
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          cmd: 'grep -o "<a href="[^"]*"" canvas_canvas.html',
+        },
+      },
+      {
+        onShellCommandStart,
+        onShellCommandComplete,
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(onShellCommandStart).not.toHaveBeenCalled();
+    expect(onShellCommandComplete).not.toHaveBeenCalled();
+    expect(result.result.exitCode).toBe(2);
+    expect(result.result.stderr).toContain('shell: unterminated escape or quote.');
+    expect(result.resultText).toBe(
+      JSON.stringify({
+        status: 'failed',
+        body:
+          'shell: unterminated escape or quote.\nThe shell command could not be parsed. Please try again with balanced quotes and escapes.',
+      })
+    );
+  });
+
   test('builds the LFM function-style tool-calling prompt', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
@@ -606,7 +637,7 @@ describe('tool-calling prompt builder', () => {
     ]);
   });
 
-  test('sniffs a run_shell_command json tool call even when inner shell quotes are not escaped', () => {
+  test('does not sniff a malformed run_shell_command json tool call when inner shell quotes are not escaped', () => {
     expect(
       sniffToolCalls(
         '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
@@ -616,20 +647,10 @@ describe('tool-calling prompt builder', () => {
           argumentsKey: 'parameters',
         }
       )
-    ).toEqual([
-      {
-        name: 'run_shell_command',
-        arguments: {
-          command: 'grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l',
-        },
-        rawText:
-          '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
-        format: 'json',
-      },
-    ]);
+    ).toEqual([]);
   });
 
-  test('sniffs a run_shell_command json tool call when the shell field is cmd', () => {
+  test('does not sniff a malformed run_shell_command json tool call when the shell field is cmd', () => {
     expect(
       sniffToolCalls(
         '{"name":"run_shell_command","parameters":{"cmd":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
@@ -639,20 +660,10 @@ describe('tool-calling prompt builder', () => {
           argumentsKey: 'parameters',
         }
       )
-    ).toEqual([
-      {
-        name: 'run_shell_command',
-        arguments: {
-          cmd: 'grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l',
-        },
-        rawText:
-          '{"name":"run_shell_command","parameters":{"cmd":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
-        format: 'json',
-      },
-    ]);
+    ).toEqual([]);
   });
 
-  test('sniffs a malformed run_shell_command json tool call after leading prose', () => {
+  test('does not sniff a malformed run_shell_command json tool call after leading prose', () => {
     expect(
       sniffToolCalls(
         'I will use the shell tool now.\n{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
@@ -662,17 +673,7 @@ describe('tool-calling prompt builder', () => {
           argumentsKey: 'parameters',
         }
       )
-    ).toEqual([
-      {
-        name: 'run_shell_command',
-        arguments: {
-          command: 'grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l',
-        },
-        rawText:
-          '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
-        format: 'json',
-      },
-    ]);
+    ).toEqual([]);
   });
 
   test('sniffs a run_shell_command json tool call with escaped quotes and backslashes intact', () => {

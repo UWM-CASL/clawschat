@@ -14,6 +14,7 @@ When tool calling is enabled for a conversation and the selected model supports 
 1. Appends any enabled feature-guidance prompt text to the effective system prompt.
 2. Appends model-specific tool-call instructions after that feature guidance.
 3. Watches the streamed model output for a complete tool call.
+   - Incomplete or malformed tool-call JSON is ignored rather than recovered heuristically.
 4. Stops generation as soon as the first complete tool call is detected for that turn.
 5. Executes the requested tool locally in the browser app.
 6. Stores the tool result as a `tool` role message in the conversation tree.

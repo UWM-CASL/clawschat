@@ -314,56 +314,6 @@ function extractLeadingJsonObject(rawText) {
   return '';
 }
 
-function detectLooseShellCommandToolCall(objectText, toolCallingConfig) {
-  if (!toolCallingConfig || typeof toolCallingConfig !== 'object') {
-    return null;
-  }
-  const nameKey =
-    typeof toolCallingConfig.nameKey === 'string' ? toolCallingConfig.nameKey : 'name';
-  const argumentsKey =
-    typeof toolCallingConfig.argumentsKey === 'string'
-      ? toolCallingConfig.argumentsKey
-      : 'arguments';
-  const topLevelMatch = String(objectText || '').match(
-    new RegExp(
-      `^\\{\\s*"${nameKey}"\\s*:\\s*"([^"]+)"\\s*,\\s*"${argumentsKey}"\\s*:\\s*\\{([\\s\\S]*)\\}\\s*\\}$`
-    )
-  );
-  if (!topLevelMatch) {
-    return null;
-  }
-  const [, toolName, rawArgumentsText] = topLevelMatch;
-  if (toolName !== 'run_shell_command') {
-    return null;
-  }
-  const normalizedArgumentsText = String(rawArgumentsText || '').trim();
-  if (!normalizedArgumentsText) {
-    return normalizeDetectedToolCall(toolName, {}, objectText, toolCallingConfig.format);
-  }
-  const commandKeyMatch = normalizedArgumentsText.match(/^"(cmd|command)"\s*:\s*"/);
-  if (!commandKeyMatch) {
-    return null;
-  }
-  const commandValueWithTail = normalizedArgumentsText.slice(commandKeyMatch[0].length);
-  const closingQuoteIndex = commandValueWithTail.lastIndexOf('"');
-  if (closingQuoteIndex < 0) {
-    return null;
-  }
-  const trailingText = commandValueWithTail.slice(closingQuoteIndex + 1).trim();
-  if (trailingText) {
-    return null;
-  }
-  const commandValue = commandValueWithTail.slice(0, closingQuoteIndex);
-  return normalizeDetectedToolCall(
-    toolName,
-    {
-      [commandKeyMatch[1]]: commandValue,
-    },
-    objectText,
-    toolCallingConfig.format
-  );
-}
-
 function detectJsonToolCall(rawText, toolCallingConfig) {
   const text = String(rawText || '');
   const detectedCalls = [];
@@ -388,11 +338,6 @@ function detectJsonToolCall(rawText, toolCallingConfig) {
         index += objectText.length - 1;
       }
     } catch {
-      const detected = detectLooseShellCommandToolCall(objectText, toolCallingConfig);
-      if (detected) {
-        detectedCalls.push(detected);
-        index += objectText.length - 1;
-      }
       continue;
     }
   }
