@@ -1131,11 +1131,11 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.stdout).toBe('/workspace');
   });
 
-  test('keeps empty-argument shell discovery responses terse', () => {
+  test('puts the preferred cmd usage first in empty-argument shell discovery responses', () => {
     expect(buildShellToolResponseEnvelope()).toEqual({
       status: 'success',
       body:
-        'Supported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
+        'Call again with {"cmd":"..."}\nCurrent working directory: /workspace\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
     });
   });
 
