@@ -427,6 +427,17 @@ describe('conversation-model', () => {
     expect(conversation.shellVariables).toEqual({});
   });
 
+  test('normalizes conversation language and thinking preferences', () => {
+    const conversation = createConversation({
+      id: 'conversation-1',
+      languagePreference: 'ES',
+      thinkingEnabled: false,
+    });
+
+    expect(conversation.languagePreference).toBe('es');
+    expect(conversation.thinkingEnabled).toBe(false);
+  });
+
   test('derives conversation menu capabilities from conversation state only', () => {
     const conversation = createConversation({ id: 'conversation-1', name: 'Task List Commands.' });
     conversation.hasGeneratedName = true;

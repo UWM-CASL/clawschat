@@ -3,8 +3,10 @@ import { normalizeWorkspacePath } from '../workspace/workspace-file-system.js';
 import {
   getConversationPathMessages,
   getTextFromMessageContentParts,
+  normalizeConversationLanguagePreference,
   normalizeConversationName,
   normalizeConversationPromptMode,
+  normalizeConversationThinkingEnabled,
   normalizeMessageContentParts,
   normalizeSystemPrompt,
   parseMessageNodeCounterFromId,
@@ -12,7 +14,7 @@ import {
 } from './conversation-model.js';
 
 export const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
-export const CONVERSATION_SCHEMA_VERSION = 7;
+export const CONVERSATION_SCHEMA_VERSION = 8;
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -505,6 +507,11 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
             : undefined,
         appendConversationSystemPrompt:
           conversation.appendConversationSystemPrompt === false ? false : undefined,
+        languagePreference:
+          normalizeConversationLanguagePreference(conversation.languagePreference) !== 'auto'
+            ? normalizeConversationLanguagePreference(conversation.languagePreference)
+            : undefined,
+        thinkingEnabled: conversation.thinkingEnabled === false ? false : undefined,
         startedAt: normalizeTimestamp(conversation.startedAt),
         hasGeneratedName: Boolean(conversation.hasGeneratedName),
         currentWorkingDirectory: normalizeConversationWorkingDirectory(
@@ -561,6 +568,12 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
       const conversationSystemPrompt = normalizeSystemPrompt(rawConversation.conversationSystemPrompt);
       const appendConversationSystemPrompt = normalizeConversationPromptMode(
         rawConversation.appendConversationSystemPrompt,
+      );
+      const languagePreference = normalizeConversationLanguagePreference(
+        rawConversation.languagePreference,
+      );
+      const thinkingEnabled = normalizeConversationThinkingEnabled(
+        rawConversation.thinkingEnabled,
       );
       const rawMessageNodes = Array.isArray(rawConversation.messageNodes) ? rawConversation.messageNodes : [];
       const hasNodeSchema = rawMessageNodes.length > 0;
@@ -664,6 +677,8 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
         systemPrompt,
         conversationSystemPrompt,
         appendConversationSystemPrompt,
+        languagePreference,
+        thinkingEnabled,
         startedAt,
         messageNodes,
         messageNodeCounter,

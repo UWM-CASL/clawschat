@@ -24,8 +24,10 @@ import { bindTranscriptEvents } from './app/transcript-events.js';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
 import {
+  buildLanguagePreferencePrompt,
   buildMathRenderingFeaturePrompt,
   buildOptionalFeaturePromptSection,
+  buildThinkingModePrompt,
 } from './llm/system-prompt.js';
 import {
   buildToolCallingSystemPrompt,
@@ -80,9 +82,11 @@ import {
   getMessageNodeById,
   getModelVariantState,
   getUserVariantState,
+  normalizeConversationLanguagePreference,
   normalizeConversationName,
   normalizeMessageContentParts,
   normalizeConversationPromptMode,
+  normalizeConversationThinkingEnabled,
   normalizeSystemPrompt,
   pruneDescendantsFromMessage,
   setUserMessageText,
@@ -188,6 +192,10 @@ const showThinkingToggle = document.getElementById('showThinkingToggle');
 const enableToolCallingToggle = document.getElementById('enableToolCallingToggle');
 const renderMathMlToggle = document.getElementById('renderMathMlToggle');
 const defaultSystemPromptInput = document.getElementById('defaultSystemPromptInput');
+const conversationLanguageSelect = document.getElementById('conversationLanguageSelect');
+const conversationLanguageHelp = document.getElementById('conversationLanguageHelp');
+const enableModelThinkingToggle = document.getElementById('enableModelThinkingToggle');
+const enableModelThinkingHelp = document.getElementById('enableModelThinkingHelp');
 const modelSelect = document.getElementById('modelSelect');
 const modelCardList = document.getElementById('modelCardList');
 const backendSelect = document.getElementById('backendSelect');
@@ -1197,17 +1205,197 @@ function getToolCallingSystemPromptSuffix(modelId) {
   );
 }
 
-function getOptionalFeatureSystemPromptSection() {
+function getThinkingControlForModel(modelId) {
+  return MODEL_OPTIONS_BY_ID.get(normalizeModelId(modelId))?.thinkingControl || null;
+}
+
+function getLanguageSupportForModel(modelId) {
+  return MODEL_OPTIONS_BY_ID.get(normalizeModelId(modelId))?.languageSupport || null;
+}
+
+function getConversationLanguagePreference(conversation) {
+  return normalizeConversationLanguagePreference(
+    conversation
+      ? conversation.languagePreference
+      : appState.pendingConversationLanguagePreference
+  );
+}
+
+function getConversationThinkingEnabled(conversation) {
+  const modelId = conversation
+    ? getConversationModelId(conversation)
+    : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const defaultEnabled = getThinkingControlForModel(modelId)?.defaultEnabled !== false;
+  return normalizeConversationThinkingEnabled(
+    conversation
+      ? conversation.thinkingEnabled
+      : appState.pendingConversationThinkingEnabled,
+    defaultEnabled
+  );
+}
+
+function getSelectedLanguageMetadata(languagePreference) {
+  const normalizedPreference = normalizeConversationLanguagePreference(languagePreference);
+  if (normalizedPreference === 'auto') {
+    return {
+      code: 'auto',
+      label: 'Auto',
+      name: '',
+    };
+  }
+  const displayNames =
+    typeof Intl.DisplayNames === 'function'
+      ? new Intl.DisplayNames(['en'], { type: 'language' })
+      : null;
+  const code = normalizedPreference.toLowerCase();
+  const baseCode = code.split('-')[0];
+  const name = displayNames?.of(code) || displayNames?.of(baseCode) || code.toUpperCase();
+  return {
+    code,
+    label: `${name} (${code.toUpperCase()})`,
+    name,
+  };
+}
+
+function getOptionalFeatureSystemPromptSection(modelId, conversation = null) {
+  const languagePreference = getConversationLanguagePreference(conversation);
+  const thinkingControl = getThinkingControlForModel(modelId);
   return buildOptionalFeaturePromptSection([
     buildMathRenderingFeaturePrompt({ renderMathMl: appState.renderMathMl }),
+    buildLanguagePreferencePrompt({
+      languageName:
+        languagePreference === 'auto'
+          ? ''
+          : getSelectedLanguageMetadata(languagePreference).name,
+    }),
+    buildThinkingModePrompt({
+      enabled: getConversationThinkingEnabled(conversation),
+      enabledInstruction: thinkingControl?.enabledInstruction,
+      disabledInstruction: thinkingControl?.disabledInstruction,
+    }),
   ]);
 }
 
-function getConversationSystemPromptSuffix(modelId) {
-  return [getOptionalFeatureSystemPromptSection(), getToolCallingSystemPromptSuffix(modelId)]
+function getConversationSystemPromptSuffix(modelId, conversation = null) {
+  return [
+    getOptionalFeatureSystemPromptSection(modelId, conversation),
+    getToolCallingSystemPromptSuffix(modelId),
+  ]
     .map((section) => normalizeSystemPrompt(section))
     .filter(Boolean)
     .join('\n\n');
+}
+
+function getConversationLanguageWarningText(modelId, languagePreference) {
+  const normalizedPreference = normalizeConversationLanguagePreference(languagePreference);
+  if (normalizedPreference === 'auto') {
+    return 'Auto leaves language choice to your prompt and the model.';
+  }
+  const selectedLanguage = getSelectedLanguageMetadata(normalizedPreference);
+  const languageSupport = getLanguageSupportForModel(modelId);
+  const supportedTags = Array.isArray(languageSupport?.tags) ? languageSupport.tags : [];
+  const isExplicitlySupported = supportedTags.some(
+    (tag) => typeof tag?.code === 'string' && tag.code.toLowerCase() === selectedLanguage.code
+  );
+  if (isExplicitlySupported) {
+    return `${selectedLanguage.name} is listed for this model.`;
+  }
+  if (languageSupport?.hasMore === true) {
+    return `${selectedLanguage.name} is not listed in this app's model card preview. It may still work, but cool and scary things can happen.`;
+  }
+  if (supportedTags.length) {
+    return `${selectedLanguage.name} is not listed for this model. It may still work, but cool and scary things can happen.`;
+  }
+  return `This app does not have published language support metadata for the selected model. ${selectedLanguage.name} may work, but cool and scary things can happen.`;
+}
+
+function buildConversationRuntimeConfig(conversation = null) {
+  const modelId = conversation
+    ? getConversationModelId(conversation)
+    : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const model = MODEL_OPTIONS_BY_ID.get(modelId);
+  const runtime = model?.runtime || {};
+  const features = model?.features || {};
+  const multimodalGeneration = runtime.multimodalGeneration === true;
+  const thinkingControl = model?.thinkingControl || null;
+  const thinkingEnabled = getConversationThinkingEnabled(conversation);
+  return {
+    ...runtime,
+    ...(multimodalGeneration && features.imageInput ? { imageInput: true } : {}),
+    ...(multimodalGeneration && features.audioInput ? { audioInput: true } : {}),
+    ...(multimodalGeneration && features.videoInput ? { videoInput: true } : {}),
+    ...(thinkingControl?.runtimeParameter === 'enable_thinking'
+      ? { enableThinking: thinkingEnabled }
+      : {}),
+  };
+}
+
+function getConversationLanguageOptions() {
+  const optionsByCode = new Map([['auto', { code: 'auto', label: 'Auto' }]]);
+  MODEL_OPTIONS_BY_ID.forEach((model) => {
+    const tags = Array.isArray(model?.languageSupport?.tags) ? model.languageSupport.tags : [];
+    tags.forEach((tag) => {
+      const code = typeof tag?.code === 'string' ? tag.code.trim().toLowerCase() : '';
+      const name = typeof tag?.name === 'string' ? tag.name.trim() : '';
+      if (!code || !name || optionsByCode.has(code)) {
+        return;
+      }
+      optionsByCode.set(code, {
+        code,
+        label: `${name} (${code.toUpperCase()})`,
+      });
+    });
+  });
+  return [...optionsByCode.values()].sort((left, right) => {
+    if (left.code === 'auto') {
+      return -1;
+    }
+    if (right.code === 'auto') {
+      return 1;
+    }
+    return left.label.localeCompare(right.label);
+  });
+}
+
+function syncConversationLanguageAndThinkingControls(conversation = getActiveConversation()) {
+  const modelId = conversation
+    ? getConversationModelId(conversation)
+    : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const languagePreference = getConversationLanguagePreference(conversation);
+  const thinkingControl = getThinkingControlForModel(modelId);
+  if (conversationLanguageSelect instanceof HTMLSelectElement) {
+    const options = getConversationLanguageOptions();
+    conversationLanguageSelect.replaceChildren();
+    options.forEach((option) => {
+      const node = document.createElement('option');
+      node.value = option.code;
+      node.textContent = option.label;
+      conversationLanguageSelect.appendChild(node);
+    });
+    if (!options.some((option) => option.code === languagePreference)) {
+      const selectedLanguage = getSelectedLanguageMetadata(languagePreference);
+      const node = document.createElement('option');
+      node.value = selectedLanguage.code;
+      node.textContent = selectedLanguage.label;
+      conversationLanguageSelect.appendChild(node);
+    }
+    conversationLanguageSelect.value = languagePreference;
+  }
+  if (conversationLanguageHelp instanceof HTMLElement) {
+    conversationLanguageHelp.textContent = getConversationLanguageWarningText(
+      modelId,
+      languagePreference
+    );
+  }
+  if (enableModelThinkingToggle instanceof HTMLInputElement) {
+    enableModelThinkingToggle.checked = getConversationThinkingEnabled(conversation);
+    enableModelThinkingToggle.disabled = !thinkingControl;
+  }
+  if (enableModelThinkingHelp instanceof HTMLElement) {
+    enableModelThinkingHelp.textContent = thinkingControl
+      ? "Uses the selected model's reasoning switch when one is available."
+      : 'This model does not expose a thinking switch in this app. This setting currently does nothing.';
+  }
 }
 
 function buildComputedConversationSystemPromptPreview({
@@ -1228,9 +1416,11 @@ function buildComputedConversationSystemPromptPreview({
         systemPrompt: appState.defaultSystemPrompt,
         conversationSystemPrompt: normalizeSystemPrompt(conversationPrompt),
         appendConversationSystemPrompt: normalizeConversationPromptMode(appendConversationPrompt),
+        languagePreference: appState.pendingConversationLanguagePreference,
+        thinkingEnabled: appState.pendingConversationThinkingEnabled,
       };
   return getEffectiveConversationSystemPrompt(promptTarget, {
-    suffix: getConversationSystemPromptSuffix(modelId),
+    suffix: getConversationSystemPromptSuffix(modelId, promptTarget),
   });
 }
 
@@ -1490,6 +1680,7 @@ async function restoreConversationStateFromStorage() {
   renderConversationList();
   renderTranscript();
   updateChatTitle();
+  syncConversationLanguageAndThinkingControls();
 }
 
 function getActiveConversation() {
@@ -1663,6 +1854,8 @@ function createConversation(name) {
     ),
     untitledPrefix: UNTITLED_CONVERSATION_PREFIX,
     systemPrompt: appState.defaultSystemPrompt,
+    languagePreference: appState.pendingConversationLanguagePreference,
+    thinkingEnabled: appState.pendingConversationThinkingEnabled,
     startedAt: Date.now(),
   });
   conversation.conversationSystemPrompt = normalizeSystemPrompt(
@@ -1692,6 +1885,10 @@ function assignConversationModelId(conversation, modelId) {
   );
   const changed = conversation.modelId !== nextModelId;
   conversation.modelId = nextModelId;
+  conversation.thinkingEnabled = normalizeConversationThinkingEnabled(
+    conversation.thinkingEnabled,
+    getThinkingControlForModel(nextModelId)?.defaultEnabled !== false
+  );
   return { changed, modelId: nextModelId };
 }
 
@@ -1713,9 +1910,19 @@ function syncConversationModelSelection(
   const selectedModelId = getAvailableModelId(requestedModelId, selectedBackend);
   if (conversation) {
     conversation.modelId = selectedModelId;
+    conversation.thinkingEnabled = normalizeConversationThinkingEnabled(
+      conversation.thinkingEnabled,
+      getThinkingControlForModel(selectedModelId)?.defaultEnabled !== false
+    );
+  } else {
+    appState.pendingConversationThinkingEnabled = normalizeConversationThinkingEnabled(
+      appState.pendingConversationThinkingEnabled,
+      getThinkingControlForModel(selectedModelId)?.defaultEnabled !== false
+    );
   }
   setSelectedModelId(selectedModelId, { dispatch: false });
   syncGenerationSettingsFromModel(selectedModelId, useDefaults);
+  syncConversationLanguageAndThinkingControls(conversation);
 
   if (announceFallback && selectedModelId !== requestedModelId) {
     const requestedModel = MODEL_OPTIONS_BY_ID.get(requestedModelId);
@@ -2313,7 +2520,7 @@ function buildActiveConversationExportPayload(activeConversation) {
   return buildConversationDownloadPayload(activeConversation, {
     modelId: selectedModelId,
     temperature,
-    systemPromptSuffix: getConversationSystemPromptSuffix(selectedModelId),
+    systemPromptSuffix: getConversationSystemPromptSuffix(selectedModelId, activeConversation),
     toolContext,
   });
 }
@@ -2323,7 +2530,10 @@ function buildPromptForActiveConversation(
   leafMessageId = conversation?.activeLeafMessageId
 ) {
   return buildPromptForConversationLeaf(conversation, leafMessageId, {
-    systemPromptSuffix: getConversationSystemPromptSuffix(getConversationModelId(conversation)),
+    systemPromptSuffix: getConversationSystemPromptSuffix(
+      getConversationModelId(conversation),
+      conversation
+    ),
   });
 }
 
@@ -2886,17 +3096,11 @@ function getThinkingTagsForModel(modelId) {
 }
 
 function getRuntimeConfigForModel(modelId) {
-  const normalizedModelId = normalizeModelId(modelId);
-  const model = MODEL_OPTIONS_BY_ID.get(normalizedModelId);
-  const runtime = model?.runtime || {};
-  const features = model?.features || {};
-  const multimodalGeneration = runtime.multimodalGeneration === true;
-  return {
-    ...runtime,
-    ...(multimodalGeneration && features.imageInput ? { imageInput: true } : {}),
-    ...(multimodalGeneration && features.audioInput ? { audioInput: true } : {}),
-    ...(multimodalGeneration && features.videoInput ? { videoInput: true } : {}),
-  };
+  return buildConversationRuntimeConfig({
+    modelId: normalizeModelId(modelId),
+    languagePreference: appState.pendingConversationLanguagePreference,
+    thinkingEnabled: appState.pendingConversationThinkingEnabled,
+  });
 }
 
 const {
@@ -3038,6 +3242,41 @@ const {
   syncModelSelectionForCurrentEnvironment,
 } = preferencesController;
 
+function applyConversationLanguagePreference(value, { persist = false } = {}) {
+  const normalizedValue = normalizeConversationLanguagePreference(value);
+  const activeConversation = getActiveConversation();
+  if (activeConversation) {
+    activeConversation.languagePreference = normalizedValue;
+    if (persist) {
+      queueConversationStateSave();
+    }
+  } else {
+    appState.pendingConversationLanguagePreference = normalizedValue;
+  }
+  syncConversationLanguageAndThinkingControls(activeConversation);
+}
+
+function applyConversationThinkingPreference(value, { persist = false } = {}) {
+  const activeConversation = getActiveConversation();
+  const nextValue = normalizeConversationThinkingEnabled(value);
+  if (activeConversation) {
+    activeConversation.thinkingEnabled = nextValue;
+    if (persist) {
+      queueConversationStateSave();
+    }
+  } else {
+    appState.pendingConversationThinkingEnabled = nextValue;
+  }
+  syncConversationLanguageAndThinkingControls(activeConversation);
+}
+
+function resetPendingConversationModelPreferences() {
+  const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  appState.pendingConversationLanguagePreference = 'auto';
+  appState.pendingConversationThinkingEnabled =
+    getThinkingControlForModel(selectedModelId)?.defaultEnabled !== false;
+}
+
 function parseThinkingText(rawText, thinkingTags) {
   const text = String(rawText || '');
   if (!thinkingTags?.open || !thinkingTags?.close) {
@@ -3110,9 +3349,10 @@ const appController = createAppController({
       conversation: getActiveConversation(),
       requestToolConsent,
       onShellCommandStart: handleShellCommandStart,
-      workspaceFileSystem: getConversationWorkspaceFileSystem(),
-    }),
+        workspaceFileSystem: getConversationWorkspaceFileSystem(),
+      }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
+  getRuntimeConfigForConversation: (conversation) => buildConversationRuntimeConfig(conversation),
   addMessageToConversation,
   buildPromptForConversationLeaf: buildPromptForActiveConversation,
   getMessageNodeById,
@@ -3243,6 +3483,7 @@ if (appState.renderMathMl) {
 }
 populateModelSelect();
 restoreInferencePreferences();
+syncConversationLanguageAndThinkingControls();
 void probeWebGpuAvailability();
 showProgressRegion(false);
 renderComposerAttachments();
@@ -3282,6 +3523,8 @@ bindSettingsEvents({
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
   defaultSystemPromptInput,
+  conversationLanguageSelect,
+  enableModelThinkingToggle,
   modelSelect,
   backendSelect,
   maxOutputTokensInput,
@@ -3304,13 +3547,17 @@ bindSettingsEvents({
   applySingleKeyShortcutPreference,
   applyTranscriptViewPreference,
   applyDefaultSystemPrompt,
+  applyConversationLanguagePreference,
+  applyConversationThinkingPreference,
   refreshMathRendering: () => {
     if (appState.renderMathMl) {
       void ensureMathJaxLoaded();
     }
     renderTranscript();
   },
+  refreshConversationSystemPromptPreview: updateConversationSystemPromptPreview,
   syncModelSelectionForCurrentEnvironment,
+  syncConversationLanguageAndThinkingControls,
   syncGenerationSettingsFromModel,
   getActiveConversation,
   assignConversationModelId,
@@ -3443,8 +3690,10 @@ bindShellEvents({
   clearUserMessageEditSession,
   setChatTitleEditing,
   clearPendingComposerAttachments,
+  resetPendingConversationModelPreferences,
   renderConversationList,
   renderTranscript,
+  syncConversationLanguageAndThinkingControls,
   updateChatTitle,
   queueConversationStateSave,
   openKeyboardShortcuts,

@@ -122,6 +122,27 @@ describe('LLMEngineClient', () => {
     expect(finalText).toBe('Hello world');
   });
 
+  test('merges per-request runtime overrides into generate payloads', async () => {
+    const client = new LLMEngineClient();
+    await client.initialize({
+      modelId: 'example/model',
+      runtime: { dtype: 'q4f16', enableThinking: true },
+    });
+
+    client.generate('prompt', {
+      runtime: { enableThinking: false },
+      onToken: () => {},
+      onComplete: () => {},
+      onError: () => {},
+    });
+
+    const generateMessage = MockWorker.instances[0].messages.find((message) => message.type === 'generate');
+    expect(generateMessage?.payload?.runtime).toEqual({
+      dtype: 'q4f16',
+      enableThinking: false,
+    });
+  });
+
   test('cancelGeneration terminates and reinitializes worker', async () => {
     const client = new LLMEngineClient();
     await client.initialize({ modelId: 'example/model' });

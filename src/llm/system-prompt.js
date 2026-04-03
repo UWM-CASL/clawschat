@@ -23,3 +23,29 @@ export function buildMathRenderingFeaturePrompt({ renderMathMl = false } = {}) {
     'for display math, and include matching delimiters so expressions render correctly.'
   );
 }
+
+export function buildLanguagePreferencePrompt({ languageName = '' } = {}) {
+  const normalizedLanguageName = normalizePromptInstruction(languageName);
+  if (!normalizedLanguageName) {
+    return '';
+  }
+  return `Write the final answer in ${normalizedLanguageName} unless the user explicitly asks for a different language.`;
+}
+
+export function buildThinkingModePrompt({
+  enabled = true,
+  enabledInstruction = '',
+  disabledInstruction = '',
+} = {}) {
+  const normalizedEnabledInstruction = normalizePromptInstruction(enabledInstruction);
+  const normalizedDisabledInstruction = normalizePromptInstruction(disabledInstruction);
+  const switchInstruction = enabled
+    ? normalizedEnabledInstruction
+    : normalizedDisabledInstruction;
+  if (!switchInstruction) {
+    return '';
+  }
+  return enabled
+    ? `${switchInstruction}\nThinking mode is enabled for this conversation.`
+    : `${switchInstruction}\nThinking mode is disabled for this conversation.`;
+}

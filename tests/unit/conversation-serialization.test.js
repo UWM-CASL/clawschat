@@ -16,6 +16,8 @@ describe('conversation-serialization', () => {
       id: 'conversation-1',
       name: 'Images',
       modelId: 'onnx-community/Qwen3.5-2B-ONNX',
+      languagePreference: 'es',
+      thinkingEnabled: false,
       startedAt: 1710000000000,
     });
     const userMessage = addMessageToConversation(conversation, 'user', 'Describe this image', {
@@ -77,6 +79,8 @@ describe('conversation-serialization', () => {
     });
 
     expect(snapshot.conversations[0]?.modelId).toBe('onnx-community/Qwen3-0.6B-ONNX');
+    expect(snapshot.conversations[0]?.languagePreference).toBe('es');
+    expect(snapshot.conversations[0]?.thinkingEnabled).toBe(false);
     expect(snapshot.conversations[0]?.currentWorkingDirectory).toBe('/workspace/uploads');
     expect(snapshot.conversations[0]?.shellVariables).toEqual({
       COURSE: 'biology',
@@ -101,6 +105,8 @@ describe('conversation-serialization', () => {
             id: 'conversation-1',
             name: 'New Conversation 2',
             modelId: 'onnx-community/Qwen3.5-2B-ONNX',
+            languagePreference: 'fr',
+            thinkingEnabled: false,
             startedAt: 1710000000000,
             currentWorkingDirectory: '/workspace/saved',
             shellVariables: {
@@ -178,6 +184,8 @@ describe('conversation-serialization', () => {
     expect(appState.activeConversationId).toBeNull();
     expect(appState.conversations[0]?.name).toBe('New Conversation');
     expect(appState.conversations[0]?.modelId).toBe('onnx-community/Qwen3-0.6B-ONNX');
+    expect(appState.conversations[0]?.languagePreference).toBe('fr');
+    expect(appState.conversations[0]?.thinkingEnabled).toBe(false);
     expect(appState.conversations[0]?.currentWorkingDirectory).toBe('/workspace/saved');
     expect(appState.conversations[0]?.shellVariables).toEqual({
       COURSE: 'chemistry',

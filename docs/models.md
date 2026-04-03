@@ -23,6 +23,10 @@ Model support is configured in `src/config/models.json`:
   - `requiresWebGpu` (`true` to disable the model unless WebGPU can be used)
   - `multimodalGeneration` (`true` only when the worker has a real multimodal execution path for image/audio/video inputs)
   - `useExternalDataFormat` (`true`/number to enable loading `.onnx_data` sidecar files)
+- `models[].thinkingControl`: optional model-specific reasoning control metadata:
+  - `defaultEnabled` (`false` only when the model should default to non-thinking mode in this app)
+  - `runtimeParameter` (currently `enable_thinking` when the worker should pass a runtime switch)
+  - `enabledInstruction` / `disabledInstruction` (literal model-specific system-prompt switch text such as `/think` and `/no_think`)
 - `models[].toolCalling`: optional per-model tool-call output profile used to build prompts and future parsing:
   - `format` (`json`, `tagged-json`, or `special-token-call`)
   - `nameKey` / `argumentsKey` for JSON-based models
@@ -150,6 +154,16 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
 - `useExternalDataFormat`
   Enables `.onnx_data` sidecar loading for exported ONNX packages.
 
+### Thinking-control fields
+
+- `thinkingControl.defaultEnabled`
+  Default per-conversation reasoning state for models with an exposed thinking switch.
+- `thinkingControl.runtimeParameter`
+  Lets the app translate the per-conversation thinking toggle into a worker generation flag.
+- `thinkingControl.enabledInstruction`
+- `thinkingControl.disabledInstruction`
+  Literal system-prompt switch strings the app appends when the model expects prompt-level reasoning control.
+
 Important multimodal rule:
 
 - `features.imageInput/audioInput/videoInput` describe what the model family can do.
@@ -237,7 +251,7 @@ Current selectable models in Settings:
   - Uses runtime dtype `q4f16`, matching the model card's WebGPU example.
   - Uses `<think>...</think>` tags for thought separation when the model emits them.
   - Uses recommended sampling defaults from the model card: temperature `0.6`, top-k `20`, top-p `0.95`.
-  - Does not force `enableThinking`.
+  - Uses `thinkingControl` with runtime `enable_thinking` plus `/think` and `/no_think` system-prompt switches.
 
 Hidden legacy/replacement models kept for compatibility and model-specific behavior:
 
@@ -279,6 +293,6 @@ Per-model limits and defaults:
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}`, no thinking tags
 - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
 - Both Llama entries use the published `model_q4f16` web export and enable `useExternalDataFormat: true` for `.onnx_data` loading.
-- `onnx-community/Qwen3-0.6B-ONNX`: runtime dtype `q4f16`, max context `40960`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, feature flags `thinking` and `toolCalling`, tool call format `<tool_call>{"name":"tool_name","arguments":{...}}</tool_call>`, thinking tags `<think>` / `</think>`
+- `onnx-community/Qwen3-0.6B-ONNX`: runtime dtype `q4f16`, max context `40960`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, feature flags `thinking` and `toolCalling`, tool call format `<tool_call>{"name":"tool_name","arguments":{...}}</tool_call>`, thinking tags `<think>` / `</think>`, thinking control `{ runtimeParameter: "enable_thinking", enabledInstruction: "/think", disabledInstruction: "/no_think" }`
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, feature flags `thinking` and `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, thinking tags `<think>` / `</think>`
 - `onnx-community/gemma-3n-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: fp32, vision_encoder: fp32, embed_tokens: q4, decoder_model_merged: q4 }`, `requiresWebGpu: true`, `multimodalGeneration: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `toolCalling`, `imageInput`, `audioInput`, and `videoInput`, tool call format `{"name":"tool_name","arguments":{...}}`

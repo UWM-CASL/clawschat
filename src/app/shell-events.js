@@ -15,8 +15,10 @@ export function bindShellEvents({
   clearUserMessageEditSession,
   setChatTitleEditing,
   clearPendingComposerAttachments,
+  resetPendingConversationModelPreferences,
   renderConversationList,
   renderTranscript,
+  syncConversationLanguageAndThinkingControls,
   updateChatTitle,
   queueConversationStateSave,
   openKeyboardShortcuts,
@@ -102,12 +104,18 @@ export function bindShellEvents({
       appState.activeConversationId = null;
       appState.pendingConversationSystemPrompt = '';
       appState.pendingAppendConversationSystemPrompt = true;
+      if (typeof resetPendingConversationModelPreferences === 'function') {
+        resetPendingConversationModelPreferences();
+      }
       clearUserMessageEditSession();
       setChatTitleEditing(appState, false);
       clearPendingComposerAttachments();
       updateWelcomePanelVisibility({ replaceRoute: false });
       renderConversationList();
       renderTranscript();
+      if (typeof syncConversationLanguageAndThinkingControls === 'function') {
+        syncConversationLanguageAndThinkingControls(null);
+      }
       updateChatTitle();
       queueConversationStateSave();
       if (messageInput instanceof HTMLTextAreaElement) {

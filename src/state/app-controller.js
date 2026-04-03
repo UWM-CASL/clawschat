@@ -38,6 +38,7 @@ function toErrorMessage(value) {
  *   detectToolCalls?: (rawText: string, modelId: string) => any[];
  *   executeToolCall?: (toolCall: any) => Promise<any>;
  *   getSelectedModelId: () => string;
+ *   getRuntimeConfigForConversation?: (conversation: any) => any;
  *   addMessageToConversation: (conversation: any, role: string, text: string, options?: any) => any;
  *   buildPromptForConversationLeaf: (conversation: any, leafMessageId?: string) => any;
  *   getMessageNodeById: (conversation: any, messageId: string) => any;
@@ -449,6 +450,10 @@ export function createAppController(dependencies) {
 
     try {
       dependencies.engine.generate(prompt, {
+        runtime:
+          typeof dependencies.getRuntimeConfigForConversation === 'function'
+            ? dependencies.getRuntimeConfigForConversation(activeConversation)
+            : undefined,
         generationConfig: dependencies.state.activeGenerationConfig,
         onToken: (chunk) => {
           if (isInterceptingToolCall) {

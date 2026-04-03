@@ -455,6 +455,24 @@ export function normalizeConversationPromptMode(value) {
   return value !== false;
 }
 
+export function normalizeConversationLanguagePreference(value) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!normalized || normalized === 'auto') {
+    return 'auto';
+  }
+  return normalized.replace(/_/g, '-');
+}
+
+export function normalizeConversationThinkingEnabled(value, defaultValue = true) {
+  if (value === false) {
+    return false;
+  }
+  if (value === true) {
+    return true;
+  }
+  return defaultValue !== false;
+}
+
 function joinSystemPromptSections(parts) {
   return parts
     .map((part) => normalizeSystemPrompt(part))
@@ -507,6 +525,8 @@ function buildToolMetadata(toolContext) {
  *   untitledPrefix?: string;
  *   modelId?: string;
  *   systemPrompt?: string;
+ *   languagePreference?: string;
+ *   thinkingEnabled?: boolean;
  *   startedAt?: number;
  * }} [options]
  */
@@ -517,6 +537,8 @@ export function createConversation(options) {
     untitledPrefix = 'New Conversation',
     modelId = '',
     systemPrompt = '',
+    languagePreference = 'auto',
+    thinkingEnabled = true,
     startedAt = Date.now(),
   } = options || {};
   if (typeof id !== 'string' || !id.trim()) {
@@ -529,6 +551,8 @@ export function createConversation(options) {
     systemPrompt: normalizeSystemPrompt(systemPrompt),
     conversationSystemPrompt: '',
     appendConversationSystemPrompt: true,
+    languagePreference: normalizeConversationLanguagePreference(languagePreference),
+    thinkingEnabled: normalizeConversationThinkingEnabled(thinkingEnabled),
     startedAt: normalizeTimestamp(startedAt) || Date.now(),
     messageNodes: [],
     messageNodeCounter: 0,

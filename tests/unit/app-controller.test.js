@@ -70,6 +70,7 @@ function createControllerHarness() {
     detectToolCalls: vi.fn(() => []),
     executeToolCall: vi.fn(),
     getSelectedModelId: () => 'test-model',
+    getRuntimeConfigForConversation: vi.fn(() => ({ enableThinking: false })),
     addMessageToConversation,
     buildPromptForConversationLeaf,
     getMessageNodeById,
@@ -259,6 +260,28 @@ describe('app-controller', () => {
         format: 'json',
       },
     ]);
+  });
+
+  test('passes conversation-specific runtime overrides into generation', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Short answer please.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onComplete('Done.');
+    });
+
+    harness.controller.startModelGeneration(conversation, buildPromptForConversationLeaf(conversation), {
+      parentMessageId: userMessage.id,
+    });
+
+    expect(harness.dependencies.getRuntimeConfigForConversation).toHaveBeenCalledWith(conversation);
+    expect(harness.engine.generate.mock.calls[0][1]).toMatchObject({
+      runtime: { enableThinking: false },
+    });
   });
 
   test('executes detected tool calls and continues generation', async () => {

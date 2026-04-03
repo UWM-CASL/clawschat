@@ -48,6 +48,9 @@ Student-facing browser chat UI with local model inference.
   - Fields are disabled until a model is loaded.
   - `Context size (short-term memory)` includes a `Reset to model default` link that applies the selected model default when clicked.
   - If changed during generation, updates are queued and applied after the current response finishes.
+- `Settings -> Model` also includes:
+  - `Response language`, stored per conversation or pending pre-chat draft, with a warning when the selected language is not listed for the selected model in this app.
+  - `Enable model thinking when supported`, stored per conversation or pending pre-chat draft, which only affects models with a configured thinking-control contract.
 - Temperature control in Settings:
   - `Temperature (Creativity)` is model-aware and constrained by per-model `minTemperature`, `maxTemperature`, and `defaultTemperature`.
   - Values use `step=0.1`.
@@ -117,6 +120,7 @@ Student-facing browser chat UI with local model inference.
   - Existing conversations are not retroactively changed.
   - New generations in a conversation use that conversation's captured system prompt.
 - When prompt-driven feature guidance is enabled, the effective system prompt appends that guidance before any tool-calling instructions.
+- The effective system prompt also appends conversation-level language steering when a response language is selected and model-specific thinking-mode switch instructions when the selected model exposes them.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
 - Tool-calling behavior, transcript presentation, export semantics, the current built-in tool catalog, and the planned function-call/MCP/`SKILL.md` capability model are documented in `docs/tools.md`.
 - The current built-in tool catalog includes date/time lookup, user location lookup, a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch, and a browser-local `run_shell_command` tool that exposes a documented GNU/Linux-like command subset over `/workspace`.
@@ -159,7 +163,7 @@ Student-facing browser chat UI with local model inference.
 - `onnx-community/Qwen3-0.6B-ONNX`
   - Uses the model card's WebGPU-recommended `q4f16` runtime.
   - Uses the model card's recommended sampling defaults: temperature `0.6`, top-k `20`, top-p `0.95`.
-  - Does not force Qwen thinking mode on by default.
+  - Uses a configurable Qwen thinking-control profile: `enable_thinking` at generation time plus `/think` and `/no_think` system-prompt switches.
 - Hidden legacy/replacement model definitions remain in config so stored conversations and model-specific behaviors still resolve correctly:
   - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
   - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
@@ -179,6 +183,7 @@ Student-facing browser chat UI with local model inference.
 - `models[].repositoryUrl`: model details link used from the card footer
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)
   - `models[].runtime`: per-model runtime hints (`dtype`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
+  - `models[].thinkingControl`: optional model-specific reasoning control metadata (`defaultEnabled`, optional `runtimeParameter`, optional `enabledInstruction`, optional `disabledInstruction`)
   - `models[].generation`: per-model defaults and limits for output/context tokens, temperature, `defaultTopK`, and `defaultTopP`
   - `defaultModelId`: fallback/default selection
   - `legacyAliases`: stored legacy IDs remapped at runtime

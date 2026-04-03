@@ -67,7 +67,10 @@ export class LLMEngineClient {
       payload: {
         requestId,
         prompt,
-        runtime: this.config.runtime,
+        runtime: {
+          ...this.config.runtime,
+          ...(handlers.runtime && typeof handlers.runtime === 'object' ? handlers.runtime : {}),
+        },
         generationConfig: handlers.generationConfig || this.config.generationConfig,
       },
     });

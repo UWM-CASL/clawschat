@@ -16,6 +16,8 @@ export function bindSettingsEvents({
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
   defaultSystemPromptInput,
+  conversationLanguageSelect,
+  enableModelThinkingToggle,
   modelSelect,
   backendSelect,
   maxOutputTokensInput,
@@ -38,8 +40,12 @@ export function bindSettingsEvents({
   applySingleKeyShortcutPreference,
   applyTranscriptViewPreference,
   applyDefaultSystemPrompt,
+  applyConversationLanguagePreference,
+  applyConversationThinkingPreference,
   refreshMathRendering,
+  refreshConversationSystemPromptPreview,
   syncModelSelectionForCurrentEnvironment,
+  syncConversationLanguageAndThinkingControls,
   syncGenerationSettingsFromModel,
   getActiveConversation,
   assignConversationModelId,
@@ -192,6 +198,28 @@ export function bindSettingsEvents({
     });
   }
 
+  if (conversationLanguageSelect instanceof HTMLSelectElement) {
+    conversationLanguageSelect.addEventListener('change', (event) => {
+      const value = event.target instanceof HTMLSelectElement ? event.target.value : 'auto';
+      applyConversationLanguagePreference(value, { persist: true });
+      if (typeof refreshConversationSystemPromptPreview === 'function') {
+        refreshConversationSystemPromptPreview();
+      }
+      setStatus('Response language updated.');
+    });
+  }
+
+  if (enableModelThinkingToggle instanceof HTMLInputElement) {
+    enableModelThinkingToggle.addEventListener('change', (event) => {
+      const value = event.target instanceof HTMLInputElement ? event.target.checked : true;
+      applyConversationThinkingPreference(value, { persist: true });
+      if (typeof refreshConversationSystemPromptPreview === 'function') {
+        refreshConversationSystemPromptPreview();
+      }
+      setStatus(value ? 'Model thinking enabled when supported.' : 'Model thinking disabled when supported.');
+    });
+  }
+
   colorSchemeQuery.addEventListener('change', () => {
     if (getStoredThemePreference() === 'system') {
       applyTheme('system');
@@ -207,6 +235,12 @@ export function bindSettingsEvents({
       if (changed) {
         queueConversationStateSave();
       }
+    }
+    if (typeof syncConversationLanguageAndThinkingControls === 'function') {
+      syncConversationLanguageAndThinkingControls(activeConversation);
+    }
+    if (typeof refreshConversationSystemPromptPreview === 'function') {
+      refreshConversationSystemPromptPreview();
     }
     void reinitializeEngineFromSettings();
   }

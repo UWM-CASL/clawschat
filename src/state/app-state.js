@@ -66,6 +66,8 @@ export function createAppState({
     defaultSystemPrompt,
     pendingConversationSystemPrompt: '',
     pendingAppendConversationSystemPrompt: true,
+    pendingConversationLanguagePreference: 'auto',
+    pendingConversationThinkingEnabled: true,
     isSwitchingVariant: false,
     interactionMode: INTERACTION_MODES.NONE,
     activeUserEditMessageId: null,

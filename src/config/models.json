@@ -118,6 +118,12 @@
         "openTag": "<tool_call>",
         "closeTag": "</tool_call>"
       },
+      "thinkingControl": {
+        "defaultEnabled": true,
+        "runtimeParameter": "enable_thinking",
+        "enabledInstruction": "/think",
+        "disabledInstruction": "/no_think"
+      },
       "thinkingTags": {
         "open": "<think>",
         "close": "</think>"

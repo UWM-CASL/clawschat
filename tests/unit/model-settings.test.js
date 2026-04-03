@@ -185,6 +185,12 @@ describe('model-settings availability', () => {
       openTag: '<tool_call>',
       closeTag: '</tool_call>',
     });
+    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Qwen3-0.6B-ONNX')?.thinkingControl).toEqual({
+      defaultEnabled: true,
+      runtimeParameter: 'enable_thinking',
+      enabledInstruction: '/think',
+      disabledInstruction: '/no_think',
+    });
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.toolCalling).toEqual({
       format: 'special-token-call',
       callOpen: '<|tool_call_start|>[',

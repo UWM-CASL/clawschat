@@ -756,6 +756,32 @@
                       />
                       <p id="topPHelp" class="form-text mb-0">Load a model to edit this setting.</p>
                     </div>
+                    <div class="settings-control-group">
+                      <label class="form-label" for="conversationLanguageSelect">
+                        Response language
+                      </label>
+                      <select id="conversationLanguageSelect" class="form-select">
+                        <option value="auto" selected>Auto</option>
+                      </select>
+                      <p id="conversationLanguageHelp" class="form-text mb-0">
+                        Auto leaves language choice to your prompt and the model.
+                      </p>
+                    </div>
+                    <div class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="enableModelThinkingToggle"
+                        checked
+                      />
+                      <label class="form-check-label" for="enableModelThinkingToggle">
+                        Enable model thinking when supported
+                      </label>
+                      <p id="enableModelThinkingHelp" class="form-text mb-0">
+                        Uses a model-specific reasoning switch when the selected model exposes one.
+                      </p>
+                    </div>
                   </section>
 
                   <section

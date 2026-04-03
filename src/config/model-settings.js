@@ -51,6 +51,7 @@ export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['aut
 export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
   new Set(['json', 'tagged-json', 'special-token-call'])
 );
+export const ALLOWED_THINKING_RUNTIME_PARAMETERS = Object.freeze(new Set(['enable_thinking']));
 
 function normalizeRuntimeDtype(rawDtype) {
   if (typeof rawDtype === 'string' && ALLOWED_RUNTIME_DTYPES.has(rawDtype.trim())) {
@@ -196,6 +197,35 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
     : null;
 }
 
+function normalizeThinkingControl(rawThinkingControl, { enabled = false } = {}) {
+  if (!enabled || !rawThinkingControl || typeof rawThinkingControl !== 'object' || Array.isArray(rawThinkingControl)) {
+    return null;
+  }
+  const runtimeParameter =
+    typeof rawThinkingControl.runtimeParameter === 'string' &&
+    ALLOWED_THINKING_RUNTIME_PARAMETERS.has(rawThinkingControl.runtimeParameter.trim())
+      ? rawThinkingControl.runtimeParameter.trim()
+      : '';
+  const enabledInstruction =
+    typeof rawThinkingControl.enabledInstruction === 'string'
+      ? rawThinkingControl.enabledInstruction.trim()
+      : '';
+  const disabledInstruction =
+    typeof rawThinkingControl.disabledInstruction === 'string'
+      ? rawThinkingControl.disabledInstruction.trim()
+      : '';
+  const defaultEnabled = rawThinkingControl.defaultEnabled !== false;
+  if (!runtimeParameter && !enabledInstruction && !disabledInstruction) {
+    return null;
+  }
+  return {
+    defaultEnabled,
+    ...(runtimeParameter ? { runtimeParameter } : {}),
+    ...(enabledInstruction ? { enabledInstruction } : {}),
+    ...(disabledInstruction ? { disabledInstruction } : {}),
+  };
+}
+
 function normalizeFeatures(rawFeatures, { thinkingTags = null } = {}) {
   const normalized = Object.fromEntries(MODEL_FEATURE_FLAGS.map((feature) => [feature, rawFeatures?.[feature] === true]));
   if (thinkingTags) {
@@ -245,6 +275,9 @@ const configuredModels = Array.isArray(modelCatalog?.models)
         const generation = normalizeGenerationLimits(model?.generation);
         const runtime = normalizeRuntime(model?.runtime);
         const features = normalizeFeatures(model?.features, { thinkingTags });
+        const thinkingControl = normalizeThinkingControl(model?.thinkingControl, {
+          enabled: features.thinking,
+        });
         const toolCalling = normalizeToolCalling(model?.toolCalling, {
           enabled: features.toolCalling,
         });
@@ -255,6 +288,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           languageSupport,
           repositoryUrl,
           features,
+          thinkingControl,
           toolCalling,
           thinkingTags,
           generation,
@@ -281,6 +315,7 @@ if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
     languageSupport: null,
     repositoryUrl: `https://huggingface.co/${DEFAULT_MODEL}`,
     features: normalizeFeatures(null),
+    thinkingControl: null,
     toolCalling: null,
     thinkingTags: null,
     generation: normalizeGenerationLimits(null),

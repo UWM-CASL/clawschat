@@ -267,7 +267,9 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain('After a tool result, continue the work and answer naturally.');
     expect(prompt).toContain('When you call a tool, output exactly one JSON object and nothing else.');
     expect(prompt).toContain('Shape: {"name":"<tool-name>","parameters":{...}}.');
-    expect(prompt).toContain('Use {} when the tool takes no arguments.');
+    expect(prompt).toContain(
+      'Use an empty "parameters" object ({"parameters":{}}) only when the tool takes no inputs'
+    );
   });
 
   test('builds the Qwen tagged-json tool-calling prompt', () => {
@@ -287,7 +289,9 @@ describe('tool-calling prompt builder', () => {
     );
     expect(prompt).toContain('Wrap the JSON object in <tool_call> and </tool_call>.');
     expect(prompt).toContain('Shape inside the tags: {"name":"<tool-name>","arguments":{...}}.');
-    expect(prompt).toContain('Use {} when the tool takes no arguments.');
+    expect(prompt).toContain(
+      'Use an empty "arguments" object ({"arguments":{}}) only when the tool takes no inputs'
+    );
   });
 
   test('adds a terminal-use instruction for get_user_location', () => {
@@ -317,10 +321,10 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      'If tasklist would help and you need its command syntax, call it first with an empty arguments object.'
+      "If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model's tool-call format."
     );
     expect(prompt).not.toContain(
-      '**Tool behavior:**\n- If tasklist would help and you need its command syntax, call it first with an empty arguments object.'
+      "**Tool behavior:**\n- If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model's tool-call format."
     );
   });
 
@@ -335,7 +339,7 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      'Commands are GNU/Linux-like but only a subset is implemented. Call it first with an empty arguments object to see the supported commands and placeholder paths.'
+      "Commands are GNU/Linux-like but only a subset is implemented. Call it first with an empty arguments object for this model's tool-call format to see the supported commands and placeholder paths."
     );
   });
 

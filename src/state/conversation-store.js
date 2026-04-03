@@ -729,6 +729,8 @@ async function normalizeStateForStorage(state) {
     systemPrompt: conversation.systemPrompt,
     conversationSystemPrompt: conversation.conversationSystemPrompt,
     appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
+    languagePreference: conversation.languagePreference,
+    thinkingEnabled: conversation.thinkingEnabled,
     startedAt: conversation.startedAt,
     hasGeneratedName: Boolean(conversation.hasGeneratedName),
     currentWorkingDirectory: normalizeStoredConversationWorkingDirectory(
@@ -834,10 +836,12 @@ async function rebuildStateFromNormalizedRecords(rootRecord, conversationRecords
       id: conversation.id,
       name: conversation.name,
       modelId: conversation.modelId,
-      systemPrompt: conversation.systemPrompt,
-      conversationSystemPrompt: conversation.conversationSystemPrompt,
-      appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
-      startedAt: conversation.startedAt,
+        systemPrompt: conversation.systemPrompt,
+        conversationSystemPrompt: conversation.conversationSystemPrompt,
+        appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
+        languagePreference: conversation.languagePreference,
+        thinkingEnabled: conversation.thinkingEnabled,
+        startedAt: conversation.startedAt,
       hasGeneratedName: Boolean(conversation.hasGeneratedName),
       currentWorkingDirectory: normalizeStoredConversationWorkingDirectory(
         conversation.currentWorkingDirectory

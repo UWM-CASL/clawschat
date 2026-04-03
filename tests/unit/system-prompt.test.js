@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import {
+  buildLanguagePreferencePrompt,
   buildMathRenderingFeaturePrompt,
   buildOptionalFeaturePromptSection,
+  buildThinkingModePrompt,
 } from '../../src/llm/system-prompt.js';
 
 describe('system prompt feature sections', () => {
@@ -25,5 +27,28 @@ describe('system prompt feature sections', () => {
 
   test('omits the math rendering instruction when math rendering is disabled', () => {
     expect(buildMathRenderingFeaturePrompt({ renderMathMl: false })).toBe('');
+  });
+
+  test('builds a language preference instruction when a language is selected', () => {
+    expect(buildLanguagePreferencePrompt({ languageName: 'Spanish' })).toBe(
+      'Write the final answer in Spanish unless the user explicitly asks for a different language.'
+    );
+    expect(buildLanguagePreferencePrompt({ languageName: '' })).toBe('');
+  });
+
+  test('builds a thinking mode switch prompt only when switch instructions exist', () => {
+    expect(
+      buildThinkingModePrompt({
+        enabled: false,
+        disabledInstruction: '/no_think',
+      })
+    ).toContain('/no_think');
+    expect(
+      buildThinkingModePrompt({
+        enabled: true,
+        enabledInstruction: '/think',
+      })
+    ).toContain('Thinking mode is enabled');
+    expect(buildThinkingModePrompt({ enabled: true })).toBe('');
   });
 });
