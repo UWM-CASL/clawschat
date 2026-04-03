@@ -3372,6 +3372,51 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.message).toBeUndefined();
   });
 
+  test('adds curl guidance when web_lookup truncates extracted content', async () => {
+    const longParagraph = 'Alpha '.repeat(900);
+    const fetchRef = vi.fn(async () => {
+      return new globalThis.Response(
+        [
+          '<!doctype html>',
+          '<html>',
+          '<head>',
+          '<title>Long Lesson</title>',
+          '</head>',
+          '<body>',
+          '<main>',
+          `<p>${longParagraph}</p>`,
+          '</main>',
+          '</body>',
+          '</html>',
+        ].join(''),
+        {
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+          },
+        }
+      );
+    });
+
+    const result = await executeToolCall(
+      {
+        name: 'web_lookup',
+        arguments: {
+          input: 'https://example.com/long-lesson',
+        },
+      },
+      {
+        fetchRef,
+      }
+    );
+
+    expect(result.result.status).toBe('successful');
+    expect(result.result.message).toBe(
+      'Extracted content limited to 4000 characters. Use the run_shell_command tool with curl to get the entire page.'
+    );
+  });
+
   test('rejects non-url input for web_lookup until search is implemented', async () => {
     const result = await executeToolCall({
         name: 'web_lookup',

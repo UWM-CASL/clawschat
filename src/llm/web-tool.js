@@ -7,6 +7,8 @@ const MAX_WEB_HEADING_COUNT = 8;
 const MAX_WEB_HEADING_LENGTH = 160;
 const WEB_LOOKUP_RETRY_MESSAGE =
   'Use a direct https URL and retry with a simpler page if the request or extraction fails.';
+const WEB_LOOKUP_TRUNCATION_FOLLOW_UP =
+  'Use the run_shell_command tool with curl to get the entire page.';
 
 function collapseWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -413,6 +415,9 @@ export async function executeWebLookupTool(argumentsValue = {}, runtimeContext =
     }
     if (contentPreview.truncated) {
       notes.push(`Extracted content limited to ${MAX_WEB_CONTENT_LENGTH} characters.`);
+    }
+    if (notes.length) {
+      notes.push(WEB_LOOKUP_TRUNCATION_FOLLOW_UP);
     }
     return {
       status: 'successful',

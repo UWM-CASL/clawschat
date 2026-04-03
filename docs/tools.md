@@ -109,7 +109,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 - Success result shape:
   - `status: "successful"`
   - `body`: markdown containing MIME type, title, and summary text
-  - optional `message` when the fetched preview or extracted summary had to be truncated
+  - optional `message` when the fetched preview or extracted summary had to be truncated; the truncation note also tells the model to use `run_shell_command` with `curl` if it needs the full page
 - Failure result shape:
   - `status: "failed"`
   - `body`: error detail
