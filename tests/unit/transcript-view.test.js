@@ -1068,6 +1068,90 @@ describe('transcript-view', () => {
     );
   });
 
+  test('renders the body from a failed web lookup envelope inline on the model card', () => {
+    const harness = createViewHarness();
+    harness.conversation.messageNodes[1].response = 'I am checking the web.';
+    harness.conversation.messageNodes[1].text = 'I am checking the web.';
+    harness.conversation.messageNodes[1].toolCalls = [
+      {
+        name: 'web_lookup',
+        arguments: { input: 'world news today' },
+        rawText: '{"name":"web_lookup","parameters":{"input":"world news today"}}',
+      },
+    ];
+    harness.conversation.messageNodes[1].childIds = ['tool-1'];
+    const toolMessage = /** @type {any} */ ({
+      id: 'tool-1',
+      role: 'tool',
+      speaker: 'Tool',
+      text: JSON.stringify({
+        status: 'failed',
+        body: 'Failed to fetch',
+        message:
+          'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+      }),
+      toolName: 'web_lookup',
+      toolResult: JSON.stringify({
+        status: 'failed',
+        body: 'Failed to fetch',
+        message:
+          'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+      }),
+      parentId: 'model-1',
+    });
+    harness.conversation.messageNodes.push(toolMessage);
+    harness.conversation.activeLeafMessageId = toolMessage.id;
+
+    const view = createTranscriptView({
+      container: harness.container,
+      getActiveConversation: () => harness.conversation,
+      getConversationPathMessages: (conversation) => conversation.messageNodes,
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
+      getModelVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      getUserVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      renderModelMarkdown: (content) => `<p>${content}</p>`,
+      scheduleMathTypeset: vi.fn(),
+      getToolDisplayName: (toolName) => (toolName === 'web_lookup' ? 'Web Lookup' : toolName),
+      getShowThinkingByDefault: () => false,
+      getActiveUserEditMessageId: () => null,
+      getControlsState: () => ({
+        isGenerating: false,
+        isLoadingModel: false,
+        isRunningOrchestration: false,
+        isSwitchingVariant: false,
+      }),
+      getEmptyStateVisible: () => false,
+      initializeTooltips: vi.fn(),
+      disposeTooltips: vi.fn(),
+      applyVariantCardSignals: vi.fn(),
+      applyFixCardSignals: vi.fn(),
+      scrollTranscriptToBottom: vi.fn(),
+      updateTranscriptNavigationButtonVisibility: vi.fn(),
+      cancelUserMessageEdit: vi.fn(),
+      saveUserMessageEdit: vi.fn(),
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    expect(harness.container.querySelector('.tool-call-request')?.textContent).toContain(
+      '"name": "web_lookup"'
+    );
+    expect(harness.container.querySelector('.tool-call-result')?.textContent).toBe('Failed to fetch');
+  });
+
   test('renders PDF attachment metadata in the transcript', () => {
     const harness = createViewHarness();
     harness.conversation.messageNodes[0].content.parts[2] = /** @type {any} */ ({

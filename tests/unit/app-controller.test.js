@@ -620,6 +620,52 @@ describe('app-controller', () => {
     );
   });
 
+  test('stores a failed web lookup envelope when tool execution throws', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-web', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Find current world news.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.detectToolCalls
+      .mockReturnValueOnce([
+        {
+          name: 'web_lookup',
+          arguments: { input: 'world news today' },
+          rawText: '{"name":"web_lookup","parameters":{"input":"world news today"}}',
+          format: 'json',
+        },
+      ])
+      .mockReturnValueOnce([]);
+    harness.dependencies.executeToolCall.mockRejectedValue(new Error('Failed to fetch'));
+
+    harness.engine.generate
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onComplete('{"name":"web_lookup","parameters":{"input":"world news today"}}');
+      })
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onComplete('The lookup failed, so I need another approach.');
+      });
+
+    harness.controller.startModelGeneration(conversation, buildPromptForConversationLeaf(conversation), {
+      parentMessageId: userMessage.id,
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const toolMessage = conversation.messageNodes.find((message) => message.role === 'tool');
+    expect(toolMessage?.toolName).toBe('web_lookup');
+    expect(toolMessage?.toolResult).toBe(
+      JSON.stringify({
+        status: 'failed',
+        body: 'Failed to fetch',
+        message:
+          'Use a direct https URL and retry with a simpler page if the request or extraction fails.',
+      })
+    );
+  });
+
   test('fixes a continuation model message after a tool call', async () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });

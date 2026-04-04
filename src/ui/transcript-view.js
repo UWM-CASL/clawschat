@@ -742,7 +742,10 @@ export function createTranscriptView(dependencies) {
           typeof parsed === 'object' &&
           !Array.isArray(parsed) &&
           typeof parsed.body === 'string' &&
-          (parsed.status === 'success' || parsed.status === 'failed')
+          (parsed.status === 'success' ||
+            parsed.status === 'successful' ||
+            parsed.status === 'failed' ||
+            parsed.status === 'failure')
         ) {
           return parsed.body.trim();
         }

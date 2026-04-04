@@ -114,6 +114,22 @@ export const TOOL_DEFINITIONS = Object.freeze([
 ]);
 
 const reverseGeocodeCache = new Map();
+const WEB_LOOKUP_FAILURE_MESSAGE =
+  'Use a direct https URL and retry with a simpler page if the request or extraction fails.';
+
+/**
+ * @param {unknown} error
+ * @param {{message?: string}} [options]
+ */
+function buildFailedToolEnvelope(error, options = {}) {
+  const message = typeof options.message === 'string' ? options.message : '';
+  const body = error instanceof Error ? error.message : String(error);
+  return JSON.stringify({
+    status: 'failed',
+    body,
+    ...(message.trim() ? { message: message.trim() } : {}),
+  });
+}
 
 function humanizeToolName(toolName) {
   const normalizedName = typeof toolName === 'string' ? toolName.trim() : '';
@@ -1357,6 +1373,10 @@ const TOOL_EXECUTORS = Object.freeze({
   web_lookup: {
     execute: (argumentsValue, runtimeContext) =>
       executeWebLookupTool(argumentsValue, runtimeContext),
+    serializeError: (error) =>
+      buildFailedToolEnvelope(error, {
+        message: WEB_LOOKUP_FAILURE_MESSAGE,
+      }),
   },
   write_python_file: {
     execute: (argumentsValue, runtimeContext) =>
@@ -1368,10 +1388,7 @@ const TOOL_EXECUTORS = Object.freeze({
         message: `To execute the script, use {"name":"run_shell_command","parameters":{"cmd":"python ${result?.path || '/workspace/script.py'}"}}`,
       }),
     serializeError: (error) =>
-      JSON.stringify({
-        status: 'failure',
-        body: error instanceof Error ? error.message : String(error),
-      }),
+      buildFailedToolEnvelope(error),
   },
   run_shell_command: {
     execute: (argumentsValue, runtimeContext) =>

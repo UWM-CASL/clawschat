@@ -20,6 +20,19 @@ function toErrorMessage(value) {
   return String(value || 'Unknown error');
 }
 
+function buildFailedToolResultText(toolCall, error) {
+  const toolName = typeof toolCall?.name === 'string' ? toolCall.name.trim() : '';
+  const result = {
+    status: 'failed',
+    body: toErrorMessage(error),
+  };
+  if (toolName === 'web_lookup') {
+    result.message =
+      'Use a direct https URL and retry with a simpler page if the request or extraction fails.';
+  }
+  return JSON.stringify(result);
+}
+
 /**
  * @param {{
  *   state: any;
@@ -207,7 +220,7 @@ export function createAppController(dependencies) {
             toolCall?.arguments && typeof toolCall.arguments === 'object'
               ? toolCall.arguments
               : {},
-          resultText: JSON.stringify({ error: message }),
+          resultText: buildFailedToolResultText(toolCall, error),
         };
         dependencies.appendDebug(`Tool execution failed: ${message}`);
       }
