@@ -364,10 +364,10 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      "If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model's tool-call format."
+      '- tasklist: Manage a task list for multi-step work. Call with an empty arguments object to get tool syntax.'
     );
-    expect(prompt).not.toContain(
-      "**Tool behavior:**\n- If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model's tool-call format."
+    expect(prompt).toContain(
+      '- Call with an empty arguments object to get tool syntax.'
     );
   });
 

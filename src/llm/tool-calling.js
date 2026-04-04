@@ -239,9 +239,7 @@ function buildToolInstructionLines(name, description = '') {
     lines.push('  Use the returned location and coordinate directly in the answer.');
   }
   if (normalizedName === 'tasklist') {
-    lines.push(
-      "  If tasklist would help and you need its command syntax, call it first with an empty arguments object for this model's tool-call format."
-    );
+    lines.push('  - Call with an empty arguments object to get tool syntax.');
   }
   if (normalizedName === 'write_python_file') {
     lines.push('  Use this for longer Python scripts.');
