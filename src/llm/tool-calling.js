@@ -250,13 +250,9 @@ function buildToolInstructionLines(name, description = '') {
     );
   }
   if (normalizedName === 'run_shell_command') {
-    lines.push('  Files are in /workspace.');
-    lines.push(
-      '  Uploaded attachments may already be available under /workspace, and user messages can include their exact workspace paths.'
-    );
-    lines.push(
-      '  The shell subset includes python /workspace/script.py and python -c "<code>". Prefer write_python_file plus python /workspace/script.py for larger scripts.'
-    );
+    lines.push('  - Call with an empty arguments object to get syntax and supported commands.');
+    lines.push('  - The shell includes python.');
+    lines.push('  - Prefer write_python_file for larger scripts.');
   }
   return lines;
 }

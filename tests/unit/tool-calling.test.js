@@ -397,10 +397,14 @@ describe('tool-calling prompt builder', () => {
       ['run_shell_command']
     );
 
-    expect(prompt).toContain('Files are in /workspace.');
     expect(prompt).toContain(
-      'The shell subset includes python /workspace/script.py and python -c "<code>". Prefer write_python_file plus python /workspace/script.py for larger scripts.'
+      '- run_shell_command: Passes a shell command to an emulated Linux shell starting in /workspace. Call with an empty arguments object to get syntax and supported commands. Files are in /workspace.'
     );
+    expect(prompt).toContain(
+      '- Call with an empty arguments object to get syntax and supported commands.'
+    );
+    expect(prompt).toContain('- The shell includes python.');
+    expect(prompt).toContain('- Prefer write_python_file for larger scripts.');
   });
 
   test('adds a python file writing instruction', () => {
