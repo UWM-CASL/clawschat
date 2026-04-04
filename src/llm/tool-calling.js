@@ -100,7 +100,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'run_shell_command',
     displayName: 'Shell Command Runner',
     description:
-      'Passes a shell command to an emulated Linux shell starting in /workspace. Prefer {"cmd":"..."} for the shell text. Call with an empty arguments object to get syntax and supported commands.',
+      'Passes a shell command to an emulated Linux shell starting in /workspace. Call with an empty arguments object to get syntax and supported commands. Files are in /workspace.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -1361,6 +1361,17 @@ const TOOL_EXECUTORS = Object.freeze({
   write_python_file: {
     execute: (argumentsValue, runtimeContext) =>
       executeWritePythonFileTool(argumentsValue, runtimeContext),
+    serializeResult: (result) =>
+      JSON.stringify({
+        status: 'success',
+        body: `Script successfully written to ${result?.path || '/workspace/script.py'}.`,
+        message: `To execute the script, use {"name":"run_shell_command","parameters":{"cmd":"python ${result?.path || '/workspace/script.py'}"}}`,
+      }),
+    serializeError: (error) =>
+      JSON.stringify({
+        status: 'failure',
+        body: error instanceof Error ? error.message : String(error),
+      }),
   },
   run_shell_command: {
     execute: (argumentsValue, runtimeContext) =>
@@ -1389,7 +1400,20 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
   if (!toolExecutor) {
     throw new Error(`Unknown tool: ${toolName}`);
   }
-  const result = await toolExecutor.execute(argumentsValue, runtimeContext);
+  let result;
+  try {
+    result = await toolExecutor.execute(argumentsValue, runtimeContext);
+  } catch (error) {
+    if (typeof toolExecutor.serializeError === 'function') {
+      return {
+        toolName,
+        arguments: argumentsValue,
+        result: null,
+        resultText: toolExecutor.serializeError(error, argumentsValue),
+      };
+    }
+    throw error;
+  }
   return {
     toolName,
     arguments: argumentsValue,

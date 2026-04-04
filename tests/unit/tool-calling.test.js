@@ -1212,6 +1212,14 @@ describe('tool-calling prompt builder', () => {
 
     expect(result.toolName).toBe('write_python_file');
     expect(result.result.path).toBe('/workspace/tools/script.py');
+    expect(result.resultText).toBe(
+      JSON.stringify({
+        status: 'success',
+        body: 'Script successfully written to /workspace/tools/script.py.',
+        message:
+          'To execute the script, use {"name":"run_shell_command","parameters":{"cmd":"python /workspace/tools/script.py"}}',
+      })
+    );
     expect(await workspaceFileSystem.readTextFile('/workspace/tools/script.py')).toBe(
       'print("hello")\n'
     );
@@ -1223,21 +1231,28 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
-  test('rejects non-python paths in write_python_file', async () => {
-    await expect(
-      executeToolCall(
-        {
-          name: 'write_python_file',
-          arguments: {
-            path: '/workspace/tools/script.txt',
-            source: 'print("hello")\n',
-          },
+  test('serializes write_python_file failures with a compact failure envelope', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'write_python_file',
+        arguments: {
+          path: '/workspace/tools/script.txt',
+          source: 'print("hello")\n',
         },
-        {
-          workspaceFileSystem: createMockWorkspaceFileSystem(),
-        }
-      )
-    ).rejects.toThrow('write_python_file path must end in .py under /workspace.');
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.toolName).toBe('write_python_file');
+    expect(result.result).toBeNull();
+    expect(result.resultText).toBe(
+      JSON.stringify({
+        status: 'failure',
+        body: 'write_python_file path must end in .py under /workspace.',
+      })
+    );
   });
 
   test('rejects fenced code blocks in shell commands', async () => {
