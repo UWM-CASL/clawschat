@@ -1,11 +1,11 @@
 # Tool Calling
 
-This repo now includes an early browser-local tool-calling loop.
+This repo now includes a browser-local tool-calling loop with browser-mediated MCP HTTP support.
 
 This document covers both:
 
-- the current implemented browser-local tool-calling behavior
-- the intended longer-term separation between function calls, MCP integration, and `SKILL.md` playbooks
+- the current implemented built-in and MCP tool-calling behavior
+- the remaining `SKILL.md` planning
 
 ## What it does
 
@@ -22,11 +22,13 @@ When tool calling is enabled for a conversation and the selected model supports 
 
 Tool calling is model-aware. The app does not use one universal tool-call format for every model family.
 If the selected model does not support tool calling, the tool-instruction section is omitted entirely from the computed system prompt even when the global tool-calling toggle is enabled.
-Users can also disable individual built-in tools in `Settings -> Tools, Services, and Skills`; disabled tools are removed from the tool-instruction section and ignored by the local tool-execution loop.
+Users can disable individual built-in tools in `Settings -> Tools`; disabled tools are removed from the tool-instruction section and ignored by the local tool-execution loop.
+Users configure MCP endpoints in `Settings -> MCP Servers`; imported servers start disabled, all discovered commands start disabled, and disabled servers or commands are omitted from the prompt and rejected by execution.
 
 The prompt is organized into separate sections so models do not confuse tool descriptions, post-tool behavior, and call syntax:
 
 - `Tools available in this conversation` lists the enabled tools and any tool-specific usage notes.
+- `MCP servers` lists only enabled MCP servers plus the two MCP helper call syntaxes.
 - `Tool behavior` covers only generic behavior after a tool result is returned.
 - `Tool call format` describes the exact wrapper or JSON shape the selected model must emit, including that a tool call should be the only output in that turn.
 
@@ -42,9 +44,19 @@ That empty object is not a universal synonym for "this tool has no inputs." It o
 
 ## Current scope
 
-Today, the app implements a small built-in tool registry and a local tool execution loop. MCP integration and `SKILL.md` ingestion are not implemented yet.
+Today, the app implements:
 
-The existing tool-calling path should be treated as the foundation for broader capability discovery later, not as the final shape of all external capability support.
+- a small built-in tool registry
+- a local tool execution loop
+- browser-mediated MCP HTTP inspection and execution for user-configured servers
+
+Current MCP constraints:
+
+- only browser-reachable `https` endpoints are accepted, except `http://localhost`
+- servers that embed credentials, obvious token query parameters, or auth challenges are rejected when detected
+- imported servers start disabled, and discovered commands start disabled
+- only enabled servers with enabled commands are exposed to the model or executable through the harness
+- `SKILL.md` discovery and selective ingestion are still not implemented
 
 ## Built-in tools
 
@@ -260,17 +272,72 @@ Any new command added to `run_shell_command` should meet the same baseline as th
 - Update the `supportedCommands`, examples, and limitations returned by the tool whenever the shell subset changes.
 - Update [README.md](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/README.md) and this document when the supported shell surface or its guarantees change.
 
-## Planned capability model
+## MCP server support
 
-The intended future design separates capability access into three layers with different purposes.
+Users add MCP servers from `Settings -> MCP Servers`.
 
-User-uploaded files are already staged for that future work through a browser-local workspace filesystem abstraction:
+- accepted endpoints: browser-reachable `https` URLs, or `http://localhost`
+- rejected where practical: embedded credentials, token-like query parameters, and OAuth/token/basic-auth challenges
+- default state: imported servers are off, and every discovered command is off
+- metadata shown in the accordion: identifier, endpoint, protocol version, server version, capabilities, instructions, and per-command schema summaries
+- prompt exposure: only enabled servers with enabled commands are listed under the `MCP servers` section
+- execution: disabled or unknown servers and commands are rejected even if the model still emits them
+- transport: the browser opens an MCP session with `initialize`, sends `notifications/initialized`, then uses `tools/list` or `tools/call`
+
+The MCP helper tools are not user-toggled. They become available automatically when at least one enabled MCP server has at least one enabled command, and they are listed only under the `MCP servers` prompt section rather than under the built-in tool list.
+
+### `list_mcp_server_commands`
+
+- Purpose: progressive discovery for one enabled MCP server
+- Arguments:
+  - required `server`
+- Result fields:
+  - `server`
+  - `name`
+  - optional `description`
+  - `commands`
+- `commands[]` fields:
+  - `name`
+  - optional `description`
+  - optional `inputSchema`
+  - `inputSummary`
+- Scope:
+  - returns only enabled commands
+  - requires the selected server to be enabled and to have at least one enabled command
+- Model-facing syntax:
+  - `{"server":"server_identifier"}`
+
+### `call_mcp_server_command`
+
+- Purpose: execute one enabled command on one enabled MCP server through the existing tool harness
+- Arguments:
+  - required `server`
+  - required `command`
+  - optional `arguments` object
+- Result fields:
+  - `status`
+  - `server`
+  - `command`
+  - `body`
+  - optional `structuredContent`
+  - optional `content`
+- Scope:
+  - requires both the selected server and the selected command to be enabled
+  - sends the provided `arguments` object to the configured MCP endpoint only when invoked
+- Model-facing syntax:
+  - `{"server":"server_identifier","command":"command_name","arguments":{...}}`
+
+## Capability model
+
+The repo now separates capability access into three layers with different purposes.
+
+User-uploaded files are already staged for future file-oriented tool work through a browser-local workspace filesystem abstraction:
 
 - uploads are written into OPFS
 - each conversation gets its own isolated OPFS-backed `/workspace`
 - future tool commands should interact with the injected workspace filesystem abstraction, not OPFS handles directly
 
-### 1. Function calls
+### 1. Built-in function calls
 
 Function calls are for small, discrete, relatively simple input-output actions.
 
@@ -285,21 +352,16 @@ Function calls should stay narrow in scope, return structured results, and be ea
 
 ### 2. MCP support
 
-MCP support is intended for connecting to broader servers and services that expose multiple related utilities.
+MCP support connects the app to broader servers and services that expose multiple related utilities.
 
-The design intent is:
+The current design keeps MCP usage discovery-first:
 
-- the entirety of an MCP server should not be injected into prompt context by default
-- the model should instead be told that MCP servers exist
-- the model should receive very brief functionality statements for available MCP servers
-- the model should be encouraged to request discovery through a tool call
+- the entirety of an MCP server is not injected into prompt context by default
+- the model sees only enabled servers, each with a short description
+- the model discovers enabled commands through `list_mcp_server_commands`
+- the model calls one enabled command at a time through `call_mcp_server_command`
 
-In practice, this means the model-facing prompt should prefer discovery-first behavior such as:
-
-- list available MCP servers
-- list commands/resources offered by one selected MCP server
-
-The tool call becomes the mechanism for progressive disclosure. The model sees only enough context to decide whether it should ask for an MCP listing, then can inspect a specific server's offerings as needed.
+The tool call is the mechanism for progressive disclosure. The model sees only enough context to decide whether it should inspect one server, then can inspect or call enabled commands as needed.
 
 Future file-oriented tool calls should follow the same boundary rule:
 
@@ -327,15 +389,15 @@ The design intent is similar to a library workflow:
 
 Skills should therefore remain discoverable and selectively loaded, rather than being fully embedded into the base prompt by default.
 
-## Prompting philosophy for future implementation
+## Prompting philosophy
 
-The future prompt model should stay minimal and discovery-oriented.
+The prompt model should stay minimal and discovery-oriented.
 
 System-prompt additions should:
 
-- mention that direct function calls are available for small discrete tasks
-- mention that MCP servers exist and can be listed or inspected on demand
-- mention that `SKILL.md` playbooks exist and can be listed for later ingestion
+- mention enabled direct function calls for small discrete tasks
+- mention enabled MCP servers and the discovery/call syntax needed to inspect them
+- keep future `SKILL.md` support discovery-first as well
 - avoid dumping full MCP inventories or full skill bodies into the base context
 
 This keeps prompt context smaller, reduces distraction, and encourages the model to pull in only the capability descriptions it actually needs for the current task.
@@ -427,9 +489,10 @@ Gemma compatibility note:
 This is still an early implementation.
 
 - The built-in tool set is intentionally small.
-- Tool execution is local and explicit; there is no remote service backend.
+- Tool execution is explicit; built-in tools run in-browser, while MCP calls go through browser fetch to configured endpoints.
 - Detection and parsing are driven by per-model metadata rather than a universal Transformers.js orchestration API.
-- The current tool registry is code-defined, but users can turn the currently available built-in tools on or off from `Settings -> Tools, Services, and Skills`.
+- The current built-in tool registry is code-defined, but users can turn the currently available built-in tools on or off from `Settings -> Tools`.
+- MCP endpoints are configured in `Settings -> MCP Servers`; imported servers and imported commands default to off.
+- MCP support is limited to browser-reachable `https` endpoints, or `http://localhost`, without OAuth or token-based authentication.
 - The current streaming interception path acts on the first complete tool call detected in a streamed turn, then resumes generation after that tool result is available.
-- MCP capability discovery is planned but not implemented yet.
 - `SKILL.md` discovery and selective ingestion are planned but not implemented yet.

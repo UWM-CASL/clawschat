@@ -13,6 +13,10 @@ export function bindSettingsEvents({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  mcpServerEndpointForm,
+  mcpServerEndpointInput,
+  addMcpServerButton,
+  mcpServersList,
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
@@ -38,14 +42,21 @@ export function bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  applyMcpServerEnabledPreference,
+  applyMcpServerCommandEnabledPreference,
   applyMathRenderingPreference,
   applySingleKeyShortcutPreference,
   applyTranscriptViewPreference,
   applyDefaultSystemPrompt,
   applyConversationLanguagePreference,
   applyConversationThinkingPreference,
+  clearMcpServerFeedback,
+  importMcpServerEndpoint,
   refreshMathRendering,
   refreshConversationSystemPromptPreview,
+  refreshMcpServerPreference,
+  removeMcpServerPreference,
+  setMcpServerFeedback,
   syncModelSelectionForCurrentEnvironment,
   syncConversationLanguageAndThinkingControls,
   syncGenerationSettingsFromModel,
@@ -184,6 +195,151 @@ export function bindSettingsEvents({
     });
   }
 
+  async function handleMcpServerImport() {
+    const endpoint =
+      mcpServerEndpointInput instanceof HTMLInputElement ? mcpServerEndpointInput.value : '';
+    if (addMcpServerButton instanceof HTMLButtonElement) {
+      addMcpServerButton.disabled = true;
+    }
+    if (typeof setMcpServerFeedback === 'function') {
+      setMcpServerFeedback('Connecting to MCP server...', 'info');
+    }
+    try {
+      const importedServer = await importMcpServerEndpoint(endpoint, { persist: true });
+      if (typeof refreshConversationSystemPromptPreview === 'function') {
+        refreshConversationSystemPromptPreview();
+      }
+      setStatus(
+        `${importedServer.displayName} added. Enable the server and any commands you want exposed.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (typeof setMcpServerFeedback === 'function') {
+        setMcpServerFeedback(message, 'danger');
+      }
+      setStatus(message);
+    } finally {
+      if (addMcpServerButton instanceof HTMLButtonElement) {
+        addMcpServerButton.disabled = false;
+      }
+    }
+  }
+
+  if (mcpServerEndpointForm instanceof HTMLElement && mcpServerEndpointForm.tagName === 'FORM') {
+    mcpServerEndpointForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void handleMcpServerImport();
+    });
+  }
+
+  if (mcpServerEndpointInput instanceof HTMLInputElement) {
+    mcpServerEndpointInput.addEventListener('input', () => {
+      if (typeof clearMcpServerFeedback === 'function') {
+        clearMcpServerFeedback();
+      }
+    });
+  }
+
+  if (mcpServersList instanceof HTMLElement) {
+    mcpServersList.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      if (target.dataset.mcpServerToggle === 'true') {
+        const serverId =
+          typeof target.dataset.mcpServerId === 'string' ? target.dataset.mcpServerId : '';
+        const serverLabel =
+          typeof target.dataset.mcpServerDisplayName === 'string' &&
+          target.dataset.mcpServerDisplayName.trim()
+            ? target.dataset.mcpServerDisplayName.trim()
+            : serverId;
+        applyMcpServerEnabledPreference(serverId, target.checked, { persist: true });
+        if (typeof refreshConversationSystemPromptPreview === 'function') {
+          refreshConversationSystemPromptPreview();
+        }
+        setStatus(target.checked ? `${serverLabel} enabled.` : `${serverLabel} disabled.`);
+        return;
+      }
+      if (target.dataset.mcpCommandToggle === 'true') {
+        const serverId =
+          typeof target.dataset.mcpServerId === 'string' ? target.dataset.mcpServerId : '';
+        const commandName =
+          typeof target.dataset.mcpCommandName === 'string' ? target.dataset.mcpCommandName : '';
+        const commandLabel =
+          typeof target.dataset.mcpCommandDisplayName === 'string' &&
+          target.dataset.mcpCommandDisplayName.trim()
+            ? target.dataset.mcpCommandDisplayName.trim()
+            : commandName;
+        applyMcpServerCommandEnabledPreference(serverId, commandName, target.checked, {
+          persist: true,
+        });
+        if (typeof refreshConversationSystemPromptPreview === 'function') {
+          refreshConversationSystemPromptPreview();
+        }
+        setStatus(
+          target.checked
+            ? `${commandLabel} enabled for MCP server use.`
+            : `${commandLabel} disabled for MCP server use.`
+        );
+      }
+    });
+
+    mcpServersList.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const refreshButton = target.closest('button[data-mcp-server-refresh="true"]');
+      if (refreshButton instanceof HTMLButtonElement) {
+        const serverId =
+          typeof refreshButton.dataset.mcpServerId === 'string'
+            ? refreshButton.dataset.mcpServerId
+            : '';
+        refreshButton.disabled = true;
+        if (typeof setMcpServerFeedback === 'function') {
+          setMcpServerFeedback('Refreshing MCP server metadata...', 'info');
+        }
+        void refreshMcpServerPreference(serverId, { persist: true })
+          .then(
+            (server) => {
+              if (typeof refreshConversationSystemPromptPreview === 'function') {
+                refreshConversationSystemPromptPreview();
+              }
+              setStatus(`${server.displayName} metadata refreshed.`);
+            },
+            (error) => {
+              const message = error instanceof Error ? error.message : String(error);
+              if (typeof setMcpServerFeedback === 'function') {
+                setMcpServerFeedback(message, 'danger');
+              }
+              setStatus(message);
+            }
+          )
+          .finally(() => {
+            refreshButton.disabled = false;
+          });
+        return;
+      }
+
+      const removeButton = target.closest('button[data-mcp-server-remove="true"]');
+      if (removeButton instanceof HTMLButtonElement) {
+        const serverId =
+          typeof removeButton.dataset.mcpServerId === 'string'
+            ? removeButton.dataset.mcpServerId
+            : '';
+        removeMcpServerPreference(serverId, { persist: true });
+        if (typeof refreshConversationSystemPromptPreview === 'function') {
+          refreshConversationSystemPromptPreview();
+        }
+        if (typeof clearMcpServerFeedback === 'function') {
+          clearMcpServerFeedback();
+        }
+        setStatus('MCP server removed.');
+      }
+    });
+  }
+
   if (renderMathMlToggle instanceof HTMLInputElement) {
     renderMathMlToggle.addEventListener('change', (event) => {
       const value = event.target instanceof HTMLInputElement ? event.target.checked : true;
@@ -250,7 +406,9 @@ export function bindSettingsEvents({
       if (typeof refreshConversationSystemPromptPreview === 'function') {
         refreshConversationSystemPromptPreview();
       }
-      setStatus(value ? 'Model thinking enabled when supported.' : 'Model thinking disabled when supported.');
+      setStatus(
+        value ? 'Model thinking enabled when supported.' : 'Model thinking disabled when supported.'
+      );
     });
   }
 

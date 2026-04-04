@@ -8,6 +8,7 @@ This document tracks security hardening decisions and known gaps that should sta
 - After the user grants that consent, the app may reuse precise location in later tool calls.
 - If the user declines precise location consent, the location tool falls back to a coarse locale/timezone-derived label with no coordinates.
 - The `web_lookup` tool uses the browser fetch API directly, so page fetches stay inside normal browser CORS, redirect, and forbidden-header constraints rather than bypassing them.
+- MCP server support also uses the browser fetch API directly. It accepts only browser-reachable `https` endpoints, or `http://localhost`, and rejects embedded credentials plus obvious auth challenges where detected.
 - Transformers.js is loaded from the locally installed package and bundled with the app build instead of being imported from a CDN at runtime.
 - Browser-local Python execution currently loads Pyodide runtime assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
 - Attachment ingestion applies per-type limits before large files are read into memory:
@@ -22,3 +23,4 @@ This document tracks security hardening decisions and known gaps that should sta
 ## Remaining accepted risk
 
 - Model artifacts are still fetched from upstream model repositories at runtime and are not revision-pinned or integrity-verified yet. This remains an accepted supply-chain risk for now and should stay documented until the app adopts pinned or self-hosted model artifacts.
+- When an enabled MCP command is invoked, that command's arguments are sent to the configured remote MCP endpoint and its result comes back into the local conversation. This is expected behavior, but it is still an external network surface the user controls.

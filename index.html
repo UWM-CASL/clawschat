@@ -51,12 +51,7 @@
         <div class="app-frame-header">
           <h1 class="app-window-title">ClawsChat</h1>
         </div>
-        <header
-          id="topBar"
-          class="top-bar"
-          aria-label="Application controls"
-          tabindex="-1"
-        >
+        <header id="topBar" class="top-bar" aria-label="Application controls" tabindex="-1">
           <div class="top-bar-sidebar-spacer d-none d-md-block" aria-hidden="true"></div>
           <div class="top-bar-main">
             <div class="top-bar-start">
@@ -208,248 +203,252 @@
           <div id="chatWorkspaceLayout" class="chat-workspace-layout">
             <div id="chatWorkspacePrimary" class="chat-workspace-primary">
               <section class="chat-main" aria-label="Chat workspace">
-            <section
-              id="homePanel"
-              class="welcome-panel card shadow-sm mb-3 home-panel"
-              aria-labelledby="homeTitle"
-            >
-              <div class="card-body home-panel-body">
-                <h2 id="homeTitle" class="home-title mb-3">Local AI chat, ready when you are</h2>
-                <p class="home-lead mb-4">
-                  Start a conversation first. Your selected model will load when you send your first
-                  message.
-                </p>
-                <button
-                  id="startConversationButton"
-                  type="button"
-                  class="btn btn-primary btn-lg"
-                  aria-keyshortcuts="Alt+N"
+                <section
+                  id="homePanel"
+                  class="welcome-panel card shadow-sm mb-3 home-panel"
+                  aria-labelledby="homeTitle"
                 >
-                  Start a conversation
-                </button>
-              </div>
-            </section>
-
-            <section
-              id="preChatPanel"
-              class="pre-chat-panel d-none"
-              aria-labelledby="preChatHeading"
-            >
-              <div class="pre-chat-inner">
-                <div class="pre-chat-header d-flex align-items-start justify-content-between gap-3 mb-3">
-                  <h2 id="preChatHeading" class="h3 mb-0">Start a New Chat</h2>
-                  <button
-                    id="preChatEditConversationSystemPromptBtn"
-                    type="button"
-                    class="btn icon-button pre-chat-context-button"
-                    aria-label="Edit custom context for this chat"
-                    aria-keyshortcuts="Alt+P"
-                    data-icon-tooltip="true"
-                    data-bs-title="Edit custom context for this chat (Alt+P)"
-                  >
-                    <i class="bi bi-card-checklist" aria-hidden="true"></i>
-                    <span class="visually-hidden">Edit custom context for this chat</span>
-                  </button>
-                </div>
-                <div class="pre-chat-model-picker">
-                  <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
-                    <div>
-                      <p id="modelPickerLabel" class="form-label mb-1">Choose a model</p>
-                    </div>
-                  </div>
-                  <div
-                    id="modelCardList"
-                    class="model-card-list"
-                    role="radiogroup"
-                    aria-labelledby="modelPickerLabel"
-                  ></div>
-                  <select
-                    id="modelSelect"
-                    class="visually-hidden"
-                    tabindex="-1"
-                    aria-hidden="true"
-                  ></select>
-                </div>
-                <div id="preChatActions" class="pre-chat-actions d-none">
-                  <button
-                    id="preChatLoadModelBtn"
-                    type="button"
-                    class="btn btn-primary"
-                    aria-label="Load model"
-                    aria-keyshortcuts="Alt+L"
-                  >
-                    Load model
-                  </button>
-                </div>
-                <div id="modelLoadFeedback" class="pre-chat-progress">
-                  <div id="modelLoadProgressWrap" class="d-none" aria-live="off">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                      <p id="modelLoadProgressLabel" class="mb-0 small text-body-secondary">
-                        Preparing model...
-                      </p>
-                      <p id="modelLoadProgressValue" class="mb-0 small text-body-secondary">0%</p>
-                    </div>
-                    <div class="progress" role="presentation">
-                      <div
-                        id="modelLoadProgressBar"
-                        class="progress-bar progress-bar-striped progress-bar-animated"
-                        role="progressbar"
-                        aria-label="Model loading progress"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                        aria-valuenow="0"
-                        style="width: 0%"
-                      ></div>
-                    </div>
-                    <p id="modelLoadProgressSummary" class="small text-body-secondary mt-2 mb-1">
-                      Waiting for download details...
+                  <div class="card-body home-panel-body">
+                    <h2 id="homeTitle" class="home-title mb-3">
+                      Local AI chat, ready when you are
+                    </h2>
+                    <p class="home-lead mb-4">
+                      Start a conversation first. Your selected model will load when you send your
+                      first message.
                     </p>
+                    <button
+                      id="startConversationButton"
+                      type="button"
+                      class="btn btn-primary btn-lg"
+                      aria-keyshortcuts="Alt+N"
+                    >
+                      Start a conversation
+                    </button>
                   </div>
-                  <div id="modelLoadError" class="alert alert-danger d-none mt-3 mb-0" role="alert">
-                    <h3 class="h6 mb-2">Model loading failed</h3>
-                    <p id="modelLoadErrorSummary" class="mb-2"></p>
-                    <ul id="modelLoadErrorDetails" class="mb-0"></ul>
+                </section>
+
+                <section
+                  id="preChatPanel"
+                  class="pre-chat-panel d-none"
+                  aria-labelledby="preChatHeading"
+                >
+                  <div class="pre-chat-inner">
+                    <div
+                      class="pre-chat-header d-flex align-items-start justify-content-between gap-3 mb-3"
+                    >
+                      <h2 id="preChatHeading" class="h3 mb-0">Start a New Chat</h2>
+                      <button
+                        id="preChatEditConversationSystemPromptBtn"
+                        type="button"
+                        class="btn icon-button pre-chat-context-button"
+                        aria-label="Edit custom context for this chat"
+                        aria-keyshortcuts="Alt+P"
+                        data-icon-tooltip="true"
+                        data-bs-title="Edit custom context for this chat (Alt+P)"
+                      >
+                        <i class="bi bi-card-checklist" aria-hidden="true"></i>
+                        <span class="visually-hidden">Edit custom context for this chat</span>
+                      </button>
+                    </div>
+                    <div class="pre-chat-model-picker">
+                      <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                        <div>
+                          <p id="modelPickerLabel" class="form-label mb-1">Choose a model</p>
+                        </div>
+                      </div>
+                      <div
+                        id="modelCardList"
+                        class="model-card-list"
+                        role="radiogroup"
+                        aria-labelledby="modelPickerLabel"
+                      ></div>
+                      <select
+                        id="modelSelect"
+                        class="visually-hidden"
+                        tabindex="-1"
+                        aria-hidden="true"
+                      ></select>
+                    </div>
+                    <div id="preChatActions" class="pre-chat-actions d-none">
+                      <button
+                        id="preChatLoadModelBtn"
+                        type="button"
+                        class="btn btn-primary"
+                        aria-label="Load model"
+                        aria-keyshortcuts="Alt+L"
+                      >
+                        Load model
+                      </button>
+                    </div>
+                    <div id="modelLoadFeedback" class="pre-chat-progress">
+                      <div id="modelLoadProgressWrap" class="d-none" aria-live="off">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                          <p id="modelLoadProgressLabel" class="mb-0 small text-body-secondary">
+                            Preparing model...
+                          </p>
+                          <p id="modelLoadProgressValue" class="mb-0 small text-body-secondary">
+                            0%
+                          </p>
+                        </div>
+                        <div class="progress" role="presentation">
+                          <div
+                            id="modelLoadProgressBar"
+                            class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar"
+                            aria-label="Model loading progress"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-valuenow="0"
+                            style="width: 0%"
+                          ></div>
+                        </div>
+                        <p
+                          id="modelLoadProgressSummary"
+                          class="small text-body-secondary mt-2 mb-1"
+                        >
+                          Waiting for download details...
+                        </p>
+                      </div>
+                      <div
+                        id="modelLoadError"
+                        class="alert alert-danger d-none mt-3 mb-0"
+                        role="alert"
+                      >
+                        <h3 class="h6 mb-2">Model loading failed</h3>
+                        <p id="modelLoadErrorSummary" class="mb-2"></p>
+                        <ul id="modelLoadErrorDetails" class="mb-0"></ul>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </section>
-            <section
-              id="chatTranscriptWrap"
-              class="chat-transcript-wrap"
-              aria-label="Chat transcript"
-            >
-              <div id="chatTranscriptStart" class="transcript-boundary" tabindex="-1"></div>
-              <div class="transcript-step-nav" aria-label="Transcript navigation">
-                <button
-                  id="jumpToPreviousUserButton"
-                  type="button"
-                  class="btn btn-primary transcript-step-btn"
-                  aria-keyshortcuts="Alt+K"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="left"
-                  data-bs-title="Previous user prompt (Alt+K)"
-                  aria-disabled="true"
+                </section>
+                <section
+                  id="chatTranscriptWrap"
+                  class="chat-transcript-wrap"
+                  aria-label="Chat transcript"
                 >
-                  <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
-                  <span class="visually-hidden">Jump to previous user prompt</span>
-                </button>
-                <button
-                  id="jumpToNextModelButton"
-                  type="button"
-                  class="btn btn-primary transcript-step-btn"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="left"
-                  data-bs-title="Next model response"
-                  aria-disabled="true"
-                >
-                  <i class="bi bi-arrow-down-circle" aria-hidden="true"></i>
-                  <span class="visually-hidden">Jump to next model response</span>
-                </button>
-                <button
-                  id="jumpToLatestButton"
-                  type="button"
-                  class="btn btn-primary transcript-step-btn"
-                  aria-keyshortcuts="Alt+J"
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="left"
-                  data-bs-title="Latest response (Alt+J)"
-                  aria-disabled="true"
-                >
-                  <i class="bi bi-chevron-double-down" aria-hidden="true"></i>
-                  <span class="visually-hidden">Jump to latest response</span>
-                </button>
-              </div>
-              <button
-                id="jumpToTopButton"
-                type="button"
-                class="btn btn-primary jump-to-top-btn"
-                data-bs-toggle="tooltip"
-                data-bs-placement="left"
-                data-bs-title="Transcript top"
-                aria-disabled="true"
-              >
-                <i class="bi bi-chevron-double-up" aria-hidden="true"></i>
-                <span class="visually-hidden">Jump to transcript top</span>
-              </button>
-              <ol id="chatTranscript" class="chat-transcript"></ol>
-              <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
-            </section>
+                  <div id="chatTranscriptStart" class="transcript-boundary" tabindex="-1"></div>
+                  <div class="transcript-step-nav" aria-label="Transcript navigation">
+                    <button
+                      id="jumpToPreviousUserButton"
+                      type="button"
+                      class="btn btn-primary transcript-step-btn"
+                      aria-keyshortcuts="Alt+K"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="left"
+                      data-bs-title="Previous user prompt (Alt+K)"
+                      aria-disabled="true"
+                    >
+                      <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
+                      <span class="visually-hidden">Jump to previous user prompt</span>
+                    </button>
+                    <button
+                      id="jumpToNextModelButton"
+                      type="button"
+                      class="btn btn-primary transcript-step-btn"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="left"
+                      data-bs-title="Next model response"
+                      aria-disabled="true"
+                    >
+                      <i class="bi bi-arrow-down-circle" aria-hidden="true"></i>
+                      <span class="visually-hidden">Jump to next model response</span>
+                    </button>
+                    <button
+                      id="jumpToLatestButton"
+                      type="button"
+                      class="btn btn-primary transcript-step-btn"
+                      aria-keyshortcuts="Alt+J"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="left"
+                      data-bs-title="Latest response (Alt+J)"
+                      aria-disabled="true"
+                    >
+                      <i class="bi bi-chevron-double-down" aria-hidden="true"></i>
+                      <span class="visually-hidden">Jump to latest response</span>
+                    </button>
+                  </div>
+                  <button
+                    id="jumpToTopButton"
+                    type="button"
+                    class="btn btn-primary jump-to-top-btn"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="left"
+                    data-bs-title="Transcript top"
+                    aria-disabled="true"
+                  >
+                    <i class="bi bi-chevron-double-up" aria-hidden="true"></i>
+                    <span class="visually-hidden">Jump to transcript top</span>
+                  </button>
+                  <ol id="chatTranscript" class="chat-transcript"></ol>
+                  <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
+                </section>
               </section>
-              <section
-                id="taskListTray"
-                class="task-list-tray d-none"
-                aria-live="off"
-              ></section>
+              <section id="taskListTray" class="task-list-tray d-none" aria-live="off"></section>
 
               <form class="composer" aria-label="Message input">
-            <label class="visually-hidden" for="messageInput">Message input</label>
-            <input
-              id="imageAttachmentInput"
-              class="visually-hidden"
-              type="file"
-              aria-label="Choose attachments"
-              accept="image/*,.txt,.csv,.md,.pdf"
-              multiple
-            />
-            <section
-              id="composerAttachmentTray"
-              class="composer-attachment-tray d-none"
-              aria-label="Attached files"
-            ></section>
-            <div class="composer-row">
-              <div class="dropdown">
-                <button
-                  id="addImagesButton"
-                  type="button"
-                  class="btn btn-outline-secondary composer-attach-button dropdown-toggle dropdown-toggle-no-caret"
-                  data-bs-toggle="dropdown"
-                  data-bs-auto-close="true"
-                  aria-label="Add attachment"
-                  title="Add attachment"
-                >
-                  <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                  <span class="visually-hidden">Add attachment</span>
-                </button>
-                <ul class="dropdown-menu composer-attach-menu" aria-label="Add attachment options">
-                  <li>
+                <label class="visually-hidden" for="messageInput">Message input</label>
+                <input
+                  id="imageAttachmentInput"
+                  class="visually-hidden"
+                  type="file"
+                  aria-label="Choose attachments"
+                  accept="image/*,.txt,.csv,.md,.pdf"
+                  multiple
+                />
+                <section
+                  id="composerAttachmentTray"
+                  class="composer-attachment-tray d-none"
+                  aria-label="Attached files"
+                ></section>
+                <div class="composer-row">
+                  <div class="dropdown">
                     <button
-                      id="attachReferenceMenuItem"
+                      id="addImagesButton"
                       type="button"
-                      class="dropdown-item"
+                      class="btn btn-outline-secondary composer-attach-button dropdown-toggle dropdown-toggle-no-caret"
+                      data-bs-toggle="dropdown"
+                      data-bs-auto-close="true"
+                      aria-label="Add attachment"
+                      title="Add attachment"
                     >
-                      Attach for Reference
+                      <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                      <span class="visually-hidden">Add attachment</span>
                     </button>
-                  </li>
-                  <li>
-                    <button
-                      id="attachWorkWithMenuItem"
-                      type="button"
-                      class="dropdown-item"
+                    <ul
+                      class="dropdown-menu composer-attach-menu"
+                      aria-label="Add attachment options"
                     >
-                      Attach to Work With
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <textarea
-                id="messageInput"
-                class="form-control"
-                rows="2"
-                placeholder="Type your message..."
-              ></textarea>
-              <button
-                id="sendButton"
-                type="submit"
-                class="btn btn-primary"
-                aria-label="Send message"
-                aria-keyshortcuts="Enter"
-                data-bs-toggle="tooltip"
-                data-bs-title="Send message (Enter)"
-              >
-                <i class="bi bi-send" aria-hidden="true"></i>
-                <span class="visually-hidden">Send message</span>
-              </button>
-            </div>
+                      <li>
+                        <button id="attachReferenceMenuItem" type="button" class="dropdown-item">
+                          Attach for Reference
+                        </button>
+                      </li>
+                      <li>
+                        <button id="attachWorkWithMenuItem" type="button" class="dropdown-item">
+                          Attach to Work With
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                  <textarea
+                    id="messageInput"
+                    class="form-control"
+                    rows="2"
+                    placeholder="Type your message..."
+                  ></textarea>
+                  <button
+                    id="sendButton"
+                    type="submit"
+                    class="btn btn-primary"
+                    aria-label="Send message"
+                    aria-keyshortcuts="Enter"
+                    data-bs-toggle="tooltip"
+                    data-bs-title="Send message (Enter)"
+                  >
+                    <i class="bi bi-send" aria-hidden="true"></i>
+                    <span class="visually-hidden">Send message</span>
+                  </button>
+                </div>
               </form>
             </div>
             <aside
@@ -588,11 +587,22 @@
                       aria-controls="settingsToolsPanel"
                       aria-selected="false"
                     >
-                      Tools, Services, and Skills
+                      Tools
+                    </button>
+                    <button
+                      type="button"
+                      class="nav-link"
+                      id="settingsTabMcpServers"
+                      role="tab"
+                      data-settings-tab="mcpServers"
+                      aria-controls="settingsMcpServersPanel"
+                      aria-selected="false"
+                    >
+                      MCP Servers
                     </button>
                   </div>
                 </nav>
-                <form class="settings-panels">
+                <div class="settings-panels">
                   <section
                     id="settingsSystemPanel"
                     class="settings-tab-panel"
@@ -897,7 +907,7 @@
                     data-settings-tab-panel="tools"
                     aria-labelledby="settingsTabTools"
                   >
-                    <h3 class="h6 mb-0" id="settingsToolsHeading">Tools, Services, and Skills</h3>
+                    <h3 class="h6 mb-0" id="settingsToolsHeading">Tools</h3>
                     <div class="form-check form-switch">
                       <input
                         class="form-check-input"
@@ -916,8 +926,8 @@
                     <div class="settings-control-group">
                       <p class="form-label mb-1" id="availableToolsLabel">Available tools</p>
                       <p class="form-text mt-0">
-                        Turn off any tool you do not want exposed in the system prompt or executed
-                        by the app. Services and skills are reserved for future capability types.
+                        Turn off any built-in tool you do not want exposed in the system prompt or
+                        executed by the app.
                       </p>
                       <div
                         id="toolSettingsList"
@@ -926,7 +936,54 @@
                       ></div>
                     </div>
                   </section>
-                </form>
+
+                  <section
+                    id="settingsMcpServersPanel"
+                    class="settings-tab-panel d-none"
+                    role="tabpanel"
+                    data-settings-tab-panel="mcpServers"
+                    aria-labelledby="settingsTabMcpServers"
+                  >
+                    <h3 class="h6 mb-0" id="settingsMcpServersHeading">MCP Servers</h3>
+                    <div class="settings-control-group">
+                      <form id="mcpServerEndpointForm" class="mcp-server-form">
+                        <label class="form-label" for="mcpServerEndpointInput"
+                          >Server endpoint</label
+                        >
+                        <div class="input-group">
+                          <input
+                            id="mcpServerEndpointInput"
+                            class="form-control"
+                            type="url"
+                            inputmode="url"
+                            placeholder="https://example.com/mcp"
+                            aria-describedby="mcpServerEndpointHelp"
+                          />
+                          <button id="addMcpServerButton" type="submit" class="btn btn-primary">
+                            Add server
+                          </button>
+                        </div>
+                        <p id="mcpServerEndpointHelp" class="form-text mb-0">
+                          Only browser-reachable MCP HTTP endpoints without OAuth or token
+                          authentication are supported.
+                        </p>
+                        <div id="mcpServerAddFeedback" class="d-none" aria-live="polite"></div>
+                      </form>
+                    </div>
+                    <div class="settings-control-group">
+                      <p class="form-label mb-1" id="mcpServersListLabel">Configured MCP servers</p>
+                      <p class="form-text mt-0">
+                        Imported servers and commands stay local to this browser. Enable the server
+                        and the specific commands you want exposed to the model.
+                      </p>
+                      <div
+                        id="mcpServersList"
+                        class="accordion settings-accordion"
+                        aria-labelledby="mcpServersListLabel"
+                      ></div>
+                    </div>
+                  </section>
+                </div>
               </div>
             </div>
           </section>
@@ -1170,8 +1227,8 @@
             </div>
             <p id="conversationSystemPromptModalHelp" class="form-text mb-0 mt-2">
               When enabled, this conversation prompt is appended to the captured default prompt.
-              When disabled, it replaces the captured default prompt for this conversation.
-              Tool instructions are only included for models that support tool calling.
+              When disabled, it replaces the captured default prompt for this conversation. Tool
+              instructions are only included for models that support tool calling.
             </p>
             <div class="mt-3">
               <label class="form-label" for="conversationSystemPromptComputedPreview">

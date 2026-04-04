@@ -1,6 +1,16 @@
 import { executeWritePythonFileTool } from './python-tool.js';
 import { buildShellToolResponseEnvelope, executeShellCommandTool } from './shell-command-tool.js';
 import { executeWebLookupTool } from './web-tool.js';
+import {
+  executeMcpServerCommand,
+  findMcpServerCommand,
+  findMcpServerConfig,
+  getEnabledMcpServerConfigs,
+  summarizeMcpInputSchema,
+} from './mcp-client.js';
+
+export const MCP_SERVER_COMMAND_LIST_TOOL = 'list_mcp_server_commands';
+export const MCP_SERVER_COMMAND_CALL_TOOL = 'call_mcp_server_command';
 
 export const TOOL_DEFINITIONS = Object.freeze([
   {
@@ -113,6 +123,45 @@ export const TOOL_DEFINITIONS = Object.freeze([
   },
 ]);
 
+export const MCP_TOOL_DEFINITIONS = Object.freeze([
+  {
+    name: MCP_SERVER_COMMAND_LIST_TOOL,
+    displayName: 'List MCP Server Commands',
+    description: 'Lists the enabled commands for one configured MCP server.',
+    parameters: {
+      type: 'object',
+      properties: {
+        server: {
+          type: 'string',
+        },
+      },
+      required: ['server'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: MCP_SERVER_COMMAND_CALL_TOOL,
+    displayName: 'Call MCP Server Command',
+    description: 'Calls one enabled command on one configured MCP server.',
+    parameters: {
+      type: 'object',
+      properties: {
+        server: {
+          type: 'string',
+        },
+        command: {
+          type: 'string',
+        },
+        arguments: {
+          type: 'object',
+        },
+      },
+      required: ['server', 'command'],
+      additionalProperties: false,
+    },
+  },
+]);
+
 const reverseGeocodeCache = new Map();
 const WEB_LOOKUP_FAILURE_MESSAGE =
   'Use a direct https URL and retry with a simpler page if the request or extraction fails.';
@@ -149,7 +198,11 @@ export function getToolDefinitionByName(toolName) {
   if (!normalizedName) {
     return null;
   }
-  return TOOL_DEFINITIONS.find((tool) => tool?.name === normalizedName) || null;
+  return (
+    TOOL_DEFINITIONS.find((tool) => tool?.name === normalizedName) ||
+    MCP_TOOL_DEFINITIONS.find((tool) => tool?.name === normalizedName) ||
+    null
+  );
 }
 
 export function getToolDisplayName(toolName) {
@@ -184,6 +237,12 @@ export function getEnabledToolNames(requestedToolNames = null) {
   return getEnabledToolDefinitions(requestedToolNames)
     .map((tool) => (typeof tool.name === 'string' ? tool.name.trim() : ''))
     .filter(Boolean);
+}
+
+export function getImplicitlyEnabledToolNames(configuredMcpServers = []) {
+  return getEnabledMcpServerConfigs(configuredMcpServers).length
+    ? MCP_TOOL_DEFINITIONS.map((tool) => tool.name)
+    : [];
 }
 
 function getNormalizedToolList(enabledToolNames = []) {
@@ -262,6 +321,34 @@ function buildEnabledToolInstructions(enabledTools = []) {
   );
 }
 
+function buildMcpServerInstructionLines(enabledMcpServers = []) {
+  if (!Array.isArray(enabledMcpServers) || !enabledMcpServers.length) {
+    return [];
+  }
+  const primaryServer = enabledMcpServers[0];
+  const serverLines = enabledMcpServers.map((server) => {
+    const identifier =
+      typeof server?.identifier === 'string' && server.identifier.trim()
+        ? server.identifier.trim()
+        : 'mcp-server';
+    const description =
+      typeof server?.description === 'string' && server.description.trim()
+        ? `: ${server.description.trim()}`
+        : '';
+    return `- ${identifier}${description}`;
+  });
+  const exampleServer =
+    typeof primaryServer?.identifier === 'string' && primaryServer.identifier.trim()
+      ? primaryServer.identifier.trim()
+      : 'mcp-server';
+  return [
+    '**MCP servers:**\nThese servers are available in this conversation.',
+    ...serverLines,
+    `- Discover one server with ${MCP_SERVER_COMMAND_LIST_TOOL} using {"server":"${exampleServer}"}.`,
+    `- Call one enabled command with ${MCP_SERVER_COMMAND_CALL_TOOL} using {"server":"${exampleServer}","command":"command_name","arguments":{...}}.`,
+  ];
+}
+
 function buildToolInstructionLines(name, description = '') {
   const normalizedName = typeof name === 'string' && name.trim() ? name.trim() : 'unknown_tool';
   const normalizedDescription =
@@ -275,9 +362,7 @@ function buildToolInstructionLines(name, description = '') {
   }
   if (normalizedName === 'write_python_file') {
     lines.push('  Use this for longer Python scripts.');
-    lines.push(
-      '  Call with {"path":"/workspace/script.py","source":"print(\\"hello\\")\\n"}.'
-    );
+    lines.push('  Call with {"path":"/workspace/script.py","source":"print(\\"hello\\")\\n"}.');
   }
   if (normalizedName === 'web_lookup') {
     lines.push('  - When input is a URL, fetch a page preview');
@@ -294,33 +379,42 @@ function buildToolInstructionLines(name, description = '') {
 export function buildToolCallingSystemPrompt(
   toolCallingConfig,
   enabledToolNames = [],
-  enabledTools = []
+  enabledTools = [],
+  { mcpServers = [] } = {}
 ) {
+  const enabledMcpServers = getEnabledMcpServerConfigs(mcpServers);
   const toolList = getNormalizedToolList(enabledToolNames).filter(
     (toolName) => toolName !== 'none'
   );
-  if (!toolList.length) {
+  const hasBuiltInTools = toolList.length > 0;
+  const hasMcpServers = enabledMcpServers.length > 0;
+  if (!hasBuiltInTools && !hasMcpServers) {
     return '';
   }
-  const toolLines = [
-    '**Tools available in this conversation:**\nThese are the tools you can call.',
-    ...buildEnabledToolInstructions(enabledTools),
-    ...(enabledTools.length
-      ? []
-      : toolList.flatMap((toolName) => {
-          const definition = getToolDefinitionByName(toolName);
-          return buildToolInstructionLines(
-            toolName,
-            typeof definition?.description === 'string' ? definition.description : ''
-          );
-        })),
-  ];
+  const toolLines = hasBuiltInTools
+    ? [
+        '**Tools available in this conversation:**\nThese are the tools you can call.',
+        ...buildEnabledToolInstructions(enabledTools),
+        ...(enabledTools.length
+          ? []
+          : toolList.flatMap((toolName) => {
+              const definition = getToolDefinitionByName(toolName);
+              return buildToolInstructionLines(
+                toolName,
+                typeof definition?.description === 'string' ? definition.description : ''
+              );
+            })),
+      ]
+    : [];
+  const mcpLines = buildMcpServerInstructionLines(enabledMcpServers);
   const toolBehaviorLines = ['After a tool result, continue the work and answer naturally.'].filter(
     Boolean
   );
   const formatLines = buildToolCallingFormatInstructions(toolCallingConfig);
   return [
     ...toolLines,
+    toolLines.length && mcpLines.length ? '' : null,
+    ...mcpLines,
     toolBehaviorLines.length ? '' : null,
     toolBehaviorLines.length ? '**Tool behavior:**' : null,
     ...toolBehaviorLines.map((line) => `- ${line}`),
@@ -460,8 +554,8 @@ function parseLooseStructuredValue(rawValue) {
   if (
     (text.startsWith('{') && text.endsWith('}')) ||
     (text.startsWith('[') && text.endsWith(']')) ||
-    ((text.startsWith('"') && text.endsWith('"')) ||
-      (text.startsWith("'") && text.endsWith("'")))
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
   ) {
     try {
       return JSON.parse(text);
@@ -510,7 +604,8 @@ function detectXmlToolCall(rawText, toolCallingConfig) {
     if (functionMatch) {
       const [, toolName, parameterText] = functionMatch;
       const argumentsObject = {};
-      const parameterPattern = /<parameter=([a-zA-Z_][a-zA-Z0-9_-]*)>\s*([\s\S]*?)\s*<\/parameter>/g;
+      const parameterPattern =
+        /<parameter=([a-zA-Z_][a-zA-Z0-9_-]*)>\s*([\s\S]*?)\s*<\/parameter>/g;
       let parameterMatch;
       while ((parameterMatch = parameterPattern.exec(parameterText))) {
         argumentsObject[parameterMatch[1]] = parseLooseStructuredValue(parameterMatch[2]);
@@ -1376,6 +1471,137 @@ async function executeGetUserLocation(argumentsValue = {}, runtimeContext = {}) 
   }
 }
 
+function getValidatedMcpServerListArguments(argumentsValue = {}) {
+  if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) {
+    throw new Error(`${MCP_SERVER_COMMAND_LIST_TOOL} arguments must be an object.`);
+  }
+  const listArguments = /** @type {{server?: unknown}} */ (argumentsValue);
+  const supportedKeys = new Set(['server']);
+  const unexpectedKeys = Object.keys(argumentsValue).filter((key) => !supportedKeys.has(key));
+  if (unexpectedKeys.length) {
+    throw new Error(
+      `${MCP_SERVER_COMMAND_LIST_TOOL} does not accept: ${unexpectedKeys.join(', ')}.`
+    );
+  }
+  const serverName = typeof listArguments.server === 'string' ? listArguments.server.trim() : '';
+  if (!serverName) {
+    throw new Error(`${MCP_SERVER_COMMAND_LIST_TOOL} requires server.`);
+  }
+  return {
+    server: serverName,
+  };
+}
+
+function getValidatedMcpServerCallArguments(argumentsValue = {}) {
+  if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) {
+    throw new Error(`${MCP_SERVER_COMMAND_CALL_TOOL} arguments must be an object.`);
+  }
+  const callArguments = /** @type {{server?: unknown; command?: unknown; arguments?: unknown}} */ (
+    argumentsValue
+  );
+  const supportedKeys = new Set(['server', 'command', 'arguments']);
+  const unexpectedKeys = Object.keys(argumentsValue).filter((key) => !supportedKeys.has(key));
+  if (unexpectedKeys.length) {
+    throw new Error(
+      `${MCP_SERVER_COMMAND_CALL_TOOL} does not accept: ${unexpectedKeys.join(', ')}.`
+    );
+  }
+  const serverName = typeof callArguments.server === 'string' ? callArguments.server.trim() : '';
+  if (!serverName) {
+    throw new Error(`${MCP_SERVER_COMMAND_CALL_TOOL} requires server.`);
+  }
+  const commandName = typeof callArguments.command === 'string' ? callArguments.command.trim() : '';
+  if (!commandName) {
+    throw new Error(`${MCP_SERVER_COMMAND_CALL_TOOL} requires command.`);
+  }
+  const commandArguments =
+    callArguments.arguments &&
+    typeof callArguments.arguments === 'object' &&
+    !Array.isArray(callArguments.arguments)
+      ? callArguments.arguments
+      : callArguments.arguments === undefined
+        ? {}
+        : null;
+  if (commandArguments === null) {
+    throw new Error(`${MCP_SERVER_COMMAND_CALL_TOOL} arguments must be an object when provided.`);
+  }
+  return {
+    server: serverName,
+    command: commandName,
+    arguments: commandArguments,
+  };
+}
+
+function buildMcpCommandListResult(server) {
+  return {
+    server: server.identifier,
+    name: server.displayName,
+    description: server.description || undefined,
+    commands: server.commands
+      .filter((command) => command.enabled)
+      .map((command) => ({
+        name: command.name,
+        description: command.description || undefined,
+        inputSchema: command.inputSchema || undefined,
+        inputSummary: summarizeMcpInputSchema(command.inputSchema),
+      })),
+  };
+}
+
+function executeListMcpServerCommands(argumentsValue = {}, runtimeContext = {}) {
+  const { server: serverSelector } = getValidatedMcpServerListArguments(argumentsValue);
+  const configuredServer = findMcpServerConfig(runtimeContext.mcpServers, serverSelector, {
+    enabledOnly: true,
+    requireEnabledCommands: true,
+  });
+  if (!configuredServer) {
+    throw new Error(`Unknown MCP server: ${serverSelector}`);
+  }
+  return buildMcpCommandListResult(configuredServer);
+}
+
+async function executeCallMcpServerCommand(argumentsValue = {}, runtimeContext = {}) {
+  const normalizedArguments = getValidatedMcpServerCallArguments(argumentsValue);
+  const configuredServer = findMcpServerConfig(
+    runtimeContext.mcpServers,
+    normalizedArguments.server,
+    {
+      enabledOnly: true,
+      requireEnabledCommands: true,
+    }
+  );
+  if (!configuredServer) {
+    throw new Error(`Unknown MCP server: ${normalizedArguments.server}`);
+  }
+  const configuredCommand = findMcpServerCommand(configuredServer, normalizedArguments.command, {
+    enabledOnly: true,
+  });
+  if (!configuredCommand) {
+    throw new Error(`Unknown MCP command: ${normalizedArguments.command}`);
+  }
+  return executeMcpServerCommand(
+    configuredServer,
+    configuredCommand.name,
+    normalizedArguments.arguments,
+    {
+      fetchRef:
+        runtimeContext.fetchRef || (typeof fetch === 'function' ? fetch.bind(globalThis) : null),
+    }
+  );
+}
+
+function getAllowedToolNamesForRuntime(runtimeContext = {}) {
+  const allowedToolNames = new Set(
+    Array.isArray(runtimeContext.enabledToolNames)
+      ? getEnabledToolNames(runtimeContext.enabledToolNames)
+      : []
+  );
+  getImplicitlyEnabledToolNames(runtimeContext.mcpServers).forEach((toolName) => {
+    allowedToolNames.add(toolName);
+  });
+  return allowedToolNames;
+}
+
 const TOOL_EXECUTORS = Object.freeze({
   get_current_date_time: {
     execute: (argumentsValue) => executeGetCurrentDateTime(argumentsValue),
@@ -1404,8 +1630,7 @@ const TOOL_EXECUTORS = Object.freeze({
         body: `Script successfully written to ${result?.path || '/workspace/script.py'}.`,
         message: `To execute the script, use {"name":"run_shell_command","parameters":{"cmd":"python ${result?.path || '/workspace/script.py'}"}}`,
       }),
-    serializeError: (error) =>
-      buildFailedToolEnvelope(error),
+    serializeError: (error) => buildFailedToolEnvelope(error),
   },
   run_shell_command: {
     execute: (argumentsValue, runtimeContext) =>
@@ -1417,6 +1642,16 @@ const TOOL_EXECUTORS = Object.freeze({
           : buildShellToolResponseEnvelope(result)
       ),
   },
+  [MCP_SERVER_COMMAND_LIST_TOOL]: {
+    execute: (argumentsValue, runtimeContext) =>
+      executeListMcpServerCommands(argumentsValue, runtimeContext),
+    serializeError: (error) => buildFailedToolEnvelope(error),
+  },
+  [MCP_SERVER_COMMAND_CALL_TOOL]: {
+    execute: (argumentsValue, runtimeContext) =>
+      executeCallMcpServerCommand(argumentsValue, runtimeContext),
+    serializeError: (error) => buildFailedToolEnvelope(error),
+  },
 });
 
 export async function executeToolCall(toolCall, runtimeContext = {}) {
@@ -1424,11 +1659,11 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
     throw new Error('Tool call is required.');
   }
   const toolName = typeof toolCall.name === 'string' ? toolCall.name.trim() : '';
-  if (
-    Array.isArray(runtimeContext.enabledToolNames) &&
-    !getEnabledToolNames(runtimeContext.enabledToolNames).includes(toolName)
-  ) {
-    throw new Error(`Tool is disabled: ${toolName || 'unknown_tool'}`);
+  if (Array.isArray(runtimeContext.enabledToolNames)) {
+    const allowedToolNames = getAllowedToolNamesForRuntime(runtimeContext);
+    if (!allowedToolNames.has(toolName)) {
+      throw new Error(`Tool is disabled: ${toolName || 'unknown_tool'}`);
+    }
   }
   const argumentsValue =
     toolCall.arguments &&

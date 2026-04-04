@@ -1554,8 +1554,11 @@
   position: relative;
   border: 1px solid color-mix(in srgb, var(--composer-border) 72%, transparent);
   border-radius: 1.1rem;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, transparent), color-mix(in srgb, var(--surface-elevated) 86%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 90%, transparent),
+    color-mix(in srgb, var(--surface-elevated) 86%, transparent)
+  );
   box-shadow: 0 16px 28px rgba(5, 10, 20, 0.2);
   backdrop-filter: blur(8px);
   padding: 0.9rem 1rem 0.85rem;
@@ -1725,8 +1728,11 @@
   width: min(16rem, 100%);
   min-height: 5.5rem;
   border-radius: 1.15rem;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface) 82%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 94%, transparent),
+    color-mix(in srgb, var(--surface) 82%, transparent)
+  );
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border-soft));
   padding: 0.7rem 2.6rem 0.7rem 0.7rem;
   box-shadow: 0 10px 24px rgba(5, 10, 20, 0.18);
@@ -1750,7 +1756,11 @@
   border-radius: 0.95rem;
   padding: 0.8rem;
   background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 24%, transparent), transparent 58%),
+    radial-gradient(
+      circle at top,
+      color-mix(in srgb, var(--accent) 24%, transparent),
+      transparent 58%
+    ),
     color-mix(in srgb, var(--surface) 78%, transparent);
   color: var(--accent-strong);
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
@@ -2094,6 +2104,40 @@
   margin-top: 0.4rem;
 }
 
+.mcp-server-form {
+  max-width: 52rem;
+}
+
+.mcp-server-summary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mcp-server-summary small {
+  color: var(--ink-muted);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.mcp-server-metadata {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: 0.35rem 0.9rem;
+  max-width: 52rem;
+}
+
+.mcp-server-metadata dt {
+  margin: 0;
+  font-weight: 650;
+}
+
+.mcp-server-metadata dd {
+  margin: 0;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
 .settings-accordion {
   max-width: 52rem;
 }
@@ -2107,13 +2151,7 @@
 
 #conversationSystemPromptComputedPreview {
   font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    'Liberation Mono',
-    'Courier New',
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
   font-size: 0.88rem;
   line-height: 1.45;
@@ -2439,7 +2477,9 @@
   body.conversation-panel-collapsed .conversation-panel.offcanvas-md .offcanvas-body {
     opacity: 0;
     transform: translateX(-1.1rem);
-    clip-path: inset(0 calc(var(--conversation-panel-open-width) - var(--conversation-panel-collapsed-width)) 0 0);
+    clip-path: inset(
+      0 calc(var(--conversation-panel-open-width) - var(--conversation-panel-collapsed-width)) 0 0
+    );
     pointer-events: none;
   }
 
@@ -2461,7 +2501,9 @@
   body.web-lookup-open .conversation-panel.offcanvas-md .offcanvas-body {
     opacity: 0;
     transform: translateX(-1.1rem);
-    clip-path: inset(0 calc(var(--conversation-panel-open-width) - var(--conversation-panel-collapsed-width)) 0 0);
+    clip-path: inset(
+      0 calc(var(--conversation-panel-open-width) - var(--conversation-panel-collapsed-width)) 0 0
+    );
     pointer-events: none;
   }
 

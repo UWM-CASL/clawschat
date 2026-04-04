@@ -8,6 +8,7 @@ import {
   normalizeModelId,
   normalizeSupportedBackendPreference,
 } from '../config/model-settings.js';
+import { normalizeMcpServerConfigs, summarizeMcpInputSchema } from '../llm/mcp-client.js';
 import { normalizeSystemPrompt } from '../state/conversation-model.js';
 
 export function createPreferencesController({
@@ -24,6 +25,7 @@ export function createPreferencesController({
   transcriptViewStorageKey,
   conversationPanelCollapsedStorageKey,
   defaultSystemPromptStorageKey,
+  mcpServersStorageKey,
   modelStorageKey,
   backendStorageKey,
   supportedBackendPreferences,
@@ -33,6 +35,9 @@ export function createPreferencesController({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  mcpServerEndpointInput,
+  mcpServerAddFeedback,
+  mcpServersList,
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
@@ -47,6 +52,7 @@ export function createPreferencesController({
   getRuntimeConfigForModel,
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
+  inspectMcpServerEndpoint,
   setStatus,
   appendDebug,
 }) {
@@ -104,7 +110,9 @@ export function createPreferencesController({
     }
     try {
       const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? normalizeEnabledToolNames(parsed) : getDefaultEnabledToolNames();
+      return Array.isArray(parsed)
+        ? normalizeEnabledToolNames(parsed)
+        : getDefaultEnabledToolNames();
     } catch {
       return getDefaultEnabledToolNames();
     }
@@ -227,6 +235,385 @@ export function createPreferencesController({
       nextEnabledToolNames.delete(normalizedToolName);
     }
     applyEnabledToolNamesPreference([...nextEnabledToolNames], { persist });
+  }
+
+  function getStoredMcpServersPreference() {
+    if (!mcpServersStorageKey) {
+      return [];
+    }
+    const stored = storage.getItem(mcpServersStorageKey);
+    if (!stored) {
+      return [];
+    }
+    try {
+      return normalizeMcpServerConfigs(JSON.parse(stored));
+    } catch {
+      return [];
+    }
+  }
+
+  function setMcpServerFeedback(message = '', variant = 'info') {
+    if (!(mcpServerAddFeedback instanceof HTMLElement)) {
+      return;
+    }
+    const normalizedMessage = typeof message === 'string' ? message.trim() : '';
+    mcpServerAddFeedback.className = '';
+    mcpServerAddFeedback.replaceChildren();
+    if (!normalizedMessage) {
+      mcpServerAddFeedback.classList.add('d-none');
+      mcpServerAddFeedback.removeAttribute('role');
+      return;
+    }
+    mcpServerAddFeedback.classList.remove('d-none');
+    mcpServerAddFeedback.setAttribute('role', variant === 'danger' ? 'alert' : 'status');
+    mcpServerAddFeedback.classList.add(
+      'alert',
+      variant === 'danger'
+        ? 'alert-danger'
+        : variant === 'success'
+          ? 'alert-success'
+          : 'alert-secondary',
+      'py-2',
+      'px-3',
+      'mb-0'
+    );
+    mcpServerAddFeedback.textContent = normalizedMessage;
+  }
+
+  function clearMcpServerFeedback() {
+    setMcpServerFeedback('');
+  }
+
+  function buildMcpServerToggleId(serverIdentifier) {
+    return `mcpServerToggle-${serverIdentifier.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+  }
+
+  function buildMcpServerCommandToggleId(serverIdentifier, commandName) {
+    return `mcpCommandToggle-${serverIdentifier.replace(/[^a-zA-Z0-9_-]+/g, '-')}-${commandName.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+  }
+
+  function buildMcpServerSummaryText(server) {
+    if (server.description) {
+      return server.description;
+    }
+    if (server.endpoint) {
+      return server.endpoint;
+    }
+    return 'Configured MCP server.';
+  }
+
+  function appendMetadataEntry(list, label, value) {
+    if (!(list instanceof HTMLElement) || !value) {
+      return;
+    }
+    const term = documentRef.createElement('dt');
+    term.textContent = label;
+    list.appendChild(term);
+    const description = documentRef.createElement('dd');
+    if (/^https?:\/\//i.test(value)) {
+      const code = documentRef.createElement('code');
+      code.textContent = value;
+      description.appendChild(code);
+    } else {
+      description.textContent = value;
+    }
+    list.appendChild(description);
+  }
+
+  function renderMcpServerPreferences() {
+    if (!(mcpServersList instanceof HTMLElement)) {
+      return;
+    }
+    const servers = normalizeMcpServerConfigs(appState.mcpServers);
+    mcpServersList.replaceChildren();
+    if (!servers.length) {
+      const emptyState = documentRef.createElement('p');
+      emptyState.className = 'text-body-secondary mb-0';
+      emptyState.textContent = 'No MCP servers added yet.';
+      mcpServersList.appendChild(emptyState);
+      return;
+    }
+
+    servers.forEach((server) => {
+      const accordionItem = documentRef.createElement('div');
+      accordionItem.className = 'accordion-item';
+
+      const header = documentRef.createElement('h4');
+      header.className = 'accordion-header';
+      header.id = `mcpServerHeading-${server.identifier}`;
+
+      const headerButton = documentRef.createElement('button');
+      headerButton.className = 'accordion-button collapsed';
+      headerButton.type = 'button';
+      headerButton.setAttribute('data-bs-toggle', 'collapse');
+      headerButton.setAttribute('data-bs-target', `#mcpServerPanel-${server.identifier}`);
+      headerButton.setAttribute('aria-expanded', 'false');
+      headerButton.setAttribute('aria-controls', `mcpServerPanel-${server.identifier}`);
+
+      const headerSummary = documentRef.createElement('span');
+      headerSummary.className = 'mcp-server-summary';
+      const headerTitle = documentRef.createElement('span');
+      headerTitle.textContent = server.displayName;
+      headerSummary.appendChild(headerTitle);
+      const headerDescription = documentRef.createElement('small');
+      headerDescription.textContent = buildMcpServerSummaryText(server);
+      headerSummary.appendChild(headerDescription);
+      headerButton.appendChild(headerSummary);
+      header.appendChild(headerButton);
+      accordionItem.appendChild(header);
+
+      const collapse = documentRef.createElement('div');
+      collapse.id = `mcpServerPanel-${server.identifier}`;
+      collapse.className = 'accordion-collapse collapse';
+      collapse.setAttribute('aria-labelledby', header.id);
+
+      const body = documentRef.createElement('div');
+      body.className = 'accordion-body d-flex flex-column gap-3';
+
+      const controls = documentRef.createElement('div');
+      controls.className = 'd-flex flex-wrap align-items-start justify-content-between gap-3';
+
+      const toggleWrapper = documentRef.createElement('div');
+      toggleWrapper.className = 'form-check form-switch';
+      const toggle = documentRef.createElement('input');
+      toggle.className = 'form-check-input';
+      toggle.type = 'checkbox';
+      toggle.role = 'switch';
+      toggle.id = buildMcpServerToggleId(server.identifier);
+      toggle.checked = server.enabled;
+      toggle.dataset.mcpServerToggle = 'true';
+      toggle.dataset.mcpServerId = server.identifier;
+      toggle.dataset.mcpServerDisplayName = server.displayName;
+      toggleWrapper.appendChild(toggle);
+      const toggleLabel = documentRef.createElement('label');
+      toggleLabel.className = 'form-check-label';
+      toggleLabel.htmlFor = toggle.id;
+      toggleLabel.textContent = 'Enable this server';
+      toggleWrapper.appendChild(toggleLabel);
+      controls.appendChild(toggleWrapper);
+
+      const actionGroup = documentRef.createElement('div');
+      actionGroup.className = 'd-flex flex-wrap gap-2';
+      const refreshButton = documentRef.createElement('button');
+      refreshButton.type = 'button';
+      refreshButton.className = 'btn btn-outline-secondary btn-sm';
+      refreshButton.textContent = 'Refresh metadata';
+      refreshButton.dataset.mcpServerRefresh = 'true';
+      refreshButton.dataset.mcpServerId = server.identifier;
+      actionGroup.appendChild(refreshButton);
+      const removeButton = documentRef.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'btn btn-outline-danger btn-sm';
+      removeButton.textContent = 'Remove server';
+      removeButton.dataset.mcpServerRemove = 'true';
+      removeButton.dataset.mcpServerId = server.identifier;
+      actionGroup.appendChild(removeButton);
+      controls.appendChild(actionGroup);
+      body.appendChild(controls);
+
+      const metadata = documentRef.createElement('dl');
+      metadata.className = 'mcp-server-metadata mb-0';
+      appendMetadataEntry(metadata, 'Identifier', server.identifier);
+      appendMetadataEntry(metadata, 'Endpoint', server.endpoint);
+      appendMetadataEntry(metadata, 'Protocol', server.protocolVersion);
+      appendMetadataEntry(metadata, 'Server version', server.serverVersion);
+      appendMetadataEntry(
+        metadata,
+        'Capabilities',
+        Array.isArray(server.capabilities) && server.capabilities.length
+          ? server.capabilities.join(', ')
+          : ''
+      );
+      appendMetadataEntry(metadata, 'Instructions', server.instructions);
+      body.appendChild(metadata);
+
+      const commandsGroup = documentRef.createElement('div');
+      const commandsHeading = documentRef.createElement('p');
+      commandsHeading.className = 'form-label mb-1';
+      commandsHeading.textContent = 'Commands';
+      commandsGroup.appendChild(commandsHeading);
+      const commandsHelp = documentRef.createElement('p');
+      commandsHelp.className = 'form-text mt-0 mb-2';
+      commandsHelp.textContent = 'Enable only the commands you want exposed to the model.';
+      commandsGroup.appendChild(commandsHelp);
+      const commandList = documentRef.createElement('div');
+      commandList.className = 'd-flex flex-column gap-3';
+
+      if (!server.commands.length) {
+        const emptyCommands = documentRef.createElement('p');
+        emptyCommands.className = 'text-body-secondary mb-0';
+        emptyCommands.textContent = 'No commands are available for this server.';
+        commandList.appendChild(emptyCommands);
+      } else {
+        server.commands.forEach((command) => {
+          const commandWrapper = documentRef.createElement('div');
+          commandWrapper.className = 'form-check form-switch';
+          const commandToggle = documentRef.createElement('input');
+          commandToggle.className = 'form-check-input';
+          commandToggle.type = 'checkbox';
+          commandToggle.role = 'switch';
+          commandToggle.id = buildMcpServerCommandToggleId(server.identifier, command.name);
+          commandToggle.checked = command.enabled;
+          commandToggle.dataset.mcpCommandToggle = 'true';
+          commandToggle.dataset.mcpServerId = server.identifier;
+          commandToggle.dataset.mcpCommandName = command.name;
+          commandToggle.dataset.mcpCommandDisplayName = command.displayName;
+          commandWrapper.appendChild(commandToggle);
+
+          const commandLabel = documentRef.createElement('label');
+          commandLabel.className = 'form-check-label';
+          commandLabel.htmlFor = commandToggle.id;
+          const commandName = documentRef.createElement('span');
+          commandName.className = 'font-monospace';
+          commandName.textContent = command.name;
+          commandLabel.appendChild(commandName);
+          commandWrapper.appendChild(commandLabel);
+
+          const helpTextParts = [];
+          if (command.description) {
+            helpTextParts.push(command.description);
+          }
+          helpTextParts.push(summarizeMcpInputSchema(command.inputSchema));
+          const commandHelp = documentRef.createElement('p');
+          commandHelp.className = 'form-text mb-0';
+          commandHelp.textContent = helpTextParts.filter(Boolean).join(' ');
+          commandWrapper.appendChild(commandHelp);
+          commandList.appendChild(commandWrapper);
+        });
+      }
+
+      commandsGroup.appendChild(commandList);
+      body.appendChild(commandsGroup);
+      collapse.appendChild(body);
+      accordionItem.appendChild(collapse);
+      mcpServersList.appendChild(accordionItem);
+    });
+  }
+
+  function applyMcpServersPreference(value, { persist = false } = {}) {
+    appState.mcpServers = normalizeMcpServerConfigs(value);
+    renderMcpServerPreferences();
+    if (persist && mcpServersStorageKey) {
+      storage.setItem(mcpServersStorageKey, JSON.stringify(appState.mcpServers));
+    }
+  }
+
+  function applyMcpServerEnabledPreference(serverIdentifier, value, { persist = false } = {}) {
+    const normalizedIdentifier =
+      typeof serverIdentifier === 'string' ? serverIdentifier.trim().toLowerCase() : '';
+    if (!normalizedIdentifier) {
+      return;
+    }
+    const nextServers = normalizeMcpServerConfigs(appState.mcpServers).map((server) =>
+      server.identifier.toLowerCase() === normalizedIdentifier
+        ? {
+            ...server,
+            enabled: Boolean(value),
+          }
+        : server
+    );
+    applyMcpServersPreference(nextServers, { persist });
+  }
+
+  function applyMcpServerCommandEnabledPreference(
+    serverIdentifier,
+    commandName,
+    value,
+    { persist = false } = {}
+  ) {
+    const normalizedServerIdentifier =
+      typeof serverIdentifier === 'string' ? serverIdentifier.trim().toLowerCase() : '';
+    const normalizedCommandName =
+      typeof commandName === 'string' ? commandName.trim().toLowerCase() : '';
+    if (!normalizedServerIdentifier || !normalizedCommandName) {
+      return;
+    }
+    const nextServers = normalizeMcpServerConfigs(appState.mcpServers).map((server) => {
+      if (server.identifier.toLowerCase() !== normalizedServerIdentifier) {
+        return server;
+      }
+      return {
+        ...server,
+        commands: server.commands.map((command) =>
+          command.name.toLowerCase() === normalizedCommandName
+            ? {
+                ...command,
+                enabled: Boolean(value),
+              }
+            : command
+        ),
+      };
+    });
+    applyMcpServersPreference(nextServers, { persist });
+  }
+
+  async function importMcpServerEndpoint(endpoint, { persist = true } = {}) {
+    if (typeof inspectMcpServerEndpoint !== 'function') {
+      throw new Error('MCP server inspection is unavailable.');
+    }
+    const existingServers = normalizeMcpServerConfigs(appState.mcpServers);
+    const importedServer = await inspectMcpServerEndpoint(endpoint, {
+      existingIdentifiers: existingServers.map((server) => server.identifier),
+    });
+    if (existingServers.some((server) => server.endpoint === importedServer.endpoint)) {
+      throw new Error('That MCP server endpoint has already been added.');
+    }
+    applyMcpServersPreference([...existingServers, importedServer], { persist });
+    if (mcpServerEndpointInput instanceof HTMLInputElement) {
+      mcpServerEndpointInput.value = '';
+    }
+    clearMcpServerFeedback();
+    return importedServer;
+  }
+
+  async function refreshMcpServerPreference(serverIdentifier, { persist = true } = {}) {
+    if (typeof inspectMcpServerEndpoint !== 'function') {
+      throw new Error('MCP server inspection is unavailable.');
+    }
+    const normalizedIdentifier =
+      typeof serverIdentifier === 'string' ? serverIdentifier.trim().toLowerCase() : '';
+    const existingServers = normalizeMcpServerConfigs(appState.mcpServers);
+    const existingServer = existingServers.find(
+      (server) => server.identifier.toLowerCase() === normalizedIdentifier
+    );
+    if (!existingServer) {
+      throw new Error('The selected MCP server could not be found.');
+    }
+    const refreshedServer = await inspectMcpServerEndpoint(existingServer.endpoint, {
+      preferredIdentifier: existingServer.identifier,
+    });
+    const enabledCommandNames = new Set(
+      existingServer.commands
+        .filter((command) => command.enabled)
+        .map((command) => command.name.toLowerCase())
+    );
+    const nextServers = existingServers.map((server) =>
+      server.identifier.toLowerCase() === normalizedIdentifier
+        ? {
+            ...refreshedServer,
+            enabled: server.enabled,
+            commands: refreshedServer.commands.map((command) => ({
+              ...command,
+              enabled: enabledCommandNames.has(command.name.toLowerCase()),
+            })),
+          }
+        : server
+    );
+    applyMcpServersPreference(nextServers, { persist });
+    clearMcpServerFeedback();
+    return refreshedServer;
+  }
+
+  function removeMcpServerPreference(serverIdentifier, { persist = false } = {}) {
+    const normalizedIdentifier =
+      typeof serverIdentifier === 'string' ? serverIdentifier.trim().toLowerCase() : '';
+    if (!normalizedIdentifier) {
+      return;
+    }
+    const nextServers = normalizeMcpServerConfigs(appState.mcpServers).filter(
+      (server) => server.identifier.toLowerCase() !== normalizedIdentifier
+    );
+    applyMcpServersPreference(nextServers, { persist });
   }
 
   function applyMathRenderingPreference(value, { persist = false } = {}) {
@@ -400,7 +787,11 @@ export function createPreferencesController({
     const features = model?.features || {};
     const runtime = model?.runtime || {};
     return getFeatureDefinitions().filter((feature) => {
-      if (feature.key === 'imageInput' || feature.key === 'audioInput' || feature.key === 'videoInput') {
+      if (
+        feature.key === 'imageInput' ||
+        feature.key === 'audioInput' ||
+        feature.key === 'videoInput'
+      ) {
         return features[feature.key] === true && runtime.multimodalGeneration === true;
       }
       return features[feature.key] === true;
@@ -754,22 +1145,23 @@ export function createPreferencesController({
         return;
       }
       /** @type {HTMLButtonElement[]} */
-      const navigableButtons = Array.from(modelCardList.querySelectorAll('.model-card-button')).reduce(
-        (buttons, button) => {
-          if (button instanceof HTMLButtonElement && !button.disabled) {
-            buttons.push(button);
-          }
-          return buttons;
-        },
-        []
-      );
+      const navigableButtons = Array.from(
+        modelCardList.querySelectorAll('.model-card-button')
+      ).reduce((buttons, button) => {
+        if (button instanceof HTMLButtonElement && !button.disabled) {
+          buttons.push(button);
+        }
+        return buttons;
+      }, []);
       if (!navigableButtons.length) {
         return;
       }
       event.preventDefault();
       if (event.key === 'Home') {
         navigableButtons[0].focus();
-        setSelectedModelId(navigableButtons[0].dataset.modelId || DEFAULT_MODEL, { dispatch: true });
+        setSelectedModelId(navigableButtons[0].dataset.modelId || DEFAULT_MODEL, {
+          dispatch: true,
+        });
         return;
       }
       if (event.key === 'End') {
@@ -783,7 +1175,9 @@ export function createPreferencesController({
         (button) => button.dataset.modelId === normalizeModelId(getModelPickerValue())
       );
       const nextIndex =
-        currentIndex < 0 ? 0 : (currentIndex + direction + navigableButtons.length) % navigableButtons.length;
+        currentIndex < 0
+          ? 0
+          : (currentIndex + direction + navigableButtons.length) % navigableButtons.length;
       const nextButton = navigableButtons[nextIndex];
       nextButton.focus();
       setSelectedModelId(nextButton.dataset.modelId || DEFAULT_MODEL, { dispatch: true });
@@ -808,11 +1202,14 @@ export function createPreferencesController({
   }
 
   renderToolAvailabilityPreferences();
+  renderMcpServerPreferences();
+  clearMcpServerFeedback();
 
   return {
     getStoredShowThinkingPreference,
     getStoredToolCallingPreference,
     getStoredEnabledToolNamesPreference,
+    getStoredMcpServersPreference,
     getStoredMathRenderingPreference,
     getStoredSingleKeyShortcutPreference,
     getStoredTranscriptViewPreference,
@@ -823,14 +1220,22 @@ export function createPreferencesController({
     applyToolCallingPreference,
     applyEnabledToolNamesPreference,
     applyToolEnabledPreference,
+    applyMcpServersPreference,
+    applyMcpServerEnabledPreference,
+    applyMcpServerCommandEnabledPreference,
     applyMathRenderingPreference,
     applySingleKeyShortcutPreference,
     applyTranscriptViewPreference,
     applyConversationPanelCollapsedPreference,
+    clearMcpServerFeedback,
     getStoredThemePreference,
     resolveTheme,
     applyTheme,
+    importMcpServerEndpoint,
     populateModelSelect,
+    refreshMcpServerPreference,
+    removeMcpServerPreference,
+    setMcpServerFeedback,
     setSelectedModelId,
     normalizeBackendPreference,
     formatBackendPreferenceLabel,

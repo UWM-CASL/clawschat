@@ -26,6 +26,33 @@ function createHarness() {
             checked
           />
         </div>
+        <form id="mcpServerEndpointForm">
+          <input id="mcpServerEndpointInput" type="url" />
+          <button id="addMcpServerButton" type="submit">Add server</button>
+        </form>
+        <div id="mcpServersList">
+          <input
+            id="mcpServerToggleDocs"
+            type="checkbox"
+            data-mcp-server-toggle="true"
+            data-mcp-server-id="docs"
+            data-mcp-server-display-name="Docs"
+          />
+          <input
+            id="mcpCommandToggleSearch"
+            type="checkbox"
+            data-mcp-command-toggle="true"
+            data-mcp-server-id="docs"
+            data-mcp-command-name="search_docs"
+            data-mcp-command-display-name="Search Docs"
+          />
+          <button id="mcpServerRefreshDocs" type="button" data-mcp-server-refresh="true" data-mcp-server-id="docs">
+            Refresh
+          </button>
+          <button id="mcpServerRemoveDocs" type="button" data-mcp-server-remove="true" data-mcp-server-id="docs">
+            Remove
+          </button>
+        </div>
         <input id="renderMathMlToggle" type="checkbox" checked />
         <input id="enableSingleKeyShortcutsToggle" type="checkbox" checked />
         <select id="transcriptViewSelect">
@@ -57,7 +84,7 @@ function createHarness() {
         <button id="resetTopPButton" type="button"></button>
       </div>
     `,
-    { url: 'https://example.test/' },
+    { url: 'https://example.test/' }
   );
 
   const document = dom.window.document;
@@ -67,6 +94,7 @@ function createHarness() {
   globalThis.KeyboardEvent = dom.window.KeyboardEvent;
   globalThis.HTMLElement = dom.window.HTMLElement;
   globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
+  globalThis.HTMLFormElement = dom.window.HTMLFormElement;
   globalThis.HTMLInputElement = dom.window.HTMLInputElement;
   globalThis.HTMLSelectElement = dom.window.HTMLSelectElement;
   globalThis.HTMLTextAreaElement = dom.window.HTMLTextAreaElement;
@@ -95,6 +123,10 @@ function createHarness() {
     showThinkingToggle: document.getElementById('showThinkingToggle'),
     enableToolCallingToggle: document.getElementById('enableToolCallingToggle'),
     toolSettingsList: document.getElementById('toolSettingsList'),
+    mcpServerEndpointForm: document.getElementById('mcpServerEndpointForm'),
+    mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
+    addMcpServerButton: document.getElementById('addMcpServerButton'),
+    mcpServersList: document.getElementById('mcpServersList'),
     renderMathMlToggle: document.getElementById('renderMathMlToggle'),
     enableSingleKeyShortcutsToggle: document.getElementById('enableSingleKeyShortcutsToggle'),
     transcriptViewSelect: document.getElementById('transcriptViewSelect'),
@@ -120,14 +152,25 @@ function createHarness() {
     applyShowThinkingPreference: vi.fn(),
     applyToolCallingPreference: vi.fn(),
     applyToolEnabledPreference: vi.fn(),
+    applyMcpServerEnabledPreference: vi.fn(),
+    applyMcpServerCommandEnabledPreference: vi.fn(),
     applyMathRenderingPreference: vi.fn(),
     applySingleKeyShortcutPreference: vi.fn(),
     applyTranscriptViewPreference: vi.fn(),
     applyDefaultSystemPrompt: vi.fn(),
     applyConversationLanguagePreference: vi.fn(),
     applyConversationThinkingPreference: vi.fn(),
+    clearMcpServerFeedback: vi.fn(),
+    importMcpServerEndpoint: vi.fn(async () => ({
+      displayName: 'Docs',
+    })),
     refreshMathRendering: vi.fn(),
     refreshConversationSystemPromptPreview: vi.fn(),
+    refreshMcpServerPreference: vi.fn(async () => ({
+      displayName: 'Docs',
+    })),
+    removeMcpServerPreference: vi.fn(),
+    setMcpServerFeedback: vi.fn(),
     syncModelSelectionForCurrentEnvironment: vi.fn(() => 'model-b'),
     syncConversationLanguageAndThinkingControls: vi.fn(),
     syncGenerationSettingsFromModel: vi.fn(),
@@ -161,6 +204,13 @@ function createHarness() {
       enableToolCallingToggle: document.getElementById('enableToolCallingToggle'),
       toolSettingsList: document.getElementById('toolSettingsList'),
       toolToggleShell: document.getElementById('toolToggleShell'),
+      mcpServerEndpointForm: document.getElementById('mcpServerEndpointForm'),
+      mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
+      addMcpServerButton: document.getElementById('addMcpServerButton'),
+      mcpServerToggleDocs: document.getElementById('mcpServerToggleDocs'),
+      mcpCommandToggleSearch: document.getElementById('mcpCommandToggleSearch'),
+      mcpServerRefreshDocs: document.getElementById('mcpServerRefreshDocs'),
+      mcpServerRemoveDocs: document.getElementById('mcpServerRemoveDocs'),
       renderMathMlToggle: document.getElementById('renderMathMlToggle'),
       defaultSystemPromptInput: document.getElementById('defaultSystemPromptInput'),
       conversationLanguageSelect: document.getElementById('conversationLanguageSelect'),
@@ -194,11 +244,11 @@ describe('settings-events', () => {
     expect(harness.deps.applyToolEnabledPreference).toHaveBeenCalledWith(
       'run_shell_command',
       false,
-      { persist: true },
+      { persist: true }
     );
     expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(1);
     expect(harness.deps.setStatus).toHaveBeenCalledWith(
-      'Shell Command Runner disabled for tool calling.',
+      'Shell Command Runner disabled for tool calling.'
     );
   });
 
@@ -211,6 +261,70 @@ describe('settings-events', () => {
 
     expect(harness.deps.applyToolEnabledPreference).not.toHaveBeenCalled();
     expect(harness.deps.refreshConversationSystemPromptPreview).not.toHaveBeenCalled();
+  });
+
+  test('submitting an MCP endpoint imports the server and refreshes the prompt preview', async () => {
+    const harness = createHarness();
+    const form = /** @type {HTMLFormElement} */ (harness.elements.mcpServerEndpointForm);
+    const input = /** @type {HTMLInputElement} */ (harness.elements.mcpServerEndpointInput);
+
+    input.value = 'https://example.com/mcp';
+    form.dispatchEvent(new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+
+    expect(harness.deps.setMcpServerFeedback).toHaveBeenCalledWith(
+      'Connecting to MCP server...',
+      'info'
+    );
+    expect(harness.deps.importMcpServerEndpoint).toHaveBeenCalledWith('https://example.com/mcp', {
+      persist: true,
+    });
+    expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(1);
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Docs added. Enable the server and any commands you want exposed.'
+    );
+  });
+
+  test('mcp server and command toggles update persistence and prompt preview', () => {
+    const harness = createHarness();
+    const serverToggle = /** @type {HTMLInputElement} */ (harness.elements.mcpServerToggleDocs);
+    const commandToggle = /** @type {HTMLInputElement} */ (harness.elements.mcpCommandToggleSearch);
+
+    serverToggle.checked = true;
+    serverToggle.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+    commandToggle.checked = true;
+    commandToggle.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+
+    expect(harness.deps.applyMcpServerEnabledPreference).toHaveBeenCalledWith('docs', true, {
+      persist: true,
+    });
+    expect(harness.deps.applyMcpServerCommandEnabledPreference).toHaveBeenCalledWith(
+      'docs',
+      'search_docs',
+      true,
+      { persist: true }
+    );
+    expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(2);
+    expect(harness.deps.setStatus).toHaveBeenNthCalledWith(1, 'Docs enabled.');
+    expect(harness.deps.setStatus).toHaveBeenNthCalledWith(
+      2,
+      'Search Docs enabled for MCP server use.'
+    );
+  });
+
+  test('mcp refresh and remove actions call the matching handlers', async () => {
+    const harness = createHarness();
+    const refreshButton = /** @type {HTMLButtonElement} */ (harness.elements.mcpServerRefreshDocs);
+    const removeButton = /** @type {HTMLButtonElement} */ (harness.elements.mcpServerRemoveDocs);
+
+    refreshButton.click();
+    await Promise.resolve();
+    removeButton.click();
+
+    expect(harness.deps.refreshMcpServerPreference).toHaveBeenCalledWith('docs', { persist: true });
+    expect(harness.deps.removeMcpServerPreference).toHaveBeenCalledWith('docs', {
+      persist: true,
+    });
   });
 
   test('render MathML toggle refreshes both rendering and the computed prompt preview', () => {
@@ -265,7 +379,7 @@ describe('settings-events', () => {
     expect(harness.deps.setStatus).toHaveBeenNthCalledWith(1, 'Response language updated.');
     expect(harness.deps.setStatus).toHaveBeenNthCalledWith(
       2,
-      'Model thinking disabled when supported.',
+      'Model thinking disabled when supported.'
     );
   });
 
@@ -283,11 +397,11 @@ describe('settings-events', () => {
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith('model-b', true);
     expect(harness.deps.assignConversationModelId).toHaveBeenCalledWith(
       harness.activeConversation,
-      'model-b',
+      'model-b'
     );
     expect(harness.deps.queueConversationStateSave).toHaveBeenCalledTimes(1);
     expect(harness.deps.syncConversationLanguageAndThinkingControls).toHaveBeenCalledWith(
-      harness.activeConversation,
+      harness.activeConversation
     );
     expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(1);
     expect(harness.deps.reinitializeEngineFromSettings).toHaveBeenCalledTimes(1);

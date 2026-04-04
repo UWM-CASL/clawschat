@@ -366,9 +366,7 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain(
       '- tasklist: Manage a task list for multi-step work. Call with an empty arguments object to get tool syntax.'
     );
-    expect(prompt).toContain(
-      '- Call with an empty arguments object to get tool syntax.'
-    );
+    expect(prompt).toContain('- Call with an empty arguments object to get tool syntax.');
   });
 
   test('adds a web lookup instruction', () => {
@@ -381,9 +379,7 @@ describe('tool-calling prompt builder', () => {
       ['web_lookup']
     );
 
-    expect(prompt).toContain(
-      '- web_lookup: Interact with the web by calling {"input":"..."}.'
-    );
+    expect(prompt).toContain('- web_lookup: Interact with the web by calling {"input":"..."}.');
     expect(prompt).toContain('- When input is a URL, fetch a page preview');
     expect(prompt).toContain(
       '- When input is search terms, DuckDuckgo is used to return search results.'
@@ -426,6 +422,57 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain('Use this for longer Python scripts.');
     expect(prompt).toContain(
       'Call with {"path":"/workspace/script.py","source":"print(\\"hello\\")\\n"}.'
+    );
+  });
+
+  test('adds an MCP servers section without listing MCP tools under built-in tools', () => {
+    const prompt = buildToolCallingSystemPrompt(
+      {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'parameters',
+      },
+      [],
+      [],
+      {
+        mcpServers: [
+          {
+            identifier: 'docs',
+            endpoint: 'https://example.com/mcp',
+            displayName: 'Docs',
+            description: 'Project documentation lookup.',
+            enabled: true,
+            commands: [
+              {
+                name: 'search_docs',
+                enabled: true,
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    query: {
+                      type: 'string',
+                    },
+                  },
+                  required: ['query'],
+                },
+              },
+            ],
+          },
+        ],
+      }
+    );
+
+    expect(prompt).toContain('**MCP servers:**');
+    expect(prompt).toContain('- docs: Project documentation lookup.');
+    expect(prompt).toContain(
+      '- Discover one server with list_mcp_server_commands using {"server":"docs"}.'
+    );
+    expect(prompt).toContain(
+      '- Call one enabled command with call_mcp_server_command using {"server":"docs","command":"command_name","arguments":{...}}.'
+    );
+    expect(prompt).toContain('**Tool call format:**');
+    expect(prompt).not.toContain(
+      '**Tools available in this conversation:**\nThese are the tools you can call.\n- list_mcp_server_commands'
     );
   });
 
@@ -479,6 +526,189 @@ describe('tool-calling prompt builder', () => {
     ).rejects.toThrow('Tool is disabled: run_shell_command');
   });
 
+  test('lists only enabled MCP commands for an enabled server', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'list_mcp_server_commands',
+        arguments: {
+          server: 'docs',
+        },
+      },
+      {
+        enabledToolNames: [],
+        mcpServers: [
+          {
+            identifier: 'docs',
+            endpoint: 'https://example.com/mcp',
+            displayName: 'Docs',
+            description: 'Project documentation lookup.',
+            enabled: true,
+            commands: [
+              {
+                name: 'search_docs',
+                description: 'Search documentation pages.',
+                enabled: true,
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    query: {
+                      type: 'string',
+                    },
+                  },
+                  required: ['query'],
+                },
+              },
+              {
+                name: 'delete_docs',
+                description: 'Disabled command.',
+                enabled: false,
+                inputSchema: {
+                  type: 'object',
+                },
+              },
+            ],
+          },
+        ],
+      }
+    );
+
+    expect(result.result).toEqual({
+      server: 'docs',
+      name: 'Docs',
+      description: 'Project documentation lookup.',
+      commands: [
+        {
+          name: 'search_docs',
+          description: 'Search documentation pages.',
+          inputSchema: {
+            type: 'object',
+            required: ['query'],
+            properties: {
+              query: {
+                type: 'string',
+              },
+            },
+          },
+          inputSummary: 'Required: query. Fields: query (string).',
+        },
+      ],
+    });
+  });
+
+  test('calls an enabled MCP command through the existing tool harness', async () => {
+    const fetchRef = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new globalThis.Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'initialize',
+            result: {
+              protocolVersion: '2025-03-26',
+              serverInfo: {
+                name: 'Docs',
+                version: '1.0.0',
+              },
+              capabilities: {
+                tools: {},
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'MCP-Session-Id': 'session-1',
+            },
+          }
+        )
+      )
+      .mockResolvedValueOnce(new globalThis.Response('', { status: 202 }))
+      .mockResolvedValueOnce(
+        new globalThis.Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'tools-call-search_docs',
+            result: {
+              content: [
+                {
+                  type: 'text',
+                  text: 'Result from MCP.',
+                },
+              ],
+              structuredContent: {
+                answer: 'Result from MCP.',
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+      );
+
+    const result = await executeToolCall(
+      {
+        name: 'call_mcp_server_command',
+        arguments: {
+          server: 'docs',
+          command: 'search_docs',
+          arguments: {
+            query: 'routing',
+          },
+        },
+      },
+      {
+        enabledToolNames: [],
+        fetchRef,
+        mcpServers: [
+          {
+            identifier: 'docs',
+            endpoint: 'https://example.com/mcp',
+            displayName: 'Docs',
+            description: 'Project documentation lookup.',
+            enabled: true,
+            commands: [
+              {
+                name: 'search_docs',
+                enabled: true,
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    query: {
+                      type: 'string',
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      }
+    );
+
+    expect(fetchRef).toHaveBeenCalledTimes(3);
+    expect(fetchRef.mock.calls[2][1].body).toContain('"method":"tools/call"');
+    expect(result.result).toEqual({
+      status: 'success',
+      server: 'docs',
+      command: 'search_docs',
+      body: 'Result from MCP.',
+      structuredContent: {
+        answer: 'Result from MCP.',
+      },
+      content: [
+        {
+          type: 'text',
+          text: 'Result from MCP.',
+        },
+      ],
+    });
+  });
+
   test('does not notify shell callbacks when run_shell_command fails before execution starts', async () => {
     const onShellCommandStart = vi.fn();
     const onShellCommandComplete = vi.fn();
@@ -504,8 +734,7 @@ describe('tool-calling prompt builder', () => {
     expect(result.resultText).toBe(
       JSON.stringify({
         status: 'failed',
-        body:
-          'shell: unterminated escape or quote.\nThe shell command could not be parsed. Please try again with balanced quotes and escapes.',
+        body: 'shell: unterminated escape or quote.\nThe shell command could not be parsed. Please try again with balanced quotes and escapes.',
       })
     );
   });
@@ -773,12 +1002,9 @@ describe('tool-calling prompt builder', () => {
 
   test('sniffs bare Gemma special-token tool calls without wrappers', () => {
     expect(
-      sniffToolCalls(
-        'call:get_user_location{}',
-        {
-          format: 'gemma-special-token-call',
-        }
-      )
+      sniffToolCalls('call:get_user_location{}', {
+        format: 'gemma-special-token-call',
+      })
     ).toEqual([
       {
         name: 'get_user_location',
@@ -791,12 +1017,9 @@ describe('tool-calling prompt builder', () => {
 
   test('sniffs a leading bare Gemma tool call even with trailing prose', () => {
     expect(
-      sniffToolCalls(
-        'call:get_user_location{}\nI will answer after the tool result.',
-        {
-          format: 'gemma-special-token-call',
-        }
-      )
+      sniffToolCalls('call:get_user_location{}\nI will answer after the tool result.', {
+        format: 'gemma-special-token-call',
+      })
     ).toEqual([
       {
         name: 'get_user_location',
@@ -1346,8 +1569,7 @@ describe('tool-calling prompt builder', () => {
   test('puts the preferred cmd usage first in empty-argument shell discovery responses', () => {
     expect(buildShellToolResponseEnvelope()).toEqual({
       status: 'success',
-      body:
-        'Call again with {"cmd":"..."}\nCurrent working directory: /workspace\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
+      body: 'Call again with {"cmd":"..."}\nCurrent working directory: /workspace\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
     });
   });
 
@@ -1944,9 +2166,11 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(removeResult.result.exitCode).toBe(0);
-    await expect(workspaceFileSystem.stat('/workspace/coursework/final.txt')).rejects.toMatchObject({
-      name: 'NotFoundError',
-    });
+    await expect(workspaceFileSystem.stat('/workspace/coursework/final.txt')).rejects.toMatchObject(
+      {
+        name: 'NotFoundError',
+      }
+    );
   });
 
   test('rejects cp when source and destination resolve to the same file', async () => {
@@ -3078,7 +3302,9 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(result.result.exitCode).toBe(2);
-    expect(result.result.stderr).toBe('grep: the -o and -v options cannot be combined in this subset.');
+    expect(result.result.stderr).toBe(
+      'grep: the -o and -v options cannot be combined in this subset.'
+    );
   });
 
   test('supports sed -n with line ranges and print', async () => {
@@ -3495,20 +3721,19 @@ describe('tool-calling prompt builder', () => {
     const fetchRef = vi.fn(async (url) => {
       events.push(`fetch:${url}`);
       if (url === 'https://duckduckgo.com/?q=latest+news+about+europa&ia=web') {
-        return new globalThis.Response('<!doctype html><html><body>vqd="3-123456789012345678901234567890"</body></html>', {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-          },
-        });
-      }
-      if (
-        String(url).startsWith(
-          'https://links.duckduckgo.com/d.js?q=latest+news+about+europa'
-        )
-      ) {
         return new globalThis.Response(
-          "DDG.pageLayout.load('d',[{\"t\":\"Europa update\",\"a\":\"A short summary of the latest Europa update.\",\"i\":\"example.com\",\"u\":\"https://example.com/europa-update\"}]);DDG.duckbar.load('images', {});",
+          '<!doctype html><html><body>vqd="3-123456789012345678901234567890"</body></html>',
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html; charset=utf-8',
+            },
+          }
+        );
+      }
+      if (String(url).startsWith('https://links.duckduckgo.com/d.js?q=latest+news+about+europa')) {
+        return new globalThis.Response(
+          'DDG.pageLayout.load(\'d\',[{"t":"Europa update","a":"A short summary of the latest Europa update.","i":"example.com","u":"https://example.com/europa-update"}]);DDG.duckbar.load(\'images\', {});',
           {
             status: 200,
             headers: {
@@ -3526,16 +3751,19 @@ describe('tool-calling prompt builder', () => {
       events.push(`complete:${resultCount}`);
     });
 
-    const result = await executeToolCall({
+    const result = await executeToolCall(
+      {
         name: 'web_lookup',
         arguments: {
           input: 'latest news about europa',
         },
-      }, {
+      },
+      {
         fetchRef,
         onWebLookupSearchStart,
         onWebLookupSearchComplete,
-      });
+      }
+    );
 
     expect(onWebLookupSearchStart).toHaveBeenCalledWith({
       conversationId: null,

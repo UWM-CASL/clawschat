@@ -24,6 +24,7 @@ import { bindTranscriptEvents } from './app/transcript-events.js';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
 import { PythonRuntimeClient } from './llm/python-runtime-client.js';
+import { getEnabledMcpServerConfigs, inspectMcpServerEndpoint } from './llm/mcp-client.js';
 import {
   buildFactCheckingPrompt,
   buildLanguagePreferencePrompt,
@@ -36,6 +37,7 @@ import {
   executeToolCall,
   getEnabledToolDefinitions,
   getEnabledToolNames,
+  getImplicitlyEnabledToolNames,
   getToolDisplayName,
   sniffToolCalls,
 } from './llm/tool-calling.js';
@@ -151,6 +153,7 @@ const SINGLE_KEY_SHORTCUTS_STORAGE_KEY = 'ui-enable-single-key-shortcuts';
 const TRANSCRIPT_VIEW_STORAGE_KEY = 'ui-transcript-view';
 const CONVERSATION_PANEL_COLLAPSED_STORAGE_KEY = 'ui-conversation-panel-collapsed';
 const DEFAULT_SYSTEM_PROMPT_STORAGE_KEY = 'conversation-default-system-prompt';
+const MCP_SERVERS_STORAGE_KEY = 'mcp-server-configurations';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
@@ -195,6 +198,11 @@ const themeSelect = document.getElementById('themeSelect');
 const showThinkingToggle = document.getElementById('showThinkingToggle');
 const enableToolCallingToggle = document.getElementById('enableToolCallingToggle');
 const toolSettingsList = document.getElementById('toolSettingsList');
+const mcpServerEndpointForm = document.getElementById('mcpServerEndpointForm');
+const mcpServerEndpointInput = document.getElementById('mcpServerEndpointInput');
+const addMcpServerButton = document.getElementById('addMcpServerButton');
+const mcpServerAddFeedback = document.getElementById('mcpServerAddFeedback');
+const mcpServersList = document.getElementById('mcpServersList');
 const renderMathMlToggle = document.getElementById('renderMathMlToggle');
 const defaultSystemPromptInput = document.getElementById('defaultSystemPromptInput');
 const conversationLanguageSelect = document.getElementById('conversationLanguageSelect');
@@ -364,6 +372,7 @@ const appState = createAppState({
   defaultSystemPrompt: '',
   enableToolCalling: true,
   enabledToolNames: getEnabledToolNames(),
+  mcpServers: [],
   maxDebugEntries: MAX_DEBUG_ENTRIES,
 });
 appState.webGpuAdapterAvailable = browserSupportsWebGpu();
@@ -1222,17 +1231,25 @@ function getConfiguredEnabledToolDefinitions() {
   return getEnabledToolDefinitions(appState.enabledToolNames);
 }
 
+function getConfiguredEnabledMcpServers() {
+  return getEnabledMcpServerConfigs(appState.mcpServers);
+}
+
 function getToolCallingContext(modelId) {
   const enabled = appState.enableToolCalling === true;
   const config = enabled ? getToolCallingConfigForModel(modelId) : null;
   const supported = enabled && modelSupportsToolCalling(modelId) && Boolean(config);
   const enabledToolDefinitions = getConfiguredEnabledToolDefinitions();
   const enabledTools = getConfiguredEnabledToolNames();
+  const enabledMcpServers = getConfiguredEnabledMcpServers();
+  const implicitToolNames = supported ? getImplicitlyEnabledToolNames(enabledMcpServers) : [];
   return {
     enabled,
     supported,
     enabledTools,
     enabledToolDefinitions,
+    enabledMcpServers,
+    exposedToolNames: [...new Set([...enabledTools, ...implicitToolNames])],
     config,
   };
 }
@@ -1245,7 +1262,10 @@ function getToolCallingSystemPromptSuffix(modelId) {
   return buildToolCallingSystemPrompt(
     toolContext.config,
     toolContext.enabledTools,
-    toolContext.enabledToolDefinitions
+    toolContext.enabledToolDefinitions,
+    {
+      mcpServers: toolContext.enabledMcpServers,
+    }
   );
 }
 
@@ -1481,7 +1501,7 @@ function detectToolCallsForModel(rawText, modelId) {
   if (!toolCallingConfig || !toolContext.supported) {
     return [];
   }
-  const enabledToolNameSet = new Set(toolContext.enabledTools);
+  const enabledToolNameSet = new Set(toolContext.exposedToolNames);
   if (!enabledToolNameSet.size) {
     return [];
   }
@@ -1627,27 +1647,27 @@ function buildUserMessageAttachmentPayload(attachments) {
             samplesBase64: attachment.samplesBase64,
             workspacePath: attachment.workspacePath,
           }
-      : {
-          type: 'file',
-          artifactId: attachment.id,
-          mimeType: attachment.mimeType,
-          filename: attachment.filename,
-          extension: attachment.extension,
-          size: attachment.size,
-          text: attachment.data,
-          normalizedText: attachment.normalizedText,
-          normalizedFormat: attachment.normalizedFormat,
-          pageCount: attachment.pageCount,
-          conversionWarnings: Array.isArray(attachment.conversionWarnings)
-            ? attachment.conversionWarnings
-            : [],
-          memoryHint:
-            attachment.memoryHint && typeof attachment.memoryHint === 'object'
-              ? attachment.memoryHint
-              : undefined,
-          llmText: attachment.llmText,
-          workspacePath: attachment.workspacePath,
-        }),
+        : {
+            type: 'file',
+            artifactId: attachment.id,
+            mimeType: attachment.mimeType,
+            filename: attachment.filename,
+            extension: attachment.extension,
+            size: attachment.size,
+            text: attachment.data,
+            normalizedText: attachment.normalizedText,
+            normalizedFormat: attachment.normalizedFormat,
+            pageCount: attachment.pageCount,
+            conversionWarnings: Array.isArray(attachment.conversionWarnings)
+              ? attachment.conversionWarnings
+              : [],
+            memoryHint:
+              attachment.memoryHint && typeof attachment.memoryHint === 'object'
+                ? attachment.memoryHint
+                : undefined,
+            llmText: attachment.llmText,
+            workspacePath: attachment.workspacePath,
+          }),
   }));
   const artifactRefs = normalizedAttachments.map((attachment) => ({
     id: attachment.id,
@@ -1861,10 +1881,16 @@ function formatAttachmentTypeList(types) {
   return `${normalizedTypes.slice(0, -1).join(', ')}, and ${normalizedTypes.at(-1)} attachments`;
 }
 
-function buildRemovedComposerAttachmentStatus({ removedUnsupported, removedLimited, mediaSupport }) {
+function buildRemovedComposerAttachmentStatus({
+  removedUnsupported,
+  removedLimited,
+  mediaSupport,
+}) {
   const messages = [];
   if (removedUnsupported.length) {
-    const unsupportedTypes = removedUnsupported.map((attachment) => getAttachmentTypeLabel(attachment?.type));
+    const unsupportedTypes = removedUnsupported.map((attachment) =>
+      getAttachmentTypeLabel(attachment?.type)
+    );
     messages.push(
       `${
         removedUnsupported.length === 1
@@ -1875,7 +1901,9 @@ function buildRemovedComposerAttachmentStatus({ removedUnsupported, removedLimit
       }.`
     );
   }
-  const limitedTypes = [...new Set(removedLimited.map((attachment) => getAttachmentTypeLabel(attachment?.type)))];
+  const limitedTypes = [
+    ...new Set(removedLimited.map((attachment) => getAttachmentTypeLabel(attachment?.type))),
+  ];
   limitedTypes.forEach((type) => {
     const limit =
       type === 'image'
@@ -2720,7 +2748,7 @@ function handleWebLookupSearchComplete({
         ? panelUrl.trim()
         : typeof searchUrl === 'string' && searchUrl.trim()
           ? searchUrl.trim()
-        : existingPanel.searchUrl || '',
+          : existingPanel.searchUrl || '',
   });
   renderWorkspaceSidePanels();
 }
@@ -3372,7 +3400,12 @@ function updateActionButtons() {
   ) {
     appState.pendingComposerAttachments = filteredAttachments.attachments;
     renderComposerAttachments();
-    setStatus(buildRemovedComposerAttachmentStatus({ ...filteredAttachments, mediaSupport: attachmentSupport }));
+    setStatus(
+      buildRemovedComposerAttachmentStatus({
+        ...filteredAttachments,
+        mediaSupport: attachmentSupport,
+      })
+    );
   }
   if (sendButton) {
     sendButton.disabled =
@@ -3815,6 +3848,7 @@ const preferencesController = createPreferencesController({
   transcriptViewStorageKey: TRANSCRIPT_VIEW_STORAGE_KEY,
   conversationPanelCollapsedStorageKey: CONVERSATION_PANEL_COLLAPSED_STORAGE_KEY,
   defaultSystemPromptStorageKey: DEFAULT_SYSTEM_PROMPT_STORAGE_KEY,
+  mcpServersStorageKey: MCP_SERVERS_STORAGE_KEY,
   modelStorageKey: MODEL_STORAGE_KEY,
   backendStorageKey: BACKEND_STORAGE_KEY,
   supportedBackendPreferences: SUPPORTED_BACKEND_PREFERENCES,
@@ -3824,6 +3858,10 @@ const preferencesController = createPreferencesController({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  mcpServerEndpointInput,
+  addMcpServerButton,
+  mcpServerAddFeedback,
+  mcpServersList,
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
@@ -3838,6 +3876,11 @@ const preferencesController = createPreferencesController({
   getRuntimeConfigForModel,
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
+  inspectMcpServerEndpoint: (endpoint, options = {}) =>
+    inspectMcpServerEndpoint(endpoint, {
+      ...options,
+      fetchRef: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+    }),
   setStatus,
   appendDebug,
 });
@@ -3850,14 +3893,19 @@ const {
   applyTheme,
   applyToolEnabledPreference,
   applyToolCallingPreference,
+  applyMcpServerEnabledPreference,
+  applyMcpServerCommandEnabledPreference,
+  applyMcpServersPreference,
   applyTranscriptViewPreference,
   applyConversationPanelCollapsedPreference,
   applySingleKeyShortcutPreference,
+  clearMcpServerFeedback,
   formatBackendPreferenceLabel,
   getAvailableModelId,
   getStoredDefaultSystemPrompt,
   getStoredEnabledToolNamesPreference,
   getStoredMathRenderingPreference,
+  getStoredMcpServersPreference,
   getStoredShowThinkingPreference,
   getStoredSingleKeyShortcutPreference,
   getStoredThemePreference,
@@ -3865,13 +3913,17 @@ const {
   getStoredTranscriptViewPreference,
   getStoredConversationPanelCollapsedPreference,
   getWebGpuAvailability,
+  importMcpServerEndpoint,
   normalizeBackendPreference,
   persistInferencePreferences,
   populateModelSelect,
   probeWebGpuAvailability,
   readEngineConfigFromUI,
+  refreshMcpServerPreference,
+  removeMcpServerPreference,
   restoreInferencePreferences,
   setSelectedModelId,
+  setMcpServerFeedback,
   syncModelSelectionForCurrentEnvironment,
 } = preferencesController;
 
@@ -3981,11 +4033,13 @@ const appController = createAppController({
     executeToolCall(toolCall, {
       conversation: getActiveConversation(),
       enabledToolNames: getConfiguredEnabledToolNames(),
+      mcpServers: getConfiguredEnabledMcpServers(),
       requestToolConsent,
       onShellCommandStart: handleShellCommandStart,
       onShellCommandComplete: handleShellCommandComplete,
       onWebLookupSearchStart: handleWebLookupSearchStart,
       onWebLookupSearchComplete: handleWebLookupSearchComplete,
+      fetchRef: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
       pythonExecutor: pythonRuntime,
       workspaceFileSystem: getConversationWorkspaceFileSystem(),
     }),
@@ -4112,6 +4166,7 @@ applyTheme(themePreference);
 applyShowThinkingPreference(getStoredShowThinkingPreference());
 applyToolCallingPreference(getStoredToolCallingPreference());
 applyEnabledToolNamesPreference(getStoredEnabledToolNamesPreference());
+applyMcpServersPreference(getStoredMcpServersPreference());
 applyMathRenderingPreference(getStoredMathRenderingPreference());
 applySingleKeyShortcutPreference(getStoredSingleKeyShortcutPreference());
 applyTranscriptViewPreference(getStoredTranscriptViewPreference());
@@ -4159,6 +4214,11 @@ bindSettingsEvents({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  mcpServerEndpointForm,
+  mcpServerEndpointInput,
+  addMcpServerButton,
+  mcpServerAddFeedback,
+  mcpServersList,
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
@@ -4184,12 +4244,16 @@ bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  applyMcpServerEnabledPreference,
+  applyMcpServerCommandEnabledPreference,
   applyMathRenderingPreference,
   applySingleKeyShortcutPreference,
   applyTranscriptViewPreference,
   applyDefaultSystemPrompt,
   applyConversationLanguagePreference,
   applyConversationThinkingPreference,
+  clearMcpServerFeedback,
+  importMcpServerEndpoint,
   refreshMathRendering: () => {
     if (appState.renderMathMl) {
       void ensureMathJaxLoaded();
@@ -4197,6 +4261,9 @@ bindSettingsEvents({
     renderTranscript();
   },
   refreshConversationSystemPromptPreview: updateConversationSystemPromptPreview,
+  refreshMcpServerPreference,
+  removeMcpServerPreference,
+  setMcpServerFeedback,
   syncModelSelectionForCurrentEnvironment,
   syncConversationLanguageAndThinkingControls,
   syncGenerationSettingsFromModel,

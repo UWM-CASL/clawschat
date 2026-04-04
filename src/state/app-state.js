@@ -31,6 +31,7 @@ export const ORCHESTRATION_STATUSES = Object.freeze({
  *   defaultSystemPrompt?: string;
  *   enableToolCalling?: boolean;
  *   enabledToolNames?: string[];
+ *   mcpServers?: any[];
  *   renderMathMl?: boolean;
  *   maxDebugEntries?: number;
  * }} [options]
@@ -40,6 +41,7 @@ export function createAppState({
   defaultSystemPrompt = '',
   enableToolCalling = true,
   enabledToolNames = [],
+  mcpServers = [],
   renderMathMl = true,
   maxDebugEntries = 120,
 } = {}) {
@@ -64,6 +66,7 @@ export function createAppState({
     showThinkingByDefault: false,
     enableToolCalling: Boolean(enableToolCalling),
     enabledToolNames: Array.isArray(enabledToolNames) ? [...enabledToolNames] : [],
+    mcpServers: Array.isArray(mcpServers) ? [...mcpServers] : [],
     renderMathMl: Boolean(renderMathMl),
     enableSingleKeyShortcuts: true,
     transcriptView: 'standard',
@@ -112,8 +115,7 @@ export function isTerminalOpen(state) {
 }
 
 export function isTerminalOpenForConversation(state, conversationId) {
-  const normalizedConversationId =
-    typeof conversationId === 'string' ? conversationId.trim() : '';
+  const normalizedConversationId = typeof conversationId === 'string' ? conversationId.trim() : '';
   if (!normalizedConversationId) {
     return false;
   }
@@ -121,8 +123,7 @@ export function isTerminalOpenForConversation(state, conversationId) {
 }
 
 export function hasDismissedTerminalForConversation(state, conversationId) {
-  const normalizedConversationId =
-    typeof conversationId === 'string' ? conversationId.trim() : '';
+  const normalizedConversationId = typeof conversationId === 'string' ? conversationId.trim() : '';
   if (!normalizedConversationId) {
     return false;
   }
@@ -132,8 +133,7 @@ export function hasDismissedTerminalForConversation(state, conversationId) {
 }
 
 export function clearTerminalDismissal(state, conversationId) {
-  const normalizedConversationId =
-    typeof conversationId === 'string' ? conversationId.trim() : '';
+  const normalizedConversationId = typeof conversationId === 'string' ? conversationId.trim() : '';
   if (!normalizedConversationId) {
     return false;
   }
@@ -144,8 +144,7 @@ export function clearTerminalDismissal(state, conversationId) {
 }
 
 export function openTerminalForConversation(state, conversationId) {
-  const normalizedConversationId =
-    typeof conversationId === 'string' ? conversationId.trim() : '';
+  const normalizedConversationId = typeof conversationId === 'string' ? conversationId.trim() : '';
   if (!normalizedConversationId) {
     state.terminalOpenConversationId = null;
     return null;
@@ -156,8 +155,7 @@ export function openTerminalForConversation(state, conversationId) {
 }
 
 export function closeTerminal(state, { conversationId = null, dismissed = false } = {}) {
-  const normalizedConversationId =
-    typeof conversationId === 'string' ? conversationId.trim() : '';
+  const normalizedConversationId = typeof conversationId === 'string' ? conversationId.trim() : '';
   if (dismissed && normalizedConversationId) {
     if (!(state?.terminalDismissedConversationIds instanceof Set)) {
       state.terminalDismissedConversationIds = new Set();

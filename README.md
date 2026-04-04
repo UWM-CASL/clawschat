@@ -29,9 +29,14 @@ Student-facing browser chat UI with local model inference.
 - Keyboard users get route-safe skip links that jump to the visible main content, application controls, conversations, transcript, composer, and settings regions without breaking hash-based routing.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
 - The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
-- `Settings -> Tools, Services, and Skills` includes:
+- `Settings -> Tools` includes:
   - `Enable tool calling` to append tool-call instructions only when the selected conversation model supports tool calling
-  - per-tool toggles for each currently available built-in tool; disabled tools are removed from the computed system prompt and ignored if a model still emits them
+  - per-tool toggles for each currently available built-in tool; disabled built-in tools are removed from the computed system prompt and ignored if a model still emits them
+- `Settings -> MCP Servers` includes:
+  - adding browser-reachable `https` MCP HTTP endpoints, or `http://localhost`, when they do not require OAuth or token-based authentication
+  - imported servers start disabled, and every discovered command starts disabled
+  - per-server accordions with metadata, refresh/remove actions, and per-command toggles
+  - disabled MCP servers and disabled MCP commands are omitted from the computed system prompt and rejected by the local tool-execution loop
 - `Settings -> Conversation` includes:
   - `Render MathML from LaTeX` to control transcript math rendering and the matching math-formatting prompt hint
   - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`
@@ -131,8 +136,11 @@ Student-facing browser chat UI with local model inference.
 - When prompt-driven feature guidance is enabled, the effective system prompt appends that guidance before any tool-calling instructions.
 - The effective system prompt also appends conversation-level language steering when a response language is selected and model-specific thinking-mode switch instructions when the selected model exposes them.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
-- Tool-calling behavior, transcript presentation, export semantics, the current built-in tool catalog, and the planned function-call/MCP/`SKILL.md` capability model are documented in `docs/tools.md`.
+- When one or more configured MCP servers are enabled and have enabled commands, that tool-calling block also adds an `MCP servers` section that lists only those servers plus the discovery/call syntax for `list_mcp_server_commands` and `call_mcp_server_command`.
+- Those MCP helper tools run through the same tool harness as built-in tools, but they are listed only under the `MCP servers` prompt section and are not user-toggled in `Settings -> Tools`.
+- Tool-calling behavior, transcript presentation, export semantics, the current built-in and MCP tool surfaces, and the remaining `SKILL.md` planning are documented in `docs/tools.md`.
 - The current built-in tool catalog exposed to models includes date/time lookup, user location lookup, a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch, a `write_python_file` tool for longer `/workspace/*.py` scripts, and a browser-local `run_shell_command` tool that exposes a documented GNU/Linux-like command subset over `/workspace`.
+- When enabled MCP servers exist, the model also gets the MCP helper tools `list_mcp_server_commands` and `call_mcp_server_command`; those helpers expose only enabled servers and enabled commands.
 - The fetch-backed `web_lookup` page/search tool remains in the codebase but is temporarily disabled and not exposed to models.
   - `web_lookup` accepts one `input` string and returns a compact `{"status","body","message?"}` envelope.
   - If `input` is a direct `https` URL, `web_lookup` returns MIME type, title, and a summary excerpt in markdown inside `body`.
@@ -230,6 +238,7 @@ Student-facing browser chat UI with local model inference.
 - Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
 - Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
 - Browser-local Python execution currently loads Pyodide assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
+- MCP server support uses browser fetch directly. Only `https` endpoints, or `http://localhost`, are accepted, and servers that require OAuth or token-based authentication are rejected when detected. When an enabled MCP command is called, that command's arguments are sent to the configured MCP endpoint.
 - Attachment ingestion uses browser-local limits before large files are read into memory:
   - text files: 5 MB max, truncated to 400,000 characters
   - images: 15 MB max, 40,000,000 pixels max
@@ -263,7 +272,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Transcript and conversation-list DOM rendering live in `src/ui/`.
 - `src/main.js` remains the app shell for routing, page-level visibility, and wiring dependencies into those modules.
 - See `docs/conversation-domain.md`, `docs/app-state.md`, `docs/app-controller.md`, `docs/orchestrations.md`, and `docs/ui-views.md` for the current boundaries.
-- See `docs/tools.md` for current tool-calling behavior plus the planned separation between discrete function calls, MCP capability discovery, and `SKILL.md` playbooks.
+- See `docs/tools.md` for current built-in and MCP tool-calling behavior plus the remaining `SKILL.md` planning.
 - See `docs/web-search-hypothesis.md` for the current low-bandwidth, mobile-assisted search design hypothesis.
 - See `docs/models.md` for the model catalog schema, visible-vs-hidden model policy, and the contributor checklist for adding, replacing, or retiring models.
 

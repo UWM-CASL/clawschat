@@ -140,8 +140,8 @@ export function createTranscriptView(dependencies) {
   function shouldWindowTranscript(messages) {
     return Boolean(
       transcriptScrollContainer &&
-        Array.isArray(messages) &&
-        messages.length > TRANSCRIPT_WINDOWING_TRIGGER_COUNT
+      Array.isArray(messages) &&
+      messages.length > TRANSCRIPT_WINDOWING_TRIGGER_COUNT
     );
   }
 
@@ -211,7 +211,10 @@ export function createTranscriptView(dependencies) {
   }
 
   function getTranscriptViewportBounds() {
-    if (!(container instanceof view.HTMLElement) || !(transcriptScrollContainer instanceof view.HTMLElement)) {
+    if (
+      !(container instanceof view.HTMLElement) ||
+      !(transcriptScrollContainer instanceof view.HTMLElement)
+    ) {
       return {
         top: 0,
         bottom: 0,
@@ -810,7 +813,9 @@ export function createTranscriptView(dependencies) {
     const toolName = typeof toolCall?.name === 'string' ? toolCall.name.trim() : '';
     const toolLabel = toolName ? resolveToolDisplayName(toolName) : 'Tool';
     const toolArguments =
-      toolCall?.arguments && typeof toolCall.arguments === 'object' && !Array.isArray(toolCall.arguments)
+      toolCall?.arguments &&
+      typeof toolCall.arguments === 'object' &&
+      !Array.isArray(toolCall.arguments)
         ? toolCall.arguments
         : {};
 
@@ -835,6 +840,12 @@ export function createTranscriptView(dependencies) {
     }
     if (toolName === 'run_shell_command') {
       return 'Running shell command';
+    }
+    if (toolName === 'list_mcp_server_commands') {
+      return 'Inspecting MCP server';
+    }
+    if (toolName === 'call_mcp_server_command') {
+      return 'Running MCP server command';
     }
     return `Using ${toolLabel}`;
   }
@@ -957,7 +968,9 @@ export function createTranscriptView(dependencies) {
           typeof toolCalls[0]?.name === 'string' && toolCalls[0].name.trim()
             ? toolCalls[0].name.trim()
             : '';
-        const toolLabel = primaryToolName ? resolveToolDisplayName(primaryToolName) : 'Unknown Tool';
+        const toolLabel = primaryToolName
+          ? resolveToolDisplayName(primaryToolName)
+          : 'Unknown Tool';
         const actionLabel = getToolCallActionLabel(toolCalls[0]);
         const toolResultText = formatToolResultText(
           getInlineToolResultMessages(conversation, turnMessage)
@@ -1137,7 +1150,10 @@ export function createTranscriptView(dependencies) {
       `;
       const responseActions = item.querySelector('.response-actions');
       if (responseActions) {
-        responseActions.classList.toggle('d-none', !isModelTurnComplete(activeConversation, message));
+        responseActions.classList.toggle(
+          'd-none',
+          !isModelTurnComplete(activeConversation, message)
+        );
       }
       const timeline = item.querySelector('.model-turn-timeline');
       const copyMathMlButton = item.querySelector('.copy-mathml-btn');
@@ -1160,9 +1176,7 @@ export function createTranscriptView(dependencies) {
             if (thinkingMessageId) {
               const currentValue = refs.thinkingExpansion.get(thinkingMessageId);
               const nextValue =
-                typeof currentValue === 'boolean'
-                  ? !currentValue
-                  : !getShowThinkingByDefault();
+                typeof currentValue === 'boolean' ? !currentValue : !getShowThinkingByDefault();
               refs.thinkingExpansion.set(thinkingMessageId, nextValue);
               setModelBubbleContent(message, refs);
             }
@@ -1172,7 +1186,10 @@ export function createTranscriptView(dependencies) {
           if (toolCallToggle instanceof view.HTMLButtonElement) {
             const toolMessageId = toolCallToggle.dataset.toolMessageId || '';
             if (toolMessageId) {
-              refs.toolExpansion.set(toolMessageId, !(refs.toolExpansion.get(toolMessageId) === true));
+              refs.toolExpansion.set(
+                toolMessageId,
+                !(refs.toolExpansion.get(toolMessageId) === true)
+              );
               setModelBubbleContent(message, refs);
             }
           }
@@ -1387,10 +1404,7 @@ export function createTranscriptView(dependencies) {
     const prevButton = item.querySelector('.response-variant-prev');
     const nextButton = item.querySelector('.response-variant-next');
     if (variantNav) {
-      variantNav.classList.toggle(
-        'd-none',
-        !variantState.hasVariants || !isTurnComplete
-      );
+      variantNav.classList.toggle('d-none', !variantState.hasVariants || !isTurnComplete);
     }
     if (variantLabel) {
       variantLabel.textContent = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
@@ -1440,7 +1454,8 @@ export function createTranscriptView(dependencies) {
     refs.editButton.disabled = controlsDisabled;
     refs.branchButton.disabled = controlsDisabled;
     refs.copyButton.disabled = controlsDisabled;
-    refs.saveButton.disabled = controlsDisabled || (!refs.editor.value.trim() && getUserAttachmentCount(message) === 0);
+    refs.saveButton.disabled =
+      controlsDisabled || (!refs.editor.value.trim() && getUserAttachmentCount(message) === 0);
     refs.cancelButton.disabled = controlsDisabled;
     if (refs.variantNav) {
       refs.variantNav.classList.toggle('d-none', !variantState.hasVariants || isEditing);

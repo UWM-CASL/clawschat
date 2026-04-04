@@ -15,6 +15,9 @@ function createPreferencesHarness() {
       <input id="showThinkingToggle" type="checkbox" />
       <input id="enableToolCallingToggle" type="checkbox" />
       <div id="toolSettingsList"></div>
+      <input id="mcpServerEndpointInput" type="url" />
+      <div id="mcpServerAddFeedback"></div>
+      <div id="mcpServersList"></div>
       <input id="renderMathMlToggle" type="checkbox" />
       <input id="enableSingleKeyShortcutsToggle" type="checkbox" />
       <select id="transcriptViewSelect">
@@ -66,6 +69,7 @@ function createPreferencesHarness() {
       transcriptViewStorageKey: 'transcript-view',
       conversationPanelCollapsedStorageKey: 'conversation-panel-collapsed',
       defaultSystemPromptStorageKey: 'default-prompt',
+      mcpServersStorageKey: 'mcp-servers',
       modelStorageKey: 'model',
       backendStorageKey: 'backend',
       supportedBackendPreferences: new Set(['auto', 'webgpu', 'wasm', 'cpu']),
@@ -75,6 +79,9 @@ function createPreferencesHarness() {
       showThinkingToggle: document.getElementById('showThinkingToggle'),
       enableToolCallingToggle: document.getElementById('enableToolCallingToggle'),
       toolSettingsList: document.getElementById('toolSettingsList'),
+      mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
+      mcpServerAddFeedback: document.getElementById('mcpServerAddFeedback'),
+      mcpServersList: document.getElementById('mcpServersList'),
       renderMathMlToggle: document.getElementById('renderMathMlToggle'),
       enableSingleKeyShortcutsToggle: document.getElementById('enableSingleKeyShortcutsToggle'),
       transcriptViewSelect: document.getElementById('transcriptViewSelect'),
@@ -91,6 +98,7 @@ function createPreferencesHarness() {
       getRuntimeConfigForModel: vi.fn(() => ({})),
       syncGenerationSettingsFromModel: vi.fn(),
       persistGenerationConfigForModel: vi.fn(),
+      inspectMcpServerEndpoint: vi.fn(),
       setStatus: vi.fn(),
       appendDebug: vi.fn(),
     }),
@@ -178,9 +186,63 @@ describe('preferences controller', () => {
       harness.document.querySelector('[data-tool-name="get_current_date_time"]')?.checked
     ).toBe(true);
     expect(harness.document.querySelector('[data-tool-name="tasklist"]')?.checked).toBe(true);
-    expect(
-      harness.document.querySelector('[data-tool-name="run_shell_command"]')?.checked
-    ).toBe(false);
+    expect(harness.document.querySelector('[data-tool-name="run_shell_command"]')?.checked).toBe(
+      false
+    );
+  });
+
+  test('persists MCP servers and renders per-server and per-command toggles', () => {
+    const harness = createPreferencesHarness();
+
+    harness.controller.applyMcpServersPreference(
+      [
+        {
+          identifier: 'docs',
+          endpoint: 'https://example.com/mcp',
+          displayName: 'Docs',
+          description: 'Project documentation lookup.',
+          protocolVersion: '2025-03-26',
+          serverVersion: '1.2.3',
+          capabilities: ['tools'],
+          enabled: false,
+          commands: [
+            {
+              name: 'search_docs',
+              displayName: 'Search Docs',
+              description: 'Search documentation pages.',
+              enabled: false,
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                  },
+                },
+                required: ['query'],
+              },
+            },
+          ],
+        },
+      ],
+      { persist: true }
+    );
+
+    expect(harness.controller.getStoredMcpServersPreference()).toEqual([
+      expect.objectContaining({
+        identifier: 'docs',
+        enabled: false,
+        commands: [expect.objectContaining({ name: 'search_docs', enabled: false })],
+      }),
+    ]);
+    expect(harness.document.querySelector('[data-mcp-server-toggle="true"]')?.checked).toBe(false);
+    expect(harness.document.querySelector('[data-mcp-command-toggle="true"]')?.checked).toBe(false);
+    expect(harness.document.getElementById('mcpServersList')?.textContent).toContain('Docs');
+    expect(harness.document.getElementById('mcpServersList')?.textContent).toContain(
+      'Project documentation lookup.'
+    );
+    expect(harness.document.getElementById('mcpServersList')?.textContent).toContain(
+      'Required: query. Fields: query (string).'
+    );
   });
 
   test('falls back to an available model when the current backend cannot use the requested model', () => {
@@ -202,7 +264,9 @@ describe('preferences controller', () => {
 
   test('renders model cards with metadata and syncs card selection to the hidden select', () => {
     const harness = createPreferencesHarness();
-    const modelSelect = /** @type {HTMLSelectElement} */ (harness.document.getElementById('modelSelect'));
+    const modelSelect = /** @type {HTMLSelectElement} */ (
+      harness.document.getElementById('modelSelect')
+    );
     const modelCardList = harness.document.getElementById('modelCardList');
 
     harness.controller.populateModelSelect();
@@ -224,27 +288,30 @@ describe('preferences controller', () => {
       /** @type {HTMLAnchorElement | null} */ (qwenCard?.querySelector('.model-card-link'))?.href
     ).toBe('https://huggingface.co/onnx-community/Qwen3.5-2B-ONNX');
     expect(
-      /** @type {HTMLAnchorElement | null} */ (qwenCard?.querySelector('.model-card-link'))?.textContent
+      /** @type {HTMLAnchorElement | null} */ (qwenCard?.querySelector('.model-card-link'))
+        ?.textContent
     ).toBe('Model details');
     expect(qwenCard?.querySelectorAll('.model-feature-pill')).toHaveLength(3);
     expect(
       Array.from(qwenCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
         node.getAttribute('aria-label')
       )
-    ).toEqual([
-      'Shows a thinking section',
-      'Can use built-in tools',
-      'Accepts image input',
-    ]);
+    ).toEqual(['Shows a thinking section', 'Can use built-in tools', 'Accepts image input']);
 
-    expect(qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')).toBe(
+    expect(
+      qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')
+    ).toBe(
       'Supported languages: English (EN), Chinese (ZH), Spanish (ES), French (FR), German (DE), Japanese (JA), and more.'
     );
-    expect(qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('title')).toBe(
+    expect(
+      qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('title')
+    ).toBe(
       'English (EN), Chinese (ZH), Spanish (ES), French (FR), German (DE), Japanese (JA), and more.'
     );
     expect(
-      /** @type {HTMLAnchorElement | null} */ (qwenCard?.querySelector('.model-card-language-overflow'))?.href
+      /** @type {HTMLAnchorElement | null} */ (
+        qwenCard?.querySelector('.model-card-language-overflow')
+      )?.href
     ).toBe('https://huggingface.co/Qwen/Qwen3.5-2B');
 
     const qwenButton = /** @type {HTMLButtonElement | null} */ (
