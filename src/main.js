@@ -25,6 +25,7 @@ import { LLMEngineClient } from './llm/engine-client.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
 import { PythonRuntimeClient } from './llm/python-runtime-client.js';
 import {
+  buildFactCheckingPrompt,
   buildLanguagePreferencePrompt,
   buildMathRenderingFeaturePrompt,
   buildOptionalFeaturePromptSection,
@@ -1289,6 +1290,7 @@ function getOptionalFeatureSystemPromptSection(modelId, conversation = null) {
   const languagePreference = getConversationLanguagePreference(conversation);
   const thinkingControl = getThinkingControlForModel(modelId);
   return buildOptionalFeaturePromptSection([
+    buildFactCheckingPrompt(),
     buildMathRenderingFeaturePrompt({ renderMathMl: appState.renderMathMl }),
     buildLanguagePreferencePrompt({
       languageName:

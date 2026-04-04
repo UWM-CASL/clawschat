@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  buildFactCheckingPrompt,
   buildLanguagePreferencePrompt,
   buildMathRenderingFeaturePrompt,
   buildOptionalFeaturePromptSection,
@@ -14,11 +15,16 @@ describe('system prompt feature sections', () => {
 
   test('builds a dedicated optional feature section for math rendering', () => {
     const prompt = buildOptionalFeaturePromptSection([
+      buildFactCheckingPrompt(),
       buildMathRenderingFeaturePrompt({ renderMathMl: true }),
     ]);
 
-    expect(prompt).toContain('**Special behaviors:**');
+    expect(prompt).toContain('**Rules:**');
+    expect(prompt).toContain('- Use web_lookup to confirm facts before responding.');
     expect(prompt).toContain('- Present mathematical notation in LaTeX');
+    expect(
+      prompt.indexOf('- Use web_lookup to confirm facts before responding.')
+    ).toBeLessThan(prompt.indexOf('- Present mathematical notation in LaTeX'));
     expect(prompt).not.toContain('Math rendering is enabled.');
     expect(prompt).toContain('Present mathematical notation in LaTeX');
     expect(prompt).toContain('use $...$ for inline math');

@@ -9,9 +9,13 @@ export function buildOptionalFeaturePromptSection(instructions = []) {
   if (!normalizedInstructions.length) {
     return '';
   }
-  return ['**Special behaviors:**', ...normalizedInstructions.map((instruction) => `- ${instruction}`)].join(
+  return ['**Rules:**', ...normalizedInstructions.map((instruction) => `- ${instruction}`)].join(
     '\n'
   );
+}
+
+export function buildFactCheckingPrompt() {
+  return 'Use web_lookup to confirm facts before responding.';
 }
 
 export function buildMathRenderingFeaturePrompt({ renderMathMl = false } = {}) {
