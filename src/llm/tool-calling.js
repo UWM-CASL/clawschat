@@ -63,8 +63,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
   {
     name: 'web_lookup',
     displayName: 'Web Lookup',
-    description:
-      'Pass {"input":"https://..."} to fetch a page preview, or pass a search query to search DuckDuckGo and return concise results.',
+    description: 'Interact with the web by calling {"input":"..."}.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -246,6 +245,10 @@ function buildToolInstructionLines(name, description = '') {
     lines.push(
       '  Call with {"path":"/workspace/script.py","source":"print(\\"hello\\")\\n"}.'
     );
+  }
+  if (normalizedName === 'web_lookup') {
+    lines.push('  - When input is a URL, fetch a page preview');
+    lines.push('  - When input is search terms, DuckDuckgo is used to return search results.');
   }
   if (normalizedName === 'run_shell_command') {
     lines.push('  - Call with an empty arguments object to get syntax and supported commands.');

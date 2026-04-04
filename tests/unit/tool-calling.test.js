@@ -382,9 +382,12 @@ describe('tool-calling prompt builder', () => {
     );
 
     expect(prompt).toContain(
-      '- web_lookup: Pass {"input":"https://..."} to fetch a page preview, or pass a search query to search DuckDuckGo and return concise results.'
+      '- web_lookup: Interact with the web by calling {"input":"..."}.'
     );
-    expect(prompt).not.toContain('Returns a concise extracted preview, not raw HTML.');
+    expect(prompt).toContain('- When input is a URL, fetch a page preview');
+    expect(prompt).toContain(
+      '- When input is search terms, DuckDuckgo is used to return search results.'
+    );
   });
 
   test('adds a shell command discovery instruction', () => {
