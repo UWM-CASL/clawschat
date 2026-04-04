@@ -22,6 +22,7 @@ import { createShortcutHandlers } from './app/shortcut-events.js';
 import { createTranscriptActions } from './app/transcript-actions.js';
 import { bindTranscriptEvents } from './app/transcript-events.js';
 import { LLMEngineClient } from './llm/engine-client.js';
+import { createCorsAwareFetch, validateCorsProxyUrl } from './llm/browser-fetch.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
 import { PythonRuntimeClient } from './llm/python-runtime-client.js';
 import { getEnabledMcpServerConfigs, inspectMcpServerEndpoint } from './llm/mcp-client.js';
@@ -153,6 +154,7 @@ const SINGLE_KEY_SHORTCUTS_STORAGE_KEY = 'ui-enable-single-key-shortcuts';
 const TRANSCRIPT_VIEW_STORAGE_KEY = 'ui-transcript-view';
 const CONVERSATION_PANEL_COLLAPSED_STORAGE_KEY = 'ui-conversation-panel-collapsed';
 const DEFAULT_SYSTEM_PROMPT_STORAGE_KEY = 'conversation-default-system-prompt';
+const CORS_PROXY_STORAGE_KEY = 'cors-proxy-url';
 const MCP_SERVERS_STORAGE_KEY = 'mcp-server-configurations';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
@@ -198,6 +200,11 @@ const themeSelect = document.getElementById('themeSelect');
 const showThinkingToggle = document.getElementById('showThinkingToggle');
 const enableToolCallingToggle = document.getElementById('enableToolCallingToggle');
 const toolSettingsList = document.getElementById('toolSettingsList');
+const corsProxyForm = document.getElementById('corsProxyForm');
+const corsProxyInput = document.getElementById('corsProxyInput');
+const saveCorsProxyButton = document.getElementById('saveCorsProxyButton');
+const clearCorsProxyButton = document.getElementById('clearCorsProxyButton');
+const corsProxyFeedback = document.getElementById('corsProxyFeedback');
 const mcpServerEndpointForm = document.getElementById('mcpServerEndpointForm');
 const mcpServerEndpointInput = document.getElementById('mcpServerEndpointInput');
 const addMcpServerButton = document.getElementById('addMcpServerButton');
@@ -376,6 +383,12 @@ const appState = createAppState({
   maxDebugEntries: MAX_DEBUG_ENTRIES,
 });
 appState.webGpuAdapterAvailable = browserSupportsWebGpu();
+const baseFetchRef = typeof fetch === 'function' ? fetch.bind(globalThis) : null;
+const corsAwareFetch = createCorsAwareFetch({
+  fetchRef: baseFetchRef,
+  getProxyUrl: () => appState.corsProxyUrl,
+  locationRef: window.location,
+});
 
 function initializeTooltips(root = document) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
@@ -3848,6 +3861,7 @@ const preferencesController = createPreferencesController({
   transcriptViewStorageKey: TRANSCRIPT_VIEW_STORAGE_KEY,
   conversationPanelCollapsedStorageKey: CONVERSATION_PANEL_COLLAPSED_STORAGE_KEY,
   defaultSystemPromptStorageKey: DEFAULT_SYSTEM_PROMPT_STORAGE_KEY,
+  corsProxyStorageKey: CORS_PROXY_STORAGE_KEY,
   mcpServersStorageKey: MCP_SERVERS_STORAGE_KEY,
   modelStorageKey: MODEL_STORAGE_KEY,
   backendStorageKey: BACKEND_STORAGE_KEY,
@@ -3858,6 +3872,8 @@ const preferencesController = createPreferencesController({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  corsProxyInput,
+  corsProxyFeedback,
   mcpServerEndpointInput,
   addMcpServerButton,
   mcpServerAddFeedback,
@@ -3876,10 +3892,15 @@ const preferencesController = createPreferencesController({
   getRuntimeConfigForModel,
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
+  validateCorsProxyUrl: (proxyUrl, options = {}) =>
+    validateCorsProxyUrl(proxyUrl, {
+      ...options,
+      fetchRef: baseFetchRef,
+    }),
   inspectMcpServerEndpoint: (endpoint, options = {}) =>
     inspectMcpServerEndpoint(endpoint, {
       ...options,
-      fetchRef: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+      fetchRef: corsAwareFetch,
     }),
   setStatus,
   appendDebug,
@@ -3887,6 +3908,7 @@ const preferencesController = createPreferencesController({
 
 const {
   applyDefaultSystemPrompt,
+  applyCorsProxyPreference,
   applyMathRenderingPreference,
   applyEnabledToolNamesPreference,
   applyShowThinkingPreference,
@@ -3899,7 +3921,10 @@ const {
   applyTranscriptViewPreference,
   applyConversationPanelCollapsedPreference,
   applySingleKeyShortcutPreference,
+  clearCorsProxyFeedback,
+  clearCorsProxyPreference,
   clearMcpServerFeedback,
+  getStoredCorsProxyPreference,
   formatBackendPreferenceLabel,
   getAvailableModelId,
   getStoredDefaultSystemPrompt,
@@ -3919,10 +3944,12 @@ const {
   populateModelSelect,
   probeWebGpuAvailability,
   readEngineConfigFromUI,
+  saveCorsProxyPreference,
   refreshMcpServerPreference,
   removeMcpServerPreference,
   restoreInferencePreferences,
   setSelectedModelId,
+  setCorsProxyFeedback,
   setMcpServerFeedback,
   syncModelSelectionForCurrentEnvironment,
 } = preferencesController;
@@ -4039,7 +4066,7 @@ const appController = createAppController({
       onShellCommandComplete: handleShellCommandComplete,
       onWebLookupSearchStart: handleWebLookupSearchStart,
       onWebLookupSearchComplete: handleWebLookupSearchComplete,
-      fetchRef: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+      fetchRef: corsAwareFetch,
       pythonExecutor: pythonRuntime,
       workspaceFileSystem: getConversationWorkspaceFileSystem(),
     }),
@@ -4166,6 +4193,7 @@ applyTheme(themePreference);
 applyShowThinkingPreference(getStoredShowThinkingPreference());
 applyToolCallingPreference(getStoredToolCallingPreference());
 applyEnabledToolNamesPreference(getStoredEnabledToolNamesPreference());
+applyCorsProxyPreference(getStoredCorsProxyPreference());
 applyMcpServersPreference(getStoredMcpServersPreference());
 applyMathRenderingPreference(getStoredMathRenderingPreference());
 applySingleKeyShortcutPreference(getStoredSingleKeyShortcutPreference());
@@ -4214,6 +4242,10 @@ bindSettingsEvents({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  corsProxyForm,
+  corsProxyInput,
+  saveCorsProxyButton,
+  clearCorsProxyButton,
   mcpServerEndpointForm,
   mcpServerEndpointInput,
   addMcpServerButton,
@@ -4244,6 +4276,10 @@ bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  saveCorsProxyPreference,
+  clearCorsProxyPreference,
+  setCorsProxyFeedback,
+  clearCorsProxyFeedback,
   applyMcpServerEnabledPreference,
   applyMcpServerCommandEnabledPreference,
   applyMathRenderingPreference,

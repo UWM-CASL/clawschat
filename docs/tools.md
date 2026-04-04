@@ -23,6 +23,7 @@ When tool calling is enabled for a conversation and the selected model supports 
 Tool calling is model-aware. The app does not use one universal tool-call format for every model family.
 If the selected model does not support tool calling, the tool-instruction section is omitted entirely from the computed system prompt even when the global tool-calling toggle is enabled.
 Users can disable individual built-in tools in `Settings -> Tools`; disabled tools are removed from the tool-instruction section and ignored by the local tool-execution loop.
+Users can configure one validated prefix-style CORS proxy in `Settings -> Proxy`; browser-networked features retry through it only when a direct cross-origin request appears blocked by CORS.
 Users configure MCP endpoints in `Settings -> MCP Servers`; imported servers start disabled, all discovered commands start disabled, and disabled servers or commands are omitted from the prompt and rejected by execution.
 
 The prompt is organized into separate sections so models do not confuse tool descriptions, post-tool behavior, and call syntax:
@@ -56,6 +57,7 @@ Current MCP constraints:
 - servers that embed credentials, obvious token query parameters, or auth challenges are rejected when detected
 - imported servers start disabled, and discovered commands start disabled
 - only enabled servers with enabled commands are exposed to the model or executable through the harness
+- MCP HTTP requests use the shared browser fetch helper, so they can retry through the validated proxy only after a likely CORS block
 - `SKILL.md` discovery and selective ingestion are still not implemented
 
 ## Built-in tools
@@ -136,7 +138,7 @@ This tool remains implemented but is currently disabled and not exposed to model
   - query mode opens a right-side lightweight DuckDuckGo HTML browser panel first in a portrait 9:16 phone-like frame, then attempts an in-app fetch of DuckDuckGo search results for concise extraction
   - query-mode `message` tells the model to call `web_lookup` again with one of the returned result URLs when it wants the page itself
 - Current limits:
-  - uses browser `fetch`, so CORS, browser-managed redirects, and forbidden request headers still apply
+  - uses browser `fetch`, so CORS, browser-managed redirects, and forbidden request headers still apply unless the optional validated proxy fallback is triggered after a likely CORS block
   - only text-like responses are supported in the current implementation
   - direct URLs must use `https`
   - DuckDuckGo search extraction depends on what the browser can fetch from DuckDuckGo in the current session; failures still leave the visible DuckDuckGo panel open for the user

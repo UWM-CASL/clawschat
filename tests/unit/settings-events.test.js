@@ -26,6 +26,11 @@ function createHarness() {
             checked
           />
         </div>
+        <form id="corsProxyForm">
+          <input id="corsProxyInput" type="url" />
+          <button id="saveCorsProxyButton" type="submit">Save proxy</button>
+          <button id="clearCorsProxyButton" type="button">Clear proxy</button>
+        </form>
         <form id="mcpServerEndpointForm">
           <input id="mcpServerEndpointInput" type="url" />
           <button id="addMcpServerButton" type="submit">Add server</button>
@@ -123,6 +128,10 @@ function createHarness() {
     showThinkingToggle: document.getElementById('showThinkingToggle'),
     enableToolCallingToggle: document.getElementById('enableToolCallingToggle'),
     toolSettingsList: document.getElementById('toolSettingsList'),
+    corsProxyForm: document.getElementById('corsProxyForm'),
+    corsProxyInput: document.getElementById('corsProxyInput'),
+    saveCorsProxyButton: document.getElementById('saveCorsProxyButton'),
+    clearCorsProxyButton: document.getElementById('clearCorsProxyButton'),
     mcpServerEndpointForm: document.getElementById('mcpServerEndpointForm'),
     mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
     addMcpServerButton: document.getElementById('addMcpServerButton'),
@@ -152,6 +161,10 @@ function createHarness() {
     applyShowThinkingPreference: vi.fn(),
     applyToolCallingPreference: vi.fn(),
     applyToolEnabledPreference: vi.fn(),
+    saveCorsProxyPreference: vi.fn(async () => 'https://proxy.example/'),
+    clearCorsProxyPreference: vi.fn(),
+    setCorsProxyFeedback: vi.fn(),
+    clearCorsProxyFeedback: vi.fn(),
     applyMcpServerEnabledPreference: vi.fn(),
     applyMcpServerCommandEnabledPreference: vi.fn(),
     applyMathRenderingPreference: vi.fn(),
@@ -204,6 +217,10 @@ function createHarness() {
       enableToolCallingToggle: document.getElementById('enableToolCallingToggle'),
       toolSettingsList: document.getElementById('toolSettingsList'),
       toolToggleShell: document.getElementById('toolToggleShell'),
+      corsProxyForm: document.getElementById('corsProxyForm'),
+      corsProxyInput: document.getElementById('corsProxyInput'),
+      saveCorsProxyButton: document.getElementById('saveCorsProxyButton'),
+      clearCorsProxyButton: document.getElementById('clearCorsProxyButton'),
       mcpServerEndpointForm: document.getElementById('mcpServerEndpointForm'),
       mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
       addMcpServerButton: document.getElementById('addMcpServerButton'),
@@ -283,6 +300,40 @@ describe('settings-events', () => {
     expect(harness.deps.setStatus).toHaveBeenCalledWith(
       'Docs added. Enable the server and any commands you want exposed.'
     );
+  });
+
+  test('submitting a CORS proxy validates, saves, and announces success', async () => {
+    const harness = createHarness();
+    const form = /** @type {HTMLFormElement} */ (harness.elements.corsProxyForm);
+    const input = /** @type {HTMLInputElement} */ (harness.elements.corsProxyInput);
+
+    input.value = 'https://proxy.example';
+    form.dispatchEvent(new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+
+    expect(harness.deps.setCorsProxyFeedback).toHaveBeenCalledWith(
+      'Validating CORS proxy...',
+      'info'
+    );
+    expect(harness.deps.saveCorsProxyPreference).toHaveBeenCalledWith('https://proxy.example', {
+      persist: true,
+    });
+    expect(harness.deps.setCorsProxyFeedback).toHaveBeenLastCalledWith(
+      'Saved. Direct browser requests will retry through https://proxy.example/ only when they appear CORS-blocked.',
+      'success'
+    );
+    expect(harness.deps.setStatus).toHaveBeenCalledWith('CORS proxy saved.');
+  });
+
+  test('clearing the CORS proxy removes the saved proxy and announces the reset', () => {
+    const harness = createHarness();
+    const clearButton = /** @type {HTMLButtonElement} */ (harness.elements.clearCorsProxyButton);
+
+    clearButton.click();
+
+    expect(harness.deps.clearCorsProxyPreference).toHaveBeenCalledWith({ persist: true });
+    expect(harness.deps.clearCorsProxyFeedback).toHaveBeenCalledTimes(1);
+    expect(harness.deps.setStatus).toHaveBeenCalledWith('CORS proxy cleared.');
   });
 
   test('mcp server and command toggles update persistence and prompt preview', () => {

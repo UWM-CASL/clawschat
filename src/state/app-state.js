@@ -33,6 +33,7 @@ export const ORCHESTRATION_STATUSES = Object.freeze({
  *   enabledToolNames?: string[];
  *   mcpServers?: any[];
  *   renderMathMl?: boolean;
+ *   corsProxyUrl?: string;
  *   maxDebugEntries?: number;
  * }} [options]
  */
@@ -43,6 +44,7 @@ export function createAppState({
   enabledToolNames = [],
   mcpServers = [],
   renderMathMl = true,
+  corsProxyUrl = '',
   maxDebugEntries = 120,
 } = {}) {
   return {
@@ -62,6 +64,7 @@ export function createAppState({
     activeGenerationConfig,
     pendingGenerationConfig: null,
     pendingComposerAttachments: [],
+    corsProxyUrl: typeof corsProxyUrl === 'string' ? corsProxyUrl.trim() : '',
     conversationSaveTimerId: null,
     showThinkingByDefault: false,
     enableToolCalling: Boolean(enableToolCalling),

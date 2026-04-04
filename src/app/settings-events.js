@@ -13,6 +13,10 @@ export function bindSettingsEvents({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  corsProxyForm,
+  corsProxyInput,
+  saveCorsProxyButton,
+  clearCorsProxyButton,
   mcpServerEndpointForm,
   mcpServerEndpointInput,
   addMcpServerButton,
@@ -42,6 +46,10 @@ export function bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  saveCorsProxyPreference,
+  clearCorsProxyPreference,
+  setCorsProxyFeedback,
+  clearCorsProxyFeedback,
   applyMcpServerEnabledPreference,
   applyMcpServerCommandEnabledPreference,
   applyMathRenderingPreference,
@@ -192,6 +200,63 @@ export function bindSettingsEvents({
           ? `${toolLabel} enabled for tool calling.`
           : `${toolLabel} disabled for tool calling.`
       );
+    });
+  }
+
+  async function handleCorsProxySave() {
+    const proxyUrl = corsProxyInput instanceof HTMLInputElement ? corsProxyInput.value : '';
+    if (saveCorsProxyButton instanceof HTMLButtonElement) {
+      saveCorsProxyButton.disabled = true;
+    }
+    if (typeof setCorsProxyFeedback === 'function') {
+      setCorsProxyFeedback('Validating CORS proxy...', 'info');
+    }
+    try {
+      const normalizedProxyUrl = await saveCorsProxyPreference(proxyUrl, { persist: true });
+      if (typeof setCorsProxyFeedback === 'function') {
+        setCorsProxyFeedback(
+          `Saved. Direct browser requests will retry through ${normalizedProxyUrl} only when they appear CORS-blocked.`,
+          'success'
+        );
+      }
+      setStatus('CORS proxy saved.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (typeof setCorsProxyFeedback === 'function') {
+        setCorsProxyFeedback(message, 'danger');
+      }
+      setStatus(message);
+    } finally {
+      if (saveCorsProxyButton instanceof HTMLButtonElement) {
+        saveCorsProxyButton.disabled = false;
+      }
+    }
+  }
+
+  if (corsProxyForm instanceof HTMLElement && corsProxyForm.tagName === 'FORM') {
+    corsProxyForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void handleCorsProxySave();
+    });
+  }
+
+  if (corsProxyInput instanceof HTMLInputElement) {
+    corsProxyInput.addEventListener('input', () => {
+      if (typeof clearCorsProxyFeedback === 'function') {
+        clearCorsProxyFeedback();
+      }
+    });
+  }
+
+  if (clearCorsProxyButton instanceof HTMLButtonElement) {
+    clearCorsProxyButton.addEventListener('click', () => {
+      if (typeof clearCorsProxyPreference === 'function') {
+        clearCorsProxyPreference({ persist: true });
+      }
+      if (typeof clearCorsProxyFeedback === 'function') {
+        clearCorsProxyFeedback();
+      }
+      setStatus('CORS proxy cleared.');
     });
   }
 

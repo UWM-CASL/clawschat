@@ -32,6 +32,10 @@ Student-facing browser chat UI with local model inference.
 - `Settings -> Tools` includes:
   - `Enable tool calling` to append tool-call instructions only when the selected conversation model supports tool calling
   - per-tool toggles for each currently available built-in tool; disabled built-in tools are removed from the computed system prompt and ignored if a model still emits them
+- `Settings -> Proxy` includes:
+  - one optional prefix-style CORS proxy URL that is validated against `https://example.com/` before it is saved
+  - automatic retry through that proxy only when a direct cross-origin browser request appears blocked by CORS
+  - safety checks that skip proxy fallback for same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers
 - `Settings -> MCP Servers` includes:
   - adding browser-reachable `https` MCP HTTP endpoints, or `http://localhost`, when they do not require OAuth or token-based authentication
   - imported servers start disabled, and every discovered command starts disabled
@@ -146,7 +150,7 @@ Student-facing browser chat UI with local model inference.
   - If `input` is a direct `https` URL, `web_lookup` returns MIME type, title, and a summary excerpt in markdown inside `body`.
   - If `input` is a search query, `web_lookup` opens a right-side lightweight DuckDuckGo HTML results panel in a portrait 9:16 phone-like frame for that query, then attempts an in-app DuckDuckGo fetch and returns concise search results in `body`.
   - Failed `web_lookup` responses use `status: "failed"` plus retry guidance in `message`.
-  - `web_lookup` uses the browser fetch API directly, so normal browser CORS and fetch restrictions still apply.
+  - `web_lookup`, shell `curl`, reverse-geocoding fetches, and MCP HTTP requests share the same browser fetch helper, which can retry through the validated proxy setting only after a likely CORS block.
   - The shell tool keeps a conversation-local current working directory, defaults it to `/workspace`, and resolves relative paths from that pointer.
   - `run_shell_command` now documents `cmd` as its preferred shell-text argument and still accepts legacy `command` for compatibility.
   - Shell-command input is sanitized before execution: oversized commands, control characters, fenced blocks, and nested tool-call payloads are rejected.
@@ -238,6 +242,7 @@ Student-facing browser chat UI with local model inference.
 - Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
 - Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
 - Browser-local Python execution currently loads Pyodide assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
+- Optional CORS proxy support uses a validated prefix-style proxy URL from `Settings -> Proxy` and retries only after a likely CORS failure; same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers are left on the normal browser path.
 - MCP server support uses browser fetch directly. Only `https` endpoints, or `http://localhost`, are accepted, and servers that require OAuth or token-based authentication are rejected when detected. When an enabled MCP command is called, that command's arguments are sent to the configured MCP endpoint.
 - Attachment ingestion uses browser-local limits before large files are read into memory:
   - text files: 5 MB max, truncated to 400,000 characters

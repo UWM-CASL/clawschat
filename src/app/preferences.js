@@ -8,6 +8,7 @@ import {
   normalizeModelId,
   normalizeSupportedBackendPreference,
 } from '../config/model-settings.js';
+import { getStoredCorsProxyUrl, normalizeCorsProxyUrl } from '../llm/browser-fetch.js';
 import { normalizeMcpServerConfigs, summarizeMcpInputSchema } from '../llm/mcp-client.js';
 import { normalizeSystemPrompt } from '../state/conversation-model.js';
 
@@ -25,6 +26,7 @@ export function createPreferencesController({
   transcriptViewStorageKey,
   conversationPanelCollapsedStorageKey,
   defaultSystemPromptStorageKey,
+  corsProxyStorageKey,
   mcpServersStorageKey,
   modelStorageKey,
   backendStorageKey,
@@ -35,6 +37,8 @@ export function createPreferencesController({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  corsProxyInput,
+  corsProxyFeedback,
   mcpServerEndpointInput,
   mcpServerAddFeedback,
   mcpServersList,
@@ -52,6 +56,7 @@ export function createPreferencesController({
   getRuntimeConfigForModel,
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
+  validateCorsProxyUrl,
   inspectMcpServerEndpoint,
   setStatus,
   appendDebug,
@@ -140,6 +145,17 @@ export function createPreferencesController({
     return normalizeSystemPrompt(storage.getItem(defaultSystemPromptStorageKey));
   }
 
+  function getStoredCorsProxyPreference() {
+    if (!corsProxyStorageKey) {
+      return '';
+    }
+    const normalizedProxyUrl = getStoredCorsProxyUrl(storage.getItem(corsProxyStorageKey));
+    if (!normalizedProxyUrl) {
+      storage.removeItem(corsProxyStorageKey);
+    }
+    return normalizedProxyUrl;
+  }
+
   function applyDefaultSystemPrompt(value, { persist = false } = {}) {
     appState.defaultSystemPrompt = normalizeSystemPrompt(value);
     if (defaultSystemPromptInput instanceof HTMLTextAreaElement) {
@@ -148,6 +164,70 @@ export function createPreferencesController({
     if (persist) {
       storage.setItem(defaultSystemPromptStorageKey, appState.defaultSystemPrompt);
     }
+  }
+
+  function setCorsProxyFeedback(message = '', variant = 'info') {
+    if (!(corsProxyFeedback instanceof HTMLElement)) {
+      return;
+    }
+    const normalizedMessage = typeof message === 'string' ? message.trim() : '';
+    corsProxyFeedback.className = '';
+    corsProxyFeedback.replaceChildren();
+    if (!normalizedMessage) {
+      corsProxyFeedback.classList.add('d-none');
+      corsProxyFeedback.removeAttribute('role');
+      return;
+    }
+    corsProxyFeedback.classList.remove('d-none');
+    corsProxyFeedback.setAttribute('role', variant === 'danger' ? 'alert' : 'status');
+    corsProxyFeedback.classList.add(
+      'alert',
+      variant === 'danger'
+        ? 'alert-danger'
+        : variant === 'success'
+          ? 'alert-success'
+          : 'alert-secondary',
+      'py-2',
+      'px-3',
+      'mb-0'
+    );
+    corsProxyFeedback.textContent = normalizedMessage;
+  }
+
+  function clearCorsProxyFeedback() {
+    setCorsProxyFeedback('');
+  }
+
+  function applyCorsProxyPreference(value, { persist = false } = {}) {
+    const normalizedProxyUrl =
+      typeof value === 'string' && value.trim() ? normalizeCorsProxyUrl(value) : '';
+    appState.corsProxyUrl = normalizedProxyUrl;
+    if (corsProxyInput instanceof HTMLInputElement) {
+      corsProxyInput.value = normalizedProxyUrl;
+    }
+    if (persist && corsProxyStorageKey) {
+      if (normalizedProxyUrl) {
+        storage.setItem(corsProxyStorageKey, normalizedProxyUrl);
+      } else {
+        storage.removeItem(corsProxyStorageKey);
+      }
+    }
+    return normalizedProxyUrl;
+  }
+
+  async function saveCorsProxyPreference(value, { persist = true } = {}) {
+    if (typeof validateCorsProxyUrl !== 'function') {
+      throw new Error('CORS proxy validation is unavailable.');
+    }
+    const normalizedProxyUrl = await validateCorsProxyUrl(value);
+    applyCorsProxyPreference(normalizedProxyUrl, { persist });
+    clearCorsProxyFeedback();
+    return normalizedProxyUrl;
+  }
+
+  function clearCorsProxyPreference({ persist = false } = {}) {
+    applyCorsProxyPreference('', { persist });
+    clearCorsProxyFeedback();
   }
 
   function applyShowThinkingPreference(value, { persist = false, refresh = false } = {}) {
@@ -1202,6 +1282,7 @@ export function createPreferencesController({
   }
 
   renderToolAvailabilityPreferences();
+  clearCorsProxyFeedback();
   renderMcpServerPreferences();
   clearMcpServerFeedback();
 
@@ -1215,11 +1296,17 @@ export function createPreferencesController({
     getStoredTranscriptViewPreference,
     getStoredConversationPanelCollapsedPreference,
     getStoredDefaultSystemPrompt,
+    getStoredCorsProxyPreference,
     applyDefaultSystemPrompt,
+    applyCorsProxyPreference,
     applyShowThinkingPreference,
     applyToolCallingPreference,
     applyEnabledToolNamesPreference,
     applyToolEnabledPreference,
+    saveCorsProxyPreference,
+    clearCorsProxyPreference,
+    setCorsProxyFeedback,
+    clearCorsProxyFeedback,
     applyMcpServersPreference,
     applyMcpServerEnabledPreference,
     applyMcpServerCommandEnabledPreference,

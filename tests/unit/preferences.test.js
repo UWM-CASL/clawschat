@@ -15,6 +15,8 @@ function createPreferencesHarness() {
       <input id="showThinkingToggle" type="checkbox" />
       <input id="enableToolCallingToggle" type="checkbox" />
       <div id="toolSettingsList"></div>
+      <input id="corsProxyInput" type="url" />
+      <div id="corsProxyFeedback"></div>
       <input id="mcpServerEndpointInput" type="url" />
       <div id="mcpServerAddFeedback"></div>
       <div id="mcpServersList"></div>
@@ -69,6 +71,7 @@ function createPreferencesHarness() {
       transcriptViewStorageKey: 'transcript-view',
       conversationPanelCollapsedStorageKey: 'conversation-panel-collapsed',
       defaultSystemPromptStorageKey: 'default-prompt',
+      corsProxyStorageKey: 'cors-proxy',
       mcpServersStorageKey: 'mcp-servers',
       modelStorageKey: 'model',
       backendStorageKey: 'backend',
@@ -79,6 +82,8 @@ function createPreferencesHarness() {
       showThinkingToggle: document.getElementById('showThinkingToggle'),
       enableToolCallingToggle: document.getElementById('enableToolCallingToggle'),
       toolSettingsList: document.getElementById('toolSettingsList'),
+      corsProxyInput: document.getElementById('corsProxyInput'),
+      corsProxyFeedback: document.getElementById('corsProxyFeedback'),
       mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
       mcpServerAddFeedback: document.getElementById('mcpServerAddFeedback'),
       mcpServersList: document.getElementById('mcpServersList'),
@@ -98,6 +103,12 @@ function createPreferencesHarness() {
       getRuntimeConfigForModel: vi.fn(() => ({})),
       syncGenerationSettingsFromModel: vi.fn(),
       persistGenerationConfigForModel: vi.fn(),
+      validateCorsProxyUrl: vi.fn(async (value) => {
+        if (String(value || '').includes('bad-proxy')) {
+          throw new Error('The proxy test failed.');
+        }
+        return 'https://proxy.example/';
+      }),
       inspectMcpServerEndpoint: vi.fn(),
       setStatus: vi.fn(),
       appendDebug: vi.fn(),
@@ -189,6 +200,30 @@ describe('preferences controller', () => {
     expect(harness.document.querySelector('[data-tool-name="run_shell_command"]')?.checked).toBe(
       false
     );
+  });
+
+  test('stores a validated CORS proxy URL and restores it into state and the input', async () => {
+    const harness = createPreferencesHarness();
+
+    const savedProxyUrl = await harness.controller.saveCorsProxyPreference('https://proxy.example', {
+      persist: true,
+    });
+
+    expect(savedProxyUrl).toBe('https://proxy.example/');
+    expect(harness.controller.getStoredCorsProxyPreference()).toBe('https://proxy.example/');
+    expect(harness.appState.corsProxyUrl).toBe('https://proxy.example/');
+    expect(harness.document.getElementById('corsProxyInput')?.value).toBe('https://proxy.example/');
+  });
+
+  test('clears a stored CORS proxy URL and removes it from storage', async () => {
+    const harness = createPreferencesHarness();
+
+    await harness.controller.saveCorsProxyPreference('https://proxy.example', { persist: true });
+    harness.controller.clearCorsProxyPreference({ persist: true });
+
+    expect(harness.controller.getStoredCorsProxyPreference()).toBe('');
+    expect(harness.appState.corsProxyUrl).toBe('');
+    expect(harness.document.getElementById('corsProxyInput')?.value).toBe('');
   });
 
   test('persists MCP servers and renders per-server and per-command toggles', () => {

@@ -592,6 +592,17 @@
                     <button
                       type="button"
                       class="nav-link"
+                      id="settingsTabProxy"
+                      role="tab"
+                      data-settings-tab="proxy"
+                      aria-controls="settingsProxyPanel"
+                      aria-selected="false"
+                    >
+                      Proxy
+                    </button>
+                    <button
+                      type="button"
+                      class="nav-link"
                       id="settingsTabMcpServers"
                       role="tab"
                       data-settings-tab="mcpServers"
@@ -934,6 +945,49 @@
                         class="d-flex flex-column gap-3"
                         aria-labelledby="availableToolsLabel"
                       ></div>
+                    </div>
+                  </section>
+
+                  <section
+                    id="settingsProxyPanel"
+                    class="settings-tab-panel d-none"
+                    role="tabpanel"
+                    data-settings-tab-panel="proxy"
+                    aria-labelledby="settingsTabProxy"
+                  >
+                    <h3 class="h6 mb-0" id="settingsProxyHeading">Proxy</h3>
+                    <div class="settings-control-group">
+                      <form id="corsProxyForm" class="mcp-server-form">
+                        <label class="form-label" for="corsProxyInput">CORS proxy prefix</label>
+                        <div class="input-group">
+                          <input
+                            id="corsProxyInput"
+                            class="form-control"
+                            type="url"
+                            inputmode="url"
+                            placeholder="https://proxy.example/"
+                            aria-describedby="corsProxyHelp corsProxyFeedback"
+                          />
+                          <button id="saveCorsProxyButton" type="submit" class="btn btn-primary">
+                            Validate and save
+                          </button>
+                          <button
+                            id="clearCorsProxyButton"
+                            type="button"
+                            class="btn btn-outline-secondary"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <p id="corsProxyHelp" class="form-text mb-0">
+                          Uses a prefix-style proxy only when a direct browser request appears
+                          blocked by CORS. Proxy URLs must use <code>https</code>, or
+                          <code>http://localhost</code>, must not include credentials, query
+                          strings, or fragments, and are tested against
+                          <code>https://example.com/</code> before saving.
+                        </p>
+                        <div id="corsProxyFeedback" class="d-none mt-3" aria-live="polite"></div>
+                      </form>
                     </div>
                   </section>
 
