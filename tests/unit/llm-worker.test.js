@@ -1,13 +1,16 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 
 let resolvePrompt;
+let buildMultimodalChatTemplateOptions;
 
 beforeAll(async () => {
   globalThis.self = /** @type {any} */ ({
     postMessage: () => {},
     onmessage: null,
   });
-  ({ resolvePrompt } = await import('../../src/workers/llm.worker.js'));
+  ({ resolvePrompt, buildMultimodalChatTemplateOptions } = await import(
+    '../../src/workers/llm.worker.js'
+  ));
 });
 
 describe('llm.worker resolvePrompt', () => {
@@ -59,5 +62,20 @@ describe('llm.worker resolvePrompt', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('llm.worker multimodal chat template options', () => {
+  test('forwards the thinking flag when runtime thinking is enabled', () => {
+    expect(buildMultimodalChatTemplateOptions({ enableThinking: true })).toEqual({
+      add_generation_prompt: true,
+      enable_thinking: true,
+    });
+  });
+
+  test('omits the thinking flag when runtime thinking is disabled', () => {
+    expect(buildMultimodalChatTemplateOptions({ enableThinking: false })).toEqual({
+      add_generation_prompt: true,
+    });
   });
 });

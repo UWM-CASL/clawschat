@@ -192,6 +192,13 @@ function normalizeRuntimeConfig(rawRuntime) {
   };
 }
 
+function buildMultimodalChatTemplateOptions(runtime = {}) {
+  return {
+    add_generation_prompt: true,
+    ...(runtime.enableThinking ? { enable_thinking: true } : {}),
+  };
+}
+
 function normalizePromptContentPart(rawPart) {
   if (!rawPart || typeof rawPart !== 'object') {
     return null;
@@ -456,6 +463,7 @@ function countPromptParts(prompt, type) {
 export { resolvePrompt };
 export { getBackendAttemptOrder };
 export { prepareImageInputsFromPrompt };
+export { buildMultimodalChatTemplateOptions };
 
 function promptContainsStructuredMedia(prompt) {
   return Array.isArray(prompt)
@@ -726,9 +734,10 @@ async function generate(payload) {
         formattedPrompt,
         RawImage
       );
-      const promptText = processor.apply_chat_template(messages, {
-        add_generation_prompt: true,
-      });
+      const promptText = processor.apply_chat_template(
+        messages,
+        buildMultimodalChatTemplateOptions(runtime)
+      );
       const imageInputs = images.length > 1 ? images : images[0] || null;
       const audioInputs = audios.length > 1 ? audios : audios[0] || null;
       const modelInputs = await processor(promptText, imageInputs, audioInputs, {
