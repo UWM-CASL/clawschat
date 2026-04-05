@@ -247,10 +247,61 @@ export function createToolingPreferencesController({
     list.appendChild(description);
   }
 
+  function captureMcpServerListUiState() {
+    if (!(mcpServersList instanceof HTMLElement)) {
+      return {
+        expandedPanelIds: new Set(),
+        focusedElementId: '',
+        scrollTop: 0,
+      };
+    }
+    const expandedPanelIds = new Set(
+      Array.from(mcpServersList.querySelectorAll('.accordion-collapse.show'))
+        .map((panel) => (panel instanceof HTMLElement ? panel.id : ''))
+        .filter(Boolean)
+    );
+    const activeElement =
+      documentRef.activeElement instanceof HTMLElement &&
+      mcpServersList.contains(documentRef.activeElement)
+        ? documentRef.activeElement
+        : null;
+    return {
+      expandedPanelIds,
+      focusedElementId: activeElement?.id || '',
+      scrollTop: mcpServersList.scrollTop,
+    };
+  }
+
+  function restoreMcpServerListUiState({ expandedPanelIds, focusedElementId, scrollTop }) {
+    if (!(mcpServersList instanceof HTMLElement)) {
+      return;
+    }
+    expandedPanelIds.forEach((panelId) => {
+      const panel = documentRef.getElementById(panelId);
+      if (!(panel instanceof HTMLElement)) {
+        return;
+      }
+      panel.classList.add('show');
+      const headerButton = mcpServersList.querySelector(`[data-bs-target="#${panelId}"]`);
+      if (headerButton instanceof HTMLElement) {
+        headerButton.classList.remove('collapsed');
+        headerButton.setAttribute('aria-expanded', 'true');
+      }
+    });
+    mcpServersList.scrollTop = typeof scrollTop === 'number' ? scrollTop : 0;
+    if (focusedElementId) {
+      const nextFocusTarget = documentRef.getElementById(focusedElementId);
+      if (nextFocusTarget instanceof HTMLElement) {
+        nextFocusTarget.focus({ preventScroll: true });
+      }
+    }
+  }
+
   function renderMcpServerPreferences() {
     if (!(mcpServersList instanceof HTMLElement)) {
       return;
     }
+    const uiState = captureMcpServerListUiState();
     const servers = normalizeMcpServerConfigs(appState.mcpServers);
     mcpServersList.replaceChildren();
     if (!servers.length) {
@@ -323,7 +374,7 @@ export function createToolingPreferencesController({
       actionGroup.className = 'd-flex flex-wrap gap-2';
       const refreshButton = documentRef.createElement('button');
       refreshButton.type = 'button';
-      refreshButton.className = 'btn btn-outline-secondary btn-sm';
+      refreshButton.className = 'btn btn-outline-primary btn-sm';
       refreshButton.textContent = 'Refresh metadata';
       refreshButton.dataset.mcpServerRefresh = 'true';
       refreshButton.dataset.mcpServerId = server.identifier;
@@ -381,6 +432,7 @@ export function createToolingPreferencesController({
           commandToggle.role = 'switch';
           commandToggle.id = buildMcpServerCommandToggleId(server.identifier, command.name);
           commandToggle.checked = command.enabled;
+          commandToggle.disabled = !server.enabled;
           commandToggle.dataset.mcpCommandToggle = 'true';
           commandToggle.dataset.mcpServerId = server.identifier;
           commandToggle.dataset.mcpCommandName = command.name;
@@ -401,6 +453,9 @@ export function createToolingPreferencesController({
             helpTextParts.push(command.description);
           }
           helpTextParts.push(summarizeMcpInputSchema(command.inputSchema));
+          if (!server.enabled) {
+            helpTextParts.push('Enable this server to change command availability.');
+          }
           const commandHelp = documentRef.createElement('p');
           commandHelp.className = 'form-text mb-0';
           commandHelp.textContent = helpTextParts.filter(Boolean).join(' ');
@@ -415,6 +470,7 @@ export function createToolingPreferencesController({
       accordionItem.appendChild(collapse);
       mcpServersList.appendChild(accordionItem);
     });
+    restoreMcpServerListUiState(uiState);
   }
 
   function applyMcpServersPreference(value, { persist = false } = {}) {

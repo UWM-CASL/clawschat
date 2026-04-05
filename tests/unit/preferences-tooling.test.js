@@ -251,4 +251,96 @@ describe('preferences-tooling', () => {
       true
     );
   });
+
+  test('disables command toggles while their MCP server is disabled', () => {
+    const harness = createHarness({
+      appState: {
+        enableToolCalling: true,
+        enabledToolNames: ['run_shell_command'],
+        mcpServers: [
+          {
+            identifier: 'docs',
+            endpoint: 'https://example.test/mcp',
+            displayName: 'Docs',
+            description: 'Project documentation lookup.',
+            enabled: false,
+            commands: [
+              {
+                name: 'search_docs',
+                displayName: 'Search Docs',
+                description: 'Search the documentation.',
+                enabled: false,
+                inputSchema: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const commandToggle = /** @type {HTMLInputElement | null} */ (
+      harness.document.querySelector('[data-mcp-command-toggle="true"]')
+    );
+
+    expect(commandToggle?.disabled).toBe(true);
+    expect(harness.document.getElementById('mcpServersList')?.textContent).toContain(
+      'Enable this server to change command availability.'
+    );
+
+    harness.controller.applyMcpServerEnabledPreference('docs', true);
+
+    expect(commandToggle?.isConnected).toBe(false);
+    expect(
+      harness.document.querySelector('[data-mcp-command-toggle="true"]')?.disabled
+    ).toBe(false);
+  });
+
+  test('preserves expanded accordion panels across MCP preference rerenders', () => {
+    const harness = createHarness({
+      appState: {
+        enableToolCalling: true,
+        enabledToolNames: ['run_shell_command'],
+        mcpServers: [
+          {
+            identifier: 'docs',
+            endpoint: 'https://example.test/mcp',
+            displayName: 'Docs',
+            description: 'Project documentation lookup.',
+            enabled: false,
+            commands: [
+              {
+                name: 'search_docs',
+                displayName: 'Search Docs',
+                description: 'Search the documentation.',
+                enabled: false,
+                inputSchema: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const panel = /** @type {HTMLElement | null} */ (
+      harness.document.getElementById('mcpServerPanel-docs')
+    );
+    const headerButton = /** @type {HTMLButtonElement | null} */ (
+      harness.document.querySelector('[data-bs-target="#mcpServerPanel-docs"]')
+    );
+
+    panel?.classList.add('show');
+    headerButton?.classList.remove('collapsed');
+    headerButton?.setAttribute('aria-expanded', 'true');
+
+    harness.controller.applyMcpServerEnabledPreference('docs', true);
+
+    expect(harness.document.getElementById('mcpServerPanel-docs')?.classList.contains('show')).toBe(
+      true
+    );
+    expect(
+      harness.document
+        .querySelector('[data-bs-target="#mcpServerPanel-docs"]')
+        ?.getAttribute('aria-expanded')
+    ).toBe('true');
+  });
 });
