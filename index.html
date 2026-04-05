@@ -984,7 +984,9 @@
                           blocked by CORS. Proxy URLs must use <code>https</code>, or
                           <code>http://localhost</code>, must not include credentials or fragments,
                           may include query-string prefixes such as <code>?url=</code>, and are
-                          tested against <code>https://example.com/</code> before saving.
+                          tested with an MCP initialize probe against
+                          <code>https://example-server.modelcontextprotocol.io/mcp</code> before
+                          saving.
                         </p>
                         <div id="corsProxyFeedback" class="d-none mt-3" aria-live="polite"></div>
                       </form>

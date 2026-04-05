@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import {
+  CORS_PROXY_VALIDATION_TARGET_URL,
   buildCorsProxyRequestUrl,
   createCorsAwareFetch,
   normalizeCorsProxyUrl,
@@ -34,16 +35,66 @@ describe('browser fetch helper', () => {
     );
   });
 
-  test('validates a proxy by fetching the example.com probe page through it', async () => {
+  test('validates a proxy by sending an MCP initialize probe through it', async () => {
     const fetchRef = vi.fn(async (url, init = {}) => {
-      expect(url).toBe('https://proxy.example/https://example.com/');
-      expect(init.method).toBe('GET');
-      return new globalThis.Response('<title>Example Domain</title><h1>Example Domain</h1>', {
-        status: 200,
-        headers: {
-          'content-type': 'text/html',
+      expect(url).toBe(`https://proxy.example/${CORS_PROXY_VALIDATION_TARGET_URL}`);
+      expect(init.method).toBe('POST');
+      const headers = new globalThis.Headers(init.headers);
+      expect(headers.get('accept')).toBe('application/json, text/event-stream');
+      expect(headers.get('content-type')).toBe('application/json');
+      expect(headers.get('mcp-protocol-version')).toBe('2025-03-26');
+      expect(JSON.parse(init.body)).toEqual({
+        jsonrpc: '2.0',
+        id: 'proxy-validation-initialize',
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: {
+            name: 'browser-llm-runner-proxy-validation',
+            version: '1.0.0',
+          },
         },
       });
+      return new globalThis.Response(
+        '{"error":"invalid_token","error_description":"Missing Authorization header"}',
+        {
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: {
+            'content-type': 'application/json',
+            'www-authenticate':
+              'Bearer error="invalid_token", resource_metadata="https://example-server.modelcontextprotocol.io/.well-known/oauth-protected-resource"',
+          },
+        }
+      );
+    });
+
+    await expect(
+      validateCorsProxyUrl('https://proxy.example', {
+        fetchRef,
+      })
+    ).resolves.toBe('https://proxy.example/');
+    expect(fetchRef).toHaveBeenCalledTimes(1);
+  });
+
+  test('accepts a direct JSON-RPC initialize response from the probe endpoint', async () => {
+    const fetchRef = vi.fn(async () => {
+      return new globalThis.Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'proxy-validation-initialize',
+          result: {
+            protocolVersion: '2025-03-26',
+          },
+        }),
+        {
+          status: 200,
+        headers: {
+            'content-type': 'application/json',
+          },
+        },
+      );
     });
 
     await expect(

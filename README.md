@@ -34,7 +34,7 @@ Student-facing browser chat UI with local model inference.
   - `Enable tool calling` to append tool-call instructions only when the selected conversation model supports tool calling
   - per-tool toggles for each currently available built-in tool; disabled built-in tools are removed from the computed system prompt and ignored if a model still emits them
 - `Settings -> Proxy` includes:
-  - one optional prefix-style CORS proxy URL that is validated against `https://example.com/` before it is saved
+  - one optional prefix-style CORS proxy URL that is validated with an MCP `initialize` probe against `https://example-server.modelcontextprotocol.io/mcp` before it is saved
   - query-string-style prefixes such as `https://proxy.example/?url=` are allowed and preserved as entered
   - automatic retry through that proxy only when a direct cross-origin browser request appears blocked by CORS
   - safety checks that skip proxy fallback for same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers
@@ -264,7 +264,7 @@ Student-facing browser chat UI with local model inference.
 - Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
 - Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
 - Browser-local Python execution currently loads Pyodide assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
-- Optional CORS proxy support uses a validated prefix-style proxy URL from `Settings -> Proxy` and retries only after a likely CORS failure; same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers are left on the normal browser path.
+- Optional CORS proxy support uses a validated prefix-style proxy URL from `Settings -> Proxy`; validation now sends an MCP `initialize` probe to `https://example-server.modelcontextprotocol.io/mcp`, accepts the reference server's auth challenge as proof that the proxied MCP transport is browser-readable, and retries only after a likely CORS failure. Same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers are left on the normal browser path.
 - MCP server support uses browser fetch directly. Only `https` endpoints, or `http://localhost`, are accepted, and servers that require OAuth or token-based authentication are rejected when detected. When an enabled MCP command is called, that command's arguments are sent to the configured MCP endpoint.
 - Attachment ingestion uses browser-local limits before large files are read into memory:
   - text files: 5 MB max, truncated to 400,000 characters

@@ -6,7 +6,10 @@ const SENSITIVE_PROXY_HEADER_NAMES = new Set([
   'proxy-authorization',
   'x-api-key',
 ]);
-export const CORS_PROXY_VALIDATION_TARGET_URL = 'https://example.com/';
+export const CORS_PROXY_VALIDATION_TARGET_URL =
+  'https://example-server.modelcontextprotocol.io/mcp';
+const CORS_PROXY_VALIDATION_PROTOCOL_VERSION = '2025-03-26';
+const CORS_PROXY_VALIDATION_REQUEST_ID = 'proxy-validation-initialize';
 
 function isLocalHttpUrl(url) {
   const hostname = String(url?.hostname || '').toLowerCase();
@@ -98,6 +101,87 @@ function buildBodyPreview(value, maxLength = 140) {
   return normalized.length <= maxLength
     ? normalized
     : `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function parseJsonText(value) {
+  const normalizedValue = typeof value === 'string' ? value.trim() : '';
+  if (!normalizedValue) {
+    return null;
+  }
+  try {
+    return JSON.parse(normalizedValue);
+  } catch {
+    return null;
+  }
+}
+
+function getResponseHeader(response, name) {
+  if (!response?.headers || typeof response.headers.get !== 'function') {
+    return '';
+  }
+  return normalizeResponseMetadataText(response.headers.get(name));
+}
+
+function hasMcpAuthChallenge(response) {
+  const authHeader =
+    getResponseHeader(response, 'www-authenticate') ||
+    getResponseHeader(response, 'mcp-www-authenticate');
+  return Boolean(authHeader) && /bearer|oauth|token/i.test(authHeader);
+}
+
+function isJsonRpcEnvelope(payload) {
+  return Boolean(
+    payload &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload) &&
+      ('result' in payload || 'error' in payload)
+  );
+}
+
+function isExpectedMcpProbeResponse(response, responseText, probeTargetUrl) {
+  const parsedPayload = parseJsonText(responseText);
+  if (response?.ok && isJsonRpcEnvelope(parsedPayload)) {
+    return true;
+  }
+  if (
+    response?.ok &&
+    /text\/event-stream/i.test(getResponseContentType(response)) &&
+    /\bjsonrpc\b/i.test(responseText) &&
+    /\bdata:/i.test(responseText)
+  ) {
+    return true;
+  }
+  if (!response || (response.status !== 401 && response.status !== 403)) {
+    return false;
+  }
+  const probeHost = (() => {
+    try {
+      return new URL(String(probeTargetUrl || '').trim()).host.toLowerCase();
+    } catch {
+      return '';
+    }
+  })();
+  const authHeader =
+    getResponseHeader(response, 'www-authenticate') ||
+    getResponseHeader(response, 'mcp-www-authenticate');
+  const previewSource = [
+    authHeader,
+    responseText,
+    parsedPayload && typeof parsedPayload.error === 'string' ? parsedPayload.error : '',
+    parsedPayload && typeof parsedPayload.error_description === 'string'
+      ? parsedPayload.error_description
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  if (
+    hasMcpAuthChallenge(response) &&
+    probeHost &&
+    authHeader.toLowerCase().includes(probeHost)
+  ) {
+    return true;
+  }
+  return /invalid_token/i.test(previewSource) && /authorization header/i.test(previewSource);
 }
 
 /**
@@ -300,11 +384,26 @@ export async function validateCorsProxyUrl(
   let response;
   try {
     response = await activeFetchRef(probeRequestUrl, {
-      method: 'GET',
+      method: 'POST',
       cache: 'no-store',
       headers: {
-        Accept: 'text/html, text/plain;q=0.9, */*;q=0.1',
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': CORS_PROXY_VALIDATION_PROTOCOL_VERSION,
       },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: CORS_PROXY_VALIDATION_REQUEST_ID,
+        method: 'initialize',
+        params: {
+          protocolVersion: CORS_PROXY_VALIDATION_PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: {
+            name: 'browser-llm-runner-proxy-validation',
+            version: '1.0.0',
+          },
+        },
+      }),
     });
   } catch (error) {
     emitDebug(onDebug, `CORS proxy validation fetch failed: ${normalizeInlineErrorMessage(error)}`);
@@ -313,11 +412,6 @@ export async function validateCorsProxyUrl(
     );
   }
   emitDebug(onDebug, `CORS proxy validation response: ${formatResponseSummary(response)}.`);
-  if (!response?.ok) {
-    throw new Error(
-      `The CORS proxy test request failed (${response?.status || 0}${response?.statusText ? ` ${response.statusText}` : ''}; ${getResponseContentType(response) || 'unknown content type'}).`
-    );
-  }
   let previewText = '';
   try {
     previewText = await response.text();
@@ -331,9 +425,9 @@ export async function validateCorsProxyUrl(
     );
   }
   emitDebug(onDebug, `CORS proxy validation body preview: ${buildBodyPreview(previewText) || '(empty)'}.`);
-  if (!/example domain/i.test(previewText)) {
+  if (!isExpectedMcpProbeResponse(response, previewText, probeTargetUrl)) {
     throw new Error(
-      `The proxy did not return the expected test page. Use a prefix-style proxy that can fetch https://example.com/. Response preview: ${buildBodyPreview(previewText) || '(empty body)'}.`
+      `The proxy did not return the expected MCP probe response. Use a prefix-style proxy that can relay an MCP initialize request to ${probeTargetUrl}. Response preview: ${buildBodyPreview(previewText) || '(empty body)'}.`
     );
   }
   emitDebug(onDebug, `CORS proxy validation succeeded for ${normalizedProxyUrl}.`);
