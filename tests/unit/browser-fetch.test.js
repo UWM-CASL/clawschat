@@ -54,6 +54,34 @@ describe('browser fetch helper', () => {
     expect(fetchRef).toHaveBeenCalledTimes(1);
   });
 
+  test('includes response metadata when the proxy response body cannot be read', async () => {
+    const unreadableResponse = Object.assign(new globalThis.Response('', {
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+      },
+    }), {
+      text: vi.fn(async () => {
+        throw new Error('Body stream unavailable');
+      }),
+    });
+    const fetchRef = vi.fn(async () => unreadableResponse);
+    const onDebug = vi.fn();
+
+    await expect(
+      validateCorsProxyUrl('https://proxy.example', {
+        fetchRef,
+        onDebug,
+      })
+    ).rejects.toThrow(
+      'The CORS proxy test response could not be read by the browser (status 200 OK, content-type text/html; charset=utf-8).'
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.stringContaining('CORS proxy validation response body could not be read')
+    );
+  });
+
   test('retries through the configured proxy only after a likely CORS block', async () => {
     const fetchRef = vi
       .fn()

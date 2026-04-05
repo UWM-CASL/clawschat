@@ -1586,6 +1586,7 @@ async function executeCallMcpServerCommand(argumentsValue = {}, runtimeContext =
     {
       fetchRef:
         runtimeContext.fetchRef || (typeof fetch === 'function' ? fetch.bind(globalThis) : null),
+      onDebug: runtimeContext.onDebug,
     }
   );
 }

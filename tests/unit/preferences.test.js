@@ -4,7 +4,16 @@ import { createAppState } from '../../src/state/app-state.js';
 import { createPreferencesController } from '../../src/app/preferences.js';
 import { getEnabledToolDefinitions } from '../../src/llm/tool-calling.js';
 
-function createPreferencesHarness() {
+function createPreferencesHarness({
+  validateCorsProxyUrl = vi.fn(async (value) => {
+    if (String(value || '').includes('bad-proxy')) {
+      throw new Error('The proxy test failed.');
+    }
+    return 'https://proxy.example/';
+  }),
+  inspectMcpServerEndpoint = vi.fn(),
+  appendDebug = vi.fn(),
+} = {}) {
   const dom = new JSDOM(
     `
       <select id="themeSelect">
@@ -103,16 +112,14 @@ function createPreferencesHarness() {
       getRuntimeConfigForModel: vi.fn(() => ({})),
       syncGenerationSettingsFromModel: vi.fn(),
       persistGenerationConfigForModel: vi.fn(),
-      validateCorsProxyUrl: vi.fn(async (value) => {
-        if (String(value || '').includes('bad-proxy')) {
-          throw new Error('The proxy test failed.');
-        }
-        return 'https://proxy.example/';
-      }),
-      inspectMcpServerEndpoint: vi.fn(),
+      validateCorsProxyUrl,
+      inspectMcpServerEndpoint,
       setStatus: vi.fn(),
-      appendDebug: vi.fn(),
+      appendDebug,
     }),
+    validateCorsProxyUrl,
+    inspectMcpServerEndpoint,
+    appendDebug,
   };
 }
 
@@ -215,6 +222,32 @@ describe('preferences controller', () => {
     expect(harness.document.getElementById('corsProxyInput')?.value).toBe('https://proxy.example/');
   });
 
+  test('forwards proxy validation debug messages into the app debug log', async () => {
+    const validateCorsProxyUrl = vi.fn(async (_value, options = {}) => {
+      options.onDebug?.('Proxy probe response: status 200 OK.');
+      return 'https://proxy.example/';
+    });
+    const appendDebug = vi.fn();
+    const harness = createPreferencesHarness({
+      validateCorsProxyUrl,
+      appendDebug,
+    });
+
+    await harness.controller.saveCorsProxyPreference('https://proxy.example', {
+      persist: false,
+    });
+
+    expect(validateCorsProxyUrl).toHaveBeenCalledWith(
+      'https://proxy.example',
+      expect.objectContaining({
+        onDebug: expect.any(Function),
+      })
+    );
+    expect(appendDebug).toHaveBeenCalledWith(
+      'Proxy validation: Proxy probe response: status 200 OK.'
+    );
+  });
+
   test('clears a stored CORS proxy URL and removes it from storage', async () => {
     const harness = createPreferencesHarness();
 
@@ -224,6 +257,47 @@ describe('preferences controller', () => {
     expect(harness.controller.getStoredCorsProxyPreference()).toBe('');
     expect(harness.appState.corsProxyUrl).toBe('');
     expect(harness.document.getElementById('corsProxyInput')?.value).toBe('');
+  });
+
+  test('forwards MCP inspection debug messages into the app debug log', async () => {
+    const inspectMcpServerEndpoint = vi.fn(async (_endpoint, options = {}) => {
+      options.onDebug?.('MCP inspect docs.example: MCP initialize -> https://docs.example/mcp.');
+      return {
+        identifier: 'docs',
+        endpoint: 'https://docs.example/mcp',
+        displayName: 'Docs',
+        description: 'Docs MCP.',
+        enabled: false,
+        commands: [
+          {
+            name: 'search_docs',
+            displayName: 'search_docs',
+            description: 'Search docs.',
+            enabled: false,
+            inputSchema: null,
+          },
+        ],
+      };
+    });
+    const appendDebug = vi.fn();
+    const harness = createPreferencesHarness({
+      inspectMcpServerEndpoint,
+      appendDebug,
+    });
+
+    await harness.controller.importMcpServerEndpoint('https://docs.example/mcp', {
+      persist: false,
+    });
+
+    expect(inspectMcpServerEndpoint).toHaveBeenCalledWith(
+      'https://docs.example/mcp',
+      expect.objectContaining({
+        onDebug: expect.any(Function),
+      })
+    );
+    expect(appendDebug).toHaveBeenCalledWith(
+      'MCP inspect docs.example: MCP initialize -> https://docs.example/mcp.'
+    );
   });
 
   test('persists MCP servers and renders per-server and per-command toggles', () => {

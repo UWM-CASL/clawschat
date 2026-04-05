@@ -152,7 +152,9 @@ export function createPreferencesController({
     if (typeof validateCorsProxyUrl !== 'function') {
       throw new Error('CORS proxy validation is unavailable.');
     }
-    const normalizedProxyUrl = await validateCorsProxyUrl(value);
+    const normalizedProxyUrl = await validateCorsProxyUrl(value, {
+      onDebug: (message) => appendDebug(`Proxy validation: ${message}`),
+    });
     applyCorsProxyPreference(normalizedProxyUrl, { persist });
     clearCorsProxyFeedback();
     return normalizedProxyUrl;
@@ -191,7 +193,14 @@ export function createPreferencesController({
     mcpServerEndpointInput,
     mcpServerAddFeedback,
     mcpServersList,
-    inspectMcpServerEndpoint,
+    inspectMcpServerEndpoint:
+      typeof inspectMcpServerEndpoint === 'function'
+        ? (endpoint, options = {}) =>
+            inspectMcpServerEndpoint(endpoint, {
+              ...options,
+              onDebug: (message) => appendDebug(message),
+            })
+        : inspectMcpServerEndpoint,
   });
 
   function applyShowThinkingPreference(value, { persist = false, refresh = false } = {}) {

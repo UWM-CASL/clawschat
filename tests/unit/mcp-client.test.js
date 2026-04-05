@@ -266,6 +266,53 @@ describe('mcp client', () => {
     );
   });
 
+  test('reports non-JSON error pages with the HTTP status and content type', async () => {
+    const onDebug = vi.fn();
+    const fetchRef = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            jsonrpc: '2.0',
+            id: 'initialize-1',
+            result: {
+              protocolVersion: '2025-03-26',
+              serverInfo: {
+                name: 'Docs Server',
+              },
+            },
+          },
+          {
+            headers: {
+              'Mcp-Session-Id': 'session-1',
+            },
+          }
+        )
+      )
+      .mockResolvedValueOnce(new globalThis.Response('', { status: 202 }))
+      .mockResolvedValueOnce(
+        new globalThis.Response('<!doctype html><title>Bad gateway</title>', {
+          status: 502,
+          statusText: 'Bad Gateway',
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+          },
+        })
+      );
+
+    const client = new McpHttpClient('https://example.com/mcp', {
+      fetchRef,
+      onDebug,
+    });
+
+    await expect(client.listTools()).rejects.toThrow(
+      'The MCP server request failed (502 Bad Gateway) and returned text/html; charset=utf-8 data instead of JSON-RPC.'
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.stringContaining('response parse failed on error body')
+    );
+  });
+
   test('calls an MCP command and normalizes event-stream text content', async () => {
     const fetchRef = vi
       .fn()

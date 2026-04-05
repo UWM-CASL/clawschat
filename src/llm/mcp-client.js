@@ -42,6 +42,20 @@ function slugifyIdentifier(value) {
   return normalized || 'mcp-server';
 }
 
+function createPrefixedDebugLogger(onDebug, prefix) {
+  if (typeof onDebug !== 'function') {
+    return null;
+  }
+  const normalizedPrefix = typeof prefix === 'string' && prefix.trim() ? prefix.trim() : 'MCP';
+  return (message) => {
+    const normalizedMessage = typeof message === 'string' ? message.trim() : '';
+    if (!normalizedMessage) {
+      return;
+    }
+    onDebug(`${normalizedPrefix}: ${normalizedMessage}`);
+  };
+}
+
 export function buildUniqueMcpServerIdentifier(value, existingIdentifiers = []) {
   const baseIdentifier = slugifyIdentifier(value);
   const existingIdentifierSet = new Set(
@@ -333,13 +347,15 @@ function normalizeInspectionResult(
 
 /**
  * @param {string} endpoint
- * @param {{fetchRef?: typeof fetch; preferredIdentifier?: string; existingIdentifiers?: string[]}} [options]
+ * @param {{fetchRef?: typeof fetch; preferredIdentifier?: string; existingIdentifiers?: string[]; onDebug?: ((message: string) => void) | null}} [options]
  */
 export async function inspectMcpServerEndpoint(endpoint, options = {}) {
-  const { fetchRef, preferredIdentifier = '', existingIdentifiers = [] } = options;
+  const { fetchRef, preferredIdentifier = '', existingIdentifiers = [], onDebug } = options;
   const endpointUrl = assertSupportedMcpEndpoint(endpoint);
+  const debugLogger = createPrefixedDebugLogger(onDebug, `MCP inspect ${endpointUrl.host}`);
   const client = new McpHttpClient(endpointUrl.toString(), {
     fetchRef,
+    onDebug: debugLogger,
   });
   const initializeResult = await client.initialize();
   const commands = await client.listTools();
@@ -398,7 +414,7 @@ function buildCommandResultBody(content, structuredContent) {
  * @param {any} server
  * @param {string} commandName
  * @param {Record<string, any>} [commandArguments]
- * @param {{fetchRef?: typeof fetch}} [options]
+ * @param {{fetchRef?: typeof fetch; onDebug?: ((message: string) => void) | null}} [options]
  */
 export async function executeMcpServerCommand(
   server,
@@ -406,17 +422,23 @@ export async function executeMcpServerCommand(
   commandArguments = {},
   options = {}
 ) {
-  const { fetchRef } = options;
+  const { fetchRef, onDebug } = options;
   const normalizedServer = normalizeServerRecord(server);
   if (!normalizedServer) {
     throw new Error('MCP server configuration is invalid.');
   }
   const endpointUrl = assertSupportedMcpEndpoint(normalizedServer.endpoint);
+  const normalizedCommandName = String(commandName || '').trim();
+  const debugLogger = createPrefixedDebugLogger(
+    onDebug,
+    `MCP ${normalizedServer.identifier}${normalizedCommandName ? `/${normalizedCommandName}` : ''}`
+  );
   const client = new McpHttpClient(endpointUrl.toString(), {
     fetchRef,
+    onDebug: debugLogger,
   });
   const result = await client.callTool(
-    String(commandName || '').trim(),
+    normalizedCommandName,
     commandArguments &&
       typeof commandArguments === 'object' &&
       !Array.isArray(commandArguments)
@@ -433,7 +455,7 @@ export async function executeMcpServerCommand(
   return {
     status: result.isError === true ? 'failed' : 'success',
     server: normalizedServer.identifier,
-    command: String(commandName || '').trim(),
+    command: normalizedCommandName,
     body: buildCommandResultBody(content, structuredContent),
     structuredContent,
     content,

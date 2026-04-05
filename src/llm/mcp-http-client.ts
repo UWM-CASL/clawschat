@@ -75,6 +75,7 @@ export type McpToolsCallResult = {
 export type McpHttpClientOptions = {
   fetchRef?: FetchLike | null;
   clientInfo?: Partial<ClientInfo> | null;
+  onDebug?: ((message: string) => void) | null;
 };
 
 function normalizeInlineText(value: unknown, maxLength = 240): string {
@@ -88,6 +89,37 @@ function normalizeInlineText(value: unknown, maxLength = 240): string {
     return normalized;
   }
   return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function emitDebug(onDebug: ((message: string) => void) | null | undefined, message: string): void {
+  if (typeof onDebug === 'function') {
+    onDebug(message);
+  }
+}
+
+function buildBodyPreview(rawText: string, maxLength = 240): string {
+  return normalizeInlineText(rawText, maxLength);
+}
+
+function getResponseContentType(response: Response): string {
+  return normalizeInlineText(response.headers.get('content-type') || '', 120);
+}
+
+function buildResponseSummary(response: Response): string {
+  const parts = [
+    response.statusText
+      ? `status ${response.status} ${normalizeInlineText(response.statusText, 80)}`
+      : `status ${response.status}`,
+  ];
+  const contentType = getResponseContentType(response);
+  if (contentType) {
+    parts.push(`content-type ${contentType}`);
+  }
+  const sessionId = readSessionId(response.headers);
+  if (sessionId) {
+    parts.push(`session ${normalizeInlineText(sessionId, 80)}`);
+  }
+  return parts.join(', ');
 }
 
 function isLocalHttpUrl(url: URL): boolean {
@@ -238,7 +270,11 @@ function buildSessionErrorMessage(sentSessionId: boolean): string {
 function buildHttpErrorMessage(
   response: Response,
   payload: unknown,
-  sentSessionId: boolean
+  sentSessionId: boolean,
+  options: {
+    rawText?: string;
+    parseError?: Error | null;
+  } = {}
 ): string {
   if (responseHasAuthChallenge(response)) {
     return MCP_AUTH_UNSUPPORTED_MESSAGE;
@@ -252,6 +288,16 @@ function buildHttpErrorMessage(
       return buildSessionErrorMessage(sentSessionId);
     }
     return rpcMessage;
+  }
+  if (options.parseError) {
+    const contentType = getResponseContentType(response);
+    return `The MCP server request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''}) and returned ${contentType || 'non-JSON'} data instead of JSON-RPC.`;
+  }
+  if (typeof options.rawText === 'string' && options.rawText.trim()) {
+    const preview = buildBodyPreview(options.rawText, 160);
+    if (preview) {
+      return `The MCP server request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''}). Response preview: ${preview}`;
+    }
   }
   return `The MCP server request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`;
 }
@@ -269,6 +315,7 @@ export class McpHttpClient {
   fetchRef: FetchLike;
   protocolVersion: string;
   clientInfo: ClientInfo;
+  onDebug: ((message: string) => void) | null;
   sessionId: string;
   initialized: boolean;
   initializeResult: McpInitializeResult | null;
@@ -295,11 +342,16 @@ export class McpHttpClient {
           ? options.clientInfo.version.trim()
           : DEFAULT_CLIENT_INFO.version,
     };
+    this.onDebug = typeof options.onDebug === 'function' ? options.onDebug : null;
     this.sessionId = '';
     this.initialized = false;
     this.initializeResult = null;
     this.initializePromise = null;
     this.requestCount = 0;
+  }
+
+  debug(message: string): void {
+    emitDebug(this.onDebug, message);
   }
 
   buildRequestId(method: string): string {
@@ -332,9 +384,13 @@ export class McpHttpClient {
       method: normalizedMethod,
       params: normalizedParams,
     };
+    const requestId = expectResponse ? this.buildRequestId(normalizedMethod) : '';
     if (expectResponse) {
-      requestPayload.id = this.buildRequestId(normalizedMethod);
+      requestPayload.id = requestId;
     }
+    this.debug(
+      `MCP ${normalizedMethod} -> ${this.endpoint}${requestId ? ` (${requestId})` : ''}${this.sessionId ? ` using session ${normalizeInlineText(this.sessionId, 80)}` : ''}.`
+    );
 
     let response: Response;
     try {
@@ -344,10 +400,14 @@ export class McpHttpClient {
         body: JSON.stringify(requestPayload),
       });
     } catch (error) {
-      throw new Error(buildFetchError(error));
+      const fetchErrorMessage = buildFetchError(error);
+      this.debug(`MCP ${normalizedMethod} network failure: ${fetchErrorMessage}`);
+      throw new Error(fetchErrorMessage);
     }
 
+    this.debug(`MCP ${normalizedMethod} <- ${buildResponseSummary(response)}.`);
     if (responseHasAuthChallenge(response)) {
+      this.debug(`MCP ${normalizedMethod} authentication challenge rejected.`);
       throw new Error(MCP_AUTH_UNSUPPORTED_MESSAGE);
     }
 
@@ -359,36 +419,69 @@ export class McpHttpClient {
     const rawText = await readResponseText(response);
     const contentType = response.headers.get('content-type') || '';
     let payload: unknown = null;
+    let payloadParseError: Error | null = null;
     if (rawText.trim()) {
-      payload = parseResponsePayload(rawText, contentType);
+      try {
+        payload = parseResponsePayload(rawText, contentType);
+      } catch (error) {
+        payloadParseError =
+          error instanceof Error ? error : new Error(normalizeInlineText(error, 240));
+      }
     }
 
     if (!response.ok) {
-      throw new Error(buildHttpErrorMessage(response, payload, sentSessionId));
+      if (payloadParseError) {
+        this.debug(
+          `MCP ${normalizedMethod} response parse failed on error body: ${payloadParseError.message}. Body preview: ${buildBodyPreview(rawText) || '(empty)'}.`
+        );
+      } else if (rawText.trim()) {
+        this.debug(`MCP ${normalizedMethod} error body preview: ${buildBodyPreview(rawText)}.`);
+      }
+      const httpErrorMessage = buildHttpErrorMessage(response, payload, sentSessionId, {
+        rawText,
+        parseError: payloadParseError,
+      });
+      this.debug(`MCP ${normalizedMethod} request failed: ${httpErrorMessage}`);
+      throw new Error(httpErrorMessage);
+    }
+
+    if (payloadParseError) {
+      this.debug(
+        `MCP ${normalizedMethod} response parse failed (${contentType || 'unknown content-type'}): ${payloadParseError.message}. Body preview: ${buildBodyPreview(rawText) || '(empty)'}.`
+      );
+      throw payloadParseError;
     }
 
     if (!expectResponse) {
       if (isJsonRpcErrorEnvelope(payload)) {
         const rpcMessage = formatRpcErrorMessage(payload.error);
         if (isSessionErrorMessage(rpcMessage)) {
+          this.debug(`MCP ${normalizedMethod} session error: ${rpcMessage}`);
           throw new Error(buildSessionErrorMessage(sentSessionId));
         }
+        this.debug(`MCP ${normalizedMethod} JSON-RPC error: ${rpcMessage}`);
         throw new Error(rpcMessage);
       }
       return payload;
     }
 
     if (!rawText.trim()) {
+      this.debug(`MCP ${normalizedMethod} returned an empty response body.`);
       throw new Error('The MCP server returned an empty response.');
     }
     if (isJsonRpcErrorEnvelope(payload)) {
       const rpcMessage = formatRpcErrorMessage(payload.error);
       if (isSessionErrorMessage(rpcMessage)) {
+        this.debug(`MCP ${normalizedMethod} session error: ${rpcMessage}`);
         throw new Error(buildSessionErrorMessage(sentSessionId));
       }
+      this.debug(`MCP ${normalizedMethod} JSON-RPC error: ${rpcMessage}`);
       throw new Error(rpcMessage);
     }
     if (!isJsonRpcSuccessEnvelope(payload)) {
+      this.debug(
+        `MCP ${normalizedMethod} returned a non-result payload. Body preview: ${buildBodyPreview(rawText) || '(empty)'}.`
+      );
       throw new Error('The MCP server did not return a JSON-RPC result.');
     }
     return payload.result;

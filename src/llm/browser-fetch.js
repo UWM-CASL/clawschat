@@ -34,6 +34,72 @@ function getFetchRef(fetchRef) {
   return typeof fetch === 'function' ? fetch.bind(globalThis) : null;
 }
 
+function emitDebug(onDebug, message) {
+  if (typeof onDebug === 'function') {
+    onDebug(String(message || '').trim());
+  }
+}
+
+function normalizeResponseMetadataText(value) {
+  const normalized = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.length <= 120 ? normalized : `${normalized.slice(0, 117).trimEnd()}...`;
+}
+
+function getResponseStatusText(response) {
+  if (!response || typeof response.status !== 'number') {
+    return 'status unknown';
+  }
+  const statusText =
+    typeof response.statusText === 'string' ? normalizeResponseMetadataText(response.statusText) : '';
+  return statusText ? `status ${response.status} ${statusText}` : `status ${response.status}`;
+}
+
+function getResponseContentType(response) {
+  if (!response?.headers || typeof response.headers.get !== 'function') {
+    return '';
+  }
+  return normalizeResponseMetadataText(response.headers.get('content-type'));
+}
+
+function formatResponseSummary(response) {
+  if (!response) {
+    return 'no response details';
+  }
+  const parts = [getResponseStatusText(response)];
+  const contentType = getResponseContentType(response);
+  if (contentType) {
+    parts.push(`content-type ${contentType}`);
+  }
+  const responseType =
+    typeof response.type === 'string' ? normalizeResponseMetadataText(response.type) : '';
+  if (responseType && responseType !== 'default') {
+    parts.push(`response type ${responseType}`);
+  }
+  const responseUrl =
+    typeof response.url === 'string' ? normalizeResponseMetadataText(response.url) : '';
+  if (responseUrl) {
+    parts.push(`url ${responseUrl}`);
+  }
+  return parts.join(', ');
+}
+
+function buildBodyPreview(value, maxLength = 140) {
+  const normalized = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
 /**
  * @param {{ href?: string; origin?: string } | null | undefined} [locationRef]
  */
@@ -214,13 +280,14 @@ export function buildCorsProxyRequestUrl(proxyUrl, targetUrl) {
 
 /**
  * @param {string} value
- * @param {{fetchRef?: typeof fetch | null; probeTargetUrl?: string}} [options]
+ * @param {{fetchRef?: typeof fetch | null; probeTargetUrl?: string; onDebug?: ((message: string) => void) | null}} [options]
  */
 export async function validateCorsProxyUrl(
   value,
   {
     fetchRef,
     probeTargetUrl = CORS_PROXY_VALIDATION_TARGET_URL,
+    onDebug,
   } = {}
 ) {
   const normalizedProxyUrl = normalizeCorsProxyUrl(value);
@@ -228,9 +295,11 @@ export async function validateCorsProxyUrl(
   if (typeof activeFetchRef !== 'function') {
     throw new Error('Browser fetch is unavailable for CORS proxy validation.');
   }
+  const probeRequestUrl = buildCorsProxyRequestUrl(normalizedProxyUrl, probeTargetUrl);
+  emitDebug(onDebug, `Validating CORS proxy ${normalizedProxyUrl} using ${probeTargetUrl}.`);
   let response;
   try {
-    response = await activeFetchRef(buildCorsProxyRequestUrl(normalizedProxyUrl, probeTargetUrl), {
+    response = await activeFetchRef(probeRequestUrl, {
       method: 'GET',
       cache: 'no-store',
       headers: {
@@ -238,26 +307,36 @@ export async function validateCorsProxyUrl(
       },
     });
   } catch (error) {
+    emitDebug(onDebug, `CORS proxy validation fetch failed: ${normalizeInlineErrorMessage(error)}`);
     throw new Error(
       `The CORS proxy could not be reached from the browser. ${normalizeInlineErrorMessage(error)}`
     );
   }
+  emitDebug(onDebug, `CORS proxy validation response: ${formatResponseSummary(response)}.`);
   if (!response?.ok) {
     throw new Error(
-      `The CORS proxy test request failed (${response?.status || 0}${response?.statusText ? ` ${response.statusText}` : ''}).`
+      `The CORS proxy test request failed (${response?.status || 0}${response?.statusText ? ` ${response.statusText}` : ''}; ${getResponseContentType(response) || 'unknown content type'}).`
     );
   }
   let previewText = '';
   try {
     previewText = await response.text();
-  } catch {
-    throw new Error('The CORS proxy test response could not be read by the browser.');
-  }
-  if (!/example domain/i.test(previewText)) {
+  } catch (error) {
+    emitDebug(
+      onDebug,
+      `CORS proxy validation response body could not be read: ${normalizeInlineErrorMessage(error)}.`
+    );
     throw new Error(
-      'The proxy did not return the expected test page. Use a prefix-style proxy that can fetch https://example.com/.'
+      `The CORS proxy test response could not be read by the browser (${formatResponseSummary(response)}).`
     );
   }
+  emitDebug(onDebug, `CORS proxy validation body preview: ${buildBodyPreview(previewText) || '(empty)'}.`);
+  if (!/example domain/i.test(previewText)) {
+    throw new Error(
+      `The proxy did not return the expected test page. Use a prefix-style proxy that can fetch https://example.com/. Response preview: ${buildBodyPreview(previewText) || '(empty body)'}.`
+    );
+  }
+  emitDebug(onDebug, `CORS proxy validation succeeded for ${normalizedProxyUrl}.`);
   return normalizedProxyUrl;
 }
 
