@@ -64,6 +64,7 @@ export function createAppState({
     activeGenerationConfig,
     pendingGenerationConfig: null,
     pendingComposerAttachments: [],
+    pendingAttachmentOperationCount: 0,
     corsProxyUrl: typeof corsProxyUrl === 'string' ? corsProxyUrl.trim() : '',
     conversationSaveTimerId: null,
     showThinkingByDefault: false,
@@ -205,6 +206,28 @@ export function isGeneratingResponse(state) {
 export function isEngineBusy(state) {
   const phase = deriveEnginePhase(state);
   return phase === ENGINE_PHASES.LOADING || phase === ENGINE_PHASES.GENERATING;
+}
+
+export function isProcessingAttachments(state) {
+  return Number.isFinite(state?.pendingAttachmentOperationCount)
+    ? state.pendingAttachmentOperationCount > 0
+    : false;
+}
+
+export function beginAttachmentOperation(state) {
+  const currentCount = Number.isFinite(state?.pendingAttachmentOperationCount)
+    ? Math.max(0, Math.trunc(state.pendingAttachmentOperationCount))
+    : 0;
+  state.pendingAttachmentOperationCount = currentCount + 1;
+  return state.pendingAttachmentOperationCount;
+}
+
+export function endAttachmentOperation(state) {
+  const currentCount = Number.isFinite(state?.pendingAttachmentOperationCount)
+    ? Math.max(0, Math.trunc(state.pendingAttachmentOperationCount))
+    : 0;
+  state.pendingAttachmentOperationCount = Math.max(0, currentCount - 1);
+  return state.pendingAttachmentOperationCount;
 }
 
 export function shouldDisableConversationControls(state) {

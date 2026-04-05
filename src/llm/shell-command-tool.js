@@ -4211,7 +4211,7 @@ const SHELL_COMMAND_EXECUTORS = Object.freeze({
     runtimeContext,
     currentWorkingDirectory,
   }) => {
-    const pythonToolModule = await import('./python-tool.js');
+    const pythonToolModule = await import('./python-shell-command.js');
     return pythonToolModule.executePythonShellCommand(
       commandText,
       args,

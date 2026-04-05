@@ -4,6 +4,7 @@ import {
   INTERACTION_MODES,
   ORCHESTRATION_STATUSES,
   WORKSPACE_VIEWS,
+  beginAttachmentOperation,
   clearTerminalDismissal,
   clearUserMessageEditState,
   closeTerminal,
@@ -14,10 +15,12 @@ import {
   getCurrentViewRoute,
   hasDismissedTerminalForConversation,
   hasSelectedConversationWithHistory,
+  isProcessingAttachments,
   isTerminalOpenForConversation,
   openTerminalForConversation,
   refreshWorkspaceView,
   setChatTitleEditing,
+  endAttachmentOperation,
   setGenerating,
   setLoadingModel,
   setModelReady,
@@ -231,5 +234,24 @@ describe('app-state', () => {
 
     clearTerminalDismissal(state, 'conversation-1');
     expect(hasDismissedTerminalForConversation(state, 'conversation-1')).toBe(false);
+  });
+
+  test('tracks attachment ingestion while uploads are being prepared', () => {
+    const state = createAppState({
+      activeGenerationConfig: {},
+    });
+
+    expect(isProcessingAttachments(state)).toBe(false);
+
+    beginAttachmentOperation(state);
+    beginAttachmentOperation(state);
+    expect(state.pendingAttachmentOperationCount).toBe(2);
+    expect(isProcessingAttachments(state)).toBe(true);
+
+    endAttachmentOperation(state);
+    endAttachmentOperation(state);
+    endAttachmentOperation(state);
+    expect(state.pendingAttachmentOperationCount).toBe(0);
+    expect(isProcessingAttachments(state)).toBe(false);
   });
 });

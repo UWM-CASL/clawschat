@@ -20,7 +20,11 @@ export function bindComposerEvents({
   selectedModelSupportsImageInput,
   getSelectedModelAttachmentSupport,
   createComposerAttachmentFromFile,
+  beginComposerAttachmentOperation = () => {},
+  endComposerAttachmentOperation = () => {},
+  isProcessingComposerAttachments = () => false,
   renderComposerAttachments,
+  updateActionButtons = () => {},
   setStatus,
   clearPendingComposerAttachments,
   createConversation,
@@ -216,6 +220,10 @@ export function bindComposerEvents({
       if (!files.length) {
         return;
       }
+      if (isProcessingComposerAttachments()) {
+        setStatus('Please wait for selected attachments to finish processing.');
+        return;
+      }
       const attachmentMode =
         event.target instanceof HTMLInputElement ? event.target.dataset.attachmentMode || '' : '';
       const attachmentSupport = resolveAttachmentSupport();
@@ -283,6 +291,11 @@ export function bindComposerEvents({
         setStatus(unsupportedCount > 0 ? `${unsupportedMessage}${limitMessage}` : limitMessage.trim());
         return;
       }
+      beginComposerAttachmentOperation();
+      updateActionButtons();
+      setStatus(
+        `Preparing ${allowedFiles.length} attachment${allowedFiles.length === 1 ? '' : 's'}...`
+      );
       try {
         const nextAttachments = await Promise.all(
           allowedFiles.map((file) =>
@@ -332,6 +345,8 @@ export function bindComposerEvents({
           }`
         );
       } finally {
+        endComposerAttachmentOperation();
+        updateActionButtons();
         delete imageAttachmentInput.dataset.attachmentMode;
         imageAttachmentInput.value = '';
       }
@@ -346,6 +361,10 @@ export function bindComposerEvents({
       }
       const removeButton = target.closest('.composer-attachment-remove');
       if (!(removeButton instanceof HTMLButtonElement)) {
+        return;
+      }
+      if (isProcessingComposerAttachments()) {
+        setStatus('Please wait for selected attachments to finish processing.');
         return;
       }
       const index = Number.parseInt(removeButton.dataset.attachmentIndex || '', 10);
@@ -378,11 +397,14 @@ export function bindComposerEvents({
     const hasAttachments = attachments.length > 0;
     if (
       (!value && !hasAttachments) ||
+      isProcessingComposerAttachments() ||
       isGeneratingResponse(appState) ||
       isOrchestrationRunningState(appState) ||
       isMessageEditActive(appState)
     ) {
-      if (isMessageEditActive(appState)) {
+      if (isProcessingComposerAttachments()) {
+        setStatus('Please wait for selected attachments to finish processing.');
+      } else if (isMessageEditActive(appState)) {
         setStatus('Save or cancel the current message edit before sending a new message.');
       } else if (isOrchestrationRunningState(appState)) {
         setStatus('Please wait for the current orchestration step to finish.');

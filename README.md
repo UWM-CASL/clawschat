@@ -14,6 +14,7 @@ Student-facing browser chat UI with local model inference.
 - Switching to a saved conversation with a different model unloads the previous model worker and loads the selected conversation's model.
 - Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
+- Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.
 - From that pre-chat state, users can keep the currently loaded model or choose a different model card before sending the first message.
 - If a different model is selected for the next chat, the currently loaded model worker is unloaded before the replacement model is loaded.
 - During model load, the workspace shows one progress bar.

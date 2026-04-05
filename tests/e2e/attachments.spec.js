@@ -74,6 +74,44 @@ test('pdf attachment is added to the prompt and transcript', async ({ page }) =>
   expect(userPrompt?.content).toContain('Mock extracted PDF text.');
 });
 
+test('send stays disabled until an uploaded attachment finishes processing', async ({ page }) => {
+  await page.locator('#addImagesButton').click();
+  await page.locator('#attachWorkWithMenuItem').click();
+
+  await page.evaluate(async () => {
+    const source = '<html><body><main><h1>Canvas</h1><a href="/next">Next</a></main></body></html>';
+    const file = new window.File([source], 'canvas.html', { type: 'text/html' });
+    const encoded = new window.TextEncoder().encode(source);
+    Object.defineProperty(file, 'arrayBuffer', {
+      configurable: true,
+      value: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return encoded.buffer.slice(0);
+      },
+    });
+    const input = /** @type {HTMLInputElement | null} */ (
+      document.getElementById('imageAttachmentInput')
+    );
+    if (!input) {
+      throw new Error('Attachment input not found.');
+    }
+    const transfer = new window.DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+  });
+
+  await expect(page.locator('#sendButton')).toBeDisabled();
+  await expect(page.locator('#statusRegionMessage')).toContainText('Preparing 1 attachment');
+
+  await page.locator('#messageInput').fill('Count the links.');
+  await page.locator('#messageInput').press('Enter');
+  await expect(page.locator('.message-row.user-message')).toHaveCount(0);
+
+  await expect(page.locator('.composer-attachment-card')).toContainText('canvas.html');
+  await expect(page.locator('#sendButton')).toBeEnabled();
+});
+
 test('work-with html attachment only exposes workspace availability to the model', async ({
   page,
 }) => {
@@ -99,6 +137,7 @@ test('work-with html attachment only exposes workspace availability to the model
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
+  await expect(page.locator('.composer-attachment-card')).toContainText('canvas.html');
   await page.locator('#messageInput').fill('How many links are in this html?');
   await page.locator('#sendButton').click();
 

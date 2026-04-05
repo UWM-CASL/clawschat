@@ -24,7 +24,6 @@ import { bindTranscriptEvents } from './app/transcript-events.js';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createCorsAwareFetch, validateCorsProxyUrl } from './llm/browser-fetch.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
-import { PythonRuntimeClient } from './llm/python-runtime-client.js';
 import { getEnabledMcpServerConfigs, inspectMcpServerEndpoint } from './llm/mcp-client.js';
 import {
   buildFactCheckingPrompt,
@@ -100,10 +99,12 @@ import {
   buildConversationStateSnapshot,
 } from './state/conversation-serialization.js';
 import {
+  beginAttachmentOperation,
   clearTerminalDismissal,
   clearUserMessageEditState,
   closeTerminal,
   createAppState,
+  endAttachmentOperation,
   findConversationById as selectConversationById,
   getActiveConversation as selectActiveConversation,
   getActiveUserEditMessageId,
@@ -116,6 +117,7 @@ import {
   isEngineBusy,
   isEngineReady,
   isGeneratingResponse,
+  isProcessingAttachments,
   isTerminalOpenForConversation,
   isMessageEditActive,
   isOrchestrationRunningState,
@@ -136,7 +138,6 @@ import { loadConversationState, saveConversationState } from './state/conversati
 import { renderConversationListView } from './ui/conversation-list-view.js';
 import { createBrowserView } from './ui/browser-view.js';
 import { createTranscriptView } from './ui/transcript-view.js';
-import { createTerminalView } from './ui/terminal-view.js';
 import { renderTaskListTray } from './ui/task-list-tray.js';
 import {
   createConversationWorkspaceFileSystem,
@@ -325,7 +326,8 @@ const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const engine = new LLMEngineClient();
-const pythonRuntime = new PythonRuntimeClient();
+let pythonRuntime = null;
+let pythonRuntimeLoadPromise = null;
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
 const markdown = new MarkdownIt({
@@ -343,6 +345,37 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   token.attrSet('rel', MARKDOWN_LINK_REL);
   return defaultLinkRenderer(tokens, idx, options, env, self);
 };
+
+async function getPythonRuntime() {
+  if (pythonRuntime) {
+    return pythonRuntime;
+  }
+  if (!pythonRuntimeLoadPromise) {
+    pythonRuntimeLoadPromise = import('./llm/python-runtime-client.js')
+      .then(({ PythonRuntimeClient }) => {
+        pythonRuntime = new PythonRuntimeClient();
+        return pythonRuntime;
+      })
+      .catch((error) => {
+        pythonRuntimeLoadPromise = null;
+        throw error;
+      });
+  }
+  return pythonRuntimeLoadPromise;
+}
+
+const pythonExecutor = {
+  execute: async (options) => {
+    const runtime = await getPythonRuntime();
+    return runtime.execute(options);
+  },
+};
+
+function disposePythonRuntime() {
+  pythonRuntime?.dispose();
+  pythonRuntime = null;
+  pythonRuntimeLoadPromise = null;
+}
 
 const MAX_DEBUG_ENTRIES = 120;
 const ROUTE_HOME = 'home';
@@ -1550,8 +1583,10 @@ function renderComposerAttachments() {
     return;
   }
   const attachments = getPendingComposerAttachments();
+  const attachmentsAreProcessing = isProcessingAttachments(appState);
   composerAttachmentTray.replaceChildren();
   composerAttachmentTray.classList.toggle('d-none', attachments.length === 0);
+  composerAttachmentTray.setAttribute('aria-busy', attachmentsAreProcessing ? 'true' : 'false');
   attachments.forEach((attachment, index) => {
     const item = document.createElement('article');
     item.className = 'composer-attachment-card';
@@ -1620,6 +1655,7 @@ function renderComposerAttachments() {
     removeButton.className = 'btn btn-sm btn-light composer-attachment-remove';
     removeButton.setAttribute('aria-label', `Remove ${attachment.filename}`);
     removeButton.dataset.attachmentIndex = String(index);
+    removeButton.disabled = attachmentsAreProcessing;
     setIconButtonContent(removeButton, 'bi-x-lg', `Remove ${attachment.filename}`);
     item.appendChild(removeButton);
     composerAttachmentTray.appendChild(item);
@@ -2537,17 +2573,35 @@ const transcriptView = createTranscriptView({
   saveUserMessageEdit,
 });
 
-const terminalView = createTerminalView({
-  panel: terminalPanel,
-  host: terminalHost,
-});
-
+let terminalView = null;
+let terminalViewLoadPromise = null;
 const browserView = createBrowserView({
   panel: webLookupPanel,
   frame: webLookupFrame,
   title: webLookupPanelTitle,
   description: webLookupPanelDescription,
 });
+
+async function ensureTerminalView() {
+  if (terminalView) {
+    return terminalView;
+  }
+  if (!terminalViewLoadPromise) {
+    terminalViewLoadPromise = import('./ui/terminal-view.js')
+      .then(({ createTerminalView }) => {
+        terminalView = createTerminalView({
+          panel: terminalPanel,
+          host: terminalHost,
+        });
+        return terminalView;
+      })
+      .catch((error) => {
+        terminalViewLoadPromise = null;
+        throw error;
+      });
+  }
+  return terminalViewLoadPromise;
+}
 
 function getWebLookupPanelSessionForConversation(conversation = getActiveConversation()) {
   if (!(appState.webLookupPanelsByConversationId instanceof Map) || !conversation?.id) {
@@ -2587,7 +2641,7 @@ function renderWorkspaceSidePanels() {
   if (shouldShowWebLookupPanel) {
     document.body.classList.remove('terminal-open');
     document.body.classList.add('web-lookup-open');
-    terminalView.setVisible(false);
+    terminalView?.setVisible(false);
     browserView.setVisible(true);
     browserView.renderSession({
       heading: webLookupSession.heading,
@@ -2603,7 +2657,7 @@ function renderWorkspaceSidePanels() {
     }
     document.body.classList.remove('terminal-open');
     document.body.classList.remove('web-lookup-open');
-    terminalView.setVisible(false);
+    terminalView?.setVisible(false);
     browserView.setVisible(false);
     return;
   }
@@ -2611,8 +2665,38 @@ function renderWorkspaceSidePanels() {
   document.body.classList.remove('web-lookup-open');
   document.body.classList.add('terminal-open');
   browserView.setVisible(false);
-  terminalView.setVisible(true);
-  terminalView.renderSession(session);
+  void ensureTerminalView()
+    .then((loadedTerminalView) => {
+      const latestConversation = getActiveConversation();
+      const latestWebLookupSession = getWebLookupPanelSessionForConversation(latestConversation);
+      const latestSession = getTerminalSessionForConversation(latestConversation);
+      const shouldStillShowTerminal =
+        !isSettingsView(appState) &&
+        Boolean(latestConversation?.id) &&
+        latestSession.hasVisibleContent &&
+        !(
+          appState.activeWorkspaceSidePanel === 'web_lookup' &&
+          latestWebLookupSession &&
+          typeof latestWebLookupSession.searchUrl === 'string' &&
+          latestWebLookupSession.searchUrl.trim()
+        ) &&
+        (isTerminalOpenForConversation(appState, latestConversation.id) ||
+          (!hasDismissedTerminalForConversation(appState, latestConversation.id) &&
+            latestSession.entries.length > 0));
+      if (!shouldStillShowTerminal) {
+        loadedTerminalView.setVisible(false);
+        return;
+      }
+      loadedTerminalView.setVisible(true);
+      loadedTerminalView.renderSession(latestSession);
+    })
+    .catch((error) => {
+      appendDebug(
+        `Terminal view failed to load: ${error instanceof Error ? error.message : String(error)}`
+      );
+      document.body.classList.remove('terminal-open');
+      browserView.setVisible(false);
+    });
 }
 
 if (closeTerminalButton instanceof HTMLButtonElement) {
@@ -3374,6 +3458,7 @@ function updateActionButtons() {
   updateChatTitleEditorVisibility();
   updatePreChatActionButtons();
   const disableComposerForPreChatSelection = shouldDisableComposerForPreChatConversationSelection();
+  const attachmentsAreProcessing = isProcessingAttachments(appState);
   const composerControlsDisabled =
     isLoadingModelState(appState) ||
     isOrchestrationRunningState(appState) ||
@@ -3384,20 +3469,24 @@ function updateActionButtons() {
     messageInput.disabled = disableComposerForPreChatSelection;
   }
   if (addImagesButton instanceof HTMLButtonElement) {
-    addImagesButton.disabled = composerControlsDisabled || isGeneratingResponse(appState);
+    addImagesButton.disabled =
+      composerControlsDisabled || isGeneratingResponse(appState) || attachmentsAreProcessing;
   }
   if (attachReferenceMenuItem instanceof HTMLButtonElement) {
-    const referenceMenuDisabled = composerControlsDisabled || isGeneratingResponse(appState);
+    const referenceMenuDisabled =
+      composerControlsDisabled || isGeneratingResponse(appState) || attachmentsAreProcessing;
     attachReferenceMenuItem.disabled = referenceMenuDisabled;
     attachReferenceMenuItem.setAttribute('aria-disabled', referenceMenuDisabled ? 'true' : 'false');
   }
   if (attachWorkWithMenuItem instanceof HTMLButtonElement) {
-    const workWithMenuDisabled = composerControlsDisabled || isGeneratingResponse(appState);
+    const workWithMenuDisabled =
+      composerControlsDisabled || isGeneratingResponse(appState) || attachmentsAreProcessing;
     attachWorkWithMenuItem.disabled = workWithMenuDisabled;
     attachWorkWithMenuItem.setAttribute('aria-disabled', workWithMenuDisabled ? 'true' : 'false');
   }
   if (imageAttachmentInput instanceof HTMLInputElement) {
-    imageAttachmentInput.disabled = composerControlsDisabled || isGeneratingResponse(appState);
+    imageAttachmentInput.disabled =
+      composerControlsDisabled || isGeneratingResponse(appState) || attachmentsAreProcessing;
     imageAttachmentInput.accept = getAttachmentButtonAcceptValue(attachmentSupport);
   }
   const filteredAttachments = filterPendingComposerAttachmentsForModel(
@@ -3420,12 +3509,14 @@ function updateActionButtons() {
   if (sendButton) {
     sendButton.disabled =
       composerControlsDisabled ||
+      attachmentsAreProcessing ||
       (!isGeneratingResponse(appState) && !selectHasStartedWorkspace(appState)) ||
       false;
   }
   if (newConversationBtn) {
     newConversationBtn.classList.toggle('d-none', !shouldShowNewConversationButton());
     newConversationBtn.disabled =
+      attachmentsAreProcessing ||
       isGeneratingResponse(appState) ||
       isOrchestrationRunningState(appState) ||
       appState.isPreparingNewConversation ||
@@ -4064,7 +4155,7 @@ const appController = createAppController({
       onWebLookupSearchStart: handleWebLookupSearchStart,
       onWebLookupSearchComplete: handleWebLookupSearchComplete,
       fetchRef: corsAwareFetch,
-      pythonExecutor: pythonRuntime,
+      pythonExecutor,
       workspaceFileSystem: getConversationWorkspaceFileSystem(),
     }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
@@ -4368,7 +4459,19 @@ bindComposerEvents({
         getConversationWorkspaceFileSystem() ||
         getConversationWorkspaceFileSystem(reservePendingConversationId()),
     }),
+  beginComposerAttachmentOperation: () => {
+    beginAttachmentOperation(appState);
+    renderComposerAttachments();
+    updateActionButtons();
+  },
+  endComposerAttachmentOperation: () => {
+    endAttachmentOperation(appState);
+    renderComposerAttachments();
+    updateActionButtons();
+  },
+  isProcessingComposerAttachments: () => isProcessingAttachments(appState),
   renderComposerAttachments,
+  updateActionButtons,
   setStatus,
   clearPendingComposerAttachments,
   createConversation,
@@ -4448,7 +4551,7 @@ bindShellEvents({
   applyRouteFromHash: applyAppRouteFromHash,
   persistConversationStateNow,
   disposeEngine: () => engine.dispose(),
-  disposePythonRuntime: () => pythonRuntime.dispose(),
+  disposePythonRuntime,
   preChatEditConversationSystemPromptBtn,
   beginConversationSystemPromptEdit,
   preChatLoadModelBtn,

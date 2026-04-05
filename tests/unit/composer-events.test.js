@@ -33,6 +33,7 @@ function createHarness() {
   const appState = {
     activeGenerationConfig: { temperature: 0.7 },
     pendingComposerAttachments: [{ filename: 'diagram.png' }],
+    pendingAttachmentOperationCount: 0,
     conversations: [],
     activeConversationId: null,
     isPreparingNewConversation: false,
@@ -79,7 +80,20 @@ function createHarness() {
         maxVideoInputs: null,
       })),
       createComposerAttachmentFromFile: vi.fn(),
+      beginComposerAttachmentOperation: vi.fn(() => {
+        appState.pendingAttachmentOperationCount += 1;
+      }),
+      endComposerAttachmentOperation: vi.fn(() => {
+        appState.pendingAttachmentOperationCount = Math.max(
+          0,
+          appState.pendingAttachmentOperationCount - 1
+        );
+      }),
+      isProcessingComposerAttachments: vi.fn(
+        () => appState.pendingAttachmentOperationCount > 0
+      ),
       renderComposerAttachments: vi.fn(),
+      updateActionButtons: vi.fn(),
       setStatus: vi.fn(),
       clearPendingComposerAttachments: vi.fn(() => {
         appState.pendingComposerAttachments = [];
@@ -186,6 +200,59 @@ describe('composer-events', () => {
       'Save or cancel the current message edit before sending a new message.',
     );
     expect(harness.deps.startModelGeneration).not.toHaveBeenCalled();
+  });
+
+  test('blocks submit while attachments are still being prepared', async () => {
+    const harness = createHarness();
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    /** @type {(attachment: any) => void} */
+    let resolveAttachment = () => {
+      throw new Error('Attachment resolver was not initialized.');
+    };
+    harness.deps.createComposerAttachmentFromFile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveAttachment = resolve;
+        })
+    );
+    bindComposerEvents(harness.deps);
+
+    const attachmentInput = harness.deps.imageAttachmentInput;
+    Object.defineProperty(attachmentInput, 'files', {
+      configurable: true,
+      value: [new harness.dom.window.File(['<h1>Hello</h1>'], 'index.html', { type: 'text/html' })],
+    });
+
+    attachmentInput.dispatchEvent(
+      new harness.dom.window.Event('change', { bubbles: true, cancelable: true })
+    );
+
+    await Promise.resolve();
+
+    harness.messageInput.value = 'Count the links';
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    expect(harness.deps.setStatus).toHaveBeenLastCalledWith(
+      'Please wait for selected attachments to finish processing.'
+    );
+    expect(harness.deps.startModelGeneration).not.toHaveBeenCalled();
+    expect(harness.appState.pendingAttachmentOperationCount).toBe(1);
+
+    resolveAttachment({
+      id: 'attachment-index',
+      type: 'file',
+      filename: 'index.html',
+    });
+    await new Promise((resolve) => harness.dom.window.setTimeout(resolve, 0));
+
+    expect(harness.appState.pendingAttachmentOperationCount).toBe(0);
+    expect(harness.deps.beginComposerAttachmentOperation).toHaveBeenCalledTimes(1);
+    expect(harness.deps.endComposerAttachmentOperation).toHaveBeenCalledTimes(1);
   });
 
   test('creates a new conversation only when the first prompt is submitted', async () => {

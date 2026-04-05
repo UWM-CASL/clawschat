@@ -28,6 +28,9 @@ Centralizing them in one object gives the app:
 One important state bit is whether the workspace is explicitly preparing a new conversation.
 That keeps the app in the pre-chat model-selection view without creating or persisting a draft conversation record until the first message is actually sent.
 
+Another is the pending attachment-operation counter.
+That lets the shell disable send and attachment controls while uploads are still being normalized, hashed, or written into `/workspace`, so a message cannot be submitted before its selected files are actually ready.
+
 ## Current boundary
 
 - `src/state/app-state.js`
