@@ -252,7 +252,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_SMALL_MODEL_ID)?.features).toMatchObject({
       streaming: true,
       thinking: false,
-      toolCalling: false,
+      toolCalling: true,
       imageInput: false,
       audioInput: false,
       videoInput: false,
@@ -260,7 +260,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_INSTRUCT_MODEL_ID)?.features).toMatchObject({
       streaming: true,
       thinking: false,
-      toolCalling: false,
+      toolCalling: true,
       imageInput: false,
       audioInput: false,
       videoInput: false,
@@ -322,8 +322,16 @@ describe('model-settings availability', () => {
       argumentsKey: 'parameters',
     });
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.toolCalling).toBeNull();
-    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_SMALL_MODEL_ID)?.toolCalling).toBeNull();
-    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_INSTRUCT_MODEL_ID)?.toolCalling).toBeNull();
+    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_SMALL_MODEL_ID)?.toolCalling).toEqual({
+      format: 'special-token-call',
+      callOpen: '<|tool_call_start|>[',
+      callClose: ']<|tool_call_end|>',
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_INSTRUCT_MODEL_ID)?.toolCalling).toEqual({
+      format: 'special-token-call',
+      callOpen: '<|tool_call_start|>[',
+      callClose: ']<|tool_call_end|>',
+    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.toolCalling).toEqual({
       format: 'xml-tool-call',
     });

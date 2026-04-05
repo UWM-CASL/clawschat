@@ -213,10 +213,12 @@ Student-facing browser chat UI with local model inference.
   - Uses the published `q4` ONNX export with external data loading.
   - Requires WebGPU in this app.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
+  - Uses Liquid's special-token tool-call format supported by this app.
 - `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`
   - Uses the published `q4` ONNX export with external data loading.
   - Requires WebGPU in this app.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
+  - Uses Liquid's special-token tool-call format supported by this app.
 - `onnx-community/gemma-4-E2B-it-ONNX`
   - Uses the published `q4f16` ONNX export with external data loading.
   - Exposes text plus uploaded image and audio input in this app.
