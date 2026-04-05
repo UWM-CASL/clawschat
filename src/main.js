@@ -12,6 +12,7 @@ import {
   getAttachmentIconClass,
 } from './attachments/attachment-ui.js';
 import { createConversationEditors } from './app/conversation-editors.js';
+import { createModelLoadFeedbackController } from './app/model-load-feedback.js';
 import './styles.css';
 import { bindConversationListEvents } from './app/conversation-list-events.js';
 import { createPreferencesController } from './app/preferences.js';
@@ -19,6 +20,7 @@ import { createRoutingShell } from './app/routing-shell.js';
 import { bindShellEvents } from './app/shell-events.js';
 import { bindSettingsEvents } from './app/settings-events.js';
 import { createShortcutHandlers } from './app/shortcut-events.js';
+import { createTranscriptNavigationController } from './app/transcript-navigation.js';
 import { createTranscriptActions } from './app/transcript-actions.js';
 import { bindTranscriptEvents } from './app/transcript-events.js';
 import { LLMEngineClient } from './llm/engine-client.js';
@@ -466,6 +468,55 @@ const corsAwareFetch = createCorsAwareFetch({
   fetchRef: baseFetchRef,
   getProxyUrl: () => appState.corsProxyUrl,
   locationRef: window.location,
+});
+const {
+  clearLoadError,
+  resetLoadProgressFiles,
+  setLoadProgress,
+  showLoadError,
+  showProgressRegion,
+} = createModelLoadFeedbackController({
+  appState,
+  documentRef: document,
+  modelLoadProgressWrap,
+  modelLoadProgressLabel,
+  modelLoadProgressValue,
+  modelLoadProgressBar,
+  modelLoadProgressSummary,
+  modelLoadCurrentFileLabel,
+  modelLoadCurrentFileValue,
+  modelLoadCurrentFileBar,
+  modelLoadError,
+  modelLoadErrorSummary,
+  modelLoadErrorDetails,
+});
+const {
+  ensureModelVariantControlsVisible,
+  focusSkipTarget,
+  focusTranscriptBoundary,
+  scrollTranscriptToBottom,
+  stepTranscriptNavigation,
+  updateSkipLinkVisibility,
+  updateTranscriptNavigationButtonVisibility,
+} = createTranscriptNavigationController({
+  appState,
+  documentRef: document,
+  reducedMotionQuery,
+  chatMain,
+  chatTranscript,
+  topBar,
+  openSettingsButton,
+  jumpToTopButton,
+  jumpToPreviousUserButton,
+  jumpToNextModelButton,
+  jumpToLatestButton,
+  messageInput,
+  skipLinkElements,
+  transcriptBottomThresholdPx: TRANSCRIPT_BOTTOM_THRESHOLD_PX,
+  routeChat: ROUTE_CHAT,
+  hasStartedWorkspace: selectHasStartedWorkspace,
+  isSettingsView,
+  isEngineReady,
 });
 
 function initializeTooltips(root = document) {
@@ -2963,253 +3014,6 @@ function updateUserMessageElement(message, item) {
   transcriptView.updateUserMessageElement(message, item);
 }
 
-function scrollTranscriptToBottom() {
-  if (!chatMain) {
-    return;
-  }
-  chatMain.scrollTop = chatMain.scrollHeight;
-  updateTranscriptNavigationButtonVisibility();
-}
-
-function getPreferredScrollBehavior() {
-  return reducedMotionQuery.matches ? 'auto' : 'smooth';
-}
-
-function ensureModelVariantControlsVisible(messageId) {
-  if (!chatTranscript || !chatMain || !messageId) {
-    return;
-  }
-  const messageItem = chatTranscript.querySelector(`[data-message-id="${messageId}"]`);
-  if (!(messageItem instanceof HTMLElement)) {
-    return;
-  }
-  const variantNav = messageItem.querySelector('.response-variant-nav');
-  const responseActions = messageItem.querySelector('.response-actions');
-  const target =
-    variantNav instanceof HTMLElement
-      ? variantNav
-      : responseActions instanceof HTMLElement
-        ? responseActions
-        : messageItem;
-  target.scrollIntoView({
-    behavior: getPreferredScrollBehavior(),
-    block: 'nearest',
-    inline: 'nearest',
-  });
-  updateTranscriptNavigationButtonVisibility();
-}
-
-function isTranscriptNearBottom() {
-  if (!chatMain) {
-    return true;
-  }
-  const distanceToBottom = chatMain.scrollHeight - (chatMain.scrollTop + chatMain.clientHeight);
-  return distanceToBottom <= TRANSCRIPT_BOTTOM_THRESHOLD_PX;
-}
-
-function isTranscriptNearTop() {
-  if (!chatMain) {
-    return true;
-  }
-  return chatMain.scrollTop <= TRANSCRIPT_BOTTOM_THRESHOLD_PX;
-}
-
-function getTranscriptMessageRows(role = null) {
-  if (!chatTranscript) {
-    return [];
-  }
-  return Array.from(chatTranscript.querySelectorAll('.message-row')).filter((item) => {
-    if (!(item instanceof HTMLElement)) {
-      return false;
-    }
-    if (role === 'user') {
-      return item.classList.contains('user-message');
-    }
-    if (role === 'model') {
-      return item.classList.contains('model-message');
-    }
-    return true;
-  });
-}
-
-function findTranscriptStepTarget(role, direction) {
-  if (!(chatMain instanceof HTMLElement)) {
-    return null;
-  }
-  const rows = getTranscriptMessageRows(role);
-  if (!rows.length) {
-    return null;
-  }
-  const containerRect = chatMain.getBoundingClientRect();
-  const referenceLine =
-    containerRect.top + Math.max(getElementClearanceFromTop(topBar, containerRect), 16) + 24;
-  if (direction < 0) {
-    for (let index = rows.length - 1; index >= 0; index -= 1) {
-      const rect = rows[index].getBoundingClientRect();
-      if (rect.top < referenceLine - 4) {
-        return rows[index];
-      }
-    }
-    return rows[0];
-  }
-  for (let index = 0; index < rows.length; index += 1) {
-    const rect = rows[index].getBoundingClientRect();
-    if (rect.top > referenceLine + 4) {
-      return rows[index];
-    }
-  }
-  return rows[rows.length - 1];
-}
-
-function hasTranscriptStepTarget(role, direction) {
-  if (!(chatMain instanceof HTMLElement)) {
-    return false;
-  }
-  const rows = getTranscriptMessageRows(role);
-  if (!rows.length) {
-    return false;
-  }
-  const containerRect = chatMain.getBoundingClientRect();
-  const referenceLine =
-    containerRect.top + Math.max(getElementClearanceFromTop(topBar, containerRect), 16) + 24;
-  if (direction < 0) {
-    return rows.some((row) => row.getBoundingClientRect().top < referenceLine - 4);
-  }
-  return rows.some((row) => row.getBoundingClientRect().top > referenceLine + 4);
-}
-
-function getElementClearanceFromTop(element, containerRect) {
-  if (!(element instanceof HTMLElement) || element.classList.contains('d-none')) {
-    return 0;
-  }
-  const rect = element.getBoundingClientRect();
-  return rect.bottom > containerRect.top ? Math.max(0, rect.bottom - containerRect.top) : 0;
-}
-
-function getElementClearanceFromBottom(element, containerRect) {
-  if (!(element instanceof HTMLElement) || element.classList.contains('d-none')) {
-    return 0;
-  }
-  const rect = element.getBoundingClientRect();
-  return rect.top < containerRect.bottom ? Math.max(0, containerRect.bottom - rect.top) : 0;
-}
-
-function scrollElementIntoAccessibleView(element, { align = 'start' } = {}) {
-  if (!(chatMain instanceof HTMLElement) || !(element instanceof HTMLElement)) {
-    return;
-  }
-  const containerRect = chatMain.getBoundingClientRect();
-  const elementRect = element.getBoundingClientRect();
-  const topClearance =
-    Math.max(
-      getElementClearanceFromTop(topBar, containerRect),
-      getElementClearanceFromTop(jumpToTopButton, containerRect)
-    ) + 16;
-  const bottomClearance =
-    Math.max(
-      getElementClearanceFromBottom(jumpToLatestButton, containerRect),
-      getElementClearanceFromBottom(openSettingsButton, containerRect)
-    ) + 16;
-  let delta = 0;
-  if (align === 'end') {
-    delta = elementRect.bottom - (containerRect.bottom - bottomClearance);
-  } else if (align === 'center') {
-    const visibleHeight = Math.max(
-      0,
-      containerRect.height - topClearance - bottomClearance - elementRect.height
-    );
-    delta = elementRect.top - (containerRect.top + topClearance + Math.max(0, visibleHeight / 2));
-  } else {
-    delta = elementRect.top - (containerRect.top + topClearance);
-  }
-  chatMain.scrollBy({
-    top: delta,
-    behavior: reducedMotionQuery.matches ? 'auto' : 'smooth',
-  });
-}
-
-function focusTranscriptBoundary(boundary, { align = 'start' } = {}) {
-  if (!(boundary instanceof HTMLElement)) {
-    return;
-  }
-  boundary.focus({ preventScroll: true });
-  scrollElementIntoAccessibleView(boundary, { align });
-}
-
-function updateSkipLinkVisibility() {
-  skipLinkElements.forEach((link) => {
-    if (!(link instanceof HTMLElement)) {
-      return;
-    }
-    const scope = String(link.dataset.skipScope || 'always')
-      .trim()
-      .toLowerCase();
-    let visible = true;
-    if (scope === 'workspace') {
-      visible = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
-    } else if (scope === 'chat') {
-      visible = appState.workspaceView === ROUTE_CHAT;
-    } else if (scope === 'settings') {
-      visible = isSettingsView(appState);
-    }
-    link.hidden = !visible;
-  });
-}
-
-function focusSkipTarget(targetId) {
-  const target = document.getElementById(targetId);
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  if (target === messageInput && target instanceof HTMLTextAreaElement) {
-    target.focus();
-    scrollElementIntoAccessibleView(target, { align: 'end' });
-    return true;
-  }
-  target.focus({ preventScroll: true });
-  scrollElementIntoAccessibleView(target, {
-    align: targetId === 'chatTranscriptStart' ? 'start' : 'center',
-  });
-  return true;
-}
-
-function stepTranscriptNavigation(role, direction) {
-  const target = findTranscriptStepTarget(role, direction);
-  if (!(target instanceof HTMLElement)) {
-    return;
-  }
-  scrollElementIntoAccessibleView(target, { align: 'start' });
-}
-
-function updateTranscriptNavigationButtonVisibility() {
-  if (
-    !(jumpToTopButton instanceof HTMLButtonElement) ||
-    !(jumpToPreviousUserButton instanceof HTMLButtonElement) ||
-    !(jumpToNextModelButton instanceof HTMLButtonElement) ||
-    !(jumpToLatestButton instanceof HTMLButtonElement)
-  ) {
-    return;
-  }
-  const hasTranscriptItems = Boolean(chatTranscript?.children.length);
-  const engineReady = isEngineReady(appState);
-  jumpToTopButton.setAttribute(
-    'aria-disabled',
-    !engineReady || !hasTranscriptItems || isTranscriptNearTop() ? 'true' : 'false'
-  );
-  jumpToPreviousUserButton.setAttribute(
-    'aria-disabled',
-    !engineReady || !hasTranscriptItems || !hasTranscriptStepTarget('user', -1) ? 'true' : 'false'
-  );
-  jumpToNextModelButton.setAttribute(
-    'aria-disabled',
-    !engineReady || !hasTranscriptItems || !hasTranscriptStepTarget('model', 1) ? 'true' : 'false'
-  );
-  jumpToLatestButton.setAttribute(
-    'aria-disabled',
-    !engineReady || !hasTranscriptItems || isTranscriptNearBottom() ? 'true' : 'false'
-  );
-}
-
 function renderTranscript(options = {}) {
   transcriptView.renderTranscript(options);
   renderActiveTaskListTray();
@@ -3701,210 +3505,6 @@ function updateSendButtonMode() {
   sendButton.setAttribute('data-bs-title', 'Send message (Enter)');
   setIconButtonContent(sendButton, 'bi-send', 'Send message');
   initializeTooltips(document);
-}
-
-function showProgressRegion(show) {
-  if (!modelLoadProgressWrap) {
-    return;
-  }
-  modelLoadProgressWrap.classList.toggle('d-none', !show);
-}
-
-function formatLoadFileLabel(fileName) {
-  if (typeof fileName !== 'string' || !fileName.trim()) {
-    return '';
-  }
-  const normalized = fileName.replace(/\\/g, '/');
-  const segments = normalized.split('/').filter(Boolean);
-  return segments[segments.length - 1] || normalized;
-}
-
-function formatBytes(value) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return '0 B';
-  }
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  const decimals = size >= 100 || unitIndex === 0 ? 0 : 1;
-  return `${size.toFixed(decimals)} ${units[unitIndex]}`;
-}
-
-function setCurrentFileProgressBar({ percent = 0, indeterminate = false, animate = true }) {
-  if (!modelLoadCurrentFileBar) {
-    return;
-  }
-  const boundedPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
-  if (!animate) {
-    modelLoadCurrentFileBar.classList.add('model-load-bar-no-transition');
-  }
-  modelLoadCurrentFileBar.classList.toggle('model-load-bar-indeterminate', indeterminate);
-  if (indeterminate) {
-    modelLoadCurrentFileBar.style.width = '35%';
-    modelLoadCurrentFileBar.removeAttribute('aria-valuenow');
-  } else {
-    modelLoadCurrentFileBar.style.width = `${boundedPercent}%`;
-    modelLoadCurrentFileBar.setAttribute('aria-valuenow', `${Math.round(boundedPercent)}`);
-  }
-  if (!animate) {
-    requestAnimationFrame(() => {
-      modelLoadCurrentFileBar.classList.remove('model-load-bar-no-transition');
-    });
-  }
-}
-
-function resetLoadProgressFiles() {
-  appState.maxObservedLoadPercent = 0;
-  appState.loadProgressFiles.clear();
-  renderLoadProgressFiles();
-}
-
-function renderLoadProgressFiles() {
-  if (!modelLoadProgressSummary && !modelLoadCurrentFileLabel && !modelLoadCurrentFileValue) {
-    return;
-  }
-  const entries = [...appState.loadProgressFiles.values()].sort(
-    (a, b) => b.updatedAt - a.updatedAt
-  );
-  const completeCount = entries.filter((entry) => entry.isComplete).length;
-  const latestEntry = entries[0] || null;
-  if (modelLoadProgressSummary) {
-    if (!entries.length) {
-      modelLoadProgressSummary.textContent = '0/0 stages complete';
-    } else {
-      modelLoadProgressSummary.textContent = `${completeCount}/${entries.length} stages complete`;
-    }
-  }
-  if (!latestEntry) {
-    if (modelLoadCurrentFileLabel) {
-      modelLoadCurrentFileLabel.textContent = 'Current file';
-    }
-    if (modelLoadCurrentFileValue) {
-      modelLoadCurrentFileValue.textContent = 'Waiting...';
-    }
-    setCurrentFileProgressBar({ percent: 0, indeterminate: false, animate: false });
-    return;
-  }
-
-  if (modelLoadCurrentFileLabel) {
-    modelLoadCurrentFileLabel.textContent = latestEntry.label || 'Current file';
-  }
-  if (modelLoadCurrentFileValue) {
-    if (latestEntry.hasKnownTotal && latestEntry.totalBytes > 0) {
-      modelLoadCurrentFileValue.textContent = `${formatBytes(latestEntry.loadedBytes)} / ${formatBytes(latestEntry.totalBytes)}`;
-    } else if (latestEntry.loadedBytes > 0) {
-      modelLoadCurrentFileValue.textContent = `${formatBytes(latestEntry.loadedBytes)} downloaded`;
-    } else {
-      modelLoadCurrentFileValue.textContent = 'Downloading...';
-    }
-  }
-  setCurrentFileProgressBar({
-    percent: latestEntry.percent,
-    indeterminate: latestEntry.isIndeterminate,
-  });
-}
-
-function trackLoadFileProgress(file, percent, status, loadedBytes, totalBytes) {
-  if (typeof file !== 'string' || !file.trim()) {
-    return;
-  }
-  const key = file.trim();
-  const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
-  const statusText = typeof status === 'string' ? status.trim() : '';
-  const numericLoadedBytes = Number.isFinite(loadedBytes) && loadedBytes > 0 ? loadedBytes : 0;
-  const numericTotalBytes = Number.isFinite(totalBytes) && totalBytes > 0 ? totalBytes : 0;
-  const hasKnownTotal = numericTotalBytes > 0;
-  const percentFromBytes = hasKnownTotal ? (numericLoadedBytes / numericTotalBytes) * 100 : null;
-  const effectivePercent = Number.isFinite(percentFromBytes) ? percentFromBytes : numericPercent;
-  const previous = appState.loadProgressFiles.get(key);
-  const isComplete =
-    effectivePercent >= 100 ||
-    (hasKnownTotal && numericLoadedBytes >= numericTotalBytes) ||
-    /complete|ready|loaded|done|cached/i.test(statusText);
-  appState.loadProgressFiles.set(key, {
-    label: formatLoadFileLabel(key),
-    percent: previous ? Math.max(previous.percent, effectivePercent) : effectivePercent,
-    status: statusText || previous?.status || '',
-    loadedBytes: previous
-      ? Math.max(previous.loadedBytes || 0, numericLoadedBytes)
-      : numericLoadedBytes,
-    totalBytes: hasKnownTotal ? numericTotalBytes : previous?.totalBytes || 0,
-    hasKnownTotal: hasKnownTotal || Boolean(previous?.hasKnownTotal),
-    isIndeterminate: !hasKnownTotal && !isComplete,
-    isComplete: Boolean(previous?.isComplete || isComplete),
-    updatedAt: Date.now(),
-  });
-  renderLoadProgressFiles();
-}
-
-function clearLoadError() {
-  if (modelLoadError) {
-    modelLoadError.classList.add('d-none');
-  }
-  if (modelLoadErrorSummary) {
-    modelLoadErrorSummary.textContent = '';
-  }
-  if (modelLoadErrorDetails) {
-    modelLoadErrorDetails.replaceChildren();
-  }
-}
-
-function setLoadProgress({
-  percent = 0,
-  message = 'Preparing model...',
-  file = '',
-  status = '',
-  loadedBytes = 0,
-  totalBytes = 0,
-}) {
-  const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
-  const isCompletedMessage =
-    /^model ready\.$/i.test(String(message || '').trim()) ||
-    /^loaded .+ \((webgpu|wasm|cpu)\)\.$/i.test(String(message || '').trim());
-  const normalizedPercent = isCompletedMessage ? 100 : numericPercent;
-  const displayPercent = Math.max(appState.maxObservedLoadPercent, normalizedPercent);
-  appState.maxObservedLoadPercent = displayPercent;
-  if (modelLoadProgressLabel) {
-    modelLoadProgressLabel.textContent = message;
-  }
-  if (modelLoadProgressValue) {
-    modelLoadProgressValue.textContent = `${Math.round(displayPercent)}%`;
-  }
-  if (modelLoadProgressBar) {
-    modelLoadProgressBar.style.width = `${displayPercent}%`;
-    modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(displayPercent)}`);
-    modelLoadProgressBar.classList.toggle('progress-bar-animated', displayPercent < 100);
-  }
-  trackLoadFileProgress(file, normalizedPercent, status || message, loadedBytes, totalBytes);
-}
-
-function showLoadError(errorMessage) {
-  if (!modelLoadError) {
-    return;
-  }
-
-  const parts = String(errorMessage || 'Unknown initialization error')
-    .split(' | ')
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  const [summary, ...details] = parts;
-  if (modelLoadErrorSummary) {
-    modelLoadErrorSummary.textContent = summary || 'Failed to initialize the selected model.';
-  }
-  if (modelLoadErrorDetails) {
-    modelLoadErrorDetails.replaceChildren();
-    details.forEach((detail) => {
-      const item = document.createElement('li');
-      item.textContent = detail;
-      modelLoadErrorDetails.appendChild(item);
-    });
-  }
-  modelLoadError.classList.remove('d-none');
 }
 
 function getThinkingTagsForModel(modelId) {
