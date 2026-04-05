@@ -5,6 +5,15 @@ import {
   sanitizeUploadedFilename,
 } from '../workspace/workspace-file-system.js';
 
+export {
+  AUDIO_ATTACHMENT_ACCEPT,
+  FILE_ATTACHMENT_ACCEPT,
+  IMAGE_AND_FILE_ATTACHMENT_ACCEPT,
+  formatAttachmentSize,
+  getAttachmentButtonAcceptValue,
+  getAttachmentIconClass,
+} from './attachment-ui.js';
+
 export const SUPPORTED_TEXT_ATTACHMENT_TYPES = Object.freeze({
   txt: { mimeType: 'text/plain', label: 'Text file' },
   csv: { mimeType: 'text/csv', label: 'CSV file' },
@@ -27,9 +36,6 @@ export const SUPPORTED_AUDIO_ATTACHMENT_TYPES = Object.freeze({
   webm: { mimeType: 'audio/webm', label: 'WebM audio' },
 });
 
-export const FILE_ATTACHMENT_ACCEPT = '.txt,.csv,.md,.html,.htm,.css,.js,.pdf';
-export const AUDIO_ATTACHMENT_ACCEPT = 'audio/*,.mp3,.wav,.ogg,.oga,.flac,.aac,.m4a,.webm';
-export const IMAGE_AND_FILE_ATTACHMENT_ACCEPT = `image/*,${FILE_ATTACHMENT_ACCEPT}`;
 export const MAX_TEXT_ATTACHMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 export const MAX_TEXT_ATTACHMENT_TEXT_CHARS = 400000;
 export const MAX_IMAGE_ATTACHMENT_FILE_SIZE_BYTES = 15 * 1024 * 1024;
@@ -130,19 +136,6 @@ function loadImageDimensions(src) {
   });
 }
 
-export function formatAttachmentSize(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return '';
-  }
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  if (bytes >= 1024) {
-    return `${Math.round(bytes / 1024)} KB`;
-  }
-  return `${Math.round(bytes)} B`;
-}
-
 export function getFileExtension(filename) {
   const normalizedName = typeof filename === 'string' ? filename.trim() : '';
   if (!normalizedName.includes('.')) {
@@ -187,40 +180,6 @@ export function getSupportedAttachmentMetadata(file) {
     };
   }
   return null;
-}
-
-export function getAttachmentButtonAcceptValue({
-  imageInputSupported = false,
-  audioInputSupported = false,
-} = {}) {
-  const acceptTokens = [];
-  if (imageInputSupported) {
-    acceptTokens.push('image/*');
-  }
-  if (audioInputSupported) {
-    acceptTokens.push(...AUDIO_ATTACHMENT_ACCEPT.split(','));
-  }
-  acceptTokens.push(...FILE_ATTACHMENT_ACCEPT.split(','));
-  return [...new Set(acceptTokens)].join(',');
-}
-
-export function getAttachmentIconClass(attachment) {
-  if (attachment?.type === 'image') {
-    return 'bi-image';
-  }
-  if (attachment?.type === 'audio' || String(attachment?.mimeType || '').startsWith('audio/')) {
-    return 'bi-file-earmark-music';
-  }
-  if (attachment?.extension === 'csv' || attachment?.mimeType === 'text/csv') {
-    return 'bi-file-earmark-spreadsheet';
-  }
-  if (attachment?.extension === 'pdf' || attachment?.mimeType === 'application/pdf') {
-    return 'bi-file-earmark-pdf';
-  }
-  if (attachment?.extension === 'md' || attachment?.mimeType === 'text/markdown') {
-    return 'bi-file-earmark-richtext';
-  }
-  return 'bi-file-earmark-text';
 }
 
 export function normalizeAttachmentText(text) {

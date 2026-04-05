@@ -1,16 +1,16 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
+import 'bootstrap/js/dist/collapse';
+import 'bootstrap/js/dist/dropdown';
+import 'bootstrap/js/dist/offcanvas';
 import Modal from 'bootstrap/js/dist/modal';
 import Tooltip from 'bootstrap/js/dist/tooltip';
-import MarkdownIt from 'markdown-it';
 import { bindComposerEvents } from './app/composer-events.js';
 import {
-  createComposerAttachmentFromFile,
   formatAttachmentSize,
   getAttachmentButtonAcceptValue,
   getAttachmentIconClass,
-} from './attachments/composer-attachments.js';
+} from './attachments/attachment-ui.js';
 import { createConversationEditors } from './app/conversation-editors.js';
 import './styles.css';
 import { bindConversationListEvents } from './app/conversation-list-events.js';
@@ -136,6 +136,7 @@ import {
 } from './state/app-state.js';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 import { renderConversationListView } from './ui/conversation-list-view.js';
+import { loadMarkdownRenderer, renderPlainTextMarkdownFallback } from './ui/markdown-renderer.js';
 import { createBrowserView } from './ui/browser-view.js';
 import { createTranscriptView } from './ui/transcript-view.js';
 import { renderTaskListTray } from './ui/task-list-tray.js';
@@ -328,23 +329,13 @@ const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
 const engine = new LLMEngineClient();
 let pythonRuntime = null;
 let pythonRuntimeLoadPromise = null;
+let composerAttachmentModulePromise = null;
+let markdownRenderer = null;
+let markdownRendererLoadPromise = null;
+let hasQueuedMarkdownRendererRefresh = false;
+let hasLoggedMarkdownRendererError = false;
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
-const markdown = new MarkdownIt({
-  html: false,
-  breaks: true,
-  linkify: true,
-});
-
-const defaultLinkRenderer =
-  markdown.renderer.rules.link_open ||
-  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
-markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-  const token = tokens[idx];
-  token.attrSet('target', '_blank');
-  token.attrSet('rel', MARKDOWN_LINK_REL);
-  return defaultLinkRenderer(tokens, idx, options, env, self);
-};
 
 async function getPythonRuntime() {
   if (pythonRuntime) {
@@ -375,6 +366,63 @@ function disposePythonRuntime() {
   pythonRuntime?.dispose();
   pythonRuntime = null;
   pythonRuntimeLoadPromise = null;
+}
+
+async function loadComposerAttachmentModule() {
+  if (!composerAttachmentModulePromise) {
+    composerAttachmentModulePromise = import('./attachments/composer-attachments.js').catch(
+      (error) => {
+        composerAttachmentModulePromise = null;
+        throw error;
+      }
+    );
+  }
+  return composerAttachmentModulePromise;
+}
+
+function queueMarkdownRendererRefresh() {
+  if (hasQueuedMarkdownRendererRefresh) {
+    return;
+  }
+  hasQueuedMarkdownRendererRefresh = true;
+  const refreshWhenIdle = () => {
+    if (isGeneratingResponse(appState)) {
+      window.setTimeout(refreshWhenIdle, STREAM_UPDATE_INTERVAL_MS);
+      return;
+    }
+    hasQueuedMarkdownRendererRefresh = false;
+    renderTranscript();
+  };
+  window.setTimeout(refreshWhenIdle, 0);
+}
+
+async function ensureMarkdownRendererLoaded() {
+  if (markdownRenderer) {
+    return markdownRenderer;
+  }
+  if (!markdownRendererLoadPromise) {
+    markdownRendererLoadPromise = loadMarkdownRenderer({
+      linkRel: MARKDOWN_LINK_REL,
+    })
+      .then((loadedRenderer) => {
+        markdownRenderer = loadedRenderer;
+        queueMarkdownRendererRefresh();
+        return loadedRenderer;
+      })
+      .catch((error) => {
+        markdownRendererLoadPromise = null;
+        if (!hasLoggedMarkdownRendererError) {
+          appendDebug(
+            `Markdown renderer failed to load: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          hasLoggedMarkdownRendererError = true;
+        }
+        throw error;
+      });
+  }
+  return markdownRendererLoadPromise;
 }
 
 const MAX_DEBUG_ENTRIES = 120;
@@ -814,7 +862,11 @@ function renderModelMarkdown(content) {
   if (!normalizedContent) {
     return '';
   }
-  return markdown.render(normalizedContent);
+  if (markdownRenderer) {
+    return markdownRenderer.render(normalizedContent);
+  }
+  void ensureMarkdownRendererLoaded();
+  return renderPlainTextMarkdownFallback(normalizedContent);
 }
 
 function normalizeMathDelimitersForMarkdown(content) {
@@ -4452,13 +4504,15 @@ bindComposerEvents({
   getPendingComposerAttachments,
   selectedModelSupportsImageInput,
   getSelectedModelAttachmentSupport,
-  createComposerAttachmentFromFile: (file, options = {}) =>
-    createComposerAttachmentFromFile(file, {
+  createComposerAttachmentFromFile: async (file, options = {}) => {
+    const { createComposerAttachmentFromFile } = await loadComposerAttachmentModule();
+    return createComposerAttachmentFromFile(file, {
       ...options,
       workspaceFileSystem:
         getConversationWorkspaceFileSystem() ||
         getConversationWorkspaceFileSystem(reservePendingConversationId()),
-    }),
+    });
+  },
   beginComposerAttachmentOperation: () => {
     beginAttachmentOperation(appState);
     renderComposerAttachments();
