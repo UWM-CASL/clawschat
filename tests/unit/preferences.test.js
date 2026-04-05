@@ -311,17 +311,18 @@ describe('preferences controller', () => {
 
     const llama1BCard = cards.find((card) => card.textContent?.includes('Llama 3.2 1B Instruct'));
     expect(llama1BCard?.textContent).toContain('131,072 tokens');
-    expect(llama1BCard?.textContent).toContain('Temp 0.6');
+    expect(llama1BCard?.textContent).not.toContain('Temp 0.6');
+    expect(llama1BCard?.textContent).not.toContain('Default context 8,192');
     expect(
       /** @type {HTMLAnchorElement | null} */ (llama1BCard?.querySelector('.model-card-link'))?.href
     ).toBe('https://huggingface.co/onnx-community/Llama-3.2-1B-Instruct-ONNX');
 
     const qwenSmallCard = cards.find((card) => card.textContent?.includes('Qwen3.5 0.8B'));
     expect(qwenSmallCard?.textContent).toContain('262,144 tokens');
-    expect(qwenSmallCard?.textContent).toContain('Default context 8,192');
-    expect(qwenSmallCard?.textContent).toContain('Temp 0.7');
-    expect(qwenSmallCard?.textContent).toContain('Top P 0.80');
-    expect(qwenSmallCard?.textContent).toContain('Top K 20');
+    expect(qwenSmallCard?.textContent).not.toContain('Default context 8,192');
+    expect(qwenSmallCard?.textContent).not.toContain('Temp 0.7');
+    expect(qwenSmallCard?.textContent).not.toContain('Top P 0.80');
+    expect(qwenSmallCard?.textContent).not.toContain('Top K 20');
     expect(
       /** @type {HTMLAnchorElement | null} */ (qwenSmallCard?.querySelector('.model-card-link'))
         ?.href
@@ -334,8 +335,8 @@ describe('preferences controller', () => {
 
     const liquidSmallCard = cards.find((card) => card.textContent?.includes('Liquid LFM 2.5 350M'));
     expect(liquidSmallCard?.textContent).toContain('32,768 tokens');
-    expect(liquidSmallCard?.textContent).toContain('Temp 0.1');
-    expect(liquidSmallCard?.textContent).toContain('Top P 1.00');
+    expect(liquidSmallCard?.textContent).not.toContain('Temp 0.1');
+    expect(liquidSmallCard?.textContent).not.toContain('Top P 1.00');
     expect(liquidSmallCard?.textContent).toContain('This model requires WebGPU.');
     expect(
       /** @type {HTMLAnchorElement | null} */ (
@@ -347,8 +348,8 @@ describe('preferences controller', () => {
       card.textContent?.includes('Liquid LFM 2.5 1.2B Instruct')
     );
     expect(liquidInstructCard?.textContent).toContain('32,768 tokens');
-    expect(liquidInstructCard?.textContent).toContain('Temp 0.1');
-    expect(liquidInstructCard?.textContent).toContain('Top P 1.00');
+    expect(liquidInstructCard?.textContent).not.toContain('Temp 0.1');
+    expect(liquidInstructCard?.textContent).not.toContain('Top P 1.00');
     expect(liquidInstructCard?.textContent).toContain('This model requires WebGPU.');
     expect(
       /** @type {HTMLAnchorElement | null} */ (
@@ -359,10 +360,10 @@ describe('preferences controller', () => {
     const qwenCard = cards.find((card) => card.textContent?.includes('Qwen3.5 2B'));
     expect(qwenCard?.textContent).toContain('262,144 tokens');
     expect(qwenCard?.textContent).toContain('about 196,600 words');
-    expect(qwenCard?.textContent).toContain('Default context 8,192');
-    expect(qwenCard?.textContent).toContain('Temp 0.7');
-    expect(qwenCard?.textContent).toContain('Top P 0.80');
-    expect(qwenCard?.textContent).toContain('Top K 20');
+    expect(qwenCard?.textContent).not.toContain('Default context 8,192');
+    expect(qwenCard?.textContent).not.toContain('Temp 0.7');
+    expect(qwenCard?.textContent).not.toContain('Top P 0.80');
+    expect(qwenCard?.textContent).not.toContain('Top K 20');
     expect(qwenCard?.textContent).toContain('EN');
     expect(qwenCard?.textContent).toContain('ZH');
     expect(qwenCard?.textContent).toContain('ES');

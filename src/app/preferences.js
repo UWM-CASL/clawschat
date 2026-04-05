@@ -828,10 +828,6 @@ export function createPreferencesController({
     return new Intl.NumberFormat('en-US').format(Math.max(0, Number(value) || 0));
   }
 
-  function formatDecimal(value, fractionDigits) {
-    return Number(value || 0).toFixed(fractionDigits);
-  }
-
   function formatWordEstimate(tokenCount) {
     const roundedEstimate = Math.round(((Number(tokenCount) || 0) * 0.75) / 100) * 100;
     return formatInteger(roundedEstimate);
@@ -945,30 +941,6 @@ export function createPreferencesController({
     return languages;
   }
 
-  function createGenerationSummaryNode(model) {
-    const generation = model?.generation || null;
-    if (!generation) {
-      return null;
-    }
-
-    const list = documentRef.createElement('ul');
-    list.className = 'model-card-summary';
-
-    [
-      `Default context ${formatInteger(generation.defaultMaxContextTokens)}`,
-      `Temp ${formatDecimal(generation.defaultTemperature, 1)}`,
-      `Top P ${formatDecimal(generation.defaultTopP, 2)}`,
-      `Top K ${formatInteger(generation.defaultTopK)}`,
-    ].forEach((label) => {
-      const item = documentRef.createElement('li');
-      item.className = 'model-card-summary-pill';
-      item.textContent = label;
-      list.appendChild(item);
-    });
-
-    return list;
-  }
-
   function syncModelCardSelection() {
     if (!(modelCardList instanceof HTMLElement)) {
       return;
@@ -1056,11 +1028,6 @@ export function createPreferencesController({
       const secondary = documentRef.createElement('div');
       secondary.className = 'model-card-secondary';
 
-      const languages = createLanguageSupportNode(model);
-      if (languages) {
-        secondary.appendChild(languages);
-      }
-
       const featureList = documentRef.createElement('ul');
       featureList.className = 'model-card-features';
       buildFeatureTokens(model).forEach((feature) => {
@@ -1073,11 +1040,6 @@ export function createPreferencesController({
       });
       if (featureList.childElementCount > 0) {
         secondary.appendChild(featureList);
-      }
-
-      const generationSummary = createGenerationSummaryNode(model);
-      if (generationSummary) {
-        secondary.appendChild(generationSummary);
       }
 
       if (!availability.available) {
@@ -1105,6 +1067,10 @@ export function createPreferencesController({
 
       const footer = documentRef.createElement('div');
       footer.className = 'model-card-footer';
+      const languages = createLanguageSupportNode(model);
+      if (languages) {
+        footer.appendChild(languages);
+      }
       const detailsLink = documentRef.createElement('a');
       detailsLink.className = 'model-card-link';
       detailsLink.href = model.repositoryUrl || `https://huggingface.co/${model.id}`;
