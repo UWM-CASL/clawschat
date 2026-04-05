@@ -1019,9 +1019,6 @@ export function createPreferencesController({
         titleMeta.appendChild(badge);
       }
 
-      const secondary = documentRef.createElement('div');
-      secondary.className = 'model-card-secondary';
-
       const featureList = documentRef.createElement('ul');
       featureList.className = 'model-card-features';
       buildFeatureTokens(model).forEach((feature) => {
@@ -1052,15 +1049,13 @@ export function createPreferencesController({
         const availabilityNote = documentRef.createElement('p');
         availabilityNote.className = 'model-card-note';
         availabilityNote.textContent = availability.reason;
-        secondary.appendChild(availabilityNote);
+        content.appendChild(availabilityNote);
       } else if (model.runtime?.requiresWebGpu) {
         const requirement = documentRef.createElement('p');
         requirement.className = 'model-card-note';
         requirement.textContent = 'This model requires WebGPU.';
-        secondary.appendChild(requirement);
+        content.appendChild(requirement);
       }
-
-      content.appendChild(secondary);
       selectButton.appendChild(content);
 
       selectButton.addEventListener('click', () => {

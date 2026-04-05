@@ -799,25 +799,13 @@
 }
 
 .model-card-content {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 0.4rem;
 }
 
 .model-card-primary {
   display: grid;
   gap: 0.4rem;
-  min-width: min(16rem, 100%);
-  flex: 1 1 15rem;
-}
-
-.model-card-secondary {
-  display: grid;
-  gap: 0.45rem;
-  min-width: min(14rem, 100%);
-  flex: 2 1 18rem;
 }
 
 .model-card-title-row {
@@ -918,6 +906,7 @@
 
 .model-card-note {
   color: var(--ink-muted);
+  font-weight: 500;
 }
 
 .model-card-features {
