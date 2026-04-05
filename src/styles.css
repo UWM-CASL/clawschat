@@ -732,14 +732,14 @@
 }
 
 .model-card-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 0.85rem;
 }
 
 .model-card {
   display: flex;
-  flex-direction: column;
+  align-items: stretch;
   border: 1px solid color-mix(in srgb, var(--border-soft) 78%, transparent);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
@@ -756,15 +756,13 @@
 }
 
 .model-card-button {
-  width: 100%;
+  flex: 1 1 auto;
   border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
   padding: 1rem;
-  display: grid;
-  gap: 0.7rem;
-  min-height: 100%;
+  display: block;
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease;
@@ -797,6 +795,28 @@
 .model-card-link:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
+}
+
+.model-card-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.25rem;
+  flex-wrap: wrap;
+}
+
+.model-card-primary {
+  display: grid;
+  gap: 0.55rem;
+  min-width: min(22rem, 100%);
+  flex: 1 1 18rem;
+}
+
+.model-card-secondary {
+  display: grid;
+  gap: 0.7rem;
+  min-width: min(24rem, 100%);
+  flex: 999 1 26rem;
 }
 
 .model-card-title-row {
@@ -896,20 +916,51 @@
 }
 
 .model-feature-pill {
-  display: inline-grid;
-  place-items: center;
-  width: 2.1rem;
-  height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-height: 2.1rem;
+  padding: 0.36rem 0.7rem;
   border-radius: 0.75rem;
-  font-size: 1rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
   border: 1px solid color-mix(in srgb, var(--border-soft) 85%, transparent);
   background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
   color: var(--ink-strong);
 }
 
+.model-feature-pill .bi {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.model-card-summary {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0;
+  margin: 0;
+}
+
+.model-card-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-muted) 74%, var(--surface));
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .model-card-footer {
-  border-top: 1px solid color-mix(in srgb, var(--border-soft) 55%, transparent);
-  padding: 0.7rem 1rem 0.85rem;
+  display: flex;
+  align-items: center;
+  padding: 1rem 1rem 1rem 0;
 }
 
 .model-card-link {
@@ -2571,6 +2622,20 @@
   body.web-lookup-open .transcript-step-nav,
   body.web-lookup-open .jump-to-top-btn {
     right: calc(clamp(18rem, 24vw, 24rem) + 1rem);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .model-card {
+    flex-direction: column;
+  }
+
+  .model-card-button {
+    width: 100%;
+  }
+
+  .model-card-footer {
+    padding: 0 1rem 1rem;
   }
 }
 

@@ -183,7 +183,7 @@ describe('conversation-serialization', () => {
     expect(appState.conversationIdCounter).toBe(2);
     expect(appState.activeConversationId).toBeNull();
     expect(appState.conversations[0]?.name).toBe('New Conversation');
-    expect(appState.conversations[0]?.modelId).toBe('onnx-community/Qwen3.5-2B-ONNX');
+    expect(appState.conversations[0]?.modelId).toBe('onnx-community/Qwen3.5-0.8B-ONNX');
     expect(appState.conversations[0]?.languagePreference).toBe('fr');
     expect(appState.conversations[0]?.thinkingEnabled).toBe(false);
     expect(appState.conversations[0]?.currentWorkingDirectory).toBe('/workspace/saved');

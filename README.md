@@ -192,9 +192,16 @@ Student-facing browser chat UI with local model inference.
 
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
   - Uses the published `q4f16` web export.
+- `onnx-community/Qwen3.5-0.8B-ONNX`
+  - Uses the published `q4f16` ONNX export with external data loading.
+  - Defaults to Qwen's non-thinking mode in this app and uses runtime `enable_thinking` when the conversation-level thinking toggle is enabled.
+  - Uses the Qwen 3.5 non-thinking sampling defaults in this app: temperature `0.7`, top-k `20`, top-p `0.8`.
+  - Exposes text plus uploaded image input in this app.
+  - Uses the XML tool-call format supported by this app.
 - `onnx-community/Qwen3.5-2B-ONNX`
   - Uses the published `q4f16` ONNX export with external data loading.
-  - Uses Qwen's thinking-control profile: `enable_thinking` at generation time plus `/think` and `/no_think` system-prompt switches.
+  - Defaults to Qwen's non-thinking mode in this app and uses runtime `enable_thinking` when the conversation-level thinking toggle is enabled.
+  - Uses the Qwen 3.5 non-thinking sampling defaults in this app: temperature `0.7`, top-k `20`, top-p `0.8`.
   - Exposes text plus uploaded image input in this app.
   - Uses the XML tool-call format supported by this app.
 - `onnx-community/gemma-4-E2B-it-ONNX`
@@ -209,7 +216,7 @@ Student-facing browser chat UI with local model inference.
   - `onnx-community/gemma-3n-E2B-it-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `onnx-community/Qwen3-0.6B-ONNX` -> `onnx-community/Qwen3.5-2B-ONNX`
+  - `onnx-community/Qwen3-0.6B-ONNX` -> `onnx-community/Qwen3.5-0.8B-ONNX`
   - `huggingworld/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`

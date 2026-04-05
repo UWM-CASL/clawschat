@@ -828,6 +828,10 @@ export function createPreferencesController({
     return new Intl.NumberFormat('en-US').format(Math.max(0, Number(value) || 0));
   }
 
+  function formatDecimal(value, fractionDigits) {
+    return Number(value || 0).toFixed(fractionDigits);
+  }
+
   function formatWordEstimate(tokenCount) {
     const roundedEstimate = Math.round(((Number(tokenCount) || 0) * 0.75) / 100) * 100;
     return formatInteger(roundedEstimate);
@@ -941,6 +945,30 @@ export function createPreferencesController({
     return languages;
   }
 
+  function createGenerationSummaryNode(model) {
+    const generation = model?.generation || null;
+    if (!generation) {
+      return null;
+    }
+
+    const list = documentRef.createElement('ul');
+    list.className = 'model-card-summary';
+
+    [
+      `Default context ${formatInteger(generation.defaultMaxContextTokens)}`,
+      `Temp ${formatDecimal(generation.defaultTemperature, 1)}`,
+      `Top P ${formatDecimal(generation.defaultTopP, 2)}`,
+      `Top K ${formatInteger(generation.defaultTopK)}`,
+    ].forEach((label) => {
+      const item = documentRef.createElement('li');
+      item.className = 'model-card-summary-pill';
+      item.textContent = label;
+      list.appendChild(item);
+    });
+
+    return list;
+  }
+
   function syncModelCardSelection() {
     if (!(modelCardList instanceof HTMLElement)) {
       return;
@@ -997,6 +1025,12 @@ export function createPreferencesController({
       selectButton.setAttribute('aria-checked', 'false');
       selectButton.disabled = !availability.available;
 
+      const content = documentRef.createElement('div');
+      content.className = 'model-card-content';
+
+      const primary = documentRef.createElement('div');
+      primary.className = 'model-card-primary';
+
       const titleRow = documentRef.createElement('div');
       titleRow.className = 'model-card-title-row';
       const title = documentRef.createElement('span');
@@ -1009,18 +1043,22 @@ export function createPreferencesController({
         badge.textContent = 'Default';
         titleRow.appendChild(badge);
       }
-      selectButton.appendChild(titleRow);
+      primary.appendChild(titleRow);
 
       const context = documentRef.createElement('p');
       context.className = 'model-card-context';
       context.innerHTML = `<i class="bi bi-text-paragraph" aria-hidden="true"></i> <strong>${formatInteger(
         model.generation.maxContextTokens
       )} tokens</strong> / about ${formatWordEstimate(model.generation.maxContextTokens)} words`;
-      selectButton.appendChild(context);
+      primary.appendChild(context);
+      content.appendChild(primary);
+
+      const secondary = documentRef.createElement('div');
+      secondary.className = 'model-card-secondary';
 
       const languages = createLanguageSupportNode(model);
       if (languages) {
-        selectButton.appendChild(languages);
+        secondary.appendChild(languages);
       }
 
       const featureList = documentRef.createElement('ul');
@@ -1030,24 +1068,32 @@ export function createPreferencesController({
         item.className = 'model-feature-pill';
         item.setAttribute('aria-label', feature.label);
         item.title = feature.label;
-        item.innerHTML = `<i class="bi ${feature.icon}" aria-hidden="true"></i>`;
+        item.innerHTML = `<i class="bi ${feature.icon}" aria-hidden="true"></i><span>${feature.label}</span>`;
         featureList.appendChild(item);
       });
       if (featureList.childElementCount > 0) {
-        selectButton.appendChild(featureList);
+        secondary.appendChild(featureList);
+      }
+
+      const generationSummary = createGenerationSummaryNode(model);
+      if (generationSummary) {
+        secondary.appendChild(generationSummary);
       }
 
       if (!availability.available) {
         const availabilityNote = documentRef.createElement('p');
         availabilityNote.className = 'model-card-note';
         availabilityNote.textContent = availability.reason;
-        selectButton.appendChild(availabilityNote);
+        secondary.appendChild(availabilityNote);
       } else if (model.runtime?.requiresWebGpu) {
         const requirement = documentRef.createElement('p');
         requirement.className = 'model-card-note';
         requirement.textContent = 'This model requires WebGPU.';
-        selectButton.appendChild(requirement);
+        secondary.appendChild(requirement);
       }
+
+      content.appendChild(secondary);
+      selectButton.appendChild(content);
 
       selectButton.addEventListener('click', () => {
         if (selectButton.disabled) {

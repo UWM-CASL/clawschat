@@ -307,11 +307,31 @@ describe('preferences controller', () => {
     harness.controller.populateModelSelect();
 
     const cards = Array.from(modelCardList.querySelectorAll('.model-card'));
-    expect(cards.length).toBe(3);
+    expect(cards.length).toBe(4);
+
+    const qwenSmallCard = cards.find((card) => card.textContent?.includes('Qwen3.5 0.8B'));
+    expect(qwenSmallCard?.textContent).toContain('262,144 tokens');
+    expect(qwenSmallCard?.textContent).toContain('Default context 8,192');
+    expect(qwenSmallCard?.textContent).toContain('Temp 0.7');
+    expect(qwenSmallCard?.textContent).toContain('Top P 0.80');
+    expect(qwenSmallCard?.textContent).toContain('Top K 20');
+    expect(
+      /** @type {HTMLAnchorElement | null} */ (qwenSmallCard?.querySelector('.model-card-link'))
+        ?.href
+    ).toBe('https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX');
+    expect(
+      /** @type {HTMLAnchorElement | null} */ (
+        qwenSmallCard?.querySelector('.model-card-language-overflow')
+      )?.href
+    ).toBe('https://huggingface.co/Qwen/Qwen3.5-0.8B');
 
     const qwenCard = cards.find((card) => card.textContent?.includes('Qwen3.5 2B'));
     expect(qwenCard?.textContent).toContain('262,144 tokens');
     expect(qwenCard?.textContent).toContain('about 196,600 words');
+    expect(qwenCard?.textContent).toContain('Default context 8,192');
+    expect(qwenCard?.textContent).toContain('Temp 0.7');
+    expect(qwenCard?.textContent).toContain('Top P 0.80');
+    expect(qwenCard?.textContent).toContain('Top K 20');
     expect(qwenCard?.textContent).toContain('EN');
     expect(qwenCard?.textContent).toContain('ZH');
     expect(qwenCard?.textContent).toContain('ES');
@@ -332,6 +352,9 @@ describe('preferences controller', () => {
         node.getAttribute('aria-label')
       )
     ).toEqual(['Shows a thinking section', 'Can use built-in tools', 'Accepts image input']);
+    expect(qwenCard?.textContent).toContain('Shows a thinking section');
+    expect(qwenCard?.textContent).toContain('Can use built-in tools');
+    expect(qwenCard?.textContent).toContain('Accepts image input');
 
     expect(
       qwenCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')

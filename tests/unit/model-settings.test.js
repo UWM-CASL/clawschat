@@ -9,6 +9,7 @@ import {
 } from '../../src/config/model-settings.js';
 
 const LIQUID_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX';
+const QWEN_SMALL_MODEL_ID = 'onnx-community/Qwen3.5-0.8B-ONNX';
 const QWEN_MODEL_ID = 'onnx-community/Qwen3.5-2B-ONNX';
 const GEMMA_4_MODEL_ID = 'onnx-community/gemma-4-E2B-it-ONNX';
 const GEMMA_MODEL_ID = 'onnx-community/gemma-3n-E2B-it-ONNX';
@@ -81,10 +82,15 @@ describe('model-settings availability', () => {
       defaultTopK: 50,
       defaultTopP: 0.9,
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.generation).toMatchObject({
-      defaultTemperature: 0.6,
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.generation).toMatchObject({
+      defaultTemperature: 0.7,
       defaultTopK: 20,
-      defaultTopP: 0.95,
+      defaultTopP: 0.8,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.generation).toMatchObject({
+      defaultTemperature: 0.7,
+      defaultTopK: 20,
+      defaultTopP: 0.8,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.generation).toMatchObject({
       defaultTemperature: 1,
@@ -138,6 +144,14 @@ describe('model-settings availability', () => {
   });
 
   test('exposes model feature flags from config', () => {
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.features).toMatchObject({
+      streaming: true,
+      thinking: true,
+      toolCalling: true,
+      imageInput: true,
+      audioInput: false,
+      videoInput: false,
+    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.features).toMatchObject({
       streaming: true,
       thinking: true,
@@ -188,6 +202,12 @@ describe('model-settings availability', () => {
         decoder_model_merged: 'q4',
       },
     });
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.runtime).toMatchObject({
+      dtype: 'q4f16',
+      multimodalGeneration: true,
+      useExternalDataFormat: true,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.runtime?.requiresWebGpu).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.runtime).toMatchObject({
       dtype: 'q4f16',
       multimodalGeneration: true,
@@ -200,6 +220,9 @@ describe('model-settings availability', () => {
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime?.requiresWebGpu).toBeUndefined();
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.inputLimits).toEqual({
+      maxImageInputs: 1,
+    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.inputLimits).toEqual({
       maxImageInputs: 1,
     });
@@ -211,14 +234,19 @@ describe('model-settings availability', () => {
       nameKey: 'name',
       argumentsKey: 'parameters',
     });
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.toolCalling).toEqual({
+      format: 'xml-tool-call',
+    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.toolCalling).toEqual({
       format: 'xml-tool-call',
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.thinkingControl).toEqual({
-      defaultEnabled: true,
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.thinkingControl).toEqual({
+      defaultEnabled: false,
       runtimeParameter: 'enable_thinking',
-      enabledInstruction: '/think',
-      disabledInstruction: '/no_think',
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.thinkingControl).toEqual({
+      defaultEnabled: false,
+      runtimeParameter: 'enable_thinking',
     });
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.toolCalling).toEqual({
       format: 'special-token-call',
@@ -232,6 +260,10 @@ describe('model-settings availability', () => {
       format: 'json',
       nameKey: 'name',
       argumentsKey: 'arguments',
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)).toMatchObject({
+      displayName: 'Qwen3.5 0.8B',
+      repositoryUrl: 'https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX',
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)).toMatchObject({
       displayName: 'Qwen3.5 2B',
