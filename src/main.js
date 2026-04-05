@@ -164,6 +164,7 @@ const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
+const STREAM_UPDATE_INTERVAL_MS = 100;
 const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
 const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
 const MATHJAX_TYPESET_DEBOUNCE_MS = 150;
@@ -4094,6 +4095,7 @@ const appController = createAppController({
   showLoadError,
   applyPendingGenerationSettingsIfReady,
   markActiveIncompleteModelMessageComplete,
+  streamUpdateIntervalMs: STREAM_UPDATE_INTERVAL_MS,
 });
 
 transcriptActions = createTranscriptActions({

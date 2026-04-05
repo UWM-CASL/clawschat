@@ -136,6 +136,18 @@ function installMockWorker() {
             payload: { message: 'Complete (WASM)' },
           });
         }, isLong ? 300 : 60);
+        return;
+      }
+
+      if (message.type === 'cancel') {
+        if (this.timer) {
+          clearInterval(this.timer);
+          this.timer = null;
+        }
+        this._emit('message', {
+          type: 'canceled',
+          payload: { requestId: message.payload?.requestId },
+        });
       }
     }
   }

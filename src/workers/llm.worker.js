@@ -15,16 +15,19 @@ const WORKER_GENERATION_LIMITS = {
   defaultTopP: 0.9,
   defaultRepetitionPenalty: 1.0,
 };
+const WORKER_STREAM_UPDATE_INTERVAL_MS = 100;
 
 let model = null;
 let tokenizer = null;
 let processor = null;
 let TextStreamer = null;
+let InterruptableStoppingCriteriaClass = null;
 let backendInUse = null;
 let loadedModelId = null;
 let loadedExecutionMode = 'text';
 let cachedModule = null;
 let generationConfig = buildDefaultGenerationConfig(WORKER_GENERATION_LIMITS);
+let activeGenerationState = null;
 
 function normalizeGenerationConfig(rawConfig) {
   return sanitizeGenerationConfig(rawConfig, WORKER_GENERATION_LIMITS);
@@ -58,6 +61,109 @@ function postProgress({
       totalBytes: normalizeProgressBytes(totalBytes),
     },
   });
+}
+
+function getTimestamp() {
+  if (typeof globalThis.performance?.now === 'function') {
+    return globalThis.performance.now();
+  }
+  return Date.now();
+}
+
+function clearStreamFlushTimer(generationState) {
+  if (!generationState || generationState.flushTimerId === null) {
+    return;
+  }
+  globalThis.clearTimeout(generationState.flushTimerId);
+  generationState.flushTimerId = null;
+}
+
+function flushBufferedTokens(generationState) {
+  if (!generationState || !generationState.bufferedText) {
+    return;
+  }
+  clearStreamFlushTimer(generationState);
+  const text = generationState.bufferedText;
+  generationState.bufferedText = '';
+  generationState.lastFlushAt = getTimestamp();
+  self.postMessage({
+    type: 'token',
+    payload: {
+      requestId: generationState.requestId,
+      text,
+    },
+  });
+}
+
+function queueBufferedToken(generationState, text) {
+  const nextText = String(text || '');
+  if (!generationState || !nextText) {
+    return;
+  }
+  generationState.bufferedText += nextText;
+  const now = getTimestamp();
+  const elapsed =
+    generationState.lastFlushAt > 0
+      ? now - generationState.lastFlushAt
+      : WORKER_STREAM_UPDATE_INTERVAL_MS;
+  if (elapsed >= WORKER_STREAM_UPDATE_INTERVAL_MS) {
+    flushBufferedTokens(generationState);
+    return;
+  }
+  if (generationState.flushTimerId !== null) {
+    return;
+  }
+  generationState.flushTimerId = globalThis.setTimeout(() => {
+    generationState.flushTimerId = null;
+    flushBufferedTokens(generationState);
+  }, Math.max(0, WORKER_STREAM_UPDATE_INTERVAL_MS - elapsed));
+}
+
+function createGenerationState(requestId) {
+  if (!InterruptableStoppingCriteriaClass) {
+    throw new Error('Interruptable stopping criteria is unavailable.');
+  }
+  const generationState = {
+    requestId,
+    interruptableStoppingCriteria: new InterruptableStoppingCriteriaClass(),
+    bufferedText: '',
+    flushTimerId: null,
+    lastFlushAt: 0,
+    cancelRequested: false,
+  };
+  activeGenerationState = generationState;
+  return generationState;
+}
+
+function finishGenerationState(generationState) {
+  if (!generationState) {
+    return;
+  }
+  clearStreamFlushTimer(generationState);
+  generationState.interruptableStoppingCriteria?.reset?.();
+  if (activeGenerationState === generationState) {
+    activeGenerationState = null;
+  }
+}
+
+function requestGenerationCancel(requestId) {
+  const generationState = activeGenerationState;
+  if (!generationState) {
+    self.postMessage({
+      type: 'canceled',
+      payload: { requestId },
+    });
+    return;
+  }
+  if (requestId && generationState.requestId !== requestId) {
+    self.postMessage({
+      type: 'canceled',
+      payload: { requestId },
+    });
+    return;
+  }
+  generationState.cancelRequested = true;
+  generationState.interruptableStoppingCriteria.interrupt();
 }
 
 async function loadTransformers() {
@@ -548,10 +654,12 @@ async function initialize(payload) {
     env,
     pipeline,
     TextStreamer: StreamerClass,
+    InterruptableStoppingCriteria: InterruptableStoppingCriteria,
     AutoProcessor,
     AutoModelForImageTextToText,
   } = await loadTransformers();
   TextStreamer = StreamerClass;
+  InterruptableStoppingCriteriaClass = InterruptableStoppingCriteria;
   env.allowRemoteModels = true;
   env.useBrowserCache = true;
 
@@ -680,6 +788,11 @@ async function generate(payload) {
 
   postStatus(`Generating (${backendInUse.toUpperCase()})...`);
 
+  if (!InterruptableStoppingCriteriaClass) {
+    ({ InterruptableStoppingCriteria: InterruptableStoppingCriteriaClass } = await loadTransformers());
+  }
+
+  const generationState = createGenerationState(requestId);
   try {
     let streamedText = '';
     const formattedPrompt = resolvePrompt(prompt);
@@ -722,7 +835,10 @@ async function generate(payload) {
     if (runtime.multimodalGeneration && loadedExecutionMode !== 'multimodal') {
       throw new Error('The selected model runtime was not initialized for multimodal generation.');
     }
-    const generationOptions = buildGenerationOptions(requestGenerationConfig, runtime);
+    const generationOptions = {
+      ...buildGenerationOptions(requestGenerationConfig, runtime),
+      stopping_criteria: generationState.interruptableStoppingCriteria,
+    };
 
     if (runtime.multimodalGeneration) {
       const { RawImage } = await loadTransformers();
@@ -746,10 +862,7 @@ async function generate(payload) {
           skip_special_tokens: true,
           callback_function: (text) => {
             streamedText += text;
-            self.postMessage({
-              type: 'token',
-              payload: { requestId, text },
-            });
+            queueBufferedToken(generationState, text);
           },
         });
 
@@ -768,20 +881,14 @@ async function generate(payload) {
           { skip_special_tokens: true }
         );
         streamedText = decoded?.[0] || '';
-        self.postMessage({
-          type: 'token',
-          payload: { requestId, text: streamedText },
-        });
+        queueBufferedToken(generationState, streamedText);
       }
     } else if (TextStreamer) {
       const streamer = new TextStreamer(tokenizer, {
         skip_prompt: true,
         callback_function: (text) => {
           streamedText += text;
-          self.postMessage({
-            type: 'token',
-            payload: { requestId, text },
-          });
+          queueBufferedToken(generationState, text);
         },
       });
 
@@ -801,10 +908,16 @@ async function generate(payload) {
       } else {
         streamedText = generated || '';
       }
+      queueBufferedToken(generationState, streamedText);
+    }
+
+    flushBufferedTokens(generationState);
+    if (generationState.cancelRequested) {
       self.postMessage({
-        type: 'token',
-        payload: { requestId, text: streamedText },
+        type: 'canceled',
+        payload: { requestId },
       });
+      return;
     }
 
     const finalText = streamedText.trim();
@@ -814,6 +927,14 @@ async function generate(payload) {
     });
     postStatus(`Complete (${backendInUse.toUpperCase()})`);
   } catch (error) {
+    flushBufferedTokens(generationState);
+    if (generationState.cancelRequested) {
+      self.postMessage({
+        type: 'canceled',
+        payload: { requestId },
+      });
+      return;
+    }
     self.postMessage({
       type: 'error',
       payload: {
@@ -822,6 +943,8 @@ async function generate(payload) {
       },
     });
     postStatus('Generation failed');
+  } finally {
+    finishGenerationState(generationState);
   }
 }
 
@@ -854,5 +977,10 @@ self.onmessage = async (event) => {
 
   if (type === 'generate') {
     await generate(payload);
+    return;
+  }
+
+  if (type === 'cancel') {
+    requestGenerationCancel(payload?.requestId);
   }
 };

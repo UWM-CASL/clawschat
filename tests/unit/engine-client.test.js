@@ -55,6 +55,18 @@ class MockWorker {
           payload: { requestId, text: 'Hello world' },
         });
       });
+      return;
+    }
+
+    if (message.type === 'cancel') {
+      queueMicrotask(() => {
+        this.#emit('message', {
+          type: 'canceled',
+          payload: {
+            requestId: message.payload?.requestId,
+          },
+        });
+      });
     }
   }
 
@@ -100,6 +112,19 @@ describe('LLMEngineClient', () => {
     expect(MockWorker.instances[0].messages[0].type).toBe('init');
   });
 
+  test('deduplicates matching initialize requests while a load is already in flight', async () => {
+    const client = new LLMEngineClient();
+
+    const [firstResult, secondResult] = await Promise.all([
+      client.initialize({ modelId: 'example/model' }),
+      client.initialize({ modelId: 'example/model' }),
+    ]);
+
+    expect(firstResult).toEqual(secondResult);
+    expect(MockWorker.instances).toHaveLength(1);
+    expect(MockWorker.instances[0].messages.filter((message) => message.type === 'init')).toHaveLength(1);
+  });
+
   test('streams tokens and completes generation', async () => {
     const client = new LLMEngineClient();
     await client.initialize({ modelId: 'example/model' });
@@ -143,17 +168,28 @@ describe('LLMEngineClient', () => {
     });
   });
 
-  test('cancelGeneration terminates and reinitializes worker', async () => {
+  test('cancelGeneration sends a cancel request without reloading the worker', async () => {
     const client = new LLMEngineClient();
     await client.initialize({ modelId: 'example/model' });
 
     const firstWorker = client.worker;
+    client.pendingGeneration = {
+      requestId: '11111111-1111-1111-1111-111111111111',
+      onToken: vi.fn(),
+      onComplete: vi.fn(),
+      onError: vi.fn(),
+    };
     await client.cancelGeneration();
 
-    expect(/** @type {any} */ (firstWorker).terminated).toBe(true);
+    expect(/** @type {any} */ (firstWorker).terminated).toBe(false);
     expect(client.worker).toBeTruthy();
-    expect(client.worker).not.toBe(firstWorker);
-    expect(MockWorker.instances).toHaveLength(2);
+    expect(client.worker).toBe(firstWorker);
+    expect(client.pendingGeneration).toBeNull();
+    expect(MockWorker.instances).toHaveLength(1);
+    expect(MockWorker.instances[0].messages.at(-1)).toEqual({
+      type: 'cancel',
+      payload: { requestId: '11111111-1111-1111-1111-111111111111' },
+    });
   });
 
   test('switching models unloads the previous worker before loading the next model', async () => {

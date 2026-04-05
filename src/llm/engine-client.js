@@ -6,7 +6,10 @@ export class LLMEngineClient {
   constructor() {
     this.worker = null;
     this.pendingInit = null;
+    this.pendingInitConfigKey = '';
     this.pendingGeneration = null;
+    this.pendingCancel = null;
+    this.pendingCancelRequestId = '';
     this.loadedModelId = null;
     this.loadedBackend = null;
     this.config = {
@@ -34,16 +37,32 @@ export class LLMEngineClient {
       this.dispose();
       this.config = { ...this.config, ...config, modelId };
     }
+    const initConfigKey = this.#getInitConfigKey(this.config);
+    if (this.pendingInit) {
+      if (this.pendingInitConfigKey === initConfigKey) {
+        return this.pendingInit;
+      }
+      try {
+        await this.pendingInit;
+      } catch {
+        // Fall through and retry with the latest config.
+      }
+    }
     this.#ensureWorker();
+    this.pendingInitConfigKey = initConfigKey;
     this.pendingInit = this.#sendAndWait({
       type: 'init',
       payload: this.config,
     });
-    const result = await this.pendingInit;
-    this.pendingInit = null;
-    this.loadedModelId = result?.modelId || modelId;
-    this.loadedBackend = result?.backend || null;
-    return result;
+    try {
+      const result = await this.pendingInit;
+      this.loadedModelId = result?.modelId || modelId;
+      this.loadedBackend = result?.backend || null;
+      return result;
+    } finally {
+      this.pendingInit = null;
+      this.pendingInitConfigKey = '';
+    }
   }
 
   async generate(prompt, handlers) {
@@ -91,14 +110,31 @@ export class LLMEngineClient {
   }
 
   async cancelGeneration() {
-    if (!this.worker) {
+    if (!this.worker || !this.pendingGeneration) {
       return;
     }
-    this.worker.terminate();
-    this.worker = null;
-    this.pendingGeneration = null;
-    this.pendingInit = null;
-    await this.initialize(this.config);
+    if (this.pendingCancel) {
+      await this.pendingCancel;
+      return;
+    }
+    const requestId = this.pendingGeneration.requestId;
+    this.pendingCancelRequestId = requestId;
+    this.pendingCancel = new Promise((resolve, reject) => {
+      this.#pendingCancelResolve = resolve;
+      this.#pendingCancelReject = reject;
+    });
+    this.worker.postMessage({
+      type: 'cancel',
+      payload: { requestId },
+    });
+    try {
+      await this.pendingCancel;
+    } finally {
+      this.pendingCancel = null;
+      this.pendingCancelRequestId = '';
+      this.#pendingCancelResolve = null;
+      this.#pendingCancelReject = null;
+    }
   }
 
   dispose() {
@@ -108,6 +144,10 @@ export class LLMEngineClient {
     }
     this.pendingGeneration = null;
     this.pendingInit = null;
+    this.pendingInitConfigKey = '';
+    if (typeof this.#pendingCancelResolve === 'function') {
+      this.#pendingCancelResolve();
+    }
     this.loadedModelId = null;
     this.loadedBackend = null;
   }
@@ -164,6 +204,18 @@ export class LLMEngineClient {
       return;
     }
 
+    if (data.type === 'canceled') {
+      if (data.payload?.requestId === this.pendingCancelRequestId) {
+        if (typeof this.#pendingCancelResolve === 'function') {
+          this.#pendingCancelResolve();
+        }
+        if (this.pendingGeneration?.requestId === data.payload?.requestId) {
+          this.pendingGeneration = null;
+        }
+      }
+      return;
+    }
+
     if (!this.pendingGeneration) {
       return;
     }
@@ -184,8 +236,26 @@ export class LLMEngineClient {
     }
 
     if (data.type === 'error') {
-      this.pendingGeneration.onError(data.payload.message);
+      if (data.payload?.requestId === this.pendingCancelRequestId) {
+        if (typeof this.#pendingCancelReject === 'function') {
+          this.#pendingCancelReject(new Error(data.payload.message));
+        }
+      } else {
+        this.pendingGeneration.onError(data.payload.message);
+      }
       this.pendingGeneration = null;
     }
   }
+
+  #getInitConfigKey(config) {
+    return JSON.stringify({
+      modelId: config?.modelId || '',
+      backendPreference: config?.backendPreference || '',
+      runtime: config?.runtime || {},
+      generationConfig: config?.generationConfig || {},
+    });
+  }
+
+  #pendingCancelResolve = null;
+  #pendingCancelReject = null;
 }
