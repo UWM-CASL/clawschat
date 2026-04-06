@@ -143,6 +143,7 @@ import {
 } from './state/app-state.js';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 import { renderConversationListView } from './ui/conversation-list-view.js';
+import { buildDebugLogCsv, renderDebugLogView } from './ui/debug-log-view.js';
 import { loadMarkdownRenderer, renderPlainTextMarkdownFallback } from './ui/markdown-renderer.js';
 import { createTranscriptView } from './ui/transcript-view.js';
 import { renderTaskListTray } from './ui/task-list-tray.js';
@@ -175,6 +176,7 @@ const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
 const STREAM_UPDATE_INTERVAL_MS = 100;
+const DEBUG_LOG_PAGE_SIZE = 20;
 const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
 const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
 const MATHJAX_TYPESET_DEBOUNCE_MS = 150;
@@ -249,7 +251,7 @@ const statusRegionHeading = document.getElementById('statusRegionHeading');
 const statusRegionMessage = document.getElementById('statusRegionMessage');
 const skipLinkElements = Array.from(document.querySelectorAll('.skip-link[data-skip-target]'));
 const startConversationButton = document.getElementById('startConversationButton');
-const debugInfo = document.getElementById('debugInfo');
+const debugLogPanel = document.getElementById('debugLogPanel');
 const modelLoadFeedback = document.getElementById('modelLoadFeedback');
 const transcriptModelLoadFeedbackHost = document.getElementById('transcriptModelLoadFeedbackHost');
 const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
@@ -437,7 +439,7 @@ async function ensureMarkdownRendererLoaded() {
   return markdownRendererLoadPromise;
 }
 
-const MAX_DEBUG_ENTRIES = 120;
+const MAX_DEBUG_ENTRIES = 240;
 const ROUTE_HOME = 'home';
 const ROUTE_CHAT = 'chat';
 const ROUTE_SETTINGS = 'settings';
@@ -1243,15 +1245,100 @@ function onGenerationSettingInputChanged() {
   );
 }
 
-function appendDebug(message) {
-  const timestamp = new Date().toLocaleTimeString();
-  appState.debugEntries.push(`[${timestamp}] ${message}`);
+function normalizeDebugEntryKind(value) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return normalized === 'raw-model-output' ? normalized : 'event';
+}
+
+function buildDebugEntry(entryInput) {
+  if (entryInput && typeof entryInput === 'object' && !Array.isArray(entryInput)) {
+    return {
+      id: `debug-entry-${++appState.debugEntryCounter}`,
+      createdAt: Number.isFinite(entryInput.createdAt) ? Math.trunc(entryInput.createdAt) : Date.now(),
+      kind: normalizeDebugEntryKind(entryInput.kind),
+      message:
+        typeof entryInput.message === 'string'
+          ? entryInput.message
+          : String(entryInput.message || ''),
+      details:
+        typeof entryInput.details === 'string'
+          ? entryInput.details
+          : String(entryInput.details || ''),
+    };
+  }
+
+  return {
+    id: `debug-entry-${++appState.debugEntryCounter}`,
+    createdAt: Date.now(),
+    kind: 'event',
+    message: typeof entryInput === 'string' ? entryInput : String(entryInput || ''),
+    details: '',
+  };
+}
+
+function getDebugLogPageCount() {
+  if (!Array.isArray(appState.debugEntries) || !appState.debugEntries.length) {
+    return 0;
+  }
+  return Math.ceil(appState.debugEntries.length / DEBUG_LOG_PAGE_SIZE);
+}
+
+function clampDebugPageIndex() {
+  const pageCount = getDebugLogPageCount();
+  if (!Number.isFinite(appState.debugPageIndex) || appState.debugPageIndex < 0) {
+    appState.debugPageIndex = 0;
+    return appState.debugPageIndex;
+  }
+  if (pageCount === 0) {
+    appState.debugPageIndex = 0;
+    return appState.debugPageIndex;
+  }
+  appState.debugPageIndex = Math.min(Math.trunc(appState.debugPageIndex), pageCount - 1);
+  return appState.debugPageIndex;
+}
+
+function buildDebugLogCsvFileName() {
+  const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  return `browser-llm-runner-debug-log-${timestamp}.csv`;
+}
+
+function exportDebugLogAsCsv() {
+  if (!Array.isArray(appState.debugEntries) || appState.debugEntries.length === 0) {
+    setStatus('No debug log entries to export.');
+    return;
+  }
+  const csvDocument = `\uFEFF${buildDebugLogCsv(appState.debugEntries)}`;
+  const blob = new Blob([csvDocument], { type: 'text/csv;charset=utf-8' });
+  triggerDownload(blob, buildDebugLogCsvFileName());
+  setStatus('Debug log downloaded as CSV.');
+  appendDebug('Debug log exported as CSV.');
+}
+
+function renderDebugLog() {
+  if (!(debugLogPanel instanceof HTMLElement)) {
+    return;
+  }
+  const { pageIndex } = renderDebugLogView({
+    container: debugLogPanel,
+    entries: appState.debugEntries,
+    pageIndex: clampDebugPageIndex(),
+    pageSize: DEBUG_LOG_PAGE_SIZE,
+    onPageChange: (nextPageIndex) => {
+      appState.debugPageIndex = nextPageIndex;
+      renderDebugLog();
+    },
+    onExportCsv: exportDebugLogAsCsv,
+  });
+  appState.debugPageIndex = pageIndex;
+}
+
+function appendDebug(entryInput) {
+  appState.debugEntries.push(buildDebugEntry(entryInput));
   if (appState.debugEntries.length > appState.maxDebugEntries) {
     appState.debugEntries.shift();
   }
-  if (debugInfo) {
-    debugInfo.textContent = appState.debugEntries.join('\n');
-  }
+  clampDebugPageIndex();
+  renderDebugLog();
 }
 
 function getStatusTone(message) {
@@ -3223,6 +3310,7 @@ syncConversationLanguageAndThinkingControls();
 void probeWebGpuAvailability();
 showProgressRegion(false);
 renderComposerAttachments();
+renderDebugLog();
 updateActionButtons();
 setActiveSettingsTab(appState.activeSettingsTab);
 updateWelcomePanelVisibility({ syncRoute: false });

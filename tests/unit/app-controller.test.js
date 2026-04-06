@@ -353,6 +353,37 @@ describe('app-controller', () => {
     });
   });
 
+  test('logs raw model output entries without trimming the streamed text', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Show the exact output.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onToken('  Exact');
+      handlers.onToken(' output  ');
+      handlers.onComplete('Exact output');
+    });
+
+    harness.controller.startModelGeneration(
+      conversation,
+      buildPromptForConversationLeaf(conversation),
+      {
+        parentMessageId: userMessage.id,
+      }
+    );
+
+    const rawOutputCall = harness.dependencies.appendDebug.mock.calls.find(
+      ([entry]) => entry && typeof entry === 'object' && entry.kind === 'raw-model-output'
+    );
+    expect(rawOutputCall?.[0]).toMatchObject({
+      kind: 'raw-model-output',
+      details: '  Exact output  ',
+    });
+  });
+
   test('executes detected tool calls and continues generation', async () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });

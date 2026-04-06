@@ -49,6 +49,8 @@ describe('app-state', () => {
     expect(state.maxDebugEntries).toBe(42);
     expect(state.conversations).toEqual([]);
     expect(state.debugEntries).toEqual([]);
+    expect(state.debugEntryCounter).toBe(0);
+    expect(state.debugPageIndex).toBe(0);
     expect(state.enginePhase).toBe(ENGINE_PHASES.IDLE);
     expect(state.workspaceView).toBe(WORKSPACE_VIEWS.HOME);
     expect(state.interactionMode).toBe(INTERACTION_MODES.NONE);

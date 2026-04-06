@@ -17,6 +17,10 @@ Rendering-heavy DOM code is now split into small view modules under `src/ui/`.
   - bottom-of-chat task list tray derived from the latest `tasklist` tool result on the visible branch
   - compact and expanded tray states
   - visual sorting that keeps completed items below pending items without changing LLM-facing state
+- `src/ui/debug-log-view.js`
+  - settings-page debug log rendering
+  - newest-first pagination (20 entries per page)
+  - accessible event/raw-output list structure plus CSV export controls
 - `src/ui/terminal-view.js`
   - read-only xterm rendering for browser-local shell tool activity
   - rebuilds terminal output from the active conversation's visible shell-tool history

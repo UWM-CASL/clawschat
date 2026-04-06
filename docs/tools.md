@@ -59,7 +59,7 @@ Current MCP constraints:
 - imported servers start disabled, and discovered commands start disabled
 - only enabled servers with enabled commands are exposed to the model or executable through the harness
 - MCP HTTP requests use the shared browser fetch helper, so they can retry through the validated proxy only after a likely CORS block
-- proxy validation plus MCP initialize/list/call failures write transport details into `Settings -> Debug info` so browser-side request, status, and parse problems are inspectable without devtools
+- proxy validation plus MCP initialize/list/call failures write transport details into `Settings -> Debug`, alongside raw model-output entries, so browser-side request, status, parse, and model-emission problems are inspectable without devtools
 - `SKILL.md` discovery and selective ingestion are still not implemented
 
 ## Built-in tools

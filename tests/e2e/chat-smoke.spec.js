@@ -182,6 +182,8 @@ test('stop generating cancels in-flight stream and resets UI', async ({ page }) 
   await expect(page.locator('#sendButton')).toHaveClass(/is-stop-mode/);
 
   await page.locator('#sendButton').click();
-  await expect(page.locator('#debugInfo')).toContainText('Generation canceled by user.');
+  await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('tab', { name: 'Debug' }).click();
+  await expect(page.locator('#debugLogPanel')).toContainText('Generation canceled by user.');
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
 });

@@ -79,7 +79,7 @@ function buildFailedToolResultText(toolCall, error) {
  *   queueConversationStateSave: () => void;
  *   scrollTranscriptToBottom: () => void;
  *   setStatus: (message: string) => void;
- *   appendDebug: (message: string) => void;
+ *   appendDebug: (message: string | { kind?: string; message?: string; details?: string; createdAt?: number }) => void;
  *   showProgressRegion: (visible: boolean) => void;
  *   clearLoadError: () => void;
  *   resetLoadProgressFiles: () => void;
@@ -354,6 +354,17 @@ export function createAppController(dependencies) {
     return cursor;
   }
 
+  function appendRawModelOutput(rawText, { intercepted = false } = {}) {
+    const normalizedRawText = typeof rawText === 'string' ? rawText : String(rawText || '');
+    dependencies.appendDebug({
+      kind: 'raw-model-output',
+      message: intercepted
+        ? 'Raw model output captured before tool interception.'
+        : 'Raw model output captured.',
+      details: normalizedRawText,
+    });
+  }
+
   async function startModelGeneration(activeConversation, prompt, options = {}) {
     if (!activeConversation) {
       return;
@@ -500,6 +511,7 @@ export function createAppController(dependencies) {
           );
           dependencies.scrollTranscriptToBottom();
           dependencies.appendDebug('Detected emitted tool call during streaming.');
+          appendRawModelOutput(streamedText, { intercepted: true });
           dependencies.setStatus('Running tool call...');
           scheduleTask(() => {
             void dependencies.engine.cancelGeneration().then(
@@ -589,11 +601,16 @@ export function createAppController(dependencies) {
           if (isInterceptingToolCall) {
             return;
           }
-          streamedText = String(finalText || streamedText);
+          const completedRawText =
+            typeof streamedText === 'string' && streamedText.length > 0
+              ? streamedText
+              : String(finalText || '');
+          const completedText = String(finalText || completedRawText);
+          streamedText = completedRawText;
           if (applyStreamUpdate()) {
             return;
           }
-          const parsed = dependencies.parseThinkingText(finalText || streamedText, thinkingTags);
+          const parsed = dependencies.parseThinkingText(completedText, thinkingTags);
           modelMessage.thoughts = parsed.thoughts;
           modelMessage.response = parsed.response.trimStart();
           modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
@@ -654,6 +671,7 @@ export function createAppController(dependencies) {
               `Detected ${modelMessage.toolCalls.length} emitted tool call${modelMessage.toolCalls.length === 1 ? '' : 's'}.`
             );
           }
+          appendRawModelOutput(completedRawText);
           dependencies.queueConversationStateSave();
           if (hasDetectedToolCalls && typeof dependencies.executeToolCall === 'function') {
             dependencies.setStatus('Running tool call...');

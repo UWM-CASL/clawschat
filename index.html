@@ -560,6 +560,17 @@
                     <button
                       type="button"
                       class="nav-link"
+                      id="settingsTabDebug"
+                      role="tab"
+                      data-settings-tab="debug"
+                      aria-controls="settingsDebugPanel"
+                      aria-selected="false"
+                    >
+                      Debug
+                    </button>
+                    <button
+                      type="button"
+                      class="nav-link"
                       id="settingsTabModel"
                       role="tab"
                       data-settings-tab="model"
@@ -650,33 +661,21 @@
                       />
                       <label class="form-check-label" for="streamToggle">Stream responses</label>
                     </div>
-                    <div class="accordion settings-accordion" id="debugAccordion">
-                      <div class="accordion-item">
-                        <h2 class="accordion-header" id="debugAccordionHeading">
-                          <button
-                            class="accordion-button collapsed"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#debugAccordionBody"
-                            aria-expanded="false"
-                            aria-controls="debugAccordionBody"
-                          >
-                            Debug info
-                          </button>
-                        </h2>
-                        <div
-                          id="debugAccordionBody"
-                          class="accordion-collapse collapse"
-                          role="region"
-                          aria-labelledby="debugAccordionHeading"
-                          data-bs-parent="#debugAccordion"
-                        >
-                          <div class="accordion-body">
-                            <pre id="debugInfo" class="debug-info mb-0" aria-live="off"></pre>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                  </section>
+
+                  <section
+                    id="settingsDebugPanel"
+                    class="settings-tab-panel d-none"
+                    role="tabpanel"
+                    data-settings-tab-panel="debug"
+                    aria-labelledby="settingsTabDebug"
+                  >
+                    <h3 class="h6 mb-0" id="settingsDebugHeading">Debug</h3>
+                    <p class="settings-debug-intro mb-0">
+                      Newest entries appear first. Raw model output is recorded exactly as emitted
+                      before transcript parsing or tool handling.
+                    </p>
+                    <div id="debugLogPanel" class="debug-log-panel" aria-describedby="settingsDebugHeading"></div>
                   </section>
 
                   <section

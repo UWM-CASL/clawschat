@@ -52,7 +52,7 @@ export function createAppState({
   mcpServers = [],
   renderMathMl = true,
   corsProxyUrl = '',
-  maxDebugEntries = 120,
+  maxDebugEntries = 240,
 } = {}) {
   return {
     modelReady: false,
@@ -67,6 +67,8 @@ export function createAppState({
     pendingConversationDraftId: '',
     conversations: [],
     debugEntries: [],
+    debugEntryCounter: 0,
+    debugPageIndex: 0,
     maxDebugEntries,
     activeGenerationConfig,
     pendingGenerationConfig: null,
