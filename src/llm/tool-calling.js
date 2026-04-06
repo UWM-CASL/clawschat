@@ -245,6 +245,10 @@ export function getImplicitlyEnabledToolNames(configuredMcpServers = []) {
     : [];
 }
 
+export function getImplicitlyEnabledToolDefinitions(configuredMcpServers = []) {
+  return getEnabledMcpServerConfigs(configuredMcpServers).length ? [...MCP_TOOL_DEFINITIONS] : [];
+}
+
 function getNormalizedToolList(enabledToolNames = []) {
   const normalizedToolNames = Array.isArray(enabledToolNames)
     ? enabledToolNames
@@ -321,12 +325,12 @@ function buildEnabledToolInstructions(enabledTools = []) {
   );
 }
 
-function buildMcpServerListLines(enabledMcpServers = []) {
+function buildMcpServerInventoryLines(enabledMcpServers = []) {
   if (!Array.isArray(enabledMcpServers) || !enabledMcpServers.length) {
     return [];
   }
   return [
-    '**MCP Servers List:**\nThese servers are available in this conversation.',
+    '  Enabled MCP servers for these tools:',
     ...enabledMcpServers.map((server) => {
       const identifier =
         typeof server?.identifier === 'string' && server.identifier.trim()
@@ -336,25 +340,8 @@ function buildMcpServerListLines(enabledMcpServers = []) {
         typeof server?.description === 'string' && server.description.trim()
           ? `: ${server.description.trim()}`
           : '';
-      return `- ${identifier}${description}`;
+      return `  - ${identifier}${description}`;
     }),
-  ];
-}
-
-function buildMcpServerInstructionLines(enabledMcpServers = []) {
-  if (!Array.isArray(enabledMcpServers) || !enabledMcpServers.length) {
-    return [];
-  }
-  const primaryServer = enabledMcpServers[0];
-  const exampleServer =
-    typeof primaryServer?.identifier === 'string' && primaryServer.identifier.trim()
-      ? primaryServer.identifier.trim()
-      : 'mcp-server';
-  return [
-    '**MCP Server Instructions:**',
-    '- Use MCP support progressively: inspect one listed server first, then call one enabled command at a time as needed.',
-    `- Discover enabled commands for a listed server with ${MCP_SERVER_COMMAND_LIST_TOOL} using {"server":"${exampleServer}"}.`,
-    `- Call an enabled command on a listed server with ${MCP_SERVER_COMMAND_CALL_TOOL} using {"server":"${exampleServer}","command":"command_name","arguments":{...}}.`,
   ];
 }
 
@@ -382,6 +369,16 @@ function buildToolInstructionLines(name, description = '') {
     lines.push('  - The shell includes python.');
     lines.push('  - Prefer write_python_file for larger scripts.');
   }
+  if (normalizedName === MCP_SERVER_COMMAND_LIST_TOOL) {
+    lines.push('  - Use this first when you need to inspect one enabled MCP server.');
+    lines.push('  - Call with {"server":"server_identifier"}.');
+  }
+  if (normalizedName === MCP_SERVER_COMMAND_CALL_TOOL) {
+    lines.push('  - Use this after discovery to call one enabled MCP command.');
+    lines.push(
+      '  - Call with {"server":"server_identifier","command":"command_name","arguments":{...}}.'
+    );
+  }
   return lines;
 }
 
@@ -395,38 +392,29 @@ export function buildToolCallingSystemPrompt(
   const toolList = getNormalizedToolList(enabledToolNames).filter(
     (toolName) => toolName !== 'none'
   );
-  const hasBuiltInTools = toolList.length > 0;
-  const hasMcpServers = enabledMcpServers.length > 0;
-  if (!hasBuiltInTools && !hasMcpServers) {
+  if (!toolList.length) {
     return '';
   }
-  const toolLines = hasBuiltInTools
-    ? [
-        '**Tools available in this conversation:**\nThese are the tools you can call.',
-        ...buildEnabledToolInstructions(enabledTools),
-        ...(enabledTools.length
-          ? []
-          : toolList.flatMap((toolName) => {
-              const definition = getToolDefinitionByName(toolName);
-              return buildToolInstructionLines(
-                toolName,
-                typeof definition?.description === 'string' ? definition.description : ''
-              );
-            })),
-      ]
-    : [];
-  const mcpListLines = buildMcpServerListLines(enabledMcpServers);
-  const mcpInstructionLines = buildMcpServerInstructionLines(enabledMcpServers);
+  const toolLines = [
+    '**Tools available in this conversation:**\nThese are the tools you can call.',
+    ...buildEnabledToolInstructions(enabledTools),
+    ...(enabledTools.length
+      ? []
+      : toolList.flatMap((toolName) => {
+          const definition = getToolDefinitionByName(toolName);
+          return buildToolInstructionLines(
+            toolName,
+            typeof definition?.description === 'string' ? definition.description : ''
+          );
+        })),
+    ...(enabledMcpServers.length ? ['', ...buildMcpServerInventoryLines(enabledMcpServers)] : []),
+  ];
   const toolBehaviorLines = ['After a tool result, continue the work and answer naturally.'].filter(
     Boolean
   );
   const formatLines = buildToolCallingFormatInstructions(toolCallingConfig);
   return [
     ...toolLines,
-    toolLines.length && mcpListLines.length ? '' : null,
-    ...mcpListLines,
-    mcpListLines.length && mcpInstructionLines.length ? '' : null,
-    ...mcpInstructionLines,
     toolBehaviorLines.length ? '' : null,
     toolBehaviorLines.length ? '**Tool behavior:**' : null,
     ...toolBehaviorLines.map((line) => `- ${line}`),

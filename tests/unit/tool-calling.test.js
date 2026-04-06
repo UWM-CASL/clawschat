@@ -425,15 +425,24 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
-  test('adds separate MCP server list and instruction sections without listing MCP tools under built-in tools', () => {
+  test('lists MCP helper tools alongside the other tools when enabled MCP servers exist', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
         format: 'json',
         nameKey: 'name',
         argumentsKey: 'parameters',
       },
-      [],
-      [],
+      ['list_mcp_server_commands', 'call_mcp_server_command'],
+      [
+        {
+          name: 'list_mcp_server_commands',
+          description: 'Lists the enabled commands for one configured MCP server.',
+        },
+        {
+          name: 'call_mcp_server_command',
+          description: 'Calls one enabled command on one configured MCP server.',
+        },
+      ],
       {
         mcpServers: [
           {
@@ -462,22 +471,26 @@ describe('tool-calling prompt builder', () => {
       }
     );
 
-    expect(prompt).toContain('**MCP Servers List:**');
-    expect(prompt).toContain('- docs: Project documentation lookup.');
-    expect(prompt).toContain('**MCP Server Instructions:**');
+    expect(prompt).toContain('**Tools available in this conversation:**');
     expect(prompt).toContain(
-      '- Use MCP support progressively: inspect one listed server first, then call one enabled command at a time as needed.'
+      '- list_mcp_server_commands: Lists the enabled commands for one configured MCP server.'
     );
     expect(prompt).toContain(
-      '- Discover enabled commands for a listed server with list_mcp_server_commands using {"server":"docs"}.'
+      '- Use this first when you need to inspect one enabled MCP server.'
+    );
+    expect(prompt).toContain('- Call with {"server":"server_identifier"}.');
+    expect(prompt).toContain(
+      '- call_mcp_server_command: Calls one enabled command on one configured MCP server.'
     );
     expect(prompt).toContain(
-      '- Call an enabled command on a listed server with call_mcp_server_command using {"server":"docs","command":"command_name","arguments":{...}}.'
+      '- Use this after discovery to call one enabled MCP command.'
     );
+    expect(prompt).toContain(
+      '- Call with {"server":"server_identifier","command":"command_name","arguments":{...}}.'
+    );
+    expect(prompt).toContain('Enabled MCP servers for these tools:');
+    expect(prompt).toContain('  - docs: Project documentation lookup.');
     expect(prompt).toContain('**Tool call format:**');
-    expect(prompt).not.toContain(
-      '**Tools available in this conversation:**\nThese are the tools you can call.\n- list_mcp_server_commands'
-    );
   });
 
   test('notifies shell callbacks when run_shell_command executes', async () => {

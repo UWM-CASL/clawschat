@@ -42,6 +42,7 @@ import {
   executeToolCall,
   getEnabledToolDefinitions,
   getEnabledToolNames,
+  getImplicitlyEnabledToolDefinitions,
   getImplicitlyEnabledToolNames,
   getToolDisplayName,
   sniffToolCalls,
@@ -1407,11 +1408,14 @@ function getToolCallingContext(modelId) {
   const enabledTools = getConfiguredEnabledToolNames();
   const enabledMcpServers = getConfiguredEnabledMcpServers();
   const implicitToolNames = supported ? getImplicitlyEnabledToolNames(enabledMcpServers) : [];
+  const implicitToolDefinitions = supported
+    ? getImplicitlyEnabledToolDefinitions(enabledMcpServers)
+    : [];
   return {
     enabled,
     supported,
     enabledTools,
-    enabledToolDefinitions,
+    enabledToolDefinitions: [...enabledToolDefinitions, ...implicitToolDefinitions],
     enabledMcpServers,
     exposedToolNames: [...new Set([...enabledTools, ...implicitToolNames])],
     config,
