@@ -246,6 +246,7 @@ const skipLinkElements = Array.from(document.querySelectorAll('.skip-link[data-s
 const startConversationButton = document.getElementById('startConversationButton');
 const debugInfo = document.getElementById('debugInfo');
 const modelLoadFeedback = document.getElementById('modelLoadFeedback');
+const transcriptModelLoadFeedbackHost = document.getElementById('transcriptModelLoadFeedbackHost');
 const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
 const modelLoadProgressLabel = document.getElementById('modelLoadProgressLabel');
 const modelLoadProgressValue = document.getElementById('modelLoadProgressValue');
@@ -476,6 +477,7 @@ const corsAwareFetch = createCorsAwareFetch({
 const {
   clearLoadError,
   resetLoadProgressFiles,
+  setFeedbackContext: setModelLoadFeedbackContext,
   setLoadProgress,
   showLoadError,
   showProgressRegion,
@@ -484,6 +486,7 @@ const {
   appState,
   documentRef: document,
   modelLoadFeedback,
+  transcriptFeedbackHost: transcriptModelLoadFeedbackHost,
   modelLoadProgressWrap,
   modelLoadProgressLabel,
   modelLoadProgressValue,
@@ -1994,20 +1997,6 @@ function getLoadedModelId() {
   return null;
 }
 
-function activeConversationNeedsModelLoad(
-  conversation = getActiveConversation(),
-  { hadStoredModelId = false } = {}
-) {
-  if (!conversation || !hasConversationHistory(conversation)) {
-    return false;
-  }
-  if (!hadStoredModelId) {
-    return false;
-  }
-  const loadedModelId = getLoadedModelId();
-  return !isEngineReady(appState) || loadedModelId !== getConversationModelId(conversation);
-}
-
 function requestSingleGeneration(prompt, options = {}) {
   return new Promise((resolve, reject) => {
     const signal =
@@ -2570,10 +2559,8 @@ function setActiveConversationById(
   ) {
     activeConversation.activeLeafMessageId = activeConversation.lastSpokenLeafMessageId;
   }
-  let shouldLoadConversationModel = false;
   if (activeConversation) {
-    const selection = syncConversationModelSelection(activeConversation, { useDefaults: true });
-    shouldLoadConversationModel = activeConversationNeedsModelLoad(activeConversation, selection);
+    syncConversationModelSelection(activeConversation, { useDefaults: true });
   }
   clearUserMessageEditSession();
   clearPendingComposerAttachments();
@@ -2583,9 +2570,6 @@ function setActiveConversationById(
   queueConversationStateSave();
   if (syncRoute) {
     syncRouteToCurrentState({ replace: replaceRoute });
-  }
-  if (shouldLoadConversationModel) {
-    void appController.loadModelForSelectedConversation();
   }
 }
 
@@ -3306,8 +3290,6 @@ bindConversationListEvents({
   setChatTitleEditing,
   getActiveConversation,
   syncConversationModelSelection,
-  activeConversationNeedsModelLoad,
-  loadModelForSelectedConversation: () => appController.loadModelForSelectedConversation(),
   renderConversationList,
   renderTranscript,
   updateChatTitle,
@@ -3380,6 +3362,7 @@ bindComposerEvents({
   getLoadedModelId,
   persistInferencePreferences,
   initializeEngine: () => appController.initializeEngine(),
+  setModelLoadFeedbackContext,
   appendDebug,
   syncRouteToState: syncRouteToCurrentState,
   buildUserMessageAttachmentPayload,
@@ -3450,6 +3433,7 @@ bindShellEvents({
   beginConversationSystemPromptEdit,
   preChatLoadModelBtn,
   loadModelForSelectedConversation: () => appController.loadModelForSelectedConversation(),
+  setModelLoadFeedbackContext,
   saveChatTitleBtn,
   saveChatTitleEdit,
   cancelChatTitleBtn,

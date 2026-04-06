@@ -8,8 +8,6 @@ export function bindConversationListEvents({
   setChatTitleEditing,
   getActiveConversation,
   syncConversationModelSelection,
-  activeConversationNeedsModelLoad,
-  loadModelForSelectedConversation,
   renderConversationList,
   renderTranscript,
   updateChatTitle,
@@ -80,12 +78,9 @@ export function bindConversationListEvents({
           setChatTitleEditing(appState, false);
           const nextActiveConversation = getActiveConversation();
           if (nextActiveConversation) {
-            const selection = syncConversationModelSelection(nextActiveConversation, {
+            syncConversationModelSelection(nextActiveConversation, {
               useDefaults: true,
             });
-            if (activeConversationNeedsModelLoad(nextActiveConversation, selection)) {
-              void loadModelForSelectedConversation();
-            }
           }
         }
         renderConversationList();

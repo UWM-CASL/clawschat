@@ -4,6 +4,8 @@ import { createModelLoadFeedbackController } from '../../src/app/model-load-feed
 
 function createHarness() {
   const dom = new JSDOM(`
+    <div id="fallbackHost"><div id="modelLoadFeedback"></div></div>
+    <div id="transcriptFeedbackHost"></div>
     <div id="modelLoadProgressWrap" class="d-none"></div>
     <p id="modelLoadProgressLabel"></p>
     <p id="modelLoadProgressValue"></p>
@@ -35,7 +37,8 @@ function createHarness() {
     controller: createModelLoadFeedbackController({
       appState,
       documentRef: document,
-      modelLoadFeedback: document.createElement('div'),
+      modelLoadFeedback: document.getElementById('modelLoadFeedback'),
+      transcriptFeedbackHost: document.getElementById('transcriptFeedbackHost'),
       modelLoadProgressWrap: document.getElementById('modelLoadProgressWrap'),
       modelLoadProgressLabel: document.getElementById('modelLoadProgressLabel'),
       modelLoadProgressValue: document.getElementById('modelLoadProgressValue'),
@@ -110,5 +113,16 @@ describe('model-load-feedback', () => {
     );
     expect(harness.document.getElementById('modelLoadErrorSummary')?.textContent).toBe('');
     expect(harness.document.querySelectorAll('#modelLoadErrorDetails li')).toHaveLength(0);
+  });
+
+  test('moves the shared feedback block to the transcript host when requested', () => {
+    const harness = createHarness();
+
+    harness.controller.setFeedbackContext('transcript');
+    harness.controller.showProgressRegion(true);
+
+    expect(harness.document.getElementById('transcriptFeedbackHost')?.firstElementChild?.id).toBe(
+      'modelLoadFeedback'
+    );
   });
 });

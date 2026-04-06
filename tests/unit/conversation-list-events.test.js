@@ -57,8 +57,6 @@ function createHarness() {
       setChatTitleEditing: vi.fn(),
       getActiveConversation: vi.fn(() => ({ id: 'conversation-2' })),
       syncConversationModelSelection: vi.fn(() => ({ selectedModelId: 'model-1' })),
-      activeConversationNeedsModelLoad: vi.fn(() => false),
-      loadModelForSelectedConversation: vi.fn(),
       renderConversationList: vi.fn(),
       renderTranscript: vi.fn(),
       updateChatTitle: vi.fn(),

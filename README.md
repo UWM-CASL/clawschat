@@ -12,7 +12,8 @@ Student-facing browser chat UI with local model inference.
 - For multimodal models, the worker defers multimodal processor loading until the first generation request so image/audio preprocessing assets are not pulled in during initial model load.
 - Each conversation stores its own selected model.
 - Changing the model for the active conversation updates that conversation only.
-- Switching to a saved conversation with a different model unloads the previous model worker and loads the selected conversation's model.
+- Switching to a saved conversation with a different model keeps the current model loaded until the next send for that conversation.
+- When that continued send needs a different model, the app unloads the previous worker, loads the conversation's model, and shows load progress at the bottom of the transcript view.
 - Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
 - Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.

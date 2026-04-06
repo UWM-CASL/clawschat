@@ -39,6 +39,7 @@ export function bindComposerEvents({
   getLoadedModelId,
   persistInferencePreferences,
   initializeEngine,
+  setModelLoadFeedbackContext = (_context = 'selected-model') => {},
   syncRouteToState = (_options = {}) => {},
   buildUserMessageAttachmentPayload,
   addMessageToConversation,
@@ -427,8 +428,16 @@ export function bindComposerEvents({
     );
     const shouldInitializeEngine =
       !isEngineReady(appState) || getLoadedModelId() !== activeConversationModelId;
+    const isContinuingExistingConversation = Boolean(
+      activeConversation &&
+        Array.isArray(activeConversation.messageNodes) &&
+        activeConversation.messageNodes.length > 0
+    );
 
     if (shouldInitializeEngine) {
+      setModelLoadFeedbackContext(
+        isContinuingExistingConversation ? 'transcript' : 'selected-model'
+      );
       persistInferencePreferences(appState.activeGenerationConfig);
       setStatus(
         isEngineReady(appState)

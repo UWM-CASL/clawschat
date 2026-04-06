@@ -2,6 +2,7 @@ export function createModelLoadFeedbackController({
   appState,
   documentRef = document,
   modelLoadFeedback,
+  transcriptFeedbackHost = null,
   modelLoadProgressWrap,
   modelLoadProgressLabel,
   modelLoadProgressValue,
@@ -18,6 +19,7 @@ export function createModelLoadFeedbackController({
 }) {
   const view = documentRef?.defaultView || window;
   const fallbackParent = modelLoadFeedback?.parentElement || null;
+  let feedbackContext = 'selected-model';
 
   function getLoadPartCounts() {
     const entries = [...appState.loadProgressFiles.values()];
@@ -50,11 +52,23 @@ export function createModelLoadFeedbackController({
     return selectedCard.querySelector('.model-card-feedback-slot');
   }
 
+  function setFeedbackContext(nextContext = 'selected-model') {
+    feedbackContext = nextContext === 'transcript' ? 'transcript' : 'selected-model';
+    syncFeedbackHost();
+  }
+
+  function getFeedbackHost() {
+    if (feedbackContext === 'transcript' && transcriptFeedbackHost instanceof HTMLElement) {
+      return transcriptFeedbackHost;
+    }
+    return findSelectedModelFeedbackHost() || fallbackParent;
+  }
+
   function syncFeedbackHost() {
     if (!(modelLoadFeedback instanceof HTMLElement)) {
       return;
     }
-    const nextParent = findSelectedModelFeedbackHost() || fallbackParent;
+    const nextParent = getFeedbackHost();
     if (nextParent instanceof HTMLElement && modelLoadFeedback.parentElement !== nextParent) {
       nextParent.appendChild(modelLoadFeedback);
     }
@@ -292,6 +306,7 @@ export function createModelLoadFeedbackController({
   return {
     clearLoadError,
     resetLoadProgressFiles,
+    setFeedbackContext,
     setLoadProgress,
     showLoadError,
     showProgressRegion,

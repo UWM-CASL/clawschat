@@ -1039,6 +1039,14 @@
   padding: 0;
 }
 
+.transcript-feedback-slot:empty {
+  display: none;
+}
+
+.transcript-feedback-slot .pre-chat-progress {
+  margin-top: 1rem;
+}
+
 .transcript-window-spacer {
   list-style: none;
   margin: 0;

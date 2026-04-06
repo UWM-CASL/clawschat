@@ -110,6 +110,7 @@ function createHarness() {
       getLoadedModelId: vi.fn(() => null),
       persistInferencePreferences: vi.fn(),
       initializeEngine: vi.fn(async () => {}),
+      setModelLoadFeedbackContext: vi.fn(),
       appendDebug: vi.fn(),
       buildUserMessageAttachmentPayload: vi.fn(() => ({ contentParts: [], artifactRefs: [] })),
       addMessageToConversation: vi.fn(() => ({ id: 'message-1' })),
@@ -297,6 +298,37 @@ describe('composer-events', () => {
     expect(harness.deps.initializeEngine.mock.invocationCallOrder[0]).toBeLessThan(
       harness.deps.createConversation.mock.invocationCallOrder[0],
     );
+    expect(harness.deps.setModelLoadFeedbackContext).toHaveBeenCalledWith('selected-model');
+  });
+
+  test('loads a selected saved conversation model inside the transcript flow', async () => {
+    const harness = createHarness();
+    const activeConversation = { id: 'conversation-2', messageNodes: [{ id: 'user-1' }] };
+    harness.appState.conversations = [activeConversation];
+    harness.appState.activeConversationId = activeConversation.id;
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    harness.deps.hasStartedWorkspace.mockReturnValue(true);
+    harness.deps.isEngineReady.mockReturnValue(true);
+    harness.deps.getActiveConversation.mockReturnValue(activeConversation);
+    harness.deps.getLoadedModelId.mockReturnValue('model-1');
+    harness.deps.syncConversationModelSelection.mockReturnValue({
+      selectedModelId: 'model-2',
+    });
+    harness.messageInput.value = 'Continue';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.setModelLoadFeedbackContext).toHaveBeenCalledWith('transcript');
+    expect(harness.deps.initializeEngine).toHaveBeenCalledTimes(1);
+    expect(harness.deps.startModelGeneration).toHaveBeenCalledTimes(1);
   });
 
   test('accepts reference attachments for html files and images when the model supports image input', async () => {

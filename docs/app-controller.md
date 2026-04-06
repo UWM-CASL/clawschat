@@ -16,6 +16,7 @@ It currently owns the control flow for:
 
 - engine initialization and deferred model loading
 - explicit unload-before-reload behavior when model/backend selection changes
+- deferred reload when a saved conversation targets a different model; selection alone updates UI state and the swap happens on the next send
 - generation start and stop
 - streamed tool-call interception and continuation after tool execution
 - regenerate and fix actions

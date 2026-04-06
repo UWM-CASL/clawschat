@@ -33,6 +33,7 @@ export function bindShellEvents({
   beginConversationSystemPromptEdit,
   preChatLoadModelBtn,
   loadModelForSelectedConversation,
+  setModelLoadFeedbackContext = (_context = 'selected-model') => {},
   saveChatTitleBtn,
   saveChatTitleEdit,
   cancelChatTitleBtn,
@@ -146,6 +147,7 @@ export function bindShellEvents({
 
   if (preChatLoadModelBtn instanceof HTMLButtonElement) {
     preChatLoadModelBtn.addEventListener('click', () => {
+      setModelLoadFeedbackContext('selected-model');
       void loadModelForSelectedConversation();
     });
   }
