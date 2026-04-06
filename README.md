@@ -9,6 +9,7 @@ Student-facing browser chat UI with local model inference.
 - On initial load, the app shows a home screen with a `Start a conversation` action.
 - Clicking `Start a conversation` opens the chat workspace at `#/chat` with model selection, an empty composer, and no model load yet.
 - The selected model starts loading only after the first message is sent.
+- For multimodal models, the worker defers multimodal processor loading until the first generation request so image/audio preprocessing assets are not pulled in during initial model load.
 - Each conversation stores its own selected model.
 - Changing the model for the active conversation updates that conversation only.
 - Switching to a saved conversation with a different model unloads the previous model worker and loads the selected conversation's model.

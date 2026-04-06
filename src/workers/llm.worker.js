@@ -174,6 +174,21 @@ async function loadTransformers() {
   return cachedModule;
 }
 
+async function ensureMultimodalProcessor(modelId, progressCallback = null) {
+  if (processor) {
+    return processor;
+  }
+  const { AutoProcessor } = await loadTransformers();
+  if (typeof progressCallback === 'function') {
+    progressCallback({ percent: 10, message: 'Loading multimodal processor...' });
+  }
+  processor = await AutoProcessor.from_pretrained(modelId, {
+    progress_callback: progressCallback || undefined,
+  });
+  tokenizer = processor?.tokenizer || model?.tokenizer || tokenizer || null;
+  return processor;
+}
+
 function getBackendAttemptOrder(preference, runtimeConfig = {}) {
   const normalizedPreference = normalizeBackendPreference(preference);
   const runtime = normalizeRuntimeConfig(runtimeConfig);
@@ -580,6 +595,7 @@ export { buildMultimodalChatTemplateOptions };
 export { shouldSkipSpecialTokensInMultimodalOutput };
 export { buildMultimodalStreamerOptions };
 export { buildMultimodalDecodeOptions };
+export { ensureMultimodalProcessor };
 
 function buildGenerationOptions(requestGenerationConfig, runtime = {}) {
   return {
@@ -676,7 +692,6 @@ async function initialize(payload) {
     pipeline,
     TextStreamer: StreamerClass,
     InterruptableStoppingCriteria: InterruptableStoppingCriteria,
-    AutoProcessor,
     AutoModelForImageTextToText,
   } = await loadTransformers();
   TextStreamer = StreamerClass;
@@ -739,22 +754,20 @@ async function initialize(payload) {
         },
       };
       if (runtime.multimodalGeneration) {
-        postProgress({ percent: 10, message: 'Loading multimodal processor...' });
-        processor = await AutoProcessor.from_pretrained(modelId, {
-          progress_callback: pipelineOptions.progress_callback,
-        });
-        postProgress({ percent: 25, message: `Loading ${modelId} multimodal model...` });
+        processor = null;
+        tokenizer = null;
+        postProgress({ percent: 10, message: `Loading ${modelId} multimodal model...` });
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
           device: backend,
           ...(runtime.dtype ? { dtype: runtime.dtype } : {}),
           ...(runtime.useExternalDataFormat
             ? {
                 use_external_data_format: runtime.useExternalDataFormat,
-              }
-            : {}),
+            }
+          : {}),
           progress_callback: pipelineOptions.progress_callback,
         });
-        tokenizer = processor?.tokenizer || model?.tokenizer || null;
+        tokenizer = model?.tokenizer || null;
         loadedExecutionMode = 'multimodal';
       } else {
         processor = null;
@@ -862,18 +875,35 @@ async function generate(payload) {
     };
 
     if (runtime.multimodalGeneration) {
+      const multimodalProcessor = await ensureMultimodalProcessor(
+        loadedModelId || payload.modelId,
+        (progress) => {
+          const rawPercent = Number(progress?.percent) || 0;
+          postProgress({
+            percent: Math.max(10, Math.min(40, rawPercent)),
+            message:
+              typeof progress?.message === 'string' && progress.message.trim()
+                ? progress.message
+                : 'Loading multimodal processor...',
+            file: typeof progress?.file === 'string' ? progress.file : '',
+            status: typeof progress?.status === 'string' ? progress.status : '',
+            loadedBytes: progress?.loadedBytes ?? 0,
+            totalBytes: progress?.totalBytes ?? 0,
+          });
+        }
+      );
       const { RawImage } = await loadTransformers();
       const { messages, images, audios } = await prepareMultimodalInputsFromPrompt(
         formattedPrompt,
         RawImage
       );
-      const promptText = processor.apply_chat_template(
+      const promptText = multimodalProcessor.apply_chat_template(
         messages,
         buildMultimodalChatTemplateOptions(runtime)
       );
       const imageInputs = images.length > 1 ? images : images[0] || null;
       const audioInputs = audios.length > 1 ? audios : audios[0] || null;
-      const modelInputs = await processor(promptText, imageInputs, audioInputs, {
+      const modelInputs = await multimodalProcessor(promptText, imageInputs, audioInputs, {
         add_special_tokens: false,
       });
 
@@ -893,7 +923,7 @@ async function generate(payload) {
           ...modelInputs,
           ...generationOptions,
         });
-        const decoded = processor.batch_decode(
+        const decoded = multimodalProcessor.batch_decode(
           output.slice(null, [modelInputs.input_ids.dims.at(-1), null]),
           buildMultimodalDecodeOptions(runtime)
         );
@@ -972,8 +1002,7 @@ self.onmessage = async (event) => {
     const requestedRuntime = normalizeRuntimeConfig(payload?.runtime);
     const needsReinit =
       !model ||
-      !tokenizer ||
-      (requestedRuntime.multimodalGeneration ? !processor : false) ||
+      (!requestedRuntime.multimodalGeneration && !tokenizer) ||
       payload.modelId !== loadedModelId ||
       (requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'multimodal') ||
       (!requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'text') ||
