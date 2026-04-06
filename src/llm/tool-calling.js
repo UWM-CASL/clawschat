@@ -407,34 +407,153 @@ function buildToolInstructionLines(name, description = '') {
   const normalizedDescription =
     typeof description === 'string' && description.trim() ? `: ${description.trim()}` : '';
   const lines = [`- ${normalizedName}${normalizedDescription}`];
+  getToolInstructionNotes(normalizedName).forEach((note) => {
+    lines.push(note.bulleted ? `  - ${note.text}` : `  ${note.text}`);
+  });
+  return lines;
+}
+
+function getToolInstructionNotes(name) {
+  const normalizedName = typeof name === 'string' && name.trim() ? name.trim() : 'unknown_tool';
+  const notes = [];
   if (normalizedName === 'get_user_location') {
-    lines.push('  Use the returned location and coordinate directly in the answer.');
+    notes.push({
+      text: 'Use the returned location and coordinate directly in the answer.',
+      bulleted: false,
+    });
   }
   if (normalizedName === 'tasklist') {
-    lines.push('  - Call with an empty arguments object to get tool syntax.');
+    notes.push({
+      text: 'Call with an empty arguments object to get tool syntax.',
+      bulleted: true,
+    });
   }
   if (normalizedName === 'write_python_file') {
-    lines.push('  Use this for longer Python scripts.');
-    lines.push('  Call with {"path":"/workspace/script.py","source":"print(\\"hello\\")\\n"}.');
+    notes.push({
+      text: 'Use this for longer Python scripts.',
+      bulleted: false,
+    });
+    notes.push({
+      text: 'Call with {"path":"/workspace/script.py","source":"print(\\"hello\\")\\n"}.',
+      bulleted: false,
+    });
   }
   if (normalizedName === 'web_lookup') {
-    lines.push('  - When input is a URL, fetch a page preview');
-    lines.push('  - When input is search terms, DuckDuckgo is used to return search results.');
+    notes.push({
+      text: 'When input is a URL, fetch a page preview',
+      bulleted: true,
+    });
+    notes.push({
+      text: 'When input is search terms, DuckDuckgo is used to return search results.',
+      bulleted: true,
+    });
   }
   if (normalizedName === 'run_shell_command') {
-    lines.push('  - Call with an empty arguments object to get syntax and supported commands.');
-    lines.push('  - The shell includes python.');
-    lines.push('  - Prefer write_python_file for larger scripts.');
+    notes.push({
+      text: 'Call with an empty arguments object to get syntax and supported commands.',
+      bulleted: true,
+    });
+    notes.push({
+      text: 'The shell includes python.',
+      bulleted: true,
+    });
+    notes.push({
+      text: 'Prefer write_python_file for larger scripts.',
+      bulleted: true,
+    });
   }
   if (normalizedName === MCP_SERVER_COMMAND_LIST_TOOL) {
-    lines.push('  - Use this first when you need to inspect one enabled MCP server.');
-    lines.push('  - Call with {"server":"server_identifier"}.');
+    notes.push({
+      text: 'Use this first when you need to inspect one enabled MCP server.',
+      bulleted: true,
+    });
+    notes.push({
+      text: 'Call with {"server":"server_identifier"}.',
+      bulleted: true,
+    });
   }
   if (normalizedName === MCP_SERVER_COMMAND_CALL_TOOL) {
-    lines.push('  - Use this after discovery to call one enabled MCP command.');
-    lines.push(
-      '  - Call with {"server":"server_identifier","command":"command_name","arguments":{...}}.'
-    );
+    notes.push({
+      text: 'Use this after discovery to call one enabled MCP command.',
+      bulleted: true,
+    });
+    notes.push({
+      text: 'Call with {"server":"server_identifier","command":"command_name","arguments":{...}}.',
+      bulleted: true,
+    });
+  }
+  return notes;
+}
+
+function buildToolPromptDescription(name, description = '') {
+  const baseDescription = typeof description === 'string' ? description.trim() : '';
+  const notes = getToolInstructionNotes(name).map((note) => note.text);
+  return [baseDescription, ...notes].filter(Boolean).join(' ');
+}
+
+function buildResolvedToolDefinitions(toolList = [], enabledTools = []) {
+  const providedToolDefinitions = new Map();
+  (Array.isArray(enabledTools) ? enabledTools : []).forEach((tool) => {
+    const normalizedName = typeof tool?.name === 'string' ? tool.name.trim() : '';
+    if (normalizedName) {
+      providedToolDefinitions.set(normalizedName, tool);
+    }
+  });
+  return (Array.isArray(toolList) ? toolList : [])
+    .map((toolName) => {
+      const normalizedName = typeof toolName === 'string' ? toolName.trim() : '';
+      if (!normalizedName) {
+        return null;
+      }
+      return providedToolDefinitions.get(normalizedName) || getToolDefinitionByName(normalizedName);
+    })
+    .filter(Boolean);
+}
+
+function buildJsonToolListLines(resolvedToolDefinitions = [], enabledMcpServers = []) {
+  if (!Array.isArray(resolvedToolDefinitions) || !resolvedToolDefinitions.length) {
+    return [];
+  }
+  const serializedTools = resolvedToolDefinitions.map((tool) => {
+    const name = typeof tool?.name === 'string' ? tool.name.trim() : 'unknown_tool';
+    const description = buildToolPromptDescription(name, tool?.description);
+    const parameters =
+      tool?.parameters && typeof tool.parameters === 'object' && !Array.isArray(tool.parameters)
+        ? tool.parameters
+        : {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+          };
+    return {
+      name,
+      ...(description ? { description } : {}),
+      parameters,
+    };
+  });
+  const lines = [`List of tools: ${JSON.stringify(serializedTools)}`];
+  if (Array.isArray(enabledMcpServers) && enabledMcpServers.length) {
+    const serializedServers = enabledMcpServers.map((server) => {
+      const identifier =
+        typeof server?.identifier === 'string' && server.identifier.trim()
+          ? server.identifier.trim()
+          : 'mcp-server';
+      const enabledCommands = Array.isArray(server?.commands)
+        ? server.commands
+            .filter((command) => command?.enabled)
+            .map((command) => (typeof command?.name === 'string' ? command.name.trim() : ''))
+            .filter(Boolean)
+        : [];
+      return {
+        identifier,
+        ...(typeof server?.description === 'string' && server.description.trim()
+          ? { description: server.description.trim() }
+          : {}),
+        enabledCommands,
+      };
+    });
+    lines.push('');
+    lines.push(`Available MCP servers: ${JSON.stringify(serializedServers)}`);
   }
   return lines;
 }
@@ -452,20 +571,16 @@ export function buildToolCallingSystemPrompt(
   if (!toolList.length) {
     return '';
   }
-  const toolLines = [
-    '**Tools available in this conversation:**\nThese are the tools you can call.',
-    ...buildEnabledToolInstructions(enabledTools),
-    ...(enabledTools.length
-      ? []
-      : toolList.flatMap((toolName) => {
-          const definition = getToolDefinitionByName(toolName);
-          return buildToolInstructionLines(
-            toolName,
-            typeof definition?.description === 'string' ? definition.description : ''
-          );
-        })),
-    ...(enabledMcpServers.length ? ['', ...buildMcpServerInventoryLines(enabledMcpServers)] : []),
-  ];
+  const resolvedToolDefinitions = buildResolvedToolDefinitions(toolList, enabledTools);
+  const toolListFormat = toolCallingConfig?.toolListFormat === 'json' ? 'json' : 'markdown';
+  const toolLines =
+    toolListFormat === 'json'
+      ? buildJsonToolListLines(resolvedToolDefinitions, enabledMcpServers)
+      : [
+          '**Tools available in this conversation:**\nThese are the tools you can call.',
+          ...buildEnabledToolInstructions(resolvedToolDefinitions),
+          ...(enabledMcpServers.length ? ['', ...buildMcpServerInventoryLines(enabledMcpServers)] : []),
+        ];
   const toolBehaviorLines = ['After a tool result, continue the work and answer naturally.'].filter(
     Boolean
   );

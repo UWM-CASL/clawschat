@@ -153,7 +153,7 @@ Student-facing browser chat UI with local model inference.
 - When prompt-driven feature guidance is enabled, the effective system prompt appends that guidance before any tool-calling instructions.
 - The effective system prompt also appends conversation-level language steering when a response language is selected and model-specific thinking-mode switch instructions when the selected model exposes them.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
-- When one or more configured MCP servers are enabled and have enabled commands, that tool-calling block lists `list_mcp_server_commands` and `call_mcp_server_command` in the normal tool inventory, with an `Available MCP servers` list nested under that same tool section showing each enabled server and its enabled command names.
+- When one or more configured MCP servers are enabled and have enabled commands, that tool-calling block includes `list_mcp_server_commands` and `call_mcp_server_command` in the model-specific tool inventory, with the enabled MCP server inventory rendered in that same model-specific list style.
 - Those MCP helper tools run through the same tool harness as built-in tools and are not user-toggled in `Settings -> Tools`; their availability is derived from enabled MCP servers and enabled commands.
 - Tool-calling behavior, transcript presentation, export semantics, the current built-in and MCP tool surfaces, and the remaining `SKILL.md` planning are documented in `docs/tools.md`.
 - The current built-in tool catalog exposed to models includes date/time lookup, user location lookup, a `tasklist` planner whose latest state is derived from inline tasklist tool results on the visible conversation branch, a `write_python_file` tool for longer `/workspace/*.py` scripts, and a browser-local `run_shell_command` tool that exposes a documented GNU/Linux-like command subset over `/workspace`.
@@ -220,11 +220,13 @@ Student-facing browser chat UI with local model inference.
   - Uses `q8` in this app with external data loading.
   - Requires WebGPU in this app.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
+  - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format supported by this app.
 - `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`
   - Uses the published `q4` ONNX export with external data loading.
   - Requires WebGPU in this app.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
+  - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format supported by this app.
 - Hidden legacy/replacement model definitions remain in config so stored conversations and model-specific behaviors still resolve correctly:
   - `onnx-community/Qwen3.5-0.8B-ONNX`

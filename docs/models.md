@@ -28,6 +28,7 @@ Model support is configured in `src/config/models.json`:
   - `runtimeParameter` (currently `enable_thinking` when the worker should pass a runtime switch)
   - `enabledInstruction` / `disabledInstruction` (literal model-specific system-prompt switch text such as `/think` and `/no_think`)
 - `models[].toolCalling`: optional per-model tool-call output profile used to build prompts and future parsing:
+  - `toolListFormat` (optional: `markdown` by default, `json` for models that expect a JSON tool list in the system prompt)
   - `format` (`json`, `tagged-json`, `special-token-call`, `xml-tool-call`, or `gemma-special-token-call`)
   - `nameKey` / `argumentsKey` for JSON-based models
   - `openTag` / `closeTag` for tagged JSON models
@@ -181,6 +182,8 @@ Important multimodal rule:
 
 - `toolCalling.format`
   Must be one of `json`, `tagged-json`, `special-token-call`, `xml-tool-call`, or `gemma-special-token-call`.
+- `toolCalling.toolListFormat`
+  Optional. Defaults to the app's markdown tool list. Set to `json` for models that expect `List of tools: [...]` in the system prompt.
 - `nameKey` / `argumentsKey`
   Required for JSON-based formats.
 - `openTag` / `closeTag`
@@ -267,10 +270,12 @@ Current selectable models in Settings:
 - `LiquidAI/LFM2.5-350M-ONNX`
   - Uses runtime dtype `q8`, loads external ONNX data sidecars, and requires WebGPU in-browser.
   - Uses the published 350M sampling defaults available from the model card: temperature `0.1`, top-k `50`, repetition penalty `1.05`. This app keeps top-p effectively open at `1.0` because the card does not publish a nucleus cutoff.
+  - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format in this app.
 - `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`
   - Uses runtime dtype `q4`, loads external ONNX data sidecars, and requires WebGPU in-browser.
   - Uses the published low-temperature sampling defaults from the model card: temperature `0.1`, top-k `50`, repetition penalty `1.05`. This app keeps top-p effectively open at `1.0` because the card does not publish a nucleus cutoff.
+  - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format in this app.
 Hidden legacy/replacement models kept for compatibility and model-specific behavior:
 
@@ -322,8 +327,8 @@ Per-model limits and defaults:
 - All listed Llama entries use runtime dtype `q4` and enable `useExternalDataFormat: true` for `.onnx_data` loading.
 - `onnx-community/Qwen3.5-0.8B-ONNX`: runtime dtype `q8`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
 - `onnx-community/Qwen3.5-2B-ONNX`: runtime dtype `q4`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `LiquidAI/LFM2.5-350M-ONNX`: runtime dtype `q8`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
-- `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
+- `LiquidAI/LFM2.5-350M-ONNX`: runtime dtype `q8`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool list format `json`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
+- `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool list format `json`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
 - `onnx-community/gemma-4-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: q4, vision_encoder: q4, embed_tokens: q4, decoder_model_merged: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, input limit `maxAudioInputs: 1`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ defaultEnabled: true, runtimeParameter: "enable_thinking" }`
-- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, feature flags `thinking` and `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, thinking tags `<think>` / `</think>`
+- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, feature flags `thinking` and `toolCalling`, tool list format `json`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, thinking tags `<think>` / `</think>`
 - `onnx-community/gemma-3n-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: q4, vision_encoder: q4, embed_tokens: q4, decoder_model_merged: q4 }`, `requiresWebGpu: true`, `multimodalGeneration: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `toolCalling`, `imageInput`, and `audioInput`, tool call format `{"name":"tool_name","arguments":{...}}`

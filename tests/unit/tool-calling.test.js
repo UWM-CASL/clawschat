@@ -1079,13 +1079,34 @@ describe('tool-calling prompt builder', () => {
   test('builds the LFM function-style tool-calling prompt', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
+        toolListFormat: 'json',
         format: 'special-token-call',
         callOpen: '<|tool_call_start|>[',
         callClose: ']<|tool_call_end|>',
       },
-      ['get_weather']
+      ['get_weather'],
+      [
+        {
+          name: 'get_weather',
+          description: 'Returns the current weather for a location.',
+          parameters: {
+            type: 'object',
+            properties: {
+              location: {
+                type: 'string',
+              },
+            },
+            required: ['location'],
+            additionalProperties: false,
+          },
+        },
+      ]
     );
 
+    expect(prompt).toContain(
+      'List of tools: [{"name":"get_weather","description":"Returns the current weather for a location.","parameters":{"type":"object","properties":{"location":{"type":"string"}},"required":["location"],"additionalProperties":false}}]'
+    );
+    expect(prompt).not.toContain('**Tools available in this conversation:**');
     expect(prompt).toContain(
       'When you call a tool, output exactly one wrapped function-style call and nothing else.'
     );

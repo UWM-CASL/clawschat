@@ -26,10 +26,11 @@ Users can disable individual built-in tools in `Settings -> Tools`; disabled too
 Users can configure one validated prefix-style CORS proxy in `Settings -> Proxy`; validation uses an MCP `initialize` probe against `https://example-server.modelcontextprotocol.io/mcp`, browser-networked features retry through the saved proxy only when a direct cross-origin request appears blocked by CORS, and query-string prefixes such as `...?url=` are allowed.
 Users configure MCP endpoints in `Settings -> MCP Servers`; imported servers start disabled, all discovered commands start disabled, and disabled servers or commands are omitted from the prompt and rejected by execution.
 
-The prompt keeps all callable tool surfaces under one tool section, then separates only the generic post-tool behavior and model-specific call syntax:
+The prompt keeps all callable tool surfaces in one model-specific tool inventory section, then separates only the generic post-tool behavior and model-specific call syntax:
 
-- `Tools available in this conversation` lists the enabled tools and any tool-specific usage notes.
-- When MCP is available, that same tool section also lists `list_mcp_server_commands` and `call_mcp_server_command`, plus an `Available MCP servers` list showing each enabled server and its enabled command names.
+- By default, `Tools available in this conversation` is a markdown list of the enabled tools and any tool-specific usage notes.
+- Liquid LFM models use a JSON-formatted `List of tools: [...]` block in the system prompt instead of that markdown list.
+- When MCP is available, the same model-specific section also includes `list_mcp_server_commands` and `call_mcp_server_command`, plus the enabled MCP server inventory rendered in that model's list style.
 - `Tool behavior` covers only generic behavior after a tool result is returned.
 - `Tool call format` describes the exact wrapper or JSON shape the selected model must emit, including that a tool call should be the only output in that turn.
 

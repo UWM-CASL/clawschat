@@ -51,6 +51,7 @@ export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['aut
 export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
   new Set(['json', 'tagged-json', 'special-token-call', 'xml-tool-call', 'gemma-special-token-call'])
 );
+export const ALLOWED_TOOL_LIST_FORMATS = Object.freeze(new Set(['markdown', 'json']));
 export const ALLOWED_THINKING_RUNTIME_PARAMETERS = Object.freeze(new Set(['enable_thinking']));
 
 function normalizeRuntimeDtype(rawDtype) {
@@ -151,6 +152,11 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
   if (!enabled || !rawToolCalling || typeof rawToolCalling !== 'object' || Array.isArray(rawToolCalling)) {
     return null;
   }
+  const toolListFormat =
+    typeof rawToolCalling.toolListFormat === 'string' &&
+    ALLOWED_TOOL_LIST_FORMATS.has(rawToolCalling.toolListFormat.trim())
+      ? rawToolCalling.toolListFormat.trim()
+      : '';
   const format =
     typeof rawToolCalling.format === 'string' && ALLOWED_TOOL_CALLING_FORMATS.has(rawToolCalling.format.trim())
       ? rawToolCalling.format.trim()
@@ -167,6 +173,7 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
           format,
           nameKey,
           argumentsKey,
+          ...(toolListFormat && toolListFormat !== 'markdown' ? { toolListFormat } : {}),
         }
       : null;
   }
@@ -183,11 +190,15 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
           argumentsKey,
           openTag,
           closeTag,
+          ...(toolListFormat && toolListFormat !== 'markdown' ? { toolListFormat } : {}),
         }
       : null;
   }
   if (format === 'xml-tool-call' || format === 'gemma-special-token-call') {
-    return { format };
+    return {
+      format,
+      ...(toolListFormat && toolListFormat !== 'markdown' ? { toolListFormat } : {}),
+    };
   }
   const callOpen = typeof rawToolCalling.callOpen === 'string' ? rawToolCalling.callOpen.trim() : '';
   const callClose = typeof rawToolCalling.callClose === 'string' ? rawToolCalling.callClose.trim() : '';
@@ -196,6 +207,7 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
         format,
         callOpen,
         callClose,
+        ...(toolListFormat && toolListFormat !== 'markdown' ? { toolListFormat } : {}),
       }
     : null;
 }
