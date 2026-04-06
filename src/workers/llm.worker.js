@@ -597,6 +597,25 @@ export { buildMultimodalStreamerOptions };
 export { buildMultimodalDecodeOptions };
 export { ensureMultimodalProcessor };
 
+function isRuntimeReadyForGeneration({
+  hasModel = false,
+  hasTokenizer = false,
+  executionMode = 'text',
+  runtime = {},
+} = {}) {
+  const normalizedRuntime = /** @type {{ multimodalGeneration?: boolean }} */ (runtime);
+  const multimodalGeneration = normalizedRuntime.multimodalGeneration === true;
+  if (!hasModel) {
+    return false;
+  }
+  if (multimodalGeneration) {
+    return executionMode === 'multimodal';
+  }
+  return hasTokenizer;
+}
+
+export { isRuntimeReadyForGeneration };
+
 function buildGenerationOptions(requestGenerationConfig, runtime = {}) {
   return {
     max_new_tokens: requestGenerationConfig.maxOutputTokens,
@@ -812,7 +831,15 @@ async function initialize(payload) {
 
 async function generate(payload) {
   const { requestId, prompt } = payload;
-  if (!model || !tokenizer) {
+  const runtime = normalizeRuntimeConfig(payload.runtime);
+  if (
+    !isRuntimeReadyForGeneration({
+      hasModel: Boolean(model),
+      hasTokenizer: Boolean(tokenizer),
+      executionMode: loadedExecutionMode,
+      runtime,
+    })
+  ) {
     self.postMessage({
       type: 'error',
       payload: { requestId, message: 'Model is not initialized.' },
@@ -834,7 +861,6 @@ async function generate(payload) {
       payload.generationConfig || generationConfig
     );
     generationConfig = requestGenerationConfig;
-    const runtime = normalizeRuntimeConfig(payload.runtime);
     const imageCount = countPromptParts(formattedPrompt, 'image');
     const audioCount = countPromptParts(formattedPrompt, 'audio');
     const videoCount = countPromptParts(formattedPrompt, 'video');

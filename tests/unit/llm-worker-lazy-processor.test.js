@@ -41,4 +41,25 @@ describe('llm.worker ensureMultimodalProcessor', () => {
       message: 'Loading multimodal processor...',
     });
   });
+
+  test('allows multimodal generation readiness without a tokenizer when the multimodal model is loaded', async () => {
+    const { isRuntimeReadyForGeneration } = await import('../../src/workers/llm.worker.js');
+
+    expect(
+      isRuntimeReadyForGeneration({
+        hasModel: true,
+        hasTokenizer: false,
+        executionMode: 'multimodal',
+        runtime: { multimodalGeneration: true },
+      })
+    ).toBe(true);
+    expect(
+      isRuntimeReadyForGeneration({
+        hasModel: true,
+        hasTokenizer: false,
+        executionMode: 'text',
+        runtime: { multimodalGeneration: false },
+      })
+    ).toBe(false);
+  });
 });
