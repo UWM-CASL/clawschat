@@ -25,6 +25,8 @@ const RESPONSE_CONTROL_TOKEN_NAMES = [
   'bos',
   'eos',
   'pad',
+  'im_start',
+  'im_end',
   'turn',
   'eot',
   'eom',

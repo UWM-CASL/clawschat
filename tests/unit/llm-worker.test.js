@@ -82,9 +82,10 @@ describe('llm.worker multimodal chat template options', () => {
     });
   });
 
-  test('omits the thinking flag when runtime thinking is disabled', () => {
+  test('forwards the thinking flag when runtime thinking is disabled', () => {
     expect(buildMultimodalChatTemplateOptions({ enableThinking: false })).toEqual({
       add_generation_prompt: true,
+      enable_thinking: false,
     });
   });
 
@@ -126,6 +127,31 @@ describe('llm.worker generation options', () => {
       repetition_penalty: 1.05,
       do_sample: true,
       enable_thinking: true,
+    });
+  });
+
+  test('forwards an explicit disabled thinking flag to Transformers.js generate options', () => {
+    expect(
+      buildGenerationOptions(
+        {
+          maxOutputTokens: 256,
+          maxContextTokens: 2048,
+          temperature: 0.6,
+          topK: 20,
+          topP: 0.95,
+          repetitionPenalty: 1.0,
+        },
+        { enableThinking: false }
+      )
+    ).toEqual({
+      max_new_tokens: 256,
+      max_length: 2048,
+      temperature: 0.6,
+      top_k: 20,
+      top_p: 0.95,
+      repetition_penalty: 1.0,
+      do_sample: true,
+      enable_thinking: false,
     });
   });
 });

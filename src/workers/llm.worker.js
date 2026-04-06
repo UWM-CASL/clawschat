@@ -276,7 +276,12 @@ function normalizeRuntimeConfig(rawRuntime) {
       .filter(Boolean);
     dtype = entries.length ? Object.fromEntries(entries) : '';
   }
-  const enableThinking = rawRuntime?.enableThinking === true;
+  const enableThinking =
+    rawRuntime?.enableThinking === true
+      ? true
+      : rawRuntime?.enableThinking === false
+        ? false
+        : null;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
   const imageInput = rawRuntime?.imageInput === true;
@@ -301,7 +306,7 @@ function normalizeRuntimeConfig(rawRuntime) {
       : false;
   return {
     ...(dtype ? { dtype } : {}),
-    ...(enableThinking ? { enableThinking: true } : {}),
+    ...(enableThinking === true || enableThinking === false ? { enableThinking } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
     ...(imageInput ? { imageInput: true } : {}),
@@ -317,7 +322,9 @@ function normalizeRuntimeConfig(rawRuntime) {
 function buildMultimodalChatTemplateOptions(runtime = {}) {
   return {
     add_generation_prompt: true,
-    ...(runtime.enableThinking ? { enable_thinking: true } : {}),
+    ...(runtime.enableThinking === true || runtime.enableThinking === false
+      ? { enable_thinking: runtime.enableThinking }
+      : {}),
   };
 }
 
@@ -625,7 +632,9 @@ function buildGenerationOptions(requestGenerationConfig, runtime = {}) {
     top_p: requestGenerationConfig.topP,
     repetition_penalty: requestGenerationConfig.repetitionPenalty,
     do_sample: true,
-    ...(runtime.enableThinking ? { enable_thinking: true } : {}),
+    ...(runtime.enableThinking === true || runtime.enableThinking === false
+      ? { enable_thinking: runtime.enableThinking }
+      : {}),
   };
 }
 
