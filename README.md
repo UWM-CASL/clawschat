@@ -194,7 +194,7 @@ Student-facing browser chat UI with local model inference.
 ## Supported models
 
 - `onnx-community/gemma-4-E2B-it-ONNX` (default)
-  - Uses the published ONNX export with a mixed smallest-supported quantization profile in this app: `audio_encoder: q8`, `vision_encoder: q8`, `embed_tokens: q8`, and `decoder_model_merged: q4`.
+  - Uses the smallest quantization profile in this app across the runtime dtype map: `audio_encoder: q4`, `vision_encoder: q4`, `embed_tokens: q4`, and `decoder_model_merged: q4`.
   - Exposes text plus uploaded image and audio input in this app.
   - Audio input is upload-only; live recording is intentionally not exposed.
   - Video input is not exposed because the current browser runtime path is not viable enough yet.
@@ -202,24 +202,24 @@ Student-facing browser chat UI with local model inference.
   - Uses the published Gemma ONNX generation defaults in this app: temperature `1.0`, top-k `64`, top-p `0.95`.
   - Uses Gemma's special-token tool-call format supported by this app.
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - Uses the published `q4f16` web export.
+  - Uses `q4` in this app.
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`
-  - Uses the published ONNX export with external data loading.
+  - Uses `q4` in this app with external data loading.
   - Uses the same conservative app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
 - `onnx-community/Qwen3.5-0.8B-ONNX`
-  - Uses the published `q4f16` ONNX export with external data loading.
+  - Uses `q8` in this app with external data loading.
   - Defaults to Qwen's non-thinking mode in this app and uses runtime `enable_thinking` when the conversation-level thinking toggle is enabled.
   - Uses the Qwen 3.5 "thinking mode for VL or precise coding" profile as the app-wide default to avoid mode-specific sampling UI drift: temperature `0.6`, top-k `20`, top-p `0.95`, repetition penalty `1.0`.
   - Exposes text plus uploaded image input in this app.
   - Uses the XML tool-call format supported by this app.
 - `onnx-community/Qwen3.5-2B-ONNX`
-  - Uses the published `q4f16` ONNX export with external data loading.
+  - Uses `q4` in this app with external data loading.
   - Defaults to Qwen's non-thinking mode in this app and uses runtime `enable_thinking` when the conversation-level thinking toggle is enabled.
   - Uses the Qwen 3.5 "thinking mode for VL or precise coding" profile as the app-wide default to avoid mode-specific sampling UI drift: temperature `0.6`, top-k `20`, top-p `0.95`, repetition penalty `1.0`.
   - Exposes text plus uploaded image input in this app.
   - Uses the XML tool-call format supported by this app.
 - `LiquidAI/LFM2.5-350M-ONNX`
-  - Uses the published `q4` ONNX export with external data loading.
+  - Uses `q8` in this app with external data loading.
   - Requires WebGPU in this app.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
   - Uses Liquid's special-token tool-call format supported by this app.

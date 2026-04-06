@@ -153,7 +153,7 @@ describe('LLMEngineClient', () => {
     const client = new LLMEngineClient();
     await client.initialize({
       modelId: 'example/model',
-      runtime: { dtype: 'q4f16', enableThinking: true },
+      runtime: { dtype: 'q4', enableThinking: true },
     });
 
     client.generate('prompt', {
@@ -167,7 +167,7 @@ describe('LLMEngineClient', () => {
       (message) => message.type === 'generate'
     );
     expect(generateMessage?.payload?.runtime).toEqual({
-      dtype: 'q4f16',
+      dtype: 'q4',
       enableThinking: false,
     });
   });

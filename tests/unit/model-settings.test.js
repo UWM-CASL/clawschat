@@ -274,18 +274,22 @@ describe('model-settings availability', () => {
       requiresWebGpu: true,
       multimodalGeneration: true,
       dtype: {
-        audio_encoder: 'fp32',
-        vision_encoder: 'fp32',
+        audio_encoder: 'q4',
+        vision_encoder: 'q4',
         embed_tokens: 'q4',
         decoder_model_merged: 'q4',
       },
     });
+    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime).toMatchObject({
+      dtype: 'q4',
+      useExternalDataFormat: true,
+    });
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4f16',
+      dtype: 'q4',
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_SMALL_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4',
+      dtype: 'q8',
       requiresWebGpu: true,
       useExternalDataFormat: true,
     });
@@ -295,22 +299,22 @@ describe('model-settings availability', () => {
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4f16',
+      dtype: 'q8',
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.runtime?.requiresWebGpu).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4f16',
+      dtype: 'q4',
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.runtime?.requiresWebGpu).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime).toMatchObject({
       dtype: {
-        audio_encoder: 'q8',
-        vision_encoder: 'q8',
-        embed_tokens: 'q8',
+        audio_encoder: 'q4',
+        vision_encoder: 'q4',
+        embed_tokens: 'q4',
         decoder_model_merged: 'q4',
       },
       multimodalGeneration: true,

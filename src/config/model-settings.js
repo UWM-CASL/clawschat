@@ -46,7 +46,7 @@ export const MODEL_FEATURE_FLAGS = Object.freeze([
   'audioInput',
   'videoInput',
 ]);
-export const ALLOWED_RUNTIME_DTYPES = Object.freeze(new Set(['q4', 'q4f16', 'q8', 'fp16', 'fp32']));
+export const ALLOWED_RUNTIME_DTYPES = Object.freeze(new Set(['q4', 'q8', 'fp32']));
 export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['auto', 'webgpu']));
 export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
   new Set(['json', 'tagged-json', 'special-token-call', 'xml-tool-call', 'gemma-special-token-call'])

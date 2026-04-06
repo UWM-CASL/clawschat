@@ -18,7 +18,7 @@ Model support is configured in `src/config/models.json`:
   - `audioInput`
   - `videoInput`
 - `models[].runtime`: optional runtime hints per model:
-  - `dtype` (example: `q4f16`)
+  - `dtype` (example: `q4`)
   - `enableThinking` (`true` to pass `enable_thinking` during generation)
   - `requiresWebGpu` (`true` to disable the model unless WebGPU can be used)
   - `multimodalGeneration` (`true` only when the worker has a real multimodal execution path for image/audio/video inputs)
@@ -255,29 +255,29 @@ Do not mark a capability on the card just because the upstream model card advert
 Current selectable models in Settings:
 
 - `onnx-community/gemma-4-E2B-it-ONNX` (default)
-  - Uses a mixed runtime dtype map to keep the browser download footprint down while staying on the published ONNX export: `audio_encoder: q8`, `vision_encoder: q8`, `embed_tokens: q8`, `decoder_model_merged: q4`.
+  - Uses the smallest runtime dtype map in this app: `audio_encoder: q4`, `vision_encoder: q4`, `embed_tokens: q4`, `decoder_model_merged: q4`.
   - Uses `thinkingControl` with runtime `enable_thinking`.
   - Uses Gemma's channel-style thought markers via `thinkingTags { open: "<|channel>", close: "<channel|>", stripLeadingText: "thought" }`.
   - Accepts uploaded image input and upload-only audio input in this app.
   - Uses the Gemma special-token tool-call format.
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`
-  - Uses runtime dtype `q4f16` and loads external ONNX data sidecars.
+  - Uses runtime dtype `q4` and loads external ONNX data sidecars.
   - Uses the same app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
 - `onnx-community/Qwen3.5-0.8B-ONNX`
-  - Uses runtime dtype `q4f16` and loads external ONNX data sidecars.
+  - Uses runtime dtype `q8` and loads external ONNX data sidecars.
   - Uses the app's single Qwen default profile based on Qwen's published "thinking mode for VL or precise coding" guidance: temperature `0.6`, top-k `20`, top-p `0.95`, repetition penalty `1.0`.
   - Uses `thinkingControl` with runtime `enable_thinking` and defaults that toggle to off for new conversations.
   - Accepts uploaded image input in this app.
   - Uses the XML tool-call format.
 - `onnx-community/Qwen3.5-2B-ONNX`
-  - Uses runtime dtype `q4f16` and loads external ONNX data sidecars.
+  - Uses runtime dtype `q4` and loads external ONNX data sidecars.
   - Uses the app's single Qwen default profile based on Qwen's published "thinking mode for VL or precise coding" guidance: temperature `0.6`, top-k `20`, top-p `0.95`, repetition penalty `1.0`.
   - Uses `thinkingControl` with runtime `enable_thinking` and defaults that toggle to off for new conversations.
   - Accepts uploaded image input in this app.
   - Uses the XML tool-call format.
 - `LiquidAI/LFM2.5-350M-ONNX`
-  - Uses runtime dtype `q4`, loads external ONNX data sidecars, and requires WebGPU in-browser.
+  - Uses runtime dtype `q8`, loads external ONNX data sidecars, and requires WebGPU in-browser.
   - Uses the published 350M sampling defaults available from the model card: temperature `0.1`, top-k `50`, repetition penalty `1.05`. This app keeps top-p effectively open at `1.0` because the card does not publish a nucleus cutoff.
   - Uses Liquid's special-token tool-call format in this app.
 - `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`
@@ -324,14 +324,14 @@ Notes:
 
 Per-model limits and defaults:
 
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"cmd":"..."}` inside `parameters`, no thinking tags
-- `onnx-community/Llama-3.2-1B-Instruct-ONNX`: runtime dtype `q4f16`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
-- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtype `q4f16`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
-- Both Llama entries use the published `model_q4f16` web export and enable `useExternalDataFormat: true` for `.onnx_data` loading.
-- `onnx-community/Qwen3.5-0.8B-ONNX`: runtime dtype `q4f16`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `onnx-community/Qwen3.5-2B-ONNX`: runtime dtype `q4f16`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `LiquidAI/LFM2.5-350M-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtype `q4`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"cmd":"..."}` inside `parameters`, no thinking tags
+- `onnx-community/Llama-3.2-1B-Instruct-ONNX`: runtime dtype `q4`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtype `q4`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
+- All listed Llama entries use runtime dtype `q4` and enable `useExternalDataFormat: true` for `.onnx_data` loading.
+- `onnx-community/Qwen3.5-0.8B-ONNX`: runtime dtype `q8`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
+- `onnx-community/Qwen3.5-2B-ONNX`: runtime dtype `q4`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
+- `LiquidAI/LFM2.5-350M-ONNX`: runtime dtype `q8`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
 - `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default output `512`, default temperature `0.1`, default top-k `50`, default top-p `1.0`, default repetition penalty `1.05`, feature flag `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, no thinking tags
-- `onnx-community/gemma-4-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: q8, vision_encoder: q8, embed_tokens: q8, decoder_model_merged: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, input limit `maxAudioInputs: 1`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ defaultEnabled: true, runtimeParameter: "enable_thinking" }`
+- `onnx-community/gemma-4-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: q4, vision_encoder: q4, embed_tokens: q4, decoder_model_merged: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, input limit `maxAudioInputs: 1`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ defaultEnabled: true, runtimeParameter: "enable_thinking" }`
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`: runtime dtype `q4`, `requiresWebGpu: true`, `useExternalDataFormat: true`, max context `32768`, default context `8192`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, feature flags `thinking` and `toolCalling`, tool call format `<|tool_call_start|>[tool_name(arg="value")]<|tool_call_end|>`, thinking tags `<think>` / `</think>`
-- `onnx-community/gemma-3n-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: fp32, vision_encoder: fp32, embed_tokens: q4, decoder_model_merged: q4 }`, `requiresWebGpu: true`, `multimodalGeneration: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `toolCalling`, `imageInput`, and `audioInput`, tool call format `{"name":"tool_name","arguments":{...}}`
+- `onnx-community/gemma-3n-E2B-it-ONNX`: runtime dtype map `{ audio_encoder: q4, vision_encoder: q4, embed_tokens: q4, decoder_model_merged: q4 }`, `requiresWebGpu: true`, `multimodalGeneration: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `toolCalling`, `imageInput`, and `audioInput`, tool call format `{"name":"tool_name","arguments":{...}}`

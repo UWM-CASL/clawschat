@@ -20,7 +20,7 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Llama-3.2-3B-Instruct-onnx-web",
       "runtime": {
-        "dtype": "q4f16",
+        "dtype": "q4",
         "useExternalDataFormat": true
       },
       "toolCalling": {
@@ -68,7 +68,7 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Llama-3.2-1B-Instruct-ONNX",
       "runtime": {
-        "dtype": "q4f16",
+        "dtype": "q4",
         "useExternalDataFormat": true
       },
       "generation": {
@@ -112,7 +112,7 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa",
       "runtime": {
-        "dtype": "q4f16",
+        "dtype": "q4",
         "useExternalDataFormat": true
       },
       "generation": {
@@ -154,7 +154,7 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX",
       "runtime": {
-        "dtype": "q4f16",
+        "dtype": "q8",
         "multimodalGeneration": true,
         "useExternalDataFormat": true
       },
@@ -211,7 +211,7 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Qwen3.5-2B-ONNX",
       "runtime": {
-        "dtype": "q4f16",
+        "dtype": "q4",
         "multimodalGeneration": true,
         "useExternalDataFormat": true
       },
@@ -270,7 +270,7 @@
       },
       "repositoryUrl": "https://huggingface.co/LiquidAI/LFM2.5-350M-ONNX",
       "runtime": {
-        "dtype": "q4",
+        "dtype": "q8",
         "requiresWebGpu": true,
         "useExternalDataFormat": true
       },
@@ -369,9 +369,9 @@
       "repositoryUrl": "https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX",
       "runtime": {
         "dtype": {
-          "audio_encoder": "q8",
-          "vision_encoder": "q8",
-          "embed_tokens": "q8",
+          "audio_encoder": "q4",
+          "vision_encoder": "q4",
+          "embed_tokens": "q4",
           "decoder_model_merged": "q4"
         },
         "multimodalGeneration": true,
@@ -486,8 +486,8 @@
       "repositoryUrl": "https://huggingface.co/onnx-community/gemma-3n-E2B-it-ONNX",
       "runtime": {
         "dtype": {
-          "audio_encoder": "fp32",
-          "vision_encoder": "fp32",
+          "audio_encoder": "q4",
+          "vision_encoder": "q4",
           "embed_tokens": "q4",
           "decoder_model_merged": "q4"
         },
