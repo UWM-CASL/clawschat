@@ -399,7 +399,7 @@ export function createAppController(dependencies) {
       modelMessage.toolCalls = [];
     }
 
-    function normalizeToolCallInterception(toolCalls, visibleResponseText) {
+    function normalizeToolCallInterception(toolCalls, rawStreamText) {
       const detectedToolCalls = Array.isArray(toolCalls) ? toolCalls.filter(Boolean) : [];
       if (!detectedToolCalls.length) {
         return null;
@@ -407,14 +407,19 @@ export function createAppController(dependencies) {
       const primaryToolCall = detectedToolCalls[0];
       const rawToolCallText =
         typeof primaryToolCall?.rawText === 'string' ? primaryToolCall.rawText.trim() : '';
-      const fullResponseText = String(visibleResponseText || '');
-      const rawIndex = rawToolCallText ? fullResponseText.indexOf(rawToolCallText) : -1;
-      const narrationText =
-        rawIndex >= 0 ? fullResponseText.slice(0, rawIndex).trimEnd() : fullResponseText.trimEnd();
+      const fullRawStreamText = String(rawStreamText || '');
+      const rawIndex = rawToolCallText ? fullRawStreamText.indexOf(rawToolCallText) : -1;
+      const precedingRawText =
+        rawIndex >= 0 ? fullRawStreamText.slice(0, rawIndex) : fullRawStreamText;
+      const parsedPrefix = dependencies.parseThinkingText(precedingRawText, thinkingTags);
       return {
         toolCalls: [primaryToolCall],
         toolCallPromptText: rawToolCallText,
-        narrationText,
+        precedingRawText,
+        thoughtsText: parsedPrefix.thoughts,
+        narrationText: parsedPrefix.response.trimEnd(),
+        hasThinking: parsedPrefix.hasThinking || Boolean(parsedPrefix.thoughts.trim()),
+        isThinkingComplete: parsedPrefix.isThinkingComplete,
       };
     }
 
@@ -474,16 +479,16 @@ export function createAppController(dependencies) {
         const interceptedToolCall =
           typeof dependencies.detectToolCalls === 'function'
             ? normalizeToolCallInterception(
-                dependencies.detectToolCalls(
-                  modelMessage.response || modelMessage.text || '',
-                  selectedModelId
-                ),
-                modelMessage.response || modelMessage.text || ''
+                dependencies.detectToolCalls(streamedText, selectedModelId),
+                streamedText
               )
             : null;
         if (interceptedToolCall) {
           isInterceptingToolCall = true;
           modelMessage.toolCalls = interceptedToolCall.toolCalls;
+          modelMessage.thoughts = interceptedToolCall.thoughtsText;
+          modelMessage.hasThinking = interceptedToolCall.hasThinking;
+          modelMessage.isThinkingComplete = interceptedToolCall.isThinkingComplete;
           modelMessage.response = interceptedToolCall.narrationText;
           modelMessage.text = interceptedToolCall.narrationText;
           if (modelMessage.content && typeof modelMessage.content === 'object') {
@@ -597,17 +602,17 @@ export function createAppController(dependencies) {
           modelMessage.text = modelMessage.response || '[No output]';
           modelMessage.toolCalls =
             typeof dependencies.detectToolCalls === 'function'
-              ? dependencies.detectToolCalls(
-                  modelMessage.response || modelMessage.text || '',
-                  selectedModelId
-                )
+              ? dependencies.detectToolCalls(streamedText, selectedModelId)
               : [];
           const interceptedToolCall = normalizeToolCallInterception(
             modelMessage.toolCalls,
-            modelMessage.response || modelMessage.text || ''
+            streamedText
           );
           if (interceptedToolCall) {
             modelMessage.toolCalls = interceptedToolCall.toolCalls;
+            modelMessage.thoughts = interceptedToolCall.thoughtsText;
+            modelMessage.hasThinking = interceptedToolCall.hasThinking;
+            modelMessage.isThinkingComplete = interceptedToolCall.isThinkingComplete;
             modelMessage.response = interceptedToolCall.narrationText;
             modelMessage.text = interceptedToolCall.narrationText;
             if (modelMessage.content && typeof modelMessage.content === 'object') {

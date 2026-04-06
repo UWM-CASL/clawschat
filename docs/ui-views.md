@@ -54,6 +54,7 @@ Transcript rendering is intentionally aligned with the streaming controller cont
 
 - Tool calls are displayed inline on the same model card that emitted them.
 - Narration emitted before the intercepted tool call remains visible.
+- If the intercepted tool call was emitted during a visible thinking block, that thinking block ends before the tool action and any later continuation thinking is rendered as a new later block.
 - Follow-up tool results and resumed model narration are folded back into that same visible card in chronological order.
 - The underlying conversation still stores those steps as `tool` and later `model` messages.
 - The transcript should not surface those folded tool-result or continuation-model steps as separate standalone visible transcript cards.

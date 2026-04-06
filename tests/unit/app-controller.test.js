@@ -590,6 +590,115 @@ describe('app-controller', () => {
     expect(finalModelMessage?.text).toBe('The task list is currently empty.');
   });
 
+  test('intercepts a streamed tool call emitted during thinking', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-thinking', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(
+      conversation,
+      'user',
+      'Think through it and then use the planner.'
+    );
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.getThinkingTagsForModel = () => ({
+      open: '<think>',
+      close: '</think>',
+    });
+    harness.dependencies.parseThinkingText = (rawText, thinkingTags) => {
+      if (!thinkingTags) {
+        return {
+          response: String(rawText || ''),
+          thoughts: '',
+          hasThinking: false,
+          isThinkingComplete: false,
+        };
+      }
+      const text = String(rawText || '');
+      const openIndex = text.indexOf(thinkingTags.open);
+      if (openIndex < 0) {
+        return {
+          response: text,
+          thoughts: '',
+          hasThinking: false,
+          isThinkingComplete: false,
+        };
+      }
+      const closeIndex = text.indexOf(thinkingTags.close, openIndex + thinkingTags.open.length);
+      if (closeIndex < 0) {
+        return {
+          response: text.slice(0, openIndex),
+          thoughts: text.slice(openIndex + thinkingTags.open.length),
+          hasThinking: true,
+          isThinkingComplete: false,
+        };
+      }
+      return {
+        response:
+          text.slice(0, openIndex) + text.slice(closeIndex + thinkingTags.close.length),
+        thoughts: text.slice(openIndex + thinkingTags.open.length, closeIndex),
+        hasThinking: true,
+        isThinkingComplete: true,
+      };
+    };
+    harness.dependencies.detectToolCalls
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([
+        {
+          name: 'tasklist',
+          arguments: { command: 'list' },
+          rawText: '{"name":"tasklist","parameters":{"command":"list"}}',
+          format: 'json',
+        },
+      ])
+      .mockReturnValueOnce([]);
+    harness.dependencies.executeToolCall.mockResolvedValue({
+      toolName: 'tasklist',
+      arguments: { command: 'list' },
+      resultText: '{"items":[]}',
+    });
+
+    harness.engine.generate
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onToken('<think>I should inspect the task list first. ');
+        handlers.onToken('{"name":"tasklist","parameters":{"command":"list"}}');
+        handlers.onComplete(
+          '<think>I should inspect the task list first. {"name":"tasklist","parameters":{"command":"list"}}'
+        );
+      })
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onComplete('<think>The list is empty.</think>The planner is empty.');
+      });
+
+    harness.controller.startModelGeneration(
+      conversation,
+      buildPromptForConversationLeaf(conversation),
+      {
+        parentMessageId: userMessage.id,
+        updateLastSpokenOnComplete: true,
+      }
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const modelMessages = conversation.messageNodes.filter((message) => message.role === 'model');
+    const interceptedModelMessage = modelMessages[0];
+    const finalModelMessage = modelMessages.at(-1);
+
+    expect(harness.engine.cancelGeneration).toHaveBeenCalledTimes(1);
+    expect(interceptedModelMessage?.thoughts).toBe('I should inspect the task list first. ');
+    expect(interceptedModelMessage?.hasThinking).toBe(true);
+    expect(interceptedModelMessage?.isThinkingComplete).toBe(false);
+    expect(interceptedModelMessage?.text).toBe('');
+    expect(interceptedModelMessage?.content?.llmRepresentation).toBe(
+      '{"name":"tasklist","parameters":{"command":"list"}}'
+    );
+    expect(finalModelMessage?.thoughts).toBe('The list is empty.');
+    expect(finalModelMessage?.text).toBe('The planner is empty.');
+  });
+
   test('regenerates from a continuation model message after a tool call', () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
