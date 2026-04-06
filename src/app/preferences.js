@@ -51,6 +51,7 @@ export function createPreferencesController({
   inspectMcpServerEndpoint,
   setStatus,
   appendDebug,
+  onSelectedModelCardChange,
 }) {
   function getStoredShowThinkingPreference() {
     return storage.getItem(showThinkingStorageKey) === 'true';
@@ -323,6 +324,7 @@ export function createPreferencesController({
     persistGenerationConfigForModel,
     setStatus,
     appendDebug,
+    onSelectedModelCardChange,
   });
 
   if (conversationPanelCollapseButton instanceof HTMLButtonElement) {

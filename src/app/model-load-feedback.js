@@ -1,6 +1,7 @@
 export function createModelLoadFeedbackController({
   appState,
   documentRef = document,
+  modelLoadFeedback,
   modelLoadProgressWrap,
   modelLoadProgressLabel,
   modelLoadProgressValue,
@@ -12,14 +13,71 @@ export function createModelLoadFeedbackController({
   modelLoadError,
   modelLoadErrorSummary,
   modelLoadErrorDetails,
+  modelCardList,
+  getSelectedModelId = () => '',
 }) {
   const view = documentRef?.defaultView || window;
+  const fallbackParent = modelLoadFeedback?.parentElement || null;
+
+  function getLoadPartCounts() {
+    const entries = [...appState.loadProgressFiles.values()];
+    return {
+      totalCount: entries.length,
+      completeCount: entries.filter((entry) => entry.isComplete).length,
+    };
+  }
+
+  function findSelectedModelFeedbackHost() {
+    if (!(modelCardList instanceof HTMLElement)) {
+      return null;
+    }
+    const selectedModelId =
+      typeof getSelectedModelId === 'function' ? String(getSelectedModelId() || '').trim() : '';
+    if (!selectedModelId) {
+      return null;
+    }
+    const escapedModelId = view.CSS?.escape ? view.CSS.escape(selectedModelId) : selectedModelId;
+    const selectedButton = modelCardList.querySelector(
+      `.model-card-button[data-model-id="${escapedModelId}"]`
+    );
+    if (!(selectedButton instanceof HTMLElement)) {
+      return null;
+    }
+    const selectedCard = selectedButton.closest('.model-card');
+    if (!(selectedCard instanceof HTMLElement)) {
+      return null;
+    }
+    return selectedCard.querySelector('.model-card-feedback-slot');
+  }
+
+  function syncFeedbackHost() {
+    if (!(modelLoadFeedback instanceof HTMLElement)) {
+      return;
+    }
+    const nextParent = findSelectedModelFeedbackHost() || fallbackParent;
+    if (nextParent instanceof HTMLElement && modelLoadFeedback.parentElement !== nextParent) {
+      nextParent.appendChild(modelLoadFeedback);
+    }
+  }
+
+  function syncFeedbackVisibility() {
+    if (!(modelLoadFeedback instanceof HTMLElement)) {
+      return;
+    }
+    const hasVisibleProgress =
+      modelLoadProgressWrap instanceof HTMLElement && !modelLoadProgressWrap.classList.contains('d-none');
+    const hasVisibleError =
+      modelLoadError instanceof HTMLElement && !modelLoadError.classList.contains('d-none');
+    modelLoadFeedback.classList.toggle('d-none', !hasVisibleProgress && !hasVisibleError);
+  }
 
   function showProgressRegion(show) {
+    syncFeedbackHost();
     if (!modelLoadProgressWrap) {
       return;
     }
     modelLoadProgressWrap.classList.toggle('d-none', !show);
+    syncFeedbackVisibility();
   }
 
   function formatLoadFileLabel(fileName) {
@@ -73,19 +131,26 @@ export function createModelLoadFeedbackController({
     if (!modelLoadProgressSummary && !modelLoadCurrentFileLabel && !modelLoadCurrentFileValue) {
       return;
     }
-    const entries = [...appState.loadProgressFiles.values()].sort(
-      (a, b) => b.updatedAt - a.updatedAt
-    );
-    const completeCount = entries.filter((entry) => entry.isComplete).length;
+    const entries = [...appState.loadProgressFiles.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+    const { completeCount, totalCount } = getLoadPartCounts();
     const latestEntry = entries[0] || null;
+    if (modelLoadProgressValue) {
+      modelLoadProgressValue.textContent = `${completeCount}/${totalCount}`;
+    }
+    if (modelLoadProgressBar) {
+      modelLoadProgressBar.setAttribute(
+        'aria-valuetext',
+        totalCount ? `${completeCount} of ${totalCount} model parts loaded` : 'Waiting for model parts'
+      );
+    }
     if (modelLoadProgressSummary) {
-      modelLoadProgressSummary.textContent = !entries.length
-        ? '0/0 stages complete'
-        : `${completeCount}/${entries.length} stages complete`;
+      modelLoadProgressSummary.textContent = !totalCount
+        ? 'Waiting for model parts...'
+        : `${completeCount} of ${totalCount} model parts loaded`;
     }
     if (!latestEntry) {
       if (modelLoadCurrentFileLabel) {
-        modelLoadCurrentFileLabel.textContent = 'Current file';
+        modelLoadCurrentFileLabel.textContent = 'Current part';
       }
       if (modelLoadCurrentFileValue) {
         modelLoadCurrentFileValue.textContent = 'Waiting...';
@@ -95,7 +160,7 @@ export function createModelLoadFeedbackController({
     }
 
     if (modelLoadCurrentFileLabel) {
-      modelLoadCurrentFileLabel.textContent = latestEntry.label || 'Current file';
+      modelLoadCurrentFileLabel.textContent = latestEntry.label || 'Current part';
     }
     if (modelLoadCurrentFileValue) {
       if (latestEntry.hasKnownTotal && latestEntry.totalBytes > 0) {
@@ -161,6 +226,7 @@ export function createModelLoadFeedbackController({
     if (modelLoadErrorDetails) {
       modelLoadErrorDetails.replaceChildren();
     }
+    syncFeedbackVisibility();
   }
 
   function setLoadProgress({
@@ -182,17 +248,24 @@ export function createModelLoadFeedbackController({
       modelLoadProgressLabel.textContent = message;
     }
     if (modelLoadProgressValue) {
-      modelLoadProgressValue.textContent = `${Math.round(displayPercent)}%`;
+      const { completeCount, totalCount } = getLoadPartCounts();
+      modelLoadProgressValue.textContent = `${completeCount}/${totalCount}`;
     }
     if (modelLoadProgressBar) {
+      const { completeCount, totalCount } = getLoadPartCounts();
       modelLoadProgressBar.style.width = `${displayPercent}%`;
       modelLoadProgressBar.setAttribute('aria-valuenow', `${Math.round(displayPercent)}`);
+      modelLoadProgressBar.setAttribute(
+        'aria-valuetext',
+        totalCount ? `${completeCount} of ${totalCount} model parts loaded` : 'Waiting for model parts'
+      );
       modelLoadProgressBar.classList.toggle('progress-bar-animated', displayPercent < 100);
     }
     trackLoadFileProgress(file, normalizedPercent, status || message, loadedBytes, totalBytes);
   }
 
   function showLoadError(errorMessage) {
+    syncFeedbackHost();
     if (!modelLoadError) {
       return;
     }
@@ -213,6 +286,7 @@ export function createModelLoadFeedbackController({
       });
     }
     modelLoadError.classList.remove('d-none');
+    syncFeedbackVisibility();
   }
 
   return {
@@ -221,5 +295,6 @@ export function createModelLoadFeedbackController({
     setLoadProgress,
     showLoadError,
     showProgressRegion,
+    syncFeedbackHost,
   };
 }

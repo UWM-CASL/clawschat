@@ -948,6 +948,14 @@
   padding: 0.5rem 1rem 0.65rem;
 }
 
+.model-card-feedback-slot:empty {
+  display: none;
+}
+
+.model-card-feedback-slot .pre-chat-progress {
+  margin: 0 1rem 0.85rem;
+}
+
 .model-card-link {
   color: var(--action-btn-text);
   font-size: 0.88rem;

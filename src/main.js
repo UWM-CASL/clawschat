@@ -244,6 +244,7 @@ const statusRegionMessage = document.getElementById('statusRegionMessage');
 const skipLinkElements = Array.from(document.querySelectorAll('.skip-link[data-skip-target]'));
 const startConversationButton = document.getElementById('startConversationButton');
 const debugInfo = document.getElementById('debugInfo');
+const modelLoadFeedback = document.getElementById('modelLoadFeedback');
 const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
 const modelLoadProgressLabel = document.getElementById('modelLoadProgressLabel');
 const modelLoadProgressValue = document.getElementById('modelLoadProgressValue');
@@ -477,9 +478,11 @@ const {
   setLoadProgress,
   showLoadError,
   showProgressRegion,
+  syncFeedbackHost,
 } = createModelLoadFeedbackController({
   appState,
   documentRef: document,
+  modelLoadFeedback,
   modelLoadProgressWrap,
   modelLoadProgressLabel,
   modelLoadProgressValue,
@@ -491,6 +494,8 @@ const {
   modelLoadError,
   modelLoadErrorSummary,
   modelLoadErrorDetails,
+  modelCardList,
+  getSelectedModelId: () => modelSelect?.value || '',
 });
 const {
   buildRemovedComposerAttachmentStatus,
@@ -2916,6 +2921,7 @@ const preferencesController = createPreferencesController({
     }),
   setStatus,
   appendDebug,
+  onSelectedModelCardChange: syncFeedbackHost,
 });
 
 const {

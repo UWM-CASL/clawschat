@@ -18,7 +18,7 @@ Student-facing browser chat UI with local model inference.
 - Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.
 - From that pre-chat state, users can keep the currently loaded model or choose a different model card before sending the first message.
 - If a different model is selected for the next chat, the currently loaded model worker is unloaded before the replacement model is loaded.
-- During model load, the workspace shows one progress bar.
+- During model load, the selected model card shows the progress bar, and its status reads as loaded model parts over total parts instead of a percentage.
 - The URL hash reflects the visible screen and active conversation:
   - `#/` for setup/home
   - `#/chat` for the pre-chat workspace with no selected conversation

@@ -80,6 +80,7 @@ function shouldShowLanguageOverflow(model, visibleTagCount = DEFAULT_LANGUAGE_TA
  * @param {(modelId: string, generationConfig: any) => void} options.persistGenerationConfigForModel
  * @param {(message: string) => void} options.setStatus
  * @param {(message: string) => void} options.appendDebug
+ * @param {() => void} [options.onSelectedModelCardChange]
  */
 export function createModelPreferencesController({
   appState,
@@ -98,6 +99,7 @@ export function createModelPreferencesController({
   persistGenerationConfigForModel,
   setStatus,
   appendDebug,
+  onSelectedModelCardChange,
 }) {
   const supportedBackendPreferenceSet =
     supportedBackendPreferences instanceof Set
@@ -234,6 +236,9 @@ export function createModelPreferencesController({
       button.classList.toggle('is-selected', isSelected);
       button.setAttribute('aria-checked', String(isSelected));
     });
+    if (typeof onSelectedModelCardChange === 'function') {
+      onSelectedModelCardChange();
+    }
   }
 
   function setSelectedModelId(modelId, { dispatch = false } = {}) {
@@ -347,6 +352,10 @@ export function createModelPreferencesController({
         setSelectedModelId(model.id, { dispatch: true });
       });
       card.appendChild(selectButton);
+
+      const feedbackSlot = documentRef.createElement('div');
+      feedbackSlot.className = 'model-card-feedback-slot';
+      card.appendChild(feedbackSlot);
 
       const footer = documentRef.createElement('div');
       footer.className = 'model-card-footer';
