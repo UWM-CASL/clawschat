@@ -49,6 +49,8 @@ Student-facing browser chat UI with local model inference.
   - `Render MathML from LaTeX` to control transcript math rendering and the matching math-formatting prompt hint
   - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`
   - `Transcript view` with `Standard` and `Compact`
+  - `Export` to download a zip archive containing a full conversation-state snapshot plus per-conversation JSON, Markdown, and stored artifacts
+  - `Delete Conversations` to remove all saved conversations and their stored artifacts from this browser
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - The pre-chat panel is shown when no active conversation exists or when `New Conversation` is preparing a fresh chat; the bottom message composer keeps the same size before and after model load.
@@ -134,6 +136,10 @@ Student-facing browser chat UI with local model inference.
 - Download submenu options:
   - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), the conversation's `model`, `temperature`, optional `systemPrompt` (when present on that conversation), optional `toolCalling` metadata when tool calling is enabled at export time, and an `exchanges` array containing per-exchange `heading`, explicit created-at ISO/ms fields plus UTC date/time fields, model `toolCalls`, and tool-result metadata including structured `toolResultData` when present.
   - `Markdown (.md) File`: exports the visible branch as `<conversation-name>.md` with conversation metadata (started/exported UTC times, the conversation's model, temperature), optional tool-calling metadata when enabled at export time, optional `## System prompt` section (when present), and one section per exchange including UTC date/time lines, model tool-call metadata, and tool-result details, including structured `toolResultData` when present.
+- `Settings -> Conversation -> Export` downloads one zip archive containing:
+  - `storage/conversations.llm.json` with the full local conversation snapshot
+  - one folder per saved conversation with that conversation's `.llm.json` and `.md` exports
+  - an `artifacts/manifest.json` file plus the stored artifact payloads for that conversation
 - Model load progress UI collapses after successful initialization.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in collapsible "Thinking" sections at the point they occurred within the model turn during streaming.
   - Gemma 4 channel-style reasoning output (`<|channel>thought ... <channel|>`) is normalized into the same thinking UI without feeding that reasoning back into later turns.
@@ -306,6 +312,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Orchestration prompt templating, nested placeholder rendering, utility-step execution, and chunk-pipeline support live in `src/llm/orchestration-runner.js`.
 - Settings persistence and cross-domain wiring live in `src/app/preferences.js`, with tool/MCP settings extracted to `src/app/preferences-tooling.js` and model/backend picker logic extracted to `src/app/preferences-models.js`.
 - Settings page event wiring lives in `src/app/settings-events.js`, with tool/network handlers extracted to `src/app/settings-events-tooling.js` and conversation/model handlers extracted to `src/app/settings-events-models.js`.
+- Bulk conversation archive export lives in `src/app/conversation-bulk-export.js`.
 - Transcript and conversation-list DOM rendering live in `src/ui/`.
 - Transcript navigation/skip-link behavior, model-load feedback, composer attachment/runtime state, and workspace side-panel controllers live in `src/app/`.
 - `src/main.js` remains the app shell for routing, page-level visibility, persistence hookup, and wiring dependencies into those modules.

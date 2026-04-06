@@ -17,6 +17,9 @@ This module is the pure domain layer for:
 - building conversation export payloads and Markdown output
 - preserving model-emitted tool calls and `tool` role execution results
 
+Bulk archive export in `src/app/conversation-bulk-export.js` reuses these pure export builders and
+the normalized snapshot serializer rather than introducing a second export schema.
+
 For attachment-related document pipelines, this module should store the resulting normalized content and model-visible representation, but it should not perform parsing, chunking, or orchestration work itself. For example, HTML attachments may already be normalized into Markdown before they reach this layer.
 
 It must not depend on:

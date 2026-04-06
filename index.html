@@ -911,6 +911,34 @@
                         visible.
                       </p>
                     </div>
+                    <div class="settings-control-group" aria-labelledby="conversationStorageActionsLabel">
+                      <div class="d-flex flex-column gap-2">
+                        <h4 class="h6 mb-0" id="conversationStorageActionsLabel">
+                          Conversation storage
+                        </h4>
+                        <p class="form-text mb-0">
+                          Export downloads a zip with JSON, Markdown, and stored artifacts for every
+                          saved conversation. Delete removes all saved conversations and their stored
+                          artifacts from this browser.
+                        </p>
+                        <div class="d-flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            id="exportConversationsButton"
+                            class="btn btn-outline-primary"
+                          >
+                            Export
+                          </button>
+                          <button
+                            type="button"
+                            id="deleteConversationsButton"
+                            class="btn btn-outline-danger"
+                          >
+                            Delete Conversations
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </section>
 
                   <section

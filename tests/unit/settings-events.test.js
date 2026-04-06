@@ -65,6 +65,8 @@ function createHarness() {
           <option value="compact">Compact</option>
         </select>
         <textarea id="defaultSystemPromptInput"></textarea>
+        <button id="exportConversationsButton" type="button">Export</button>
+        <button id="deleteConversationsButton" type="button">Delete Conversations</button>
         <select id="conversationLanguageSelect">
           <option value="auto">Auto</option>
           <option value="es">Spanish</option>
@@ -140,6 +142,8 @@ function createHarness() {
     enableSingleKeyShortcutsToggle: document.getElementById('enableSingleKeyShortcutsToggle'),
     transcriptViewSelect: document.getElementById('transcriptViewSelect'),
     defaultSystemPromptInput: document.getElementById('defaultSystemPromptInput'),
+    exportConversationsButton: document.getElementById('exportConversationsButton'),
+    deleteConversationsButton: document.getElementById('deleteConversationsButton'),
     conversationLanguageSelect: document.getElementById('conversationLanguageSelect'),
     enableModelThinkingToggle: document.getElementById('enableModelThinkingToggle'),
     modelSelect: document.getElementById('modelSelect'),
@@ -200,6 +204,9 @@ function createHarness() {
     })),
     normalizeModelId: vi.fn((value) => value),
     defaultModelId: 'model-a',
+    exportAllConversations: vi.fn(),
+    deleteAllConversationStorage: vi.fn(async () => {}),
+    isUiBusy: vi.fn(() => false),
     setStatus: vi.fn(),
     isAnyModalOpen: vi.fn(() => false),
   };
@@ -230,6 +237,8 @@ function createHarness() {
       mcpServerRemoveDocs: document.getElementById('mcpServerRemoveDocs'),
       renderMathMlToggle: document.getElementById('renderMathMlToggle'),
       defaultSystemPromptInput: document.getElementById('defaultSystemPromptInput'),
+      exportConversationsButton: document.getElementById('exportConversationsButton'),
+      deleteConversationsButton: document.getElementById('deleteConversationsButton'),
       conversationLanguageSelect: document.getElementById('conversationLanguageSelect'),
       enableModelThinkingToggle: document.getElementById('enableModelThinkingToggle'),
       modelSelect: document.getElementById('modelSelect'),
@@ -404,6 +413,43 @@ describe('settings-events', () => {
       persist: true,
     });
     expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(1);
+  });
+
+  test('export button runs the bulk export action when the UI is idle', () => {
+    const harness = createHarness();
+    const button = /** @type {HTMLButtonElement} */ (harness.elements.exportConversationsButton);
+
+    button.click();
+
+    expect(harness.deps.exportAllConversations).toHaveBeenCalledTimes(1);
+  });
+
+  test('export button announces when the UI is busy', () => {
+    const harness = createHarness();
+    const button = /** @type {HTMLButtonElement} */ (harness.elements.exportConversationsButton);
+    harness.deps.isUiBusy.mockReturnValue(true);
+
+    button.click();
+
+    expect(harness.deps.exportAllConversations).not.toHaveBeenCalled();
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Wait for the current conversation task to finish before exporting.'
+    );
+  });
+
+  test('delete conversations confirms before deleting storage', async () => {
+    const harness = createHarness();
+    const button = /** @type {HTMLButtonElement} */ (harness.elements.deleteConversationsButton);
+    globalThis.confirm = vi.fn(() => true);
+
+    button.click();
+    await Promise.resolve();
+
+    expect(globalThis.confirm).toHaveBeenCalledWith(
+      'Delete all saved conversations and their stored artifacts from this browser?'
+    );
+    expect(harness.deps.deleteAllConversationStorage).toHaveBeenCalledTimes(1);
+    expect(harness.deps.setStatus).toHaveBeenCalledWith('All saved conversations were deleted.');
   });
 
   test('conversation language and thinking changes refresh the computed prompt preview', () => {

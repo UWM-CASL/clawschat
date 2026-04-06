@@ -12,6 +12,7 @@ import {
   getAttachmentButtonAcceptValue,
   getAttachmentIconClass,
 } from './attachments/attachment-ui.js';
+import { buildBulkConversationExportZip } from './app/conversation-bulk-export.js';
 import { createConversationEditors } from './app/conversation-editors.js';
 import { createModelLoadFeedbackController } from './app/model-load-feedback.js';
 import './styles.css';
@@ -146,8 +147,10 @@ import { loadMarkdownRenderer, renderPlainTextMarkdownFallback } from './ui/mark
 import { createTranscriptView } from './ui/transcript-view.js';
 import { renderTaskListTray } from './ui/task-list-tray.js';
 import {
+  CONVERSATION_WORKSPACE_DIRECTORY_NAME,
   createConversationWorkspaceFileSystem,
   createWorkspaceFileSystem,
+  WORKSPACE_ROOT_PATH,
 } from './workspace/workspace-file-system.js';
 
 const THEME_STORAGE_KEY = 'ui-theme-preference';
@@ -218,6 +221,8 @@ const mcpServerAddFeedback = document.getElementById('mcpServerAddFeedback');
 const mcpServersList = document.getElementById('mcpServersList');
 const renderMathMlToggle = document.getElementById('renderMathMlToggle');
 const defaultSystemPromptInput = document.getElementById('defaultSystemPromptInput');
+const exportConversationsButton = document.getElementById('exportConversationsButton');
+const deleteConversationsButton = document.getElementById('deleteConversationsButton');
 const conversationLanguageSelect = document.getElementById('conversationLanguageSelect');
 const conversationLanguageHelp = document.getElementById('conversationLanguageHelp');
 const enableModelThinkingToggle = document.getElementById('enableModelThinkingToggle');
@@ -2337,6 +2342,17 @@ function buildActiveConversationExportPayload(activeConversation) {
   });
 }
 
+function triggerDownload(blob, fileName) {
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
+}
+
 function buildPromptForActiveConversation(
   conversation,
   leafMessageId = conversation?.activeLeafMessageId
@@ -2362,14 +2378,7 @@ function downloadActiveConversationBranchAsJson() {
   }
   const serialized = JSON.stringify(payload, null, 2);
   const blob = new Blob([serialized], { type: 'application/json' });
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = buildConversationJsonDownloadFileName(activeConversation.name);
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.URL.revokeObjectURL(url);
+  triggerDownload(blob, buildConversationJsonDownloadFileName(activeConversation.name));
   setStatus('Conversation downloaded as JSON.');
 }
 
@@ -2386,15 +2395,54 @@ function downloadActiveConversationBranchAsMarkdown() {
   }
   const markdownDocument = buildConversationDownloadMarkdown(payload);
   const blob = new Blob([markdownDocument], { type: 'text/markdown;charset=utf-8' });
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = buildConversationMarkdownDownloadFileName(activeConversation.name);
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.URL.revokeObjectURL(url);
+  triggerDownload(blob, buildConversationMarkdownDownloadFileName(activeConversation.name));
   setStatus('Conversation downloaded as Markdown.');
+}
+
+function exportAllConversations() {
+  if (!appState.conversations.length) {
+    setStatus('No conversations to export.');
+    return;
+  }
+  const { archiveFileName, bytes } = buildBulkConversationExportZip({
+    appState,
+    getMessageArtifacts,
+    getConversationModelId,
+    getConversationSystemPromptSuffix,
+    getToolCallingContext,
+    getStoredGenerationConfigForModel,
+    getModelGenerationLimits,
+  });
+  const blob = new Blob([bytes], { type: 'application/zip' });
+  triggerDownload(blob, archiveFileName);
+  setStatus('Conversations exported as a zip archive.');
+}
+
+async function deleteAllConversationStorage() {
+  if (appState.conversationSaveTimerId !== null) {
+    window.clearTimeout(appState.conversationSaveTimerId);
+    appState.conversationSaveTimerId = null;
+  }
+  const conversationsRootPath = `${WORKSPACE_ROOT_PATH}/${CONVERSATION_WORKSPACE_DIRECTORY_NAME}`;
+  if (await workspaceFileSystem.exists(conversationsRootPath)) {
+    await workspaceFileSystem.deletePath(conversationsRootPath, { recursive: true });
+  }
+  conversationWorkspaceFileSystems.clear();
+  appState.conversations.length = 0;
+  appState.activeConversationId = null;
+  appState.conversationCount = 0;
+  appState.conversationIdCounter = 0;
+  appState.pendingConversationDraftId = null;
+  clearUserMessageEditSession();
+  clearPendingComposerAttachments();
+  setChatTitleEditing(appState, false);
+  renderConversationList();
+  renderTranscript();
+  updateChatTitle();
+  syncConversationLanguageAndThinkingControls();
+  updateActionButtons();
+  await persistConversationStateNow();
+  syncRouteToCurrentState({ replace: true });
 }
 
 function setRegionVisibility(region, visible) {
@@ -3220,6 +3268,8 @@ bindSettingsEvents({
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
   defaultSystemPromptInput,
+  exportConversationsButton,
+  deleteConversationsButton,
   conversationLanguageSelect,
   enableModelThinkingToggle,
   modelSelect,
@@ -3276,6 +3326,9 @@ bindSettingsEvents({
   getModelGenerationLimits,
   normalizeModelId,
   defaultModelId: DEFAULT_MODEL,
+  exportAllConversations,
+  deleteAllConversationStorage,
+  isUiBusy,
   setStatus,
   isAnyModalOpen,
 });

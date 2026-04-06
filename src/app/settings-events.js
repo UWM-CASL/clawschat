@@ -27,6 +27,8 @@ export function bindSettingsEvents({
   enableSingleKeyShortcutsToggle,
   transcriptViewSelect,
   defaultSystemPromptInput,
+  exportConversationsButton,
+  deleteConversationsButton,
   conversationLanguageSelect,
   enableModelThinkingToggle,
   modelSelect,
@@ -78,6 +80,9 @@ export function bindSettingsEvents({
   getModelGenerationLimits,
   normalizeModelId,
   defaultModelId,
+  exportAllConversations,
+  deleteAllConversationStorage,
+  isUiBusy = () => false,
   setStatus,
   isAnyModalOpen,
 }) {
@@ -245,6 +250,44 @@ export function bindSettingsEvents({
     defaultModelId,
     setStatus,
   });
+
+  if (exportConversationsButton instanceof HTMLButtonElement) {
+    exportConversationsButton.addEventListener('click', () => {
+      if (isUiBusy()) {
+        setStatus('Wait for the current conversation task to finish before exporting.');
+        return;
+      }
+      try {
+        exportAllConversations();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'Conversation export failed.');
+      }
+    });
+  }
+
+  if (deleteConversationsButton instanceof HTMLButtonElement) {
+    deleteConversationsButton.addEventListener('click', async () => {
+      if (isUiBusy()) {
+        setStatus('Wait for the current conversation task to finish before deleting conversations.');
+        return;
+      }
+      const confirmed =
+        typeof globalThis.confirm === 'function'
+          ? globalThis.confirm(
+              'Delete all saved conversations and their stored artifacts from this browser?'
+            )
+          : true;
+      if (!confirmed) {
+        return;
+      }
+      try {
+        await deleteAllConversationStorage();
+        setStatus('All saved conversations were deleted.');
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'Deleting conversations failed.');
+      }
+    });
+  }
 
   documentRef.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !isSettingsView(appState) || isAnyModalOpen()) {
