@@ -340,9 +340,10 @@ function buildToolCallingFormatInstructions(toolCallingConfig) {
   }
   if (toolCallingConfig.format === 'special-token-call') {
     return [
-      'When you call a tool, output exactly one wrapped function-style call and nothing else.',
+      'When you call a tool, start the assistant reply with exactly one wrapped function-style tool call.',
       `Wrap the call in ${toolCallingConfig.callOpen} and ${toolCallingConfig.callClose}.`,
-      'Shape inside the wrapper: tool_name(arg1="value1", arg2="value2").',
+      'Inside the wrapper, write one Python-style call such as tool_name(arg1="value1", arg2="value2").',
+      'After the wrapped tool call, you may include a brief plain-text sentence if helpful.',
     ];
   }
   if (toolCallingConfig.format === 'xml-tool-call') {

@@ -1162,10 +1162,15 @@ describe('tool-calling prompt builder', () => {
     );
     expect(prompt).not.toContain('**Tools available in this conversation:**');
     expect(prompt).toContain(
-      'When you call a tool, output exactly one wrapped function-style call and nothing else.'
+      'When you call a tool, start the assistant reply with exactly one wrapped function-style tool call.'
     );
     expect(prompt).toContain('Wrap the call in <|tool_call_start|>[ and ]<|tool_call_end|>.');
-    expect(prompt).toContain('Shape inside the wrapper: tool_name(arg1="value1", arg2="value2").');
+    expect(prompt).toContain(
+      'Inside the wrapper, write one Python-style call such as tool_name(arg1="value1", arg2="value2").'
+    );
+    expect(prompt).toContain(
+      'After the wrapped tool call, you may include a brief plain-text sentence if helpful.'
+    );
   });
 
   test('keeps MCP inventory markdown for LFM and includes MCP helper tools in the json tool list', () => {
