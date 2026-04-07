@@ -123,6 +123,7 @@ describe('skill-store', () => {
       importedAt: 1710000000000,
       hasSkillMarkdown: true,
       isUsable: true,
+      enabled: false,
       skillFilePath: 'lesson-planner/SKILL.md',
       skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives.',
       filePaths: ['lesson-planner/SKILL.md'],
@@ -135,6 +136,7 @@ describe('skill-store', () => {
         name: 'Lesson Planner',
         lookupName: 'lesson planner',
         isUsable: true,
+        enabled: false,
       }),
     ]);
 

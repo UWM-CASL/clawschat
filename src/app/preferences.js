@@ -35,6 +35,7 @@ export function createPreferencesController({
   corsProxyInput,
   corsProxyFeedback,
   importSkillPackage = null,
+  saveSkillPackage = null,
   removeSkillPackage = null,
   mcpServerEndpointInput,
   mcpServerAddFeedback,
@@ -174,6 +175,7 @@ export function createPreferencesController({
 
   const {
     applyEnabledToolNamesPreference,
+    applySkillPackageEnabledPreference,
     applySkillPackagesPreference,
     applyMcpServerCommandEnabledPreference,
     applyMcpServerEnabledPreference,
@@ -214,6 +216,7 @@ export function createPreferencesController({
     skillPackageAddFeedback,
     skillsList,
     importSkillPackage,
+    saveSkillPackage,
     removeSkillPackage,
     mcpServerEndpointInput,
     mcpServerAddFeedback,
@@ -381,6 +384,7 @@ export function createPreferencesController({
     applyShowThinkingPreference,
     applyToolCallingPreference,
     applyEnabledToolNamesPreference,
+    applySkillPackageEnabledPreference,
     applySkillPackagesPreference,
     applyToolEnabledPreference,
     saveCorsProxyPreference,

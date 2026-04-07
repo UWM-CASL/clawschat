@@ -168,16 +168,30 @@ export function normalizeSkillPackage(value) {
   });
   const name = normalizeWhitespace(value.name) || metadata.name || FALLBACK_SKILL_NAME;
   const lookupName = normalizeSkillLookupName(value.lookupName || name);
-  const hasSkillMarkdown =
-    value.hasSkillMarkdown === true ||
-    (Array.isArray(value.filePaths) &&
-      value.filePaths.some(
-        (entryPath) => normalizeArchivePath(entryPath).split('/').pop()?.toLowerCase() === 'skill.md'
-      ));
-  const isUsable = Boolean(value.isUsable) && hasSkillMarkdown;
   const filePaths = Array.isArray(value.filePaths)
     ? [...new Set(value.filePaths.map(normalizeArchivePath).filter(Boolean))]
     : [];
+  const skillFileMatches = filePaths.filter(
+    (entryPath) => entryPath.split('/').pop()?.toLowerCase() === 'skill.md'
+  );
+  const skillFilePath = normalizeArchivePath(value.skillFilePath);
+  const hasMultipleSkillMarkdown = skillFileMatches.length > 1;
+  const hasSkillMarkdown =
+    !hasMultipleSkillMarkdown &&
+    Boolean(
+      skillMarkdown ||
+        skillFilePath ||
+        skillFileMatches.length === 1 ||
+        value.hasSkillMarkdown === true
+    );
+  const isUsable = hasSkillMarkdown && !hasMultipleSkillMarkdown;
+  const enabled = isUsable && value.enabled === true;
+  let issue = '';
+  if (hasMultipleSkillMarkdown) {
+    issue = 'This package contains multiple SKILL.md files.';
+  } else if (!hasSkillMarkdown) {
+    issue = 'SKILL.md was not found in this package.';
+  }
   return {
     id: normalizeWhitespace(value.id),
     packageName,
@@ -187,8 +201,9 @@ export function normalizeSkillPackage(value) {
     importedAt: Number.isFinite(value.importedAt) ? Number(value.importedAt) : Date.now(),
     hasSkillMarkdown,
     isUsable,
-    issue: normalizeWhitespace(value.issue),
-    skillFilePath: normalizeArchivePath(value.skillFilePath),
+    enabled,
+    issue,
+    skillFilePath,
     skillMarkdown,
     filePaths,
   };
@@ -209,12 +224,16 @@ export function getUsableSkillPackages(skillPackages = []) {
   );
 }
 
-export function findUsableSkillPackageByName(skillPackages = [], name = '') {
+export function getEnabledSkillPackages(skillPackages = []) {
+  return getUsableSkillPackages(skillPackages).filter((skillPackage) => skillPackage.enabled);
+}
+
+export function findEnabledSkillPackageByName(skillPackages = [], name = '') {
   const normalizedLookupName = normalizeSkillLookupName(name);
   if (!normalizedLookupName) {
     return null;
   }
-  const matches = getUsableSkillPackages(skillPackages).filter(
+  const matches = getEnabledSkillPackages(skillPackages).filter(
     (skillPackage) => skillPackage.lookupName === normalizedLookupName
   );
   if (!matches.length) {
@@ -257,25 +276,14 @@ export function parseSkillArchiveBytes(bytes, { packageName = 'skill.zip' } = {}
   const skillEntries = fileEntries.filter(
     (entry) => entry.path.split('/').pop()?.toLowerCase() === 'skill.md'
   );
-
-  let issue = '';
-  let skillMarkdown = '';
-  let skillFilePath = '';
-
   if (!skillEntries.length) {
-    issue = 'SKILL.md was not found in this package.';
-  } else if (skillEntries.length > 1) {
-    issue = 'This package contains multiple SKILL.md files.';
-  } else {
-    skillFilePath = skillEntries[0].path;
-    skillMarkdown = decodeSkillMarkdown(skillEntries[0].bytes);
+    throw new Error('SKILL.md was not found in this package.');
   }
-
-  const hasSkillMarkdown = Boolean(skillMarkdown || skillFilePath);
-  const isUsable = hasSkillMarkdown && fileEntries.length === 1;
-  if (hasSkillMarkdown && !isUsable) {
-    issue = 'Only packages containing a single SKILL.md file are exposed to the model.';
+  if (skillEntries.length > 1) {
+    throw new Error('This package contains multiple SKILL.md files.');
   }
+  const skillFilePath = skillEntries[0].path;
+  const skillMarkdown = decodeSkillMarkdown(skillEntries[0].bytes);
 
   const metadata = extractSkillMetadata(skillMarkdown, {
     fallbackName: humanizePackageBaseName(packageName),
@@ -287,9 +295,10 @@ export function parseSkillArchiveBytes(bytes, { packageName = 'skill.zip' } = {}
     lookupName: normalizeSkillLookupName(metadata.name),
     description: metadata.description,
     importedAt: Date.now(),
-    hasSkillMarkdown,
-    isUsable,
-    issue,
+    hasSkillMarkdown: true,
+    isUsable: true,
+    enabled: false,
+    issue: '',
     skillFilePath,
     skillMarkdown,
     filePaths: fileEntries.map((entry) => entry.path),

@@ -30,10 +30,12 @@ function createHarness({
     description: 'Plan lessons with objectives.',
     hasSkillMarkdown: true,
     isUsable: true,
+    enabled: false,
     skillFilePath: 'lesson-planner/SKILL.md',
     skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives.',
-    filePaths: ['lesson-planner/SKILL.md'],
+    filePaths: ['lesson-planner/SKILL.md', 'lesson-planner/README.md'],
   })),
+  saveSkillPackage = vi.fn(async (skillPackage) => skillPackage),
   removeSkillPackage = vi.fn(async () => true),
 } = {}) {
   const dom = new JSDOM(
@@ -87,6 +89,7 @@ function createHarness({
       skillPackageAddFeedback: document.getElementById('skillPackageAddFeedback'),
       skillsList: document.getElementById('skillsList'),
       importSkillPackage,
+      saveSkillPackage,
       removeSkillPackage,
       mcpServerEndpointInput: document.getElementById('mcpServerEndpointInput'),
       mcpServerAddFeedback: document.getElementById('mcpServerAddFeedback'),
@@ -95,8 +98,13 @@ function createHarness({
     }),
     inspectMcpServerEndpoint,
     importSkillPackage,
+    saveSkillPackage,
     removeSkillPackage,
   };
+}
+
+function flushTimers() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('preferences-tooling', () => {
@@ -175,6 +183,7 @@ describe('preferences-tooling', () => {
     const harness = createHarness();
 
     await harness.controller.importSkillPackageFile({ name: 'lesson-planner.zip' }, { persist: true });
+    await flushTimers();
 
     expect(harness.importSkillPackage).toHaveBeenCalledWith(
       { name: 'lesson-planner.zip' },
@@ -188,15 +197,22 @@ describe('preferences-tooling', () => {
         id: 'skill-1',
         name: 'Lesson Planner',
         isUsable: true,
+        enabled: false,
       }),
     ]);
     expect(harness.document.getElementById('skillsList')?.textContent).toContain('Lesson Planner');
     expect(harness.document.getElementById('skillsList')?.textContent).toContain(
       'Plan lessons with objectives.'
     );
-    expect(harness.document.getElementById('skillsList')?.textContent).toContain(
-      '# Lesson Planner'
-    );
+    expect(
+      harness.document.querySelector('[data-skill-package-toggle="true"]')?.getAttribute('type')
+    ).toBe('checkbox');
+    expect(harness.document.querySelector('[data-skill-package-toggle="true"]')?.checked).toBe(false);
+    await vi.waitFor(() => {
+      expect(harness.document.querySelector('.skill-markdown-preview h1')?.textContent).toBe(
+        'Lesson Planner'
+      );
+    });
 
     await harness.controller.removeSkillPackagePreference('skill-1', { persist: true });
 
@@ -205,6 +221,50 @@ describe('preferences-tooling', () => {
     expect(harness.document.getElementById('skillsList')?.textContent).toContain(
       'No skill packages added yet.'
     );
+  });
+
+  test('persists skill enablement separately from import', async () => {
+    const harness = createHarness({
+      appState: {
+        skillPackages: [
+          {
+            id: 'skill-1',
+            packageName: 'lesson-planner.zip',
+            name: 'Lesson Planner',
+            lookupName: 'lesson planner',
+            description: 'Plan lessons with objectives.',
+            hasSkillMarkdown: true,
+            isUsable: true,
+            enabled: false,
+            skillFilePath: 'lesson-planner/SKILL.md',
+            skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives.',
+            filePaths: ['lesson-planner/SKILL.md', 'lesson-planner/README.md'],
+          },
+        ],
+      },
+    });
+
+    const updatedSkill = await harness.controller.applySkillPackageEnabledPreference('skill-1', true, {
+      persist: true,
+    });
+
+    expect(harness.saveSkillPackage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'skill-1',
+        enabled: true,
+      })
+    );
+    expect(updatedSkill).toMatchObject({
+      id: 'skill-1',
+      enabled: true,
+    });
+    expect(harness.appState.skillPackages).toEqual([
+      expect.objectContaining({
+        id: 'skill-1',
+        enabled: true,
+      }),
+    ]);
+    expect(harness.document.querySelector('[data-skill-package-toggle="true"]')?.checked).toBe(true);
   });
 
   test('imports a new MCP server, persists it, and clears the endpoint input', async () => {

@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import {
-  findUsableSkillPackageByName,
+  findEnabledSkillPackageByName,
   parseSkillArchiveBytes,
+  getEnabledSkillPackages,
 } from '../../src/skills/skill-packages.js';
 
 function buildZip(entries) {
@@ -15,10 +16,11 @@ function buildZip(entries) {
 }
 
 describe('skill-packages', () => {
-  test('parses a single SKILL.md zip into a usable skill package', () => {
+  test('parses a skill package with one SKILL.md and extra files into a usable disabled skill', () => {
     const skillPackage = parseSkillArchiveBytes(
       buildZip({
         'lesson-planner/SKILL.md': '# Lesson Planner\n\nPlan lessons with objectives and checks.',
+        'lesson-planner/README.md': 'extra file',
       }),
       { packageName: 'lesson-planner.zip' }
     );
@@ -30,36 +32,37 @@ describe('skill-packages', () => {
       description: 'Plan lessons with objectives and checks.',
       hasSkillMarkdown: true,
       isUsable: true,
+      enabled: false,
       skillFilePath: 'lesson-planner/SKILL.md',
-      filePaths: ['lesson-planner/SKILL.md'],
+      filePaths: ['lesson-planner/SKILL.md', 'lesson-planner/README.md'],
     });
   });
 
-  test('marks packages with extra files as not exposed to the model', () => {
-    const skillPackage = parseSkillArchiveBytes(
-      buildZip({
-        'lesson-planner/SKILL.md': '# Lesson Planner\n\nPlan lessons with objectives.',
-        'lesson-planner/README.md': 'extra file',
-      }),
-      { packageName: 'lesson-planner.zip' }
-    );
-
-    expect(skillPackage.hasSkillMarkdown).toBe(true);
-    expect(skillPackage.isUsable).toBe(false);
-    expect(skillPackage.issue).toBe(
-      'Only packages containing a single SKILL.md file are exposed to the model.'
-    );
+  test('fails when the zip does not include a SKILL.md file', () => {
+    expect(() =>
+      parseSkillArchiveBytes(
+        buildZip({
+          'lesson-planner/README.md': 'extra file',
+        }),
+        { packageName: 'lesson-planner.zip' }
+      )
+    ).toThrow('SKILL.md was not found in this package.');
   });
 
-  test('finds a usable skill by name case-insensitively', () => {
-    const skillPackage = parseSkillArchiveBytes(
+  test('finds an enabled skill by name case-insensitively', () => {
+    const disabledSkill = parseSkillArchiveBytes(
       buildZip({
         'lesson-planner/SKILL.md': '# Lesson Planner\n\nPlan lessons with objectives.',
       }),
       { packageName: 'lesson-planner.zip' }
     );
+    const enabledSkill = {
+      ...disabledSkill,
+      enabled: true,
+    };
 
-    expect(findUsableSkillPackageByName([skillPackage], 'lesson planner')).toMatchObject({
+    expect(getEnabledSkillPackages([disabledSkill, enabledSkill])).toHaveLength(1);
+    expect(findEnabledSkillPackageByName([disabledSkill, enabledSkill], 'lesson planner')).toMatchObject({
       name: 'Lesson Planner',
       lookupName: 'lesson planner',
     });

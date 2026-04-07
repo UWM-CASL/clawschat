@@ -49,6 +49,7 @@ import {
   sniffToolCalls,
 } from './llm/tool-calling.js';
 import {
+  getEnabledSkillPackages,
   getUsableSkillPackages,
   normalizeSkillLookupName,
   parseSkillArchiveBytes,
@@ -1504,7 +1505,7 @@ function getConfiguredEnabledToolDefinitions() {
 }
 
 function getConfiguredAvailableSkills() {
-  return getUsableSkillPackages(appState.skillPackages);
+  return getEnabledSkillPackages(appState.skillPackages);
 }
 
 function getConfiguredEnabledMcpServers() {
@@ -3074,6 +3075,7 @@ const preferencesController = createPreferencesController({
   corsProxyInput,
   corsProxyFeedback,
   importSkillPackage,
+  saveSkillPackage,
   removeSkillPackage: deleteSkillPackage,
   mcpServerEndpointInput,
   addMcpServerButton,
@@ -3113,6 +3115,7 @@ const {
   applyCorsProxyPreference,
   applyMathRenderingPreference,
   applyEnabledToolNamesPreference,
+  applySkillPackageEnabledPreference,
   applySkillPackagesPreference,
   applyShowThinkingPreference,
   applyTheme,
@@ -3465,6 +3468,7 @@ bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  applySkillPackageEnabledPreference,
   clearSkillPackageFeedback,
   importSkillPackageFile,
   removeSkillPackagePreference,

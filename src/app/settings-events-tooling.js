@@ -21,6 +21,7 @@ export function bindToolingSettingsEvents({
   mcpServersList,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  applySkillPackageEnabledPreference,
   clearSkillPackageFeedback,
   importSkillPackageFile,
   removeSkillPackagePreference,
@@ -90,11 +91,9 @@ export function bindToolingSettingsEvents({
     try {
       const importedSkillPackage = await importSkillPackageFile(file, { persist: true });
       refreshPromptPreview(refreshConversationSystemPromptPreview);
-      const statusMessage = importedSkillPackage.isUsable
-        ? `${importedSkillPackage.name} uploaded and exposed to the model.`
-        : `${importedSkillPackage.name} uploaded. Only single-file SKILL.md packages are exposed to the model.`;
+      const statusMessage = `${importedSkillPackage.name} uploaded. Turn it on to expose it to the model.`;
       if (typeof setSkillPackageFeedback === 'function') {
-        setSkillPackageFeedback(statusMessage, importedSkillPackage.isUsable ? 'success' : 'info');
+        setSkillPackageFeedback(statusMessage, 'success');
       }
       setStatus(statusMessage);
     } catch (error) {
@@ -134,6 +133,51 @@ export function bindToolingSettingsEvents({
   }
 
   if (skillsList instanceof HTMLElement) {
+    skillsList.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || target.dataset.skillPackageToggle !== 'true') {
+        return;
+      }
+      const skillPackageId =
+        typeof target.dataset.skillPackageId === 'string' ? target.dataset.skillPackageId : '';
+      const skillPackageName =
+        typeof target.dataset.skillPackageName === 'string' &&
+        target.dataset.skillPackageName.trim()
+          ? target.dataset.skillPackageName.trim()
+          : 'Skill package';
+      const nextChecked = target.checked;
+      target.disabled = true;
+      void Promise.resolve(
+        typeof applySkillPackageEnabledPreference === 'function'
+          ? applySkillPackageEnabledPreference(skillPackageId, nextChecked, { persist: true })
+          : null
+      )
+        .then(
+          () => {
+            refreshPromptPreview(refreshConversationSystemPromptPreview);
+            if (typeof clearSkillPackageFeedback === 'function') {
+              clearSkillPackageFeedback();
+            }
+            setStatus(
+              nextChecked
+                ? `${skillPackageName} enabled and exposed to the model.`
+                : `${skillPackageName} disabled for model use.`
+            );
+          },
+          (error) => {
+            target.checked = !nextChecked;
+            const message = error instanceof Error ? error.message : String(error);
+            if (typeof setSkillPackageFeedback === 'function') {
+              setSkillPackageFeedback(message, 'danger');
+            }
+            setStatus(message);
+          }
+        )
+        .finally(() => {
+          target.disabled = false;
+        });
+    });
+
     skillsList.addEventListener('click', (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) {

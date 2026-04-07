@@ -2205,12 +2205,19 @@
   border-radius: var(--card-radius);
   background: color-mix(in srgb, var(--surface-elevated) 78%, var(--surface-subtle));
   color: var(--ink-strong);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.skill-markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.skill-markdown-preview th,
+.skill-markdown-preview td {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-soft);
+  vertical-align: top;
 }
 
 .settings-page .form-select,

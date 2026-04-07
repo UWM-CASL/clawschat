@@ -403,6 +403,7 @@ describe('tool-calling prompt builder', () => {
             description: 'Plan lessons with objectives and quick checks.',
             hasSkillMarkdown: true,
             isUsable: true,
+            enabled: true,
             skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives and quick checks.',
             filePaths: ['lesson-planner/SKILL.md'],
           },
@@ -413,6 +414,35 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain('read_skill');
     expect(prompt).toContain('Available Agent Skills');
     expect(prompt).toContain('Lesson Planner: Plan lessons with objectives and quick checks.');
+  });
+
+  test('omits disabled uploaded skills from the prompt', () => {
+    const prompt = buildToolCallingSystemPrompt(
+      {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'arguments',
+      },
+      [],
+      [],
+      {
+        skills: [
+          {
+            id: 'skill-1',
+            name: 'Lesson Planner',
+            lookupName: 'lesson planner',
+            description: 'Plan lessons with objectives and quick checks.',
+            hasSkillMarkdown: true,
+            isUsable: true,
+            enabled: false,
+            skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives and quick checks.',
+            filePaths: ['lesson-planner/SKILL.md'],
+          },
+        ],
+      }
+    );
+
+    expect(prompt).toBe('');
   });
 
   test('adds a terminal-use instruction for get_user_location', () => {
@@ -1696,6 +1726,7 @@ describe('tool-calling prompt builder', () => {
             description: 'Plan lessons with objectives.',
             hasSkillMarkdown: true,
             isUsable: true,
+            enabled: true,
             skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives.',
             filePaths: ['lesson-planner/SKILL.md'],
           },
@@ -1733,6 +1764,7 @@ describe('tool-calling prompt builder', () => {
             description: 'Plan lessons with objectives.',
             hasSkillMarkdown: true,
             isUsable: true,
+            enabled: true,
             skillMarkdown: '# Lesson Planner\n\nPlan lessons with objectives.',
             filePaths: ['lesson-planner/SKILL.md'],
           },

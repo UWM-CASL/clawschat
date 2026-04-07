@@ -8,7 +8,10 @@ import {
   getEnabledMcpServerConfigs,
   summarizeMcpInputSchema,
 } from './mcp-client.js';
-import { findUsableSkillPackageByName, getUsableSkillPackages } from '../skills/skill-packages.js';
+import {
+  findEnabledSkillPackageByName,
+  getEnabledSkillPackages,
+} from '../skills/skill-packages.js';
 
 export const MCP_SERVER_COMMAND_LIST_TOOL = 'list_mcp_server_commands';
 export const MCP_SERVER_COMMAND_CALL_TOOL = 'call_mcp_server_command';
@@ -168,7 +171,7 @@ export const SKILL_TOOL_DEFINITIONS = Object.freeze([
   {
     name: READ_SKILL_TOOL,
     displayName: 'Read Skill',
-    description: 'Returns the full SKILL.md markdown for one available uploaded skill.',
+    description: 'Returns the full SKILL.md markdown for one enabled uploaded skill.',
     parameters: {
       type: 'object',
       properties: {
@@ -318,7 +321,7 @@ export function getImplicitlyEnabledToolNames(configuredMcpServers = [], skillPa
     ...(getEnabledMcpServerConfigs(configuredMcpServers).length
       ? MCP_TOOL_DEFINITIONS.map((tool) => tool.name)
       : []),
-    ...(getUsableSkillPackages(skillPackages).length
+    ...(getEnabledSkillPackages(skillPackages).length
       ? SKILL_TOOL_DEFINITIONS.map((tool) => tool.name)
       : []),
   ];
@@ -327,7 +330,7 @@ export function getImplicitlyEnabledToolNames(configuredMcpServers = [], skillPa
 export function getImplicitlyEnabledToolDefinitions(configuredMcpServers = [], skillPackages = []) {
   return [
     ...(getEnabledMcpServerConfigs(configuredMcpServers).length ? [...MCP_TOOL_DEFINITIONS] : []),
-    ...(getUsableSkillPackages(skillPackages).length ? [...SKILL_TOOL_DEFINITIONS] : []),
+    ...(getEnabledSkillPackages(skillPackages).length ? [...SKILL_TOOL_DEFINITIONS] : []),
   ];
 }
 
@@ -439,7 +442,7 @@ function buildMcpServerInventoryLines(enabledMcpServers = []) {
 }
 
 function buildAvailableSkillLines(skillPackages = []) {
-  const availableSkills = getUsableSkillPackages(skillPackages);
+  const availableSkills = getEnabledSkillPackages(skillPackages);
   if (!availableSkills.length) {
     return [];
   }
@@ -709,7 +712,7 @@ export function buildToolCallingSystemPrompt(
   { skills = [], mcpServers = [] } = {}
 ) {
   const enabledMcpServers = getEnabledMcpServerConfigs(mcpServers);
-  const availableSkills = getUsableSkillPackages(skills);
+  const availableSkills = getEnabledSkillPackages(skills);
   const toolList = getNormalizedToolList(enabledToolNames).filter(
     (toolName) => toolName !== 'none'
   );
@@ -1895,7 +1898,7 @@ function getValidatedReadSkillArguments(argumentsValue = {}) {
 
 function executeReadSkill(argumentsValue = {}, runtimeContext = {}) {
   const { name } = getValidatedReadSkillArguments(argumentsValue);
-  const resolvedSkillPackage = findUsableSkillPackageByName(runtimeContext.skills, name);
+  const resolvedSkillPackage = findEnabledSkillPackageByName(runtimeContext.skills, name);
   if (!resolvedSkillPackage) {
     throw new Error(`Unknown skill: ${name}`);
   }

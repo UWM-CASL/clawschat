@@ -1,5 +1,8 @@
 import { normalizeMcpServerConfigs, summarizeMcpInputSchema } from '../llm/mcp-client.js';
 import { normalizeSkillPackages } from '../skills/skill-packages.js';
+import { loadMarkdownRenderer, renderPlainTextMarkdownFallback } from '../ui/markdown-renderer.js';
+
+const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
 
 /**
  * @param {{
@@ -18,6 +21,7 @@ import { normalizeSkillPackages } from '../skills/skill-packages.js';
  *   skillPackageAddFeedback?: HTMLElement | null;
  *   skillsList?: HTMLElement | null;
  *   importSkillPackage?: ((file: File, options?: any) => Promise<any>) | null;
+ *   saveSkillPackage?: ((skillPackage: any, options?: any) => Promise<any>) | null;
  *   removeSkillPackage?: ((skillPackageId: string, options?: any) => Promise<boolean>) | null;
  *   mcpServerEndpointInput?: HTMLInputElement | null;
  *   mcpServerAddFeedback?: HTMLElement | null;
@@ -41,6 +45,7 @@ export function createToolingPreferencesController({
   skillPackageAddFeedback,
   skillsList,
   importSkillPackage = null,
+  saveSkillPackage = null,
   removeSkillPackage = null,
   mcpServerEndpointInput,
   mcpServerAddFeedback,
@@ -78,6 +83,8 @@ export function createToolingPreferencesController({
           (migration) => migration.id && migration.toolName && availableToolNameSet.has(migration.toolName)
         )
     : [];
+  let skillMarkdownRenderer = null;
+  let skillMarkdownRendererLoadPromise = null;
 
   function getStoredToolCallingPreference() {
     const stored = storage.getItem(enableToolCallingStorageKey);
@@ -231,6 +238,42 @@ export function createToolingPreferencesController({
   function applySkillPackagesPreference(value) {
     appState.skillPackages = normalizeSkillPackages(value);
     renderSkillPackagePreferences();
+  }
+
+  async function applySkillPackageEnabledPreference(skillPackageId, value, { persist = false } = {}) {
+    const normalizedSkillPackageId =
+      typeof skillPackageId === 'string' ? skillPackageId.trim() : '';
+    if (!normalizedSkillPackageId) {
+      return null;
+    }
+    const existingSkillPackages = normalizeSkillPackages(appState.skillPackages);
+    const nextSkillPackages = existingSkillPackages.map((skillPackage) =>
+      skillPackage.id === normalizedSkillPackageId
+        ? {
+            ...skillPackage,
+            enabled: skillPackage.isUsable ? Boolean(value) : false,
+          }
+        : skillPackage
+    );
+    const updatedSkillPackage =
+      nextSkillPackages.find((skillPackage) => skillPackage.id === normalizedSkillPackageId) || null;
+    if (!updatedSkillPackage) {
+      return null;
+    }
+    if (persist && typeof saveSkillPackage === 'function') {
+      const persistedSkillPackage = await saveSkillPackage(updatedSkillPackage);
+      if (!persistedSkillPackage) {
+        throw new Error('Skill package storage is unavailable in this browser session.');
+      }
+      applySkillPackagesPreference(
+        nextSkillPackages.map((skillPackage) =>
+          skillPackage.id === normalizedSkillPackageId ? persistedSkillPackage : skillPackage
+        )
+      );
+      return persistedSkillPackage;
+    }
+    applySkillPackagesPreference(nextSkillPackages);
+    return updatedSkillPackage;
   }
 
   function applyToolEnabledPreference(toolName, value, { persist = false } = {}) {
@@ -442,14 +485,8 @@ export function createToolingPreferencesController({
     return `skillPackageRemove-${skillPackageId.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
   }
 
-  function buildSkillPackageStatusText(skillPackage) {
-    if (skillPackage?.isUsable) {
-      return 'Ready';
-    }
-    if (skillPackage?.hasSkillMarkdown) {
-      return 'Not exposed to model';
-    }
-    return 'Missing SKILL.md';
+  function buildSkillPackageToggleId(skillPackageId) {
+    return `skillPackageToggle-${skillPackageId.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
   }
 
   function buildSkillPackageSummaryText(skillPackage) {
@@ -481,6 +518,39 @@ export function createToolingPreferencesController({
       description.textContent = value;
     }
     list.appendChild(description);
+  }
+
+  async function ensureSkillMarkdownRendererLoaded() {
+    if (skillMarkdownRenderer) {
+      return skillMarkdownRenderer;
+    }
+    if (!skillMarkdownRendererLoadPromise) {
+      skillMarkdownRendererLoadPromise = loadMarkdownRenderer({
+        linkRel: MARKDOWN_LINK_REL,
+      })
+        .then((loadedRenderer) => {
+          skillMarkdownRenderer = loadedRenderer;
+          renderSkillPackagePreferences();
+          return loadedRenderer;
+        })
+        .catch(() => {
+          skillMarkdownRendererLoadPromise = null;
+          return null;
+        });
+    }
+    return skillMarkdownRendererLoadPromise;
+  }
+
+  function renderSkillMarkdownPreview(content) {
+    const normalizedContent = String(content || '');
+    if (!normalizedContent) {
+      return '';
+    }
+    if (skillMarkdownRenderer) {
+      return skillMarkdownRenderer.render(normalizedContent);
+    }
+    void ensureSkillMarkdownRendererLoaded();
+    return renderPlainTextMarkdownFallback(normalizedContent);
   }
 
   function renderSkillPackagePreferences() {
@@ -539,16 +609,27 @@ export function createToolingPreferencesController({
 
       const controls = documentRef.createElement('div');
       controls.className = 'd-flex flex-wrap align-items-start justify-content-between gap-3';
-      const statusBlock = documentRef.createElement('div');
-      const statusHeading = documentRef.createElement('p');
-      statusHeading.className = 'form-label mb-1';
-      statusHeading.textContent = 'Package status';
-      statusBlock.appendChild(statusHeading);
-      const statusValue = documentRef.createElement('p');
-      statusValue.className = 'mb-0';
-      statusValue.textContent = buildSkillPackageStatusText(skillPackage);
-      statusBlock.appendChild(statusValue);
-      controls.appendChild(statusBlock);
+      if (skillPackage.hasSkillMarkdown) {
+        const toggleWrapper = documentRef.createElement('div');
+        toggleWrapper.className = 'form-check form-switch';
+        const toggle = documentRef.createElement('input');
+        toggle.className = 'form-check-input';
+        toggle.type = 'checkbox';
+        toggle.role = 'switch';
+        toggle.id = buildSkillPackageToggleId(skillPackageId);
+        toggle.checked = skillPackage.enabled === true;
+        toggle.disabled = !skillPackage.isUsable;
+        toggle.dataset.skillPackageToggle = 'true';
+        toggle.dataset.skillPackageId = skillPackage.id;
+        toggle.dataset.skillPackageName = skillPackage.name;
+        toggleWrapper.appendChild(toggle);
+        const toggleLabel = documentRef.createElement('label');
+        toggleLabel.className = 'form-check-label';
+        toggleLabel.htmlFor = toggle.id;
+        toggleLabel.textContent = 'Enable this skill';
+        toggleWrapper.appendChild(toggleLabel);
+        controls.appendChild(toggleWrapper);
+      }
 
       const actionGroup = documentRef.createElement('div');
       actionGroup.className = 'd-flex flex-wrap gap-2';
@@ -566,12 +647,7 @@ export function createToolingPreferencesController({
 
       const metadata = documentRef.createElement('dl');
       metadata.className = 'mcp-server-metadata mb-0';
-      appendMetadataEntry(metadata, 'Name', skillPackage.name);
-      appendMetadataEntry(metadata, 'Lookup name', skillPackage.lookupName);
       appendMetadataEntry(metadata, 'Package file', skillPackage.packageName);
-      appendMetadataEntry(metadata, 'Status', buildSkillPackageStatusText(skillPackage));
-      appendMetadataEntry(metadata, 'Description', skillPackage.description);
-      appendMetadataEntry(metadata, 'SKILL.md path', skillPackage.skillFilePath);
       appendMetadataEntry(
         metadata,
         'Files',
@@ -579,41 +655,32 @@ export function createToolingPreferencesController({
           ? skillPackage.filePaths.join(', ')
           : ''
       );
-      body.appendChild(metadata);
-
-      if (skillPackage.issue) {
-        const issue = documentRef.createElement('div');
-        issue.className = skillPackage.isUsable
-          ? 'alert alert-secondary py-2 px-3 mb-0'
-          : 'alert alert-warning py-2 px-3 mb-0';
-        issue.textContent = skillPackage.issue;
-        body.appendChild(issue);
+      if (metadata.children.length) {
+        body.appendChild(metadata);
       }
 
-      const markdownGroup = documentRef.createElement('div');
-      const markdownHeading = documentRef.createElement('p');
-      markdownHeading.className = 'form-label mb-1';
-      markdownHeading.textContent = 'SKILL.md';
-      markdownGroup.appendChild(markdownHeading);
-      const markdownHelp = documentRef.createElement('p');
-      markdownHelp.className = 'form-text mt-0 mb-2';
-      markdownHelp.textContent =
-        'This preview shows the exact stored markdown returned by read_skill.';
-      markdownGroup.appendChild(markdownHelp);
-
-      if (skillPackage.skillMarkdown) {
-        const markdownPreview = documentRef.createElement('pre');
-        markdownPreview.className = 'skill-markdown-preview mb-0';
-        markdownPreview.textContent = skillPackage.skillMarkdown;
-        markdownGroup.appendChild(markdownPreview);
-      } else {
+      if (!skillPackage.skillMarkdown) {
         const emptyState = documentRef.createElement('p');
         emptyState.className = 'text-body-secondary mb-0';
         emptyState.textContent = 'This package does not include a readable SKILL.md file.';
-        markdownGroup.appendChild(emptyState);
+        body.appendChild(emptyState);
+      } else {
+        const markdownGroup = documentRef.createElement('div');
+        const markdownHeading = documentRef.createElement('p');
+        markdownHeading.className = 'form-label mb-1';
+        markdownHeading.textContent = 'SKILL.md';
+        markdownGroup.appendChild(markdownHeading);
+        const markdownHelp = documentRef.createElement('p');
+        markdownHelp.className = 'form-text mt-0 mb-2';
+        markdownHelp.textContent =
+          'This preview shows the markdown returned by read_skill when the skill is enabled.';
+        markdownGroup.appendChild(markdownHelp);
+        const markdownPreview = documentRef.createElement('div');
+        markdownPreview.className = 'skill-markdown-preview response-content mb-0';
+        markdownPreview.innerHTML = renderSkillMarkdownPreview(skillPackage.skillMarkdown);
+        markdownGroup.appendChild(markdownPreview);
+        body.appendChild(markdownGroup);
       }
-
-      body.appendChild(markdownGroup);
       collapse.appendChild(body);
       accordionItem.appendChild(collapse);
       skillsList.appendChild(accordionItem);
@@ -932,6 +999,7 @@ export function createToolingPreferencesController({
 
   return {
     applyEnabledToolNamesPreference,
+    applySkillPackageEnabledPreference,
     applySkillPackagesPreference,
     applyMcpServerCommandEnabledPreference,
     applyMcpServerEnabledPreference,

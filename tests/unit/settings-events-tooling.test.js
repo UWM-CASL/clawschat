@@ -21,6 +21,13 @@ function createHarness() {
         <button id="addSkillPackageButton" type="submit">Upload skill</button>
       </form>
       <div id="skillsList">
+        <input
+          id="skillPackageToggleLesson"
+          type="checkbox"
+          data-skill-package-toggle="true"
+          data-skill-package-id="skill-1"
+          data-skill-package-name="Lesson Planner"
+        />
         <button
           id="skillPackageRemoveLesson"
           type="button"
@@ -93,10 +100,15 @@ function createHarness() {
     mcpServersList: document.getElementById('mcpServersList'),
     applyToolCallingPreference: vi.fn(),
     applyToolEnabledPreference: vi.fn(),
+    applySkillPackageEnabledPreference: vi.fn(async () => ({
+      id: 'skill-1',
+      enabled: true,
+    })),
     clearSkillPackageFeedback: vi.fn(),
     importSkillPackageFile: vi.fn(async () => ({
       name: 'Lesson Planner',
       isUsable: true,
+      enabled: false,
     })),
     removeSkillPackagePreference: vi.fn(async () => true),
     saveCorsProxyPreference: vi.fn(async () => 'https://proxy.example/'),
@@ -127,6 +139,7 @@ function createHarness() {
       skillPackageForm: document.getElementById('skillPackageForm'),
       skillPackageInput: document.getElementById('skillPackageInput'),
       addSkillPackageButton: document.getElementById('addSkillPackageButton'),
+      skillPackageToggleLesson: document.getElementById('skillPackageToggleLesson'),
       skillPackageRemoveLesson: document.getElementById('skillPackageRemoveLesson'),
       corsProxyForm: document.getElementById('corsProxyForm'),
       corsProxyInput: document.getElementById('corsProxyInput'),
@@ -174,6 +187,7 @@ describe('settings-events-tooling', () => {
     const harness = createHarness();
     const form = /** @type {HTMLFormElement} */ (harness.elements.skillPackageForm);
     const input = /** @type {HTMLInputElement} */ (harness.elements.skillPackageInput);
+    const toggle = /** @type {HTMLInputElement} */ (harness.elements.skillPackageToggleLesson);
     const removeButton = /** @type {HTMLButtonElement} */ (
       harness.elements.skillPackageRemoveLesson
     );
@@ -186,21 +200,31 @@ describe('settings-events-tooling', () => {
 
     form.dispatchEvent(new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }));
     await Promise.resolve();
+    toggle.checked = true;
+    toggle.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+    await Promise.resolve();
     removeButton.click();
     await Promise.resolve();
 
     expect(harness.deps.importSkillPackageFile).toHaveBeenCalledWith(uploadedFile, {
       persist: true,
     });
+    expect(harness.deps.applySkillPackageEnabledPreference).toHaveBeenCalledWith('skill-1', true, {
+      persist: true,
+    });
     expect(harness.deps.removeSkillPackagePreference).toHaveBeenCalledWith('skill-1', {
       persist: true,
     });
-    expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(2);
+    expect(harness.deps.refreshConversationSystemPromptPreview).toHaveBeenCalledTimes(3);
     expect(harness.deps.setStatus).toHaveBeenNthCalledWith(
       1,
-      'Lesson Planner uploaded and exposed to the model.'
+      'Lesson Planner uploaded. Turn it on to expose it to the model.'
     );
-    expect(harness.deps.setStatus).toHaveBeenNthCalledWith(2, 'Lesson Planner removed.');
+    expect(harness.deps.setStatus).toHaveBeenNthCalledWith(
+      2,
+      'Lesson Planner enabled and exposed to the model.'
+    );
+    expect(harness.deps.setStatus).toHaveBeenNthCalledWith(3, 'Lesson Planner removed.');
   });
 
   test('cors proxy actions validate, save, clear, and announce status', async () => {
