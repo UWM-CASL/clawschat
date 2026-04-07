@@ -420,7 +420,6 @@
       "id": "LiquidAI/LFM2.5-1.2B-Thinking-ONNX",
       "label": "LiquidAI/LFM2.5-1.2B-Thinking-ONNX",
       "displayName": "Liquid LFM 2.5 1.2B Thinking",
-      "hidden": true,
       "languageSupport": {
         "tags": [
           { "code": "en", "name": "English" },
@@ -432,7 +431,7 @@
           { "code": "ko", "name": "Korean" },
           { "code": "es", "name": "Spanish" }
         ],
-        "sourceUrl": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-ONNX"
+        "sourceUrl": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking"
       },
       "repositoryUrl": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-ONNX",
       "runtime": {
@@ -459,8 +458,8 @@
         "maxTemperature": 2.0,
         "defaultTemperature": 0.1,
         "defaultTopK": 50,
-        "defaultTopP": 0.1,
-        "defaultRepetitionPenalty": 1.0
+        "defaultTopP": 1.0,
+        "defaultRepetitionPenalty": 1.05
       },
       "features": {
         "streaming": true,

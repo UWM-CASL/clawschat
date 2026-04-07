@@ -152,8 +152,8 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.generation).toMatchObject({
       defaultTemperature: 0.1,
       defaultTopK: 50,
-      defaultTopP: 0.1,
-      defaultRepetitionPenalty: 1,
+      defaultTopP: 1,
+      defaultRepetitionPenalty: 1.05,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.generation).toMatchObject({
       defaultTemperature: 0.6,
@@ -167,7 +167,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.hidden).toBe(true);
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.hidden).toBe(true);
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.hidden).toBe(true);
-    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.hidden).toBe(true);
+    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.hidden).toBe(false);
     expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')?.hidden).toBe(
       true,
     );
@@ -183,7 +183,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS.some((model) => model.id === QWEN_SMALL_MODEL_ID)).toBe(false);
     expect(MODEL_OPTIONS.some((model) => model.id === QWEN_MODEL_ID)).toBe(false);
     expect(MODEL_OPTIONS.some((model) => model.id === GEMMA_MODEL_ID)).toBe(false);
-    expect(MODEL_OPTIONS.some((model) => model.id === LIQUID_MODEL_ID)).toBe(false);
+    expect(MODEL_OPTIONS.some((model) => model.id === LIQUID_MODEL_ID)).toBe(true);
     expect(MODEL_OPTIONS.some((model) => model.id === 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')).toBe(
       false,
     );
@@ -400,6 +400,10 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_INSTRUCT_MODEL_ID)).toMatchObject({
       displayName: 'Liquid LFM 2.5 1.2B Instruct',
       repositoryUrl: 'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-ONNX',
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)).toMatchObject({
+      displayName: 'Liquid LFM 2.5 1.2B Thinking',
+      repositoryUrl: 'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-ONNX',
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)).toMatchObject({
       displayName: 'Qwen3.5 0.8B',

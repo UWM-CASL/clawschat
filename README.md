@@ -228,11 +228,17 @@ Student-facing browser chat UI with local model inference.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
   - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format supported by this app.
+- `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
+  - Uses the published `q4` ONNX export with external data loading.
+  - Requires WebGPU in this app.
+  - Uses `<think>...</think>` tags for reasoning output.
+  - Uses the upstream tokenizer chat template from the ONNX export: ChatML-style `<|im_start|>...<|im_end|>` turns plus a JSON-formatted `List of tools: [...]` block when tools are enabled.
+  - The upstream model card recommends `temperature: 0.05`, `top_k: 50`, and `repetition_penalty: 1.05`; this app rounds temperature to its nearest supported step (`0.1`) and leaves top-p open at `1.0` because the card does not publish a nucleus cutoff.
+  - Uses Liquid's special-token tool-call format supported by this app.
 - Hidden legacy/replacement model definitions remain in config so stored conversations and model-specific behaviors still resolve correctly:
   - `onnx-community/Qwen3.5-0.8B-ONNX`
   - `onnx-community/Qwen3.5-2B-ONNX`
   - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
-  - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
   - `onnx-community/gemma-3n-E2B-it-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
