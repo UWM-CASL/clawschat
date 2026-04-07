@@ -87,7 +87,7 @@ Student-facing browser chat UI with local model inference.
 - `Auto` attempts WebGPU first, then falls back to the browser CPU path via WASM if WebGPU is unavailable or initialization fails.
 - The selected backend and model are stored in `localStorage`.
 - Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
-- `Settings -> Debug` shows a paginated debug log (20 entries per page, newest first) with CSV export, including proxy validation, MCP transport diagnostics, and raw model-output entries captured before transcript parsing or tool handling.
+- `Settings -> Debug` shows a paginated debug log (20 entries per page, newest first) with CSV export, including proxy validation, MCP transport diagnostics, and one complete raw model-output blob per visible model turn, preserved before transcript parsing or tool-call folding.
 - Conversation list and transcript are state-driven (no placeholder messages).
 - On desktop widths, the conversation list can be collapsed from a border-mounted toggle to give the active chat more space; the preference is saved locally.
 - Chat and setup status notices use Bootstrap alert patterns with headings so updates are announced in context.

@@ -1046,7 +1046,7 @@ async function generate(payload) {
       return;
     }
 
-    const finalText = streamedText.trim();
+    const finalText = streamedText;
     self.postMessage({
       type: 'complete',
       payload: { requestId, text: finalText },

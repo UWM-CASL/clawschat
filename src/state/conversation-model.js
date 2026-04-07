@@ -926,6 +926,7 @@ export function addMessageToConversation(conversation, role, text, options = {})
   if (normalizedRole === 'model') {
     message.thoughts = '';
     message.response = normalizedText;
+    message.rawStreamText = normalizedText;
     message.hasThinking = false;
     message.isThinkingComplete = false;
     message.isResponseComplete = false;

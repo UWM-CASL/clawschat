@@ -246,6 +246,14 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
         rawMessage.content?.llmRepresentation?.text ||
         text,
     );
+    message.rawStreamText = String(
+      rawMessage.rawStreamText ||
+        rawMessage.inference?.output?.rawStreamText ||
+        rawMessage.response ||
+        rawMessage.inference?.output?.verbatimText ||
+        rawMessage.content?.llmRepresentation?.text ||
+        text,
+    );
     message.hasThinking = Boolean(rawMessage.hasThinking || message.thoughts.trim());
     message.isThinkingComplete = Boolean(rawMessage.isThinkingComplete);
     message.isResponseComplete = Boolean(
@@ -460,6 +468,14 @@ function serializeConversationMessage(message) {
     createdAt: normalizeTimestamp(message.createdAt),
     thoughts: typeof message.thoughts === 'string' ? message.thoughts : '',
     response: typeof message.response === 'string' ? message.response : String(message.text || ''),
+    rawStreamText:
+      message.role === 'model'
+        ? typeof message.rawStreamText === 'string'
+          ? message.rawStreamText
+          : typeof message.response === 'string'
+            ? message.response
+            : String(message.text || '')
+        : undefined,
     hasThinking: Boolean(message.hasThinking),
     isThinkingComplete: Boolean(message.isThinkingComplete),
     isResponseComplete: Boolean(message.isResponseComplete ?? true),

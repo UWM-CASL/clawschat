@@ -377,8 +377,8 @@ function buildMcpServerInventoryLines(enabledMcpServers = []) {
     return [];
   }
   return [
-    '  **Available MCP servers:**',
-    '  Use call_mcp_server_command with a server identifier and one of that server\'s enabled command names.',
+    '**Available MCP servers:**',
+    'Use call_mcp_server_command with a server identifier and one of that server\'s enabled command names.',
     ...enabledMcpServers.map((server) => {
       const identifier =
         typeof server?.identifier === 'string' && server.identifier.trim()
@@ -397,8 +397,97 @@ function buildMcpServerInventoryLines(enabledMcpServers = []) {
       const commandSummary = enabledCommands.length
         ? ` Enabled commands: ${enabledCommands.join(', ')}.`
         : ' Enabled commands: none.';
-      return `  - ${identifier}${description}${commandSummary}`;
+      return `- ${identifier}${description}${commandSummary}`;
     }),
+  ];
+}
+
+function stringifyToolCallArgumentValue(value) {
+  if (typeof value === 'string') {
+    return JSON.stringify(value);
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+function buildExampleToolCallText(toolCallingConfig, toolName, argumentsValue = {}) {
+  if (!toolCallingConfig || typeof toolCallingConfig !== 'object') {
+    return '';
+  }
+  if (toolCallingConfig.format === 'json') {
+    const nameKey = toolCallingConfig.nameKey || 'name';
+    const argumentsKey = toolCallingConfig.argumentsKey || 'arguments';
+    return JSON.stringify({
+      [nameKey]: toolName,
+      [argumentsKey]: argumentsValue,
+    });
+  }
+  if (toolCallingConfig.format === 'tagged-json') {
+    const nameKey = toolCallingConfig.nameKey || 'name';
+    const argumentsKey = toolCallingConfig.argumentsKey || 'arguments';
+    const payload = JSON.stringify({
+      [nameKey]: toolName,
+      [argumentsKey]: argumentsValue,
+    });
+    return `${toolCallingConfig.openTag}${payload}${toolCallingConfig.closeTag}`;
+  }
+  if (toolCallingConfig.format === 'special-token-call') {
+    const serializedArguments = Object.entries(argumentsValue)
+      .map(([key, value]) => `${key}=${stringifyToolCallArgumentValue(value)}`)
+      .join(', ');
+    return `${toolCallingConfig.callOpen}${toolName}(${serializedArguments})${toolCallingConfig.callClose}`;
+  }
+  if (toolCallingConfig.format === 'xml-tool-call') {
+    const parameterLines = Object.entries(argumentsValue).map(
+      ([key, value]) => `  <parameter=${key}>${JSON.stringify(value)}</parameter>`
+    );
+    return [
+      '<tool_call>',
+      `  <function=${toolName}>`,
+      ...parameterLines,
+      '  </function>',
+      '</tool_call>',
+    ].join('\n');
+  }
+  if (toolCallingConfig.format === 'gemma-special-token-call') {
+    const serializedArguments = Object.entries(argumentsValue)
+      .map(([key, value]) => `${key}:${typeof value === 'string' ? `<|"|>${value}<|"|>` : stringifyToolCallArgumentValue(value)}`)
+      .join(', ');
+    return `<|tool_call>call:${toolName}{${serializedArguments}}<tool_call|>`;
+  }
+  return '';
+}
+
+function buildMcpServerExampleLines(toolCallingConfig, enabledMcpServers = []) {
+  if (!Array.isArray(enabledMcpServers) || !enabledMcpServers.length) {
+    return [];
+  }
+  const listExample = buildExampleToolCallText(toolCallingConfig, MCP_SERVER_COMMAND_LIST_TOOL, {
+    server: 'demo_mcp_server',
+  });
+  const callExample = buildExampleToolCallText(toolCallingConfig, MCP_SERVER_COMMAND_CALL_TOOL, {
+    server: 'demo_mcp_server',
+    command: 'get_status',
+  });
+  if (!listExample || !callExample) {
+    return [];
+  }
+  return [
+    '**Example MCP Server Tool Calls:**',
+    'These examples use a fake server and fake command names. Replace them with enabled values from this conversation.',
+    'Example: inspect one MCP server',
+    '```text',
+    listExample,
+    '```',
+    'Example: call one MCP command',
+    '```text',
+    callExample,
+    '```',
   ];
 }
 
@@ -510,7 +599,11 @@ function buildResolvedToolDefinitions(toolList = [], enabledTools = []) {
     .filter(Boolean);
 }
 
-function buildJsonToolListLines(resolvedToolDefinitions = [], enabledMcpServers = []) {
+function buildJsonToolListLines(
+  resolvedToolDefinitions = [],
+  enabledMcpServers = [],
+  toolCallingConfig = {}
+) {
   if (!Array.isArray(resolvedToolDefinitions) || !resolvedToolDefinitions.length) {
     return [];
   }
@@ -535,6 +628,8 @@ function buildJsonToolListLines(resolvedToolDefinitions = [], enabledMcpServers 
   if (Array.isArray(enabledMcpServers) && enabledMcpServers.length) {
     lines.push('');
     lines.push(...buildMcpServerInventoryLines(enabledMcpServers));
+    lines.push('');
+    lines.push(...buildMcpServerExampleLines(toolCallingConfig, enabledMcpServers));
   }
   return lines;
 }
@@ -556,11 +651,14 @@ export function buildToolCallingSystemPrompt(
   const toolListFormat = toolCallingConfig?.toolListFormat === 'json' ? 'json' : 'markdown';
   const toolLines =
     toolListFormat === 'json'
-      ? buildJsonToolListLines(resolvedToolDefinitions, enabledMcpServers)
+      ? buildJsonToolListLines(resolvedToolDefinitions, enabledMcpServers, toolCallingConfig)
       : [
           '**Tools available in this conversation:**\nThese are the tools you can call.',
           ...buildEnabledToolInstructions(resolvedToolDefinitions),
           ...(enabledMcpServers.length ? ['', ...buildMcpServerInventoryLines(enabledMcpServers)] : []),
+          ...(enabledMcpServers.length
+            ? ['', ...buildMcpServerExampleLines(toolCallingConfig, enabledMcpServers)]
+            : []),
         ];
   const toolBehaviorLines = ['After a tool result, continue the work and answer naturally.'].filter(
     Boolean

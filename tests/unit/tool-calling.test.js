@@ -337,6 +337,53 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain('Use <|"|>...<|"|> around string values.');
   });
 
+  test('adds format-aware fake MCP examples and keeps the MCP markdown section top-level', () => {
+    const prompt = buildToolCallingSystemPrompt(
+      {
+        format: 'gemma-special-token-call',
+      },
+      ['list_mcp_server_commands', 'call_mcp_server_command'],
+      [
+        {
+          name: 'list_mcp_server_commands',
+          description: 'Lists the enabled commands for one configured MCP server.',
+        },
+        {
+          name: 'call_mcp_server_command',
+          description: 'Calls one enabled command on one configured MCP server.',
+        },
+      ],
+      {
+        mcpServers: [
+          {
+            identifier: 'docs',
+            endpoint: 'https://example.com/mcp',
+            description: 'Project documentation lookup.',
+            enabled: true,
+            commands: [
+              {
+                name: 'search_docs',
+                enabled: true,
+              },
+            ],
+          },
+        ],
+      }
+    );
+
+    expect(prompt).toContain('\n\n**Available MCP servers:**\n');
+    expect(prompt).toContain(
+      '\nUse call_mcp_server_command with a server identifier and one of that server\'s enabled command names.\n- docs: Project documentation lookup. Enabled commands: search_docs.\n'
+    );
+    expect(prompt).toContain('**Example MCP Server Tool Calls:**');
+    expect(prompt).toContain(
+      '<|tool_call>call:list_mcp_server_commands{server:<|"|>demo_mcp_server<|"|>}<tool_call|>'
+    );
+    expect(prompt).toContain(
+      '<|tool_call>call:call_mcp_server_command{server:<|"|>demo_mcp_server<|"|>, command:<|"|>get_status<|"|>}<tool_call|>'
+    );
+  });
+
   test('adds a terminal-use instruction for get_user_location', () => {
     const prompt = buildToolCallingSystemPrompt(
       {
@@ -493,7 +540,14 @@ describe('tool-calling prompt builder', () => {
       'Use call_mcp_server_command with a server identifier and one of that server\'s enabled command names.'
     );
     expect(prompt).toContain(
-      '  - docs: Project documentation lookup. Enabled commands: search_docs.'
+      '- docs: Project documentation lookup. Enabled commands: search_docs.'
+    );
+    expect(prompt).toContain('**Example MCP Server Tool Calls:**');
+    expect(prompt).toContain(
+      '```text\n{"name":"list_mcp_server_commands","parameters":{"server":"demo_mcp_server"}}\n```'
+    );
+    expect(prompt).toContain(
+      '```text\n{"name":"call_mcp_server_command","parameters":{"server":"demo_mcp_server","command":"get_status"}}\n```'
     );
     expect(prompt).toContain('**Tool call format:**');
   });
@@ -1182,7 +1236,14 @@ describe('tool-calling prompt builder', () => {
     expect(prompt).toContain('"name":"call_mcp_server_command"');
     expect(prompt).toContain('**Available MCP servers:**');
     expect(prompt).toContain(
-      '  - docs: Project documentation lookup. Enabled commands: search_docs.'
+      '- docs: Project documentation lookup. Enabled commands: search_docs.'
+    );
+    expect(prompt).toContain('**Example MCP Server Tool Calls:**');
+    expect(prompt).toContain(
+      '```text\n<|tool_call_start|>[list_mcp_server_commands(server="demo_mcp_server")]<|tool_call_end|>\n```'
+    );
+    expect(prompt).toContain(
+      '```text\n<|tool_call_start|>[call_mcp_server_command(server="demo_mcp_server", command="get_status")]<|tool_call_end|>\n```'
     );
     expect(prompt).not.toContain('Available MCP servers: [{"identifier":"docs"');
   });

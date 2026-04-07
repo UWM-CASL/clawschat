@@ -31,6 +31,7 @@ The prompt keeps all callable tool surfaces in one model-specific tool inventory
 - By default, `Tools available in this conversation` is a markdown list of the enabled tools and any tool-specific usage notes.
 - Liquid LFM models use a JSON-formatted `List of tools: [...]` block in the system prompt instead of that markdown list.
 - When MCP is available, the same model-specific section also includes `list_mcp_server_commands` and `call_mcp_server_command`, plus the enabled MCP server inventory rendered in that model's list style.
+- When MCP is available, the system prompt also includes an `Example MCP Server Tool Calls` section that uses a fake server and fake command names in the selected model's exact tool-call wrapper.
 - `Tool behavior` covers only generic behavior after a tool result is returned.
 - `Tool call format` describes the exact wrapper or JSON shape the selected model must emit, including that a tool call should be the only output in that turn.
 
@@ -59,7 +60,7 @@ Current MCP constraints:
 - imported servers start disabled, and discovered commands start disabled
 - only enabled servers with enabled commands are exposed to the model or executable through the harness
 - MCP HTTP requests use the shared browser fetch helper, so they can retry through the validated proxy only after a likely CORS block
-- proxy validation plus MCP initialize/list/call failures write transport details into `Settings -> Debug`, alongside raw model-output entries, so browser-side request, status, parse, and model-emission problems are inspectable without devtools
+- proxy validation plus MCP initialize/list/call failures write transport details into `Settings -> Debug`, alongside complete per-turn raw model-output blobs, so browser-side request, status, parse, and model-emission problems are inspectable without devtools
 - `SKILL.md` discovery and selective ingestion are still not implemented
 
 ## Built-in tools

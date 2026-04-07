@@ -365,6 +365,84 @@ export function createAppController(dependencies) {
     });
   }
 
+  function ensureRawStreamState(message, { reset = false } = {}) {
+    if (!message || message.role !== 'model') {
+      return;
+    }
+    if (reset || typeof message.rawStreamText !== 'string') {
+      message.rawStreamText = '';
+    }
+    if (reset || typeof message.hasLoggedRawStream !== 'boolean') {
+      message.hasLoggedRawStream = false;
+    }
+  }
+
+  function appendRawStreamChunk(message, rawChunk, aggregateMessage = null) {
+    const normalizedChunk = typeof rawChunk === 'string' ? rawChunk : String(rawChunk || '');
+    if (!normalizedChunk) {
+      return;
+    }
+    ensureRawStreamState(message);
+    message.rawStreamText += normalizedChunk;
+    if (
+      aggregateMessage &&
+      aggregateMessage.role === 'model' &&
+      aggregateMessage.id !== message.id
+    ) {
+      ensureRawStreamState(aggregateMessage);
+      aggregateMessage.rawStreamText += normalizedChunk;
+    }
+  }
+
+  function getVisibleTurnRawStreamText(modelMessage, visibleModelTurnMessage = null) {
+    const aggregateMessage =
+      visibleModelTurnMessage && visibleModelTurnMessage.role === 'model'
+        ? visibleModelTurnMessage
+        : modelMessage;
+    if (!aggregateMessage || aggregateMessage.role !== 'model') {
+      return '';
+    }
+    return typeof aggregateMessage.rawStreamText === 'string' ? aggregateMessage.rawStreamText : '';
+  }
+
+  function logVisibleTurnRawOutputIfNeeded(
+    modelMessage,
+    visibleModelTurnMessage = null,
+    { intercepted = false } = {}
+  ) {
+    const aggregateMessage =
+      visibleModelTurnMessage && visibleModelTurnMessage.role === 'model'
+        ? visibleModelTurnMessage
+        : modelMessage;
+    if (!aggregateMessage || aggregateMessage.role !== 'model') {
+      return;
+    }
+    ensureRawStreamState(aggregateMessage);
+    if (aggregateMessage.hasLoggedRawStream === true) {
+      return;
+    }
+    const rawStreamText = getVisibleTurnRawStreamText(modelMessage, aggregateMessage);
+    if (!rawStreamText) {
+      return;
+    }
+    appendRawModelOutput(rawStreamText, { intercepted });
+    aggregateMessage.hasLoggedRawStream = true;
+  }
+
+  function getActiveIncompleteVisibleModelTurn(conversation) {
+    if (!conversation || typeof conversation.activeLeafMessageId !== 'string') {
+      return null;
+    }
+    const activeLeafMessage = dependencies.getMessageNodeById(
+      conversation,
+      conversation.activeLeafMessageId
+    );
+    if (!activeLeafMessage || activeLeafMessage.role !== 'model' || activeLeafMessage.isResponseComplete) {
+      return null;
+    }
+    return findVisibleModelTurnMessage(conversation, activeLeafMessage);
+  }
+
   async function startModelGeneration(activeConversation, prompt, options = {}) {
     if (!activeConversation) {
       return;
@@ -438,6 +516,16 @@ export function createAppController(dependencies) {
     modelMessage.toolCalls = Array.isArray(modelMessage.toolCalls) ? modelMessage.toolCalls : [];
     activeConversation.activeLeafMessageId = modelMessage.id;
     const visibleModelTurnMessage = findVisibleModelTurnMessage(activeConversation, modelMessage);
+    ensureRawStreamState(modelMessage, {
+      reset: !canReuseExistingModelMessage || clearExistingMessageBeforeStream,
+    });
+    if (visibleModelTurnMessage?.id === modelMessage.id) {
+      ensureRawStreamState(visibleModelTurnMessage, {
+        reset: !canReuseExistingModelMessage || clearExistingMessageBeforeStream,
+      });
+    } else if (visibleModelTurnMessage?.role === 'model') {
+      ensureRawStreamState(visibleModelTurnMessage);
+    }
     const modelBubbleItem =
       dependencies.findMessageElement(visibleModelTurnMessage?.id || '') ||
       dependencies.addMessageElement(visibleModelTurnMessage || modelMessage);
@@ -511,7 +599,6 @@ export function createAppController(dependencies) {
           );
           dependencies.scrollTranscriptToBottom();
           dependencies.appendDebug('Detected emitted tool call during streaming.');
-          appendRawModelOutput(streamedText, { intercepted: true });
           dependencies.setStatus('Running tool call...');
           scheduleTask(() => {
             void dependencies.engine.cancelGeneration().then(
@@ -541,6 +628,7 @@ export function createAppController(dependencies) {
                 dependencies.updateActionButtons();
                 dependencies.applyPendingGenerationSettingsIfReady();
                 dependencies.setStatus('Generation failed');
+                logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
                 dependencies.appendDebug(`Tool call interception failed: ${message}`);
                 dependencies.queueConversationStateSave();
               }
@@ -594,7 +682,9 @@ export function createAppController(dependencies) {
           if (isInterceptingToolCall) {
             return;
           }
-          streamedText += chunk;
+          const normalizedChunk = String(chunk || '');
+          streamedText += normalizedChunk;
+          appendRawStreamChunk(modelMessage, normalizedChunk, visibleModelTurnMessage);
           scheduleStreamUpdate();
         },
         onComplete: (finalText) => {
@@ -607,6 +697,9 @@ export function createAppController(dependencies) {
               : String(finalText || '');
           const completedText = String(finalText || completedRawText);
           streamedText = completedRawText;
+          if (!modelMessage.rawStreamText && completedRawText) {
+            appendRawStreamChunk(modelMessage, completedRawText, visibleModelTurnMessage);
+          }
           if (applyStreamUpdate()) {
             return;
           }
@@ -671,7 +764,6 @@ export function createAppController(dependencies) {
               `Detected ${modelMessage.toolCalls.length} emitted tool call${modelMessage.toolCalls.length === 1 ? '' : 's'}.`
             );
           }
-          appendRawModelOutput(completedRawText);
           dependencies.queueConversationStateSave();
           if (hasDetectedToolCalls && typeof dependencies.executeToolCall === 'function') {
             dependencies.setStatus('Running tool call...');
@@ -687,6 +779,7 @@ export function createAppController(dependencies) {
             });
             return;
           }
+          logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
           setGenerating(dependencies.state, false);
           dependencies.updateActionButtons();
           dependencies.applyPendingGenerationSettingsIfReady();
@@ -714,6 +807,7 @@ export function createAppController(dependencies) {
           dependencies.updateActionButtons();
           dependencies.applyPendingGenerationSettingsIfReady();
           dependencies.setStatus('Generation failed');
+          logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
           dependencies.appendDebug(`Generation error: ${message}`);
           dependencies.queueConversationStateSave();
         },
@@ -739,6 +833,7 @@ export function createAppController(dependencies) {
       dependencies.updateActionButtons();
       dependencies.applyPendingGenerationSettingsIfReady();
       dependencies.setStatus('Generation failed');
+      logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
       dependencies.appendDebug(`Generation error: ${message}`);
       dependencies.queueConversationStateSave();
     }
@@ -750,6 +845,11 @@ export function createAppController(dependencies) {
       await dependencies.engine.cancelGeneration();
       setModelReady(dependencies.state, true);
       dependencies.setStatus('Stopped');
+      const activeConversation = dependencies.getActiveConversation();
+      const visibleModelTurn = getActiveIncompleteVisibleModelTurn(activeConversation);
+      if (visibleModelTurn) {
+        logVisibleTurnRawOutputIfNeeded(visibleModelTurn, visibleModelTurn);
+      }
       dependencies.appendDebug('Generation canceled by user.');
     } catch (error) {
       const message = toErrorMessage(error);

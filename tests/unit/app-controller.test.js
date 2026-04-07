@@ -391,16 +391,18 @@ describe('app-controller', () => {
     harness.conversations.push(conversation);
     harness.activeConversationId.value = conversation.id;
     harness.state.modelReady = true;
-    harness.dependencies.detectToolCalls
-      .mockReturnValueOnce([
-        {
-          name: 'get_current_date_time',
-          arguments: {},
-          rawText: '{"name":"get_current_date_time","parameters":{}}',
-          format: 'json',
-        },
-      ])
-      .mockReturnValueOnce([]);
+    harness.dependencies.detectToolCalls.mockImplementation((rawText) =>
+      String(rawText || '').includes('{"name":"get_current_date_time","parameters":{}}')
+        ? [
+            {
+              name: 'get_current_date_time',
+              arguments: {},
+              rawText: '{"name":"get_current_date_time","parameters":{}}',
+              format: 'json',
+            },
+          ]
+        : []
+    );
     harness.dependencies.executeToolCall.mockResolvedValue({
       toolName: 'get_current_date_time',
       arguments: {},
@@ -440,6 +442,61 @@ describe('app-controller', () => {
     expect(toolMessage?.toolName).toBe('get_current_date_time');
     expect(toolMessage?.toolResult).toBe('{"iso":"2026-03-26T06:00:00.000Z"}');
     expect(finalModelMessages.at(-1)?.text).toBe('It is currently 1:00 AM local time.');
+  });
+
+  test('logs one complete raw output blob across tool interception and continuation', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Check the time.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.detectToolCalls
+      .mockReturnValueOnce([
+        {
+          name: 'get_current_date_time',
+          arguments: {},
+          rawText: '{"name":"get_current_date_time","parameters":{}}',
+          format: 'json',
+        },
+      ])
+      .mockReturnValueOnce([]);
+    harness.dependencies.executeToolCall.mockResolvedValue({
+      toolName: 'get_current_date_time',
+      arguments: {},
+      resultText: '{"iso":"2026-03-26T06:00:00.000Z"}',
+    });
+
+    harness.engine.generate
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onToken('Let me check.\n{"name":"get_current_date_time","parameters":{}}');
+        handlers.onComplete('Let me check.\n{"name":"get_current_date_time","parameters":{}}');
+      })
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onToken('\nIt is currently 1:00 AM local time.');
+        handlers.onComplete('\nIt is currently 1:00 AM local time.');
+      });
+
+    harness.controller.startModelGeneration(
+      conversation,
+      buildPromptForConversationLeaf(conversation),
+      {
+        parentMessageId: userMessage.id,
+      }
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const rawOutputCalls = harness.dependencies.appendDebug.mock.calls.filter(
+      ([entry]) => entry && typeof entry === 'object' && entry.kind === 'raw-model-output'
+    );
+    expect(rawOutputCalls).toHaveLength(1);
+    expect(rawOutputCalls[0][0]).toMatchObject({
+      kind: 'raw-model-output',
+      details:
+        'Let me check.\n{"name":"get_current_date_time","parameters":{}}\nIt is currently 1:00 AM local time.',
+    });
   });
 
   test('stores validated shell tool results with terminal metadata on the raw conversation object', async () => {
