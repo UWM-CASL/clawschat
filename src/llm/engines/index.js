@@ -1,15 +1,23 @@
 import {
   DEFAULT_ENGINE_TYPE,
+  MEDIAPIPE_GENAI_ENGINE_TYPE,
   TRANSFORMERS_JS_ENGINE_TYPE,
   normalizeEngineType,
 } from './engine-types.js';
+import { createMediapipeGenAiEngineDescriptor } from './mediapipe-genai-engine.js';
 import { createTransformersJsEngineDescriptor } from './transformers-js-engine.js';
 
 const ENGINE_DESCRIPTOR_FACTORIES = Object.freeze({
+  [MEDIAPIPE_GENAI_ENGINE_TYPE]: createMediapipeGenAiEngineDescriptor,
   [TRANSFORMERS_JS_ENGINE_TYPE]: createTransformersJsEngineDescriptor,
 });
 
-export { DEFAULT_ENGINE_TYPE, TRANSFORMERS_JS_ENGINE_TYPE, normalizeEngineType };
+export {
+  DEFAULT_ENGINE_TYPE,
+  MEDIAPIPE_GENAI_ENGINE_TYPE,
+  TRANSFORMERS_JS_ENGINE_TYPE,
+  normalizeEngineType,
+};
 
 export function getEngineDescriptor(engineType = DEFAULT_ENGINE_TYPE) {
   const normalizedEngineType = normalizeEngineType(engineType);

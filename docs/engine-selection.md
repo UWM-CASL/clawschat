@@ -1,12 +1,14 @@
 # Engine Selection
 
-Inference is selected through the engine client boundary and currently executes through the shipped `transformers-js` driver in a dedicated Web Worker (`src/workers/llm.worker.js`).
+Inference is selected through the engine client boundary and executes through a per-model engine driver in a dedicated Web Worker.
 
 ## Engine drivers
 
 - Model config now declares an explicit engine via `models[].engine.type`.
 - `src/llm/engine-client.js` reads that engine type from the selected model config and uses the matching engine descriptor from `src/llm/engines/`.
-- Today the only shipped engine type is `transformers-js`.
+- The app currently ships:
+  - `transformers-js` via `src/workers/llm.worker.js`
+  - `mediapipe-genai` via `src/workers/mediapipe-llm.worker.js`
 - Additional local or remote drivers can be added later without changing the UI/controller contract, as long as they implement the same client-facing `initialize` / `generate` / `cancel` lifecycle.
 
 ## Backends
@@ -16,8 +18,10 @@ Inference is selected through the engine client boundary and currently executes 
 - `wasm`: WASM only
 - `cpu`: CPU only, mapped to Transformers.js browser execution via `wasm`
 - Models with `requiresWebGpu: true` only attempt WebGPU and do not fall back to WASM/CPU.
+- `mediapipe-genai` models currently require WebGPU and reject `wasm` / `cpu` backend selection.
 - Models with `multimodalGeneration: true` use a processor/model execution path in the worker instead of the text-generation pipeline.
 - For multimodal models, the worker loads the `AutoProcessor` lazily on first generation and then reuses it for later requests.
+- LiteRT-backed models may use engine-specific runtime hints such as `runtime.modelAssetPath` instead of Transformers.js-specific dtype settings.
 
 The resolved backend is shown in the status region in the main UI.
 Initialization is user-triggered on first message send in the chat workspace.

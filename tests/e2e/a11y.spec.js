@@ -93,7 +93,9 @@ test('@a11y settings screen keyboard open/close and no wcag2a/2aa violations', a
   await expect(page.locator('#backendSelect')).toBeVisible();
   await page.getByRole('tab', { name: 'Debug' }).click();
   await expect(page.getByRole('tabpanel', { name: 'Debug' })).toBeVisible();
-  await expect(page.locator('#debugLogPanel')).toContainText('No debug entries yet.');
+  await expect(page.locator('#debugLogPanel')).toContainText(
+    /No debug entries yet\.|entry available\.|entries available\./
+  );
   await expectNoCriticalA11yViolations(page);
 
   await page.keyboard.press('Escape');

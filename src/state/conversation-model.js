@@ -1079,6 +1079,11 @@ export function buildConversationMessages(messages, systemPrompt = '') {
     structuredMessages.push({
       role: message.role === 'user' ? 'user' : message.role === 'tool' ? 'tool' : 'assistant',
       content,
+      ...(message.role === 'tool' &&
+      typeof message.toolName === 'string' &&
+      message.toolName.trim()
+        ? { toolName: message.toolName.trim() }
+        : {}),
     });
   });
   return structuredMessages;

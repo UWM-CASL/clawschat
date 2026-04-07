@@ -1,5 +1,5 @@
 {
-  "defaultModelId": "onnx-community/gemma-4-E2B-it-ONNX",
+  "defaultModelId": "litert-community/gemma-4-E4B-it-litert-lm",
   "models": [
     {
       "id": "onnx-community/Llama-3.2-3B-Instruct-onnx-web",
@@ -376,9 +376,66 @@
       }
     },
     {
+      "id": "litert-community/gemma-4-E4B-it-litert-lm",
+      "label": "litert-community/gemma-4-E4B-it-litert-lm",
+      "displayName": "Gemma 4 E4B",
+      "engine": {
+        "type": "mediapipe-genai"
+      },
+      "languageSupport": {
+        "tags": [
+          { "code": "en", "name": "English" },
+          { "code": "es", "name": "Spanish" },
+          { "code": "fr", "name": "French" },
+          { "code": "zh", "name": "Chinese" },
+          { "code": "hi", "name": "Hindi" },
+          { "code": "ja", "name": "Japanese" }
+        ],
+        "hasMore": true,
+        "sourceUrl": "https://ai.google.dev/gemma"
+      },
+      "repositoryUrl": "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm",
+      "runtime": {
+        "requiresWebGpu": true,
+        "modelAssetPath": "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/439779041cf1a165146a3ee1f9a7653b2f047975/gemma-4-E4B-it-web.task"
+      },
+      "thinkingControl": {
+        "runtimeParameter": "enable_thinking"
+      },
+      "thinkingTags": {
+        "open": "<|channel>",
+        "close": "<channel|>",
+        "stripLeadingText": "thought"
+      },
+      "toolCalling": {
+        "format": "gemma-special-token-call"
+      },
+      "generation": {
+        "defaultMaxOutputTokens": 1024,
+        "maxOutputTokens": 131072,
+        "defaultMaxContextTokens": 8192,
+        "maxContextTokens": 131072,
+        "minTemperature": 0.1,
+        "maxTemperature": 2.0,
+        "defaultTemperature": 1.0,
+        "defaultTopK": 64,
+        "defaultTopP": 0.95,
+        "defaultRepetitionPenalty": 1.0
+      },
+      "features": {
+        "streaming": true,
+        "thinking": true,
+        "toolCalling": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false
+      }
+    },
+    {
       "id": "onnx-community/gemma-4-E2B-it-ONNX",
       "label": "onnx-community/gemma-4-E2B-it-ONNX",
       "displayName": "Gemma 4 E2B",
+      "hidden": true,
       "engine": {
         "type": "transformers-js"
       },

@@ -230,4 +230,17 @@ describe('LLMEngineClient', () => {
     expect(client.loadedModelId).toBe('example/model-b');
     expect(MockWorker.instances).toHaveLength(2);
   });
+
+  test('initializes alternative engine workers based on the configured engine type', async () => {
+    const client = new LLMEngineClient();
+
+    await client.initialize({
+      modelId: 'litert-community/gemma-4-E4B-it-litert-lm',
+      engineType: 'mediapipe-genai',
+    });
+
+    expect(client.loadedEngineType).toBe('mediapipe-genai');
+    expect(MockWorker.instances).toHaveLength(1);
+    expect(MockWorker.instances[0].messages[0].payload.engineType).toBe('mediapipe-genai');
+  });
 });

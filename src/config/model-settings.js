@@ -88,6 +88,10 @@ function normalizeRuntimeDtype(rawDtype) {
 
 function normalizeRuntime(rawRuntime) {
   const dtype = normalizeRuntimeDtype(rawRuntime?.dtype);
+  const modelAssetPath =
+    typeof rawRuntime?.modelAssetPath === 'string' && rawRuntime.modelAssetPath.trim()
+      ? rawRuntime.modelAssetPath.trim()
+      : '';
   const enableThinking = rawRuntime?.enableThinking === true;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
@@ -98,6 +102,7 @@ function normalizeRuntime(rawRuntime) {
       : false;
   return {
     ...(dtype ? { dtype } : {}),
+    ...(modelAssetPath ? { modelAssetPath } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),

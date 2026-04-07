@@ -456,7 +456,7 @@ describe('conversation-model', () => {
         role: 'assistant',
         content: '{"name":"get_weather","parameters":{"location":"Milwaukee, WI"}}',
       },
-      { role: 'tool', content: '72 F and sunny.' },
+      { role: 'tool', content: '72 F and sunny.', toolName: 'get_weather' },
       { role: 'assistant', content: 'It is 72 F and sunny in Milwaukee.' },
     ]);
 

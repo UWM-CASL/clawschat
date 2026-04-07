@@ -446,7 +446,7 @@ describe('preferences controller', () => {
       )?.href
     ).toBe('https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-ONNX');
 
-    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E2B'));
+    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E4B'));
     expect(gemmaCard?.textContent).toContain('131,072 tokens');
     expect(gemmaCard?.textContent).toContain('about 98,300 words');
     expect(gemmaCard?.textContent).not.toContain('Default context 8,192');
@@ -456,15 +456,15 @@ describe('preferences controller', () => {
     expect(gemmaCard?.textContent).toContain('ZH');
     expect(gemmaCard?.textContent).not.toContain('HI');
     expect(gemmaCard?.textContent).toContain('and more');
-    expect(gemmaCard?.textContent).not.toContain('onnx-community/gemma-4-E2B-it-ONNX');
+    expect(gemmaCard?.textContent).not.toContain('litert-community/gemma-4-E4B-it-litert-lm');
     expect(
       /** @type {HTMLAnchorElement | null} */ (gemmaCard?.querySelector('.model-card-link'))?.href
-    ).toBe('https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX');
+    ).toBe('https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm');
     expect(
       /** @type {HTMLAnchorElement | null} */ (gemmaCard?.querySelector('.model-card-link'))
         ?.textContent
     ).toBe('Model details');
-    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(4);
+    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(2);
     expect(
       Array.from(gemmaCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
         node.getAttribute('aria-label')
@@ -472,9 +472,8 @@ describe('preferences controller', () => {
     ).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
-      'Accepts image input',
-      'Accepts audio input',
     ]);
+    expect(gemmaCard?.textContent).toContain('This model requires WebGPU.');
 
     expect(
       gemmaCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')
@@ -498,7 +497,7 @@ describe('preferences controller', () => {
     );
     gemmaButton?.click();
 
-    expect(modelSelect.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
+    expect(modelSelect.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
     expect(gemmaButton?.getAttribute('aria-checked')).toBe('true');
   });
 
@@ -523,11 +522,9 @@ describe('preferences controller', () => {
     expect(getFeatureLabels('Liquid LFM 2.5 1.2B Instruct')).toEqual([
       'Can use built-in tools',
     ]);
-    expect(getFeatureLabels('Gemma 4 E2B')).toEqual([
+    expect(getFeatureLabels('Gemma 4 E4B')).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
-      'Accepts image input',
-      'Accepts audio input',
     ]);
   });
 
@@ -539,7 +536,7 @@ describe('preferences controller', () => {
     harness.controller.populateModelSelect();
 
     const firstCardTitle = modelCardList.querySelector('.model-card .model-card-title')?.textContent;
-    expect(firstCardTitle).toBe('Gemma 4 E2B');
-    expect(modelSelect.options[0]?.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
+    expect(firstCardTitle).toBe('Gemma 4 E4B');
+    expect(modelSelect.options[0]?.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
   });
 });

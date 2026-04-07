@@ -77,9 +77,10 @@ describe('preferences-models', () => {
     const cards = Array.from(modelCardList.querySelectorAll('.model-card'));
     expect(cards.length).toBe(modelSelect.querySelectorAll('option').length);
 
-    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E2B'));
+    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E4B'));
     expect(gemmaCard?.textContent).toContain('131,072 tokens');
-    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(4);
+    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(2);
+    expect(gemmaCard?.textContent).toContain('This model requires WebGPU.');
     expect(
       gemmaCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')
     ).toBe(
@@ -90,7 +91,7 @@ describe('preferences-models', () => {
       gemmaCard?.querySelector('.model-card-button')
     );
     gemmaButton?.click();
-    expect(modelSelect.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
+    expect(modelSelect.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
     expect(gemmaButton?.getAttribute('aria-checked')).toBe('true');
 
     modelCardList.dispatchEvent(new harness.document.defaultView.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));

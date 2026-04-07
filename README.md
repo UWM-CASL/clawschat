@@ -4,7 +4,7 @@ Student-facing browser chat UI with local model inference.
 
 ## Runtime behavior
 
-- Inference runs through an engine-driver layer selected from model config and user preferences; the current shipped driver uses Transformers.js in-browser inside a Web Worker.
+- Inference runs through an engine-driver layer selected from model config and user preferences; the app currently ships both a Transformers.js worker path and a LiteRT/MediaPipe GenAI worker path.
 - Conversation turns are sent to the model as structured chat messages (`system`/`user`/`assistant`) rather than a flattened transcript string.
 - On initial load, the app shows a home screen with a `Start a conversation` action.
 - Clicking `Start a conversation` opens the chat workspace at `#/chat` with model selection, an empty composer, and no model load yet.
@@ -66,6 +66,7 @@ Student-facing browser chat UI with local model inference.
   - `WebGPU only`
   - `WASM only`
   - `CPU only (via WASM)`
+- LiteRT-backed models are WebGPU-only in this app and require `Auto` or `WebGPU only`.
 - Token controls in Settings:
   - `Maximum output tokens` and `Context size (short-term memory)` are model-aware integer fields.
   - Values are constrained by per-model limits from `src/config/models.json` and use `step=8`.
@@ -91,7 +92,9 @@ Student-facing browser chat UI with local model inference.
   - The runtime also applies per-model `repetition_penalty` defaults where Transformers.js supports them; unsupported knobs such as `min_p` and `presence_penalty` are intentionally not exposed in this app.
 - `Auto` attempts WebGPU first, then falls back to the browser CPU path via WASM if WebGPU is unavailable or initialization fails.
 - The selected backend and model are stored in `localStorage`.
-- Model files are downloaded on first load and cached in-browser for reuse (`Transformers.js` browser cache).
+- Model files are downloaded on first load and cached in-browser for reuse.
+  - Transformers.js-backed models use the Transformers.js browser cache.
+  - LiteRT-backed models fetch a pinned `.task` asset at runtime and rely on the browser HTTP cache.
 - `Settings -> Debug` shows a paginated debug log (20 entries per page, newest first) with CSV export, including proxy validation, MCP transport diagnostics, and one complete raw model-output blob per visible model turn, preserved before transcript parsing or tool-call folding.
 - Conversation list and transcript are state-driven (no placeholder messages).
 - On desktop widths, the conversation list can be collapsed from a border-mounted toggle to give the active chat more space; the preference is saved locally.
@@ -210,13 +213,11 @@ Student-facing browser chat UI with local model inference.
 
 ## Supported models
 
-- `onnx-community/gemma-4-E2B-it-ONNX` (default)
-  - Uses the smallest quantization profile in this app across the runtime dtype map: `audio_encoder: q4`, `vision_encoder: q4`, `embed_tokens: q4`, and `decoder_model_merged: q4`.
-  - Exposes text plus uploaded image and audio input in this app.
-  - Audio input is upload-only; live recording is intentionally not exposed.
-  - Video input is not exposed because the current browser runtime path is not viable enough yet.
-  - Uses runtime `enable_thinking` in Transformers.js and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
-  - Uses the published Gemma ONNX generation defaults in this app: temperature `1.0`, top-k `64`, top-p `0.95`.
+- `litert-community/gemma-4-E4B-it-litert-lm` (default)
+  - Uses the LiteRT/MediaPipe GenAI worker path in this app.
+  - Requires WebGPU in-browser and is text-only in the current app path.
+  - Loads the pinned `gemma-4-E4B-it-web.task` artifact from the model repository at runtime.
+  - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - Uses `q4` in this app.
@@ -243,6 +244,7 @@ Student-facing browser chat UI with local model inference.
   - The upstream model card recommends `temperature: 0.05`, `top_k: 50`, and `repetition_penalty: 1.05`; this app rounds temperature to its nearest supported step (`0.1`) and leaves top-p open at `1.0` because the card does not publish a nucleus cutoff.
   - Uses Liquid's special-token tool-call format supported by this app.
 - Hidden legacy/replacement model definitions remain in config so stored conversations and model-specific behaviors still resolve correctly:
+  - `onnx-community/gemma-4-E2B-it-ONNX`
   - `onnx-community/Qwen3.5-0.8B-ONNX`
   - `onnx-community/Qwen3.5-2B-ONNX`
   - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
@@ -281,7 +283,7 @@ Student-facing browser chat UI with local model inference.
 ## Security notes
 
 - Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
-- Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
+- Transformers.js and MediaPipe Tasks GenAI are bundled from locally installed packages rather than imported from a CDN at runtime.
 - Browser-local Python execution currently loads Pyodide assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
 - Optional CORS proxy support uses a validated prefix-style proxy URL from `Settings -> Proxy`; validation now sends an MCP `initialize` probe to `https://example-server.modelcontextprotocol.io/mcp`, accepts the reference server's auth challenge as proof that the proxied MCP transport is browser-readable, and retries only after a likely CORS failure. Same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers are left on the normal browser path.
 - MCP server support uses browser fetch directly. Only `https` endpoints, or `http://localhost`, are accepted, and servers that require OAuth or token-based authentication are rejected when detected. When an enabled MCP command is called, that command's arguments are sent to the configured MCP endpoint.
@@ -293,7 +295,7 @@ Student-facing browser chat UI with local model inference.
 - Audio input is upload-only. The app does not expose live recording.
 - Video input is not currently exposed because the supported browser runtime paths are not reliable enough yet.
 - The app still does not ship with a CSP. This is a documented hardening gap for a future pass.
-- Model artifacts are still fetched from upstream repositories at runtime and are not revision-pinned yet. That risk is currently accepted.
+- Most model artifacts are still fetched from upstream repositories at runtime and are not revision-pinned yet. The default LiteRT Gemma 4 asset is pinned to a specific Hugging Face revision, but the app does not yet apply a uniform integrity-verification policy across all models.
 
 See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 
