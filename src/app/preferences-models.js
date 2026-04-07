@@ -4,6 +4,7 @@ import {
   MODEL_OPTIONS_BY_ID,
   browserSupportsWebGpu,
   getFirstAvailableModelId,
+  getModelEngineType,
   getModelAvailability,
   normalizeModelId,
   normalizeSupportedBackendPreference,
@@ -504,6 +505,7 @@ export function createModelPreferencesController({
     }
     syncGenerationSettingsFromModel(selectedModel, false);
     return {
+      engineType: getModelEngineType(selectedModel),
       modelId: selectedModel,
       backendPreference: selectedBackend,
       runtime: getRuntimeConfigForModel(selectedModel),

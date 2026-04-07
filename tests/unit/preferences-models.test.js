@@ -144,6 +144,7 @@ describe('preferences-models', () => {
     const engineConfig = harness.controller.readEngineConfigFromUI(generationConfig);
 
     expect(engineConfig).toEqual({
+      engineType: 'transformers-js',
       modelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX',
       backendPreference: 'cpu',
       runtime: { runtimeModelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX' },

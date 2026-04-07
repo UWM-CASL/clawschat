@@ -1,3 +1,9 @@
+import {
+  DEFAULT_ENGINE_TYPE,
+  getEngineDescriptor,
+  normalizeEngineType,
+} from './engines/index.js';
+
 /**
  * Browser-facing engine abstraction.
  * UI must depend on this client only, never runtime-specific APIs.
@@ -12,7 +18,10 @@ export class LLMEngineClient {
     this.pendingCancelRequestId = '';
     this.loadedModelId = null;
     this.loadedBackend = null;
+    this.loadedEngineType = null;
+    this.engineDescriptor = null;
     this.config = {
+      engineType: DEFAULT_ENGINE_TYPE,
       modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       backendPreference: 'auto',
       runtime: {},
@@ -31,11 +40,12 @@ export class LLMEngineClient {
   }
 
   async initialize(config = {}) {
+    const engineType = normalizeEngineType(config.engineType || this.config.engineType);
     const modelId = config.modelId || this.config.modelId;
-    this.config = { ...this.config, ...config, modelId };
-    if (this.worker && this.loadedModelId && this.loadedModelId !== modelId) {
+    this.config = { ...this.config, ...config, engineType, modelId };
+    if (this.#shouldReplaceWorker({ modelId, engineType })) {
       this.dispose();
-      this.config = { ...this.config, ...config, modelId };
+      this.config = { ...this.config, ...config, engineType, modelId };
     }
     const initConfigKey = this.#getInitConfigKey(this.config);
     if (this.pendingInit) {
@@ -48,6 +58,10 @@ export class LLMEngineClient {
         // Fall through and retry with the latest config.
       }
     }
+    if (this.#shouldReplaceWorker({ modelId, engineType })) {
+      this.dispose();
+      this.config = { ...this.config, ...config, engineType, modelId };
+    }
     this.#ensureWorker();
     this.pendingInitConfigKey = initConfigKey;
     this.pendingInit = this.#sendAndWait({
@@ -58,6 +72,7 @@ export class LLMEngineClient {
       const result = await this.pendingInit;
       this.loadedModelId = result?.modelId || modelId;
       this.loadedBackend = result?.backend || null;
+      this.loadedEngineType = result?.engineType || engineType;
       return result;
     } finally {
       this.pendingInit = null;
@@ -151,15 +166,19 @@ export class LLMEngineClient {
     }
     this.loadedModelId = null;
     this.loadedBackend = null;
+    this.loadedEngineType = null;
+    this.engineDescriptor = null;
   }
 
   #ensureWorker() {
     if (this.worker) {
       return;
     }
-    this.worker = new Worker(new URL('../workers/llm.worker.js', import.meta.url), {
-      type: 'module',
-    });
+    this.engineDescriptor = getEngineDescriptor(this.config.engineType);
+    if (this.engineDescriptor.kind !== 'worker') {
+      throw new Error(`Unsupported engine driver kind: ${this.engineDescriptor.kind}`);
+    }
+    this.worker = this.engineDescriptor.createWorker();
     this.worker.addEventListener('message', (event) => {
       this.#handleWorkerMessage(event.data);
     });
@@ -253,11 +272,21 @@ export class LLMEngineClient {
 
   #getInitConfigKey(config) {
     return JSON.stringify({
+      engineType: normalizeEngineType(config?.engineType),
       modelId: config?.modelId || '',
       backendPreference: config?.backendPreference || '',
       runtime: config?.runtime || {},
       generationConfig: config?.generationConfig || {},
     });
+  }
+
+  #shouldReplaceWorker({ modelId, engineType }) {
+    const normalizedEngineType = normalizeEngineType(engineType);
+    return Boolean(
+      this.worker &&
+      ((this.loadedModelId && this.loadedModelId !== modelId) ||
+        (this.loadedEngineType && this.loadedEngineType !== normalizedEngineType))
+    );
   }
 
   #pendingCancelResolve = null;

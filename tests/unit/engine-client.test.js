@@ -107,9 +107,11 @@ describe('LLMEngineClient', () => {
 
     expect(result.backend).toBe('wasm');
     expect(result.modelId).toBe('example/model');
+    expect(client.loadedEngineType).toBe('transformers-js');
     expect(onBackendResolved).toHaveBeenCalledWith('wasm');
     expect(MockWorker.instances).toHaveLength(1);
     expect(MockWorker.instances[0].messages[0].type).toBe('init');
+    expect(MockWorker.instances[0].messages[0].payload.engineType).toBe('transformers-js');
   });
 
   test('deduplicates matching initialize requests while a load is already in flight', async () => {

@@ -1,6 +1,13 @@
 # Engine Selection
 
-Inference is executed in a dedicated Web Worker (`src/workers/llm.worker.js`).
+Inference is selected through the engine client boundary and currently executes through the shipped `transformers-js` driver in a dedicated Web Worker (`src/workers/llm.worker.js`).
+
+## Engine drivers
+
+- Model config now declares an explicit engine via `models[].engine.type`.
+- `src/llm/engine-client.js` reads that engine type from the selected model config and uses the matching engine descriptor from `src/llm/engines/`.
+- Today the only shipped engine type is `transformers-js`.
+- Additional local or remote drivers can be added later without changing the UI/controller contract, as long as they implement the same client-facing `initialize` / `generate` / `cancel` lifecycle.
 
 ## Backends
 

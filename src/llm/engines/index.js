@@ -1,0 +1,20 @@
+import {
+  DEFAULT_ENGINE_TYPE,
+  TRANSFORMERS_JS_ENGINE_TYPE,
+  normalizeEngineType,
+} from './engine-types.js';
+import { createTransformersJsEngineDescriptor } from './transformers-js-engine.js';
+
+const ENGINE_DESCRIPTOR_FACTORIES = Object.freeze({
+  [TRANSFORMERS_JS_ENGINE_TYPE]: createTransformersJsEngineDescriptor,
+});
+
+export { DEFAULT_ENGINE_TYPE, TRANSFORMERS_JS_ENGINE_TYPE, normalizeEngineType };
+
+export function getEngineDescriptor(engineType = DEFAULT_ENGINE_TYPE) {
+  const normalizedEngineType = normalizeEngineType(engineType);
+  const createDescriptor =
+    ENGINE_DESCRIPTOR_FACTORIES[normalizedEngineType] ||
+    ENGINE_DESCRIPTOR_FACTORIES[DEFAULT_ENGINE_TYPE];
+  return createDescriptor();
+}

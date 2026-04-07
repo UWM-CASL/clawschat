@@ -1,4 +1,5 @@
 import modelCatalog from './models.json';
+import { DEFAULT_ENGINE_TYPE, normalizeEngineType } from '../llm/engines/index.js';
 import {
   DEFAULT_GENERATION_LIMITS,
   DEFAULT_TOP_K,
@@ -53,6 +54,17 @@ export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
 );
 export const ALLOWED_TOOL_LIST_FORMATS = Object.freeze(new Set(['markdown', 'json']));
 export const ALLOWED_THINKING_RUNTIME_PARAMETERS = Object.freeze(new Set(['enable_thinking']));
+
+function normalizeEngine(rawEngine) {
+  if (typeof rawEngine === 'string') {
+    return {
+      type: normalizeEngineType(rawEngine),
+    };
+  }
+  return {
+    type: normalizeEngineType(rawEngine?.type),
+  };
+}
 
 function normalizeRuntimeDtype(rawDtype) {
   if (typeof rawDtype === 'string' && ALLOWED_RUNTIME_DTYPES.has(rawDtype.trim())) {
@@ -316,6 +328,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
         const label =
           typeof model?.label === 'string' && model.label.trim() ? model.label.trim() : id;
         const displayName = normalizeModelCardText(model?.displayName) || label;
+        const engine = normalizeEngine(model?.engine);
         const languageSupport = normalizeLanguageSupport(model?.languageSupport);
         const repositoryUrl = normalizeRepositoryUrl(model?.repositoryUrl, id);
         const thinkingTags = normalizeThinkingTags(model?.thinkingTags);
@@ -333,6 +346,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           id,
           label,
           displayName,
+          engine,
           languageSupport,
           repositoryUrl,
           features,
@@ -361,6 +375,7 @@ if (!configuredModels.some((model) => model.id === DEFAULT_MODEL)) {
     id: DEFAULT_MODEL,
     label: DEFAULT_MODEL,
     displayName: DEFAULT_MODEL,
+    engine: { type: DEFAULT_ENGINE_TYPE },
     languageSupport: null,
     repositoryUrl: `https://huggingface.co/${DEFAULT_MODEL}`,
     features: normalizeFeatures(null),
@@ -397,6 +412,11 @@ export function normalizeModelId(modelId) {
     return canonical;
   }
   return DEFAULT_MODEL;
+}
+
+export function getModelEngineType(modelId) {
+  const resolvedModelId = normalizeConfiguredModelId(modelId);
+  return MODEL_OPTIONS_BY_ID.get(resolvedModelId)?.engine?.type || DEFAULT_ENGINE_TYPE;
 }
 
 export function getModelAvailability(

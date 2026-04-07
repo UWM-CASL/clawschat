@@ -274,6 +274,12 @@ describe('model-settings availability', () => {
       audioInput: false,
       videoInput: false,
     });
+    expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.engine).toEqual({
+      type: 'transformers-js',
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.engine).toEqual({
+      type: 'transformers-js',
+    });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.runtime).toMatchObject({
       requiresWebGpu: true,
       multimodalGeneration: true,

@@ -3,6 +3,8 @@
 Model support is configured in `src/config/models.json`:
 
 - `models`: list of supported models (`id`, `label`, optional card metadata, optional `features`)
+- `models[].engine`: explicit inference-driver selection for that model
+  - `type`: currently `transformers-js`
 - `models[].hidden`: optional flag to keep a model available for stored conversations and behavior-specific handling without showing it in the picker
 - `models[].displayName`: friendly card title shown in the pre-chat model picker
 - `models[].languageSupport`: optional language-tag metadata for the pre-chat picker
@@ -149,10 +151,15 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
 - `videoInput`
   Same pattern as audio input. Do not enable this unless the worker path is actually viable; the app currently keeps video disabled for supported models.
 
+### Engine field
+
+- `engine.type`
+  Selects the inference driver for that model. The current app ships only `transformers-js`, but this field is now the contract future LiteRT or API-backed models will use.
+
 ### Runtime fields
 
 - `dtype`
-  Parsed by `src/config/model-settings.js` and `src/workers/llm.worker.js`. Can be a string or a per-submodule dtype map.
+  Parsed by `src/config/model-settings.js` and the current Transformers.js worker path. Can be a string or a per-submodule dtype map.
 - `enableThinking`
   Passed to the worker generation path as `enable_thinking` for models that need an explicit runtime switch instead of only prompt behavior.
 - `requiresWebGpu`
@@ -304,6 +311,7 @@ Hidden legacy/replacement models kept for compatibility and model-specific behav
 
 Notes:
 
+- Each visible/hidden model now explicitly points at the `transformers-js` engine driver in config.
 - Transformers.js is loaded from the locally installed package and bundled into the app build.
 - The model is downloaded at runtime by Transformers.js and cached in-browser for reuse.
 - Model assets are not committed to this repository.
