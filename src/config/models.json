@@ -1,5 +1,5 @@
 {
-  "defaultModelId": "onnx-community/Llama-3.2-3B-Instruct-onnx-web",
+  "defaultModelId": "onnx-community/Llama-3.2-1B-Instruct-ONNX",
   "models": [
     {
       "id": "onnx-community/Llama-3.2-3B-Instruct-onnx-web",
@@ -79,9 +79,14 @@
       "runtime": {
         "dtypes": {
           "webgpu": "q4f16",
-          "cpu": "int8"
+          "cpu": "uint8"
         },
         "useExternalDataFormat": true
+      },
+      "toolCalling": {
+        "format": "json",
+        "nameKey": "name",
+        "argumentsKey": "parameters"
       },
       "generation": {
         "defaultMaxOutputTokens": 1024,
@@ -98,7 +103,7 @@
       "features": {
         "streaming": true,
         "thinking": false,
-        "toolCalling": false,
+        "toolCalling": true,
         "imageInput": false,
         "audioInput": false,
         "videoInput": false

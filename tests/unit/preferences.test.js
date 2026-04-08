@@ -499,7 +499,7 @@ describe('preferences controller', () => {
     };
 
     expect(getFeatureLabels('Llama 3.2 3B Instruct')).toEqual(['Can use built-in tools']);
-    expect(getFeatureLabels('Llama 3.2 1B Instruct')).toEqual([]);
+    expect(getFeatureLabels('Llama 3.2 1B Instruct')).toEqual(['Can use built-in tools']);
     expect(getFeatureLabels('Qwen3.5 2B Instruct')).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
@@ -523,7 +523,7 @@ describe('preferences controller', () => {
     const firstCardTitle = modelCardList.querySelector(
       '.model-card .model-card-title'
     )?.textContent;
-    expect(firstCardTitle).toBe('Llama 3.2 3B Instruct');
-    expect(modelSelect.options[0]?.value).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
+    expect(firstCardTitle).toBe('Llama 3.2 1B Instruct');
+    expect(modelSelect.options[0]?.value).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
   });
 });

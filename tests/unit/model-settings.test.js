@@ -16,9 +16,9 @@ const QWEN_2B_MODEL_ID = 'onnx-community/Qwen3.5-2B-ONNX';
 const GEMMA_4_MODEL_ID = 'litert-community/gemma-4-E4B-it-litert-lm';
 
 describe('model-settings availability', () => {
-  test('uses Llama 3.2 3B as the default model and keeps it first in the visible catalog', () => {
-    expect(DEFAULT_MODEL).toBe(LLAMA_3B_MODEL_ID);
-    expect(MODEL_OPTIONS[0]?.id).toBe(LLAMA_3B_MODEL_ID);
+  test('uses Llama 3.2 1B as the default model and keeps it first in the visible catalog', () => {
+    expect(DEFAULT_MODEL).toBe(LLAMA_1B_MODEL_ID);
+    expect(MODEL_OPTIONS[0]?.id).toBe(LLAMA_1B_MODEL_ID);
   });
 
   test('marks Gemma 4 unavailable in cpu mode without WebGPU', () => {
@@ -51,7 +51,7 @@ describe('model-settings availability', () => {
         backendPreference: 'cpu',
         webGpuAvailable: false,
       })
-    ).toBe(LLAMA_3B_MODEL_ID);
+    ).toBe(LLAMA_1B_MODEL_ID);
   });
 
   test('detects WebGPU support from a navigator-like object', () => {
@@ -124,7 +124,7 @@ describe('model-settings availability', () => {
     ).toBe('q4');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime, 'cpu')
-    ).toBe('int8');
+    ).toBe('uint8');
   });
 
   test('maps the temporary llama 3.2 3B full ONNX repo id back to the browser repo id', () => {
@@ -136,15 +136,15 @@ describe('model-settings availability', () => {
   });
 
   test('falls back to the default model for removed model ids', () => {
-    expect(normalizeModelId('onnx-community/Qwen3-0.6B-ONNX')).toBe(LLAMA_3B_MODEL_ID);
-    expect(normalizeModelId('onnx-community/gemma-4-E2B-it-ONNX')).toBe(LLAMA_3B_MODEL_ID);
+    expect(normalizeModelId('onnx-community/Qwen3-0.6B-ONNX')).toBe(LLAMA_1B_MODEL_ID);
+    expect(normalizeModelId('onnx-community/gemma-4-E2B-it-ONNX')).toBe(LLAMA_1B_MODEL_ID);
   });
 
   test('exposes model feature flags from config', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.features).toMatchObject({
       streaming: true,
       thinking: false,
-      toolCalling: false,
+      toolCalling: true,
       imageInput: false,
       audioInput: false,
       videoInput: false,
@@ -196,7 +196,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime).toMatchObject({
       dtypes: {
         webgpu: 'q4f16',
-        cpu: 'int8',
+        cpu: 'uint8',
       },
       useExternalDataFormat: true,
     });
@@ -227,7 +227,11 @@ describe('model-settings availability', () => {
       nameKey: 'name',
       argumentsKey: 'parameters',
     });
-    expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.toolCalling).toBeNull();
+    expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.toolCalling).toEqual({
+      format: 'json',
+      nameKey: 'name',
+      argumentsKey: 'parameters',
+    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_2B_MODEL_ID)?.toolCalling).toEqual({
       format: 'xml-tool-call',
     });

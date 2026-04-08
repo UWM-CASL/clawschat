@@ -214,7 +214,11 @@ Student-facing browser chat UI with local model inference.
 
 ## Supported models
 
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` (default)
+- `onnx-community/Llama-3.2-1B-Instruct-ONNX` (default)
+  - Uses `q4f16` on WebGPU and `uint8` on CPU in this app, with external data loading.
+  - Uses the same conservative app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
+  - Uses the same JSON tool-call format as the 3B Llama entry in this app.
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - Uses `q4f16` on WebGPU and `q4` on CPU in this app.
   - Remains the canonical Llama 3.2 3B entry for this browser app because the full ONNX repo was not reliable here.
 - `onnx-community/Qwen3.5-2B-ONNX`
@@ -229,9 +233,6 @@ Student-facing browser chat UI with local model inference.
   - Loads the pinned `gemma-4-E4B-it-web.task` artifact from the model repository at runtime.
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
-- `onnx-community/Llama-3.2-1B-Instruct-ONNX`
-  - Uses `q4f16` on WebGPU and `int8` on CPU in this app, with external data loading.
-  - Uses the same conservative app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`

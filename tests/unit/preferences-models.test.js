@@ -161,12 +161,12 @@ describe('preferences-models', () => {
 
     expect(
       harness.controller.getAvailableModelId('LiquidAI/LFM2.5-1.2B-Thinking-ONNX', 'webgpu')
-    ).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
-    expect(modelSelect.value).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
-    expect(harness.storage.getItem('model')).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
+    ).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
+    expect(modelSelect.value).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
+    expect(harness.storage.getItem('model')).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
     expect(harness.storage.getItem('backend')).toBe('webgpu');
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+      'onnx-community/Llama-3.2-1B-Instruct-ONNX',
       true
     );
   });
