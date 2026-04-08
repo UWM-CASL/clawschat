@@ -784,6 +784,22 @@ function buildGenerationOptions(requestGenerationConfig, runtime = {}) {
 
 export { buildGenerationOptions };
 
+function resolveGenerationMaxLength(promptTokens, requestGenerationConfig) {
+  const normalizedPromptTokens =
+    Number.isInteger(promptTokens) && promptTokens > 0 ? promptTokens : 0;
+  const maxOutputTokens =
+    Number.isInteger(requestGenerationConfig?.maxOutputTokens) &&
+    requestGenerationConfig.maxOutputTokens > 0
+      ? requestGenerationConfig.maxOutputTokens
+      : 0;
+  if (!normalizedPromptTokens || !maxOutputTokens) {
+    return 0;
+  }
+  return normalizedPromptTokens + maxOutputTokens;
+}
+
+export { resolveGenerationMaxLength };
+
 function getPromptTokenCount(inputIds) {
   if (!inputIds) {
     return 0;
@@ -1276,6 +1292,21 @@ async function generate(payload) {
       const modelInputs = await multimodalProcessor(promptText, imageInputs, audioInputs, {
         add_special_tokens: false,
       });
+      const promptTokens = getPromptTokenCount(modelInputs?.input_ids);
+      const maxLength = resolveGenerationMaxLength(promptTokens, requestGenerationConfig);
+      const multimodalGenerationOptions = {
+        ...generationOptions,
+        ...(maxLength > 0 ? { max_length: maxLength } : {}),
+      };
+      logWorkerDebug('generate-invoke', {
+        requestId,
+        mode: 'multimodal',
+        backendInUse,
+        loadedBackendDevice,
+        promptTokens,
+        maxNewTokens: requestGenerationConfig.maxOutputTokens,
+        maxLength: maxLength || '(runtime default)',
+      });
 
       if (TextStreamer) {
         const streamer = buildMultimodalStreamerOptions(tokenizer, runtime, (text) => {
@@ -1285,13 +1316,13 @@ async function generate(payload) {
 
         await model.generate({
           ...modelInputs,
-          ...generationOptions,
+          ...multimodalGenerationOptions,
           streamer,
         });
       } else {
         const output = await model.generate({
           ...modelInputs,
-          ...generationOptions,
+          ...multimodalGenerationOptions,
         });
         const decoded = multimodalProcessor.batch_decode(
           output.slice(null, [modelInputs.input_ids.dims.at(-1), null]),
@@ -1330,6 +1361,17 @@ async function generate(payload) {
       const promptText = decodePreparedTextPrompt(tokenizer, preparedTextInputs);
       const pipelineGenerationOptions = {
         ...generationOptions,
+        ...(resolveGenerationMaxLength(
+          preparedTextInputs.promptTokens,
+          requestGenerationConfig
+        ) > 0
+          ? {
+              max_length: resolveGenerationMaxLength(
+                preparedTextInputs.promptTokens,
+                requestGenerationConfig
+              ),
+            }
+          : {}),
         return_full_text: false,
         add_special_tokens: false,
         tokenizer_encode_kwargs: {
@@ -1338,6 +1380,15 @@ async function generate(payload) {
           max_length: requestGenerationConfig.maxContextTokens,
         },
       };
+      logWorkerDebug('generate-invoke', {
+        requestId,
+        mode: 'text',
+        backendInUse,
+        loadedBackendDevice,
+        promptTokens: preparedTextInputs.promptTokens,
+        maxNewTokens: requestGenerationConfig.maxOutputTokens,
+        maxLength: pipelineGenerationOptions.max_length || '(runtime default)',
+      });
       if (TextStreamer) {
         const streamer = new TextStreamer(tokenizer, {
           skip_prompt: true,

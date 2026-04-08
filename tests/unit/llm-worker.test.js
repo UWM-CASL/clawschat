@@ -10,6 +10,7 @@ let getBackendAttemptOrder;
 let configureOnnxWasmBackend;
 let prepareTextGenerationInputs;
 let decodePreparedTextPrompt;
+let resolveGenerationMaxLength;
 let resolveBackendLabel;
 
 beforeAll(async () => {
@@ -28,6 +29,7 @@ beforeAll(async () => {
     configureOnnxWasmBackend,
     prepareTextGenerationInputs,
     decodePreparedTextPrompt,
+    resolveGenerationMaxLength,
     resolveBackendLabel,
   } = await import('../../src/workers/llm.worker.js'));
 });
@@ -172,6 +174,14 @@ describe('llm.worker generation options', () => {
       do_sample: true,
       enable_thinking: false,
     });
+  });
+
+  test('derives total max_length from prompt tokens plus maximum output tokens', () => {
+    expect(
+      resolveGenerationMaxLength(714, {
+        maxOutputTokens: 1024,
+      })
+    ).toBe(1738);
   });
 });
 

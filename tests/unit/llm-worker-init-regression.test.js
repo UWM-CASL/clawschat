@@ -313,6 +313,7 @@ describe('llm.worker init regression', () => {
       '<s>Prompt text',
       expect.objectContaining({
         max_new_tokens: 64,
+        max_length: 67,
         return_full_text: false,
         add_special_tokens: false,
         tokenizer_encode_kwargs: expect.objectContaining({
