@@ -6,12 +6,14 @@ import {
   browserSupportsWebGpu,
   getFirstAvailableModelId,
   getModelAvailability,
+  normalizeModelId,
   resolveRuntimeDtypeForBackend,
 } from '../../src/config/model-settings.js';
 
 const LIQUID_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX';
 const LIQUID_SMALL_MODEL_ID = 'LiquidAI/LFM2.5-350M-ONNX';
 const LIQUID_INSTRUCT_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Instruct-ONNX';
+const LLAMA_3B_MODEL_ID = 'onnx-community/Llama-3.2-3B-Instruct-ONNX';
 const LLAMA_1B_MODEL_ID = 'onnx-community/Llama-3.2-1B-Instruct-ONNX';
 const QWEN_SMALL_MODEL_ID = 'onnx-community/Qwen3.5-0.8B-ONNX';
 const QWEN_MODEL_ID = 'onnx-community/Qwen3.5-2B-ONNX';
@@ -91,7 +93,7 @@ describe('model-settings availability', () => {
         backendPreference: 'cpu',
         webGpuAvailable: false,
       })
-    ).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
+    ).toBe(LLAMA_3B_MODEL_ID);
   });
 
   test('detects WebGPU support from a navigator-like object', () => {
@@ -102,7 +104,7 @@ describe('model-settings availability', () => {
 
   test('loads model-specific default sampling settings from config', () => {
     expect(
-      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.generation
+      MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.generation
     ).toMatchObject({
       defaultTemperature: 0.6,
       defaultTopK: 50,
@@ -201,17 +203,11 @@ describe('model-settings availability', () => {
 
   test('resolves mode-specific runtime dtypes from config', () => {
     expect(
-      resolveRuntimeDtypeForBackend(
-        MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime,
-        'webgpu'
-      )
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime, 'webgpu')
     ).toBe('q4f16');
     expect(
-      resolveRuntimeDtypeForBackend(
-        MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime,
-        'cpu'
-      )
-    ).toBe('q4');
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime, 'cpu')
+    ).toBe('int8');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime, 'cpu')
     ).toBe('int8');
@@ -224,6 +220,12 @@ describe('model-settings availability', () => {
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.runtime, 'webgpu')
     ).toBe('q8');
+  });
+
+  test('maps the old llama 3.2 3B onnx-web id to the current ONNX repo id', () => {
+    expect(normalizeModelId('onnx-community/Llama-3.2-3B-Instruct-onnx-web')).toBe(
+      LLAMA_3B_MODEL_ID
+    );
   });
 
   test('exposes model feature flags from config', () => {
@@ -252,7 +254,7 @@ describe('model-settings availability', () => {
       videoInput: false,
     });
     expect(
-      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.features
+      MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.features
     ).toMatchObject({
       streaming: true,
       thinking: false,
@@ -326,11 +328,11 @@ describe('model-settings availability', () => {
       },
     });
     expect(
-      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime
+      MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime
     ).toMatchObject({
       dtypes: {
         webgpu: 'q4f16',
-        cpu: 'q4',
+        cpu: 'int8',
       },
       useExternalDataFormat: true,
     });
@@ -399,7 +401,7 @@ describe('model-settings availability', () => {
       maxAudioInputs: 1,
     });
     expect(
-      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.toolCalling
+      MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.toolCalling
     ).toEqual({
       format: 'json',
       nameKey: 'name',

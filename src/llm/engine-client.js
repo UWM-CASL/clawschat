@@ -58,7 +58,7 @@ export class LLMEngineClient {
     this.engineDescriptor = null;
     this.config = {
       engineType: DEFAULT_ENGINE_TYPE,
-      modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+      modelId: 'onnx-community/Llama-3.2-3B-Instruct-ONNX',
       backendPreference: 'webgpu',
       runtime: {},
       generationConfig: {

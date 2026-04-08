@@ -220,7 +220,7 @@ Student-facing browser chat UI with local model inference.
   - Loads the pinned `gemma-4-E4B-it-web.task` artifact from the model repository at runtime.
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+- `onnx-community/Llama-3.2-3B-Instruct-ONNX`
   - Uses `q4f16` on WebGPU and `q4` on CPU in this app.
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`
   - Uses `q4f16` on WebGPU and `int8` on CPU in this app, with external data loading.
@@ -248,12 +248,12 @@ Student-facing browser chat UI with local model inference.
   - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
   - `onnx-community/gemma-3n-E2B-it-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
-  - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `onnx-community/Llama-3.2-3B-Instruct-onnx-web` -> `onnx-community/Llama-3.2-3B-Instruct-ONNX`
   - `onnx-community/Qwen3-0.6B-ONNX` -> `onnx-community/Qwen3.5-0.8B-ONNX`
   - `huggingworld/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
-  - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-ONNX`
 - Model support configuration lives in `src/config/models.json`:
 - `models`: options shown in the pre-chat model card picker
 - `models[].hidden`: optional flag that keeps a model supported internally while removing its card and picker option
