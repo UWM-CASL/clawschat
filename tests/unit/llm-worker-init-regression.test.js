@@ -12,7 +12,13 @@ vi.mock('@huggingface/transformers', () => ({
     },
   },
   pipeline: pipelineFactory,
-  TextStreamer: class TextStreamerMock {},
+  TextStreamer: class TextStreamerMock {
+    constructor(_tokenizer, options = {}) {
+      this.callback_function = options.callback_function || null;
+      this.skip_prompt = options.skip_prompt === true;
+      this.skip_special_tokens = options.skip_special_tokens === true;
+    }
+  },
   InterruptableStoppingCriteria: class InterruptableStoppingCriteriaMock {
     interrupt() {}
 
@@ -231,6 +237,97 @@ describe('llm.worker init regression', () => {
         backend: 'cpu',
         backendDevice: 'default',
         modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+      },
+    });
+  });
+
+  test('uses the text-generation pipeline wrapper for cpu generation after prompt preparation', async () => {
+    const rawGenerate = vi.fn(async () => {
+      throw new Error('raw model.generate should not be called');
+    });
+    const generator = /** @type {any} */ (vi.fn(async (_prompt, options = {}) => {
+      options.streamer?.callback_function?.('Pipeline output');
+      return [{ generated_text: 'Pipeline output' }];
+    }));
+    generator.tokenizer = {
+      apply_chat_template: vi.fn(() => ({
+        input_ids: [[101, 102, 103]],
+        attention_mask: [[1, 1, 1]],
+      })),
+      batch_decode: vi.fn((value) => {
+        if (Array.isArray(value) && Array.isArray(value[0])) {
+          return ['<s>Prompt text'];
+        }
+        return ['Pipeline output'];
+      }),
+    };
+    generator.model = {
+      generate: rawGenerate,
+    };
+    pipelineFactory.mockResolvedValue(generator);
+
+    await import('../../src/workers/llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload: {
+            modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+            backendPreference: 'cpu',
+            runtime: {
+              dtypes: {
+                cpu: 'q4',
+              },
+            },
+          },
+        },
+      })
+    );
+
+    workerSelf.postMessage.mockClear();
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'generate',
+          payload: {
+            requestId: 'request-1',
+            prompt: [{ role: 'user', content: 'Hello there' }],
+            runtime: {},
+            generationConfig: {
+              maxOutputTokens: 64,
+              maxContextTokens: 8192,
+              temperature: 0.6,
+              topK: 50,
+              topP: 0.9,
+              repetitionPenalty: 1.0,
+            },
+          },
+        },
+      })
+    );
+
+    expect(generator).toHaveBeenCalledWith(
+      '<s>Prompt text',
+      expect.objectContaining({
+        max_new_tokens: 64,
+        return_full_text: false,
+        add_special_tokens: false,
+        tokenizer_encode_kwargs: expect.objectContaining({
+          add_special_tokens: false,
+          truncation: true,
+          max_length: 8192,
+        }),
+      })
+    );
+    expect(rawGenerate).not.toHaveBeenCalled();
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'complete',
+      payload: {
+        requestId: 'request-1',
+        text: 'Pipeline output',
       },
     });
   });

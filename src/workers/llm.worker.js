@@ -871,6 +871,26 @@ function prepareTextGenerationInputs(tokenizerInstance, prompt, requestGeneratio
 
 export { prepareTextGenerationInputs };
 
+function decodePreparedTextPrompt(tokenizerInstance, preparedTextInputs) {
+  const inputIds = preparedTextInputs?.modelInputs?.input_ids;
+  if (!inputIds) {
+    throw new Error('Prepared text-generation inputs are missing input_ids.');
+  }
+  if (tokenizerInstance && typeof tokenizerInstance.batch_decode === 'function') {
+    const decoded = tokenizerInstance.batch_decode(inputIds, {
+      skip_special_tokens: false,
+      clean_up_tokenization_spaces: false,
+    });
+    const promptText = Array.isArray(decoded) ? String(decoded[0] || '') : '';
+    if (promptText) {
+      return promptText;
+    }
+  }
+  throw new Error('Text-generation prompt could not be decoded for pipeline execution.');
+}
+
+export { decodePreparedTextPrompt };
+
 function promptContainsStructuredMedia(prompt) {
   return Array.isArray(prompt)
     ? prompt.some((message) =>
@@ -1281,9 +1301,9 @@ async function generate(payload) {
         queueBufferedToken(generationState, streamedText);
       }
     } else {
-      const textModel = model?.model;
-      if (!textModel || typeof textModel.generate !== 'function') {
-        throw new Error('Text-generation model is not initialized correctly.');
+      const textGenerator = model;
+      if (typeof textGenerator !== 'function') {
+        throw new Error('Text-generation pipeline is not initialized correctly.');
       }
       const preparedTextInputs = prepareTextGenerationInputs(
         tokenizer,
@@ -1307,32 +1327,41 @@ async function generate(payload) {
           maxContextTokens: requestGenerationConfig.maxContextTokens,
         });
       }
-      if (TextStreamer) {
-      const streamer = new TextStreamer(tokenizer, {
-        skip_prompt: true,
-        callback_function: (text) => {
-          streamedText += text;
-          queueBufferedToken(generationState, text);
+      const promptText = decodePreparedTextPrompt(tokenizer, preparedTextInputs);
+      const pipelineGenerationOptions = {
+        ...generationOptions,
+        return_full_text: false,
+        add_special_tokens: false,
+        tokenizer_encode_kwargs: {
+          add_special_tokens: false,
+          truncation: true,
+          max_length: requestGenerationConfig.maxContextTokens,
         },
-      });
+      };
+      if (TextStreamer) {
+        const streamer = new TextStreamer(tokenizer, {
+          skip_prompt: true,
+          skip_special_tokens: true,
+          callback_function: (text) => {
+            streamedText += text;
+            queueBufferedToken(generationState, text);
+          },
+        });
 
-        await textModel.generate({
-          ...preparedTextInputs.modelInputs,
-          ...generationOptions,
+        await textGenerator(promptText, {
+          ...pipelineGenerationOptions,
           streamer,
         });
       } else {
-        const output = await textModel.generate({
-          ...preparedTextInputs.modelInputs,
-          ...generationOptions,
+        const output = await textGenerator(promptText, {
+          ...pipelineGenerationOptions,
         });
-        const decoded = tokenizer.batch_decode(
-          output.slice(null, [preparedTextInputs.promptTokens, null]),
-          {
-            skip_special_tokens: true,
-          }
-        );
-        streamedText = decoded?.[0] || '';
+        const generated = output?.[0]?.generated_text;
+        if (Array.isArray(generated)) {
+          streamedText = generated[generated.length - 1]?.content || '';
+        } else {
+          streamedText = typeof generated === 'string' ? generated : '';
+        }
         queueBufferedToken(generationState, streamedText);
       }
     }

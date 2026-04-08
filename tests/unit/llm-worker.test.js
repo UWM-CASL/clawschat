@@ -9,6 +9,7 @@ let buildMultimodalDecodeOptions;
 let getBackendAttemptOrder;
 let configureOnnxWasmBackend;
 let prepareTextGenerationInputs;
+let decodePreparedTextPrompt;
 let resolveBackendLabel;
 
 beforeAll(async () => {
@@ -26,6 +27,7 @@ beforeAll(async () => {
     getBackendAttemptOrder,
     configureOnnxWasmBackend,
     prepareTextGenerationInputs,
+    decodePreparedTextPrompt,
     resolveBackendLabel,
   } = await import('../../src/workers/llm.worker.js'));
 });
@@ -235,6 +237,25 @@ describe('llm.worker text prompt preparation', () => {
         return_dict: true,
       })
     );
+  });
+
+  test('decodes prepared text-generation inputs back into a prompt string for pipeline execution', () => {
+    const batchDecode = vi.fn(() => ['<s>Prompt text']);
+    const tokenizer = {
+      batch_decode: batchDecode,
+    };
+
+    expect(
+      decodePreparedTextPrompt(tokenizer, {
+        modelInputs: {
+          input_ids: [[11, 12, 13]],
+        },
+      })
+    ).toBe('<s>Prompt text');
+    expect(batchDecode).toHaveBeenCalledWith([[11, 12, 13]], {
+      skip_special_tokens: false,
+      clean_up_tokenization_spaces: false,
+    });
   });
 });
 
