@@ -750,7 +750,7 @@ export function createTranscriptView(dependencies) {
             parsed.status === 'failed' ||
             parsed.status === 'failure')
         ) {
-          return parsed.body.trim();
+          return JSON.stringify(parsed, null, 2);
         }
         return JSON.stringify(parsed, null, 2);
       } catch {

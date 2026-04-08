@@ -1126,14 +1126,14 @@ describe('transcript-view', () => {
       '"cmd": "ls /workspace"'
     );
     expect(harness.container.querySelector('.tool-call-result')?.textContent).toContain(
-      'notes.txt'
+      '"status": "success"'
     );
     expect(harness.container.querySelector('.tool-call-result')?.textContent).toContain(
-      'readme.md'
+      '"body": "notes.txt\\nreadme.md"'
     );
   });
 
-  test('renders the body from a failed web lookup envelope inline on the model card', () => {
+  test('renders the full failed web lookup envelope inline on the model card', () => {
     const harness = createViewHarness();
     harness.conversation.messageNodes[1].response = 'I am checking the web.';
     harness.conversation.messageNodes[1].text = 'I am checking the web.';
@@ -1214,7 +1214,12 @@ describe('transcript-view', () => {
     expect(harness.container.querySelector('.tool-call-request')?.textContent).toContain(
       '"name": "web_lookup"'
     );
-    expect(harness.container.querySelector('.tool-call-result')?.textContent).toBe('Failed to fetch');
+    expect(harness.container.querySelector('.tool-call-result')?.textContent).toContain(
+      '"status": "failed"'
+    );
+    expect(harness.container.querySelector('.tool-call-result')?.textContent).toContain(
+      '"body": "Failed to fetch"'
+    );
   });
 
   test('renders PDF attachment metadata in the transcript', () => {
