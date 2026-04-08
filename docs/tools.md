@@ -82,8 +82,8 @@ Current MCP constraints:
   - `timeZone`
 - Model-facing envelope:
   - `status: "successful"`
-  - `body`: markdown summary of the current time values
-  - `message`: short follow-up telling the model to use the timestamp directly
+  - `body`: a simple markdown list of the current local date, local time, timezone, and UTC timestamp
+  - `message`: `Present the time in a concise, useful way suitible for the conversation.`
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js).
 

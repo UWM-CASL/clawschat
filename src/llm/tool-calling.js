@@ -243,7 +243,7 @@ function getStandardToolFollowUpMessage(toolName, { failed = false } = {}) {
   }
   switch (normalizedToolName) {
     case 'get_current_date_time':
-      return 'Use this timestamp directly in your response.';
+      return 'Present the time in a concise, useful way suitible for the conversation.';
     case 'get_user_location':
       return 'Use this location detail directly in your response.';
     case 'tasklist':
@@ -1734,12 +1734,10 @@ function buildTaskListUsageResult() {
 
 function buildDateTimeToolBody(result = {}) {
   return [
-    '## Current date and time',
     `- Local date: ${typeof result.localDate === 'string' ? result.localDate : 'Unknown'}`,
     `- Local time: ${typeof result.localTime === 'string' ? result.localTime : 'Unknown'}`,
     `- Time zone: ${typeof result.timeZone === 'string' ? result.timeZone : 'UTC'}`,
-    `- ISO timestamp: ${typeof result.iso === 'string' ? result.iso : ''}`,
-    `- Unix milliseconds: ${Number.isFinite(result.unixMs) ? String(result.unixMs) : ''}`,
+    `- UTC timestamp: ${typeof result.iso === 'string' ? result.iso : ''}`,
   ].join('\n');
 }
 

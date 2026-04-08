@@ -1713,7 +1713,8 @@ describe('tool-calling prompt builder', () => {
     });
     expect(JSON.parse(result.resultText)).toMatchObject({
       status: 'successful',
-      body: expect.stringContaining('## Current date and time'),
+      body: expect.stringContaining('- Local date:'),
+      message: 'Present the time in a concise, useful way suitible for the conversation.',
     });
   });
 
