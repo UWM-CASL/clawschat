@@ -5,7 +5,6 @@ Model support is configured in `src/config/models.json`:
 - `models`: list of supported models (`id`, `label`, optional card metadata, optional `features`)
 - `models[].engine`: explicit inference-driver selection for that model
   - `type`: currently `transformers-js` or `mediapipe-genai`
-- `models[].hidden`: optional flag to keep a model available for stored conversations and behavior-specific handling without showing it in the picker
 - `models[].displayName`: friendly card title shown in the pre-chat model picker
 - `models[].languageSupport`: optional language-tag metadata for the pre-chat picker
   - `tags`: ordered language entries with two-letter `code` and full `name`
@@ -66,23 +65,15 @@ Model support is configured in `src/config/models.json`:
 Treat model work as one of three cases:
 
 1. Add a new selectable model.
-2. Hide or replace an existing model while preserving compatibility for stored conversations.
+2. Disable or replace an existing model.
 3. Introduce a new model capability that the current schema or worker path does not understand yet.
-
-This app already supports case 2 directly:
-
-- `MODEL_OPTIONS` only contains models where `hidden !== true`.
-- `MODEL_OPTIONS_BY_ID` still contains hidden models so old conversations, exports, and per-model behavior continue to resolve.
-- `legacyAliases` remaps previously stored model IDs before lookup.
-
-That means removal from the picker should usually be a hide, not a hard delete, until you are certain no stored conversation or migration path still depends on the old ID.
 
 ## Add a model
 
 When adding a new model:
 
 1. Add the model entry to `src/config/models.json`.
-2. Decide whether it should be selectable now or shipped hidden first with `"hidden": true`.
+2. Decide whether it should be selectable now or temporarily unavailable through `unavailableReason`.
 3. Set `generation` defaults and limits from the publisher card or the tested runtime behavior.
 4. Set `runtime` fields to match the actual worker path requirements.
 5. Set `features` conservatively. Do not advertise a capability the app cannot execute yet.
@@ -100,24 +91,14 @@ Minimum validation after adding a model:
 - `npm run typecheck`
 - Relevant unit tests
 
-## Hide or remove a model
+## Disable or remove a model
 
-Use this path when a model should disappear from the UI but older conversations or behavior-specific code still need it.
+Use this path when a model should stop being selectable.
 
-1. Set `"hidden": true` on the model entry.
-2. Keep the existing `id` unchanged.
-3. Keep any needed `toolCalling`, `thinkingTags`, `runtime`, and `generation` fields so old conversations still behave correctly.
-4. If an older stored ID should now resolve to a replacement model, add or update `legacyAliases`.
-5. Update docs so the model is described as hidden legacy/replacement support rather than selectable support.
-6. Update tests that assume a visible card count or visible catalog membership.
-
-Hard deletion from `models.json` is higher risk because it removes:
-
-- normalization support for existing stored model IDs
-- model-specific availability checks
-- model-specific tool-call parsing/prompt rules
-- model-specific thinking-tag parsing
-- model-specific generation defaults
+1. If the model is only temporarily unsupported, keep the entry and set `unavailableReason`.
+2. If compatibility is no longer required, delete the model entry entirely.
+3. Remove any `legacyAliases` that only pointed at the deleted model.
+4. Update docs and tests that assume the removed model still exists.
 
 ## Schema field impact map
 
@@ -135,8 +116,6 @@ This is the practical checklist for future model drops. If a model like a future
   Model details link in the picker.
 - `languageSupport`
   Card language badges and the linked `and more` overflow indicator.
-- `hidden`
-  Removes the model from `MODEL_OPTIONS` while keeping it available through `MODEL_OPTIONS_BY_ID`.
 - `unavailableReason`
   Keeps the model visible in `MODEL_OPTIONS`, but `getModelAvailability()` will disable it with the provided reason until the runtime path is actually supported.
 
@@ -274,7 +253,7 @@ In those cases:
 
 Do not mark a capability on the card just because the upstream model card advertises it. In this app, `models.json` is the contract for what this frontend and worker can actually support.
 
-Current selectable models in Settings:
+Current models in Settings:
 
 - `litert-community/gemma-4-E4B-it-litert-lm` (default)
   - Uses the `mediapipe-genai` engine with a pinned `gemma-4-E4B-it-web.task` asset URL.
@@ -292,33 +271,13 @@ Current selectable models in Settings:
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`
   - Uses `q4f16` on WebGPU and `int8` on CPU, and loads external ONNX data sidecars.
   - Uses the same app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
-
-Hidden legacy/replacement models kept for compatibility and model-specific behavior:
-
-- `onnx-community/gemma-4-E2B-it-ONNX`
-  - Hidden from the picker after the LiteRT Gemma 4 replacement, but kept so stored conversations and model-specific multimodal behavior still resolve.
-- `onnx-community/Qwen3.5-0.8B-ONNX`
-  - Hidden from the picker for now, but kept in config so stored conversations, aliases, and model-specific handling still resolve.
-- `onnx-community/Qwen3.5-2B-ONNX`
-  - Hidden from the picker for now, but kept in config so stored conversations, aliases, and model-specific handling still resolve.
-- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
-- `onnx-community/gemma-3n-E2B-it-ONNX`
-  - Supports text output with image and audio inputs in this app.
-  - Video remains disabled in config because the current browser runtime path is not reliable enough yet.
-  - The app uses a dedicated multimodal worker path for this model and currently resolves `q8` in both WebGPU and CPU modes because the full repo does not expose a complete q4/q4f16 multimodal set.
-- `LiquidAI/LFM2.5-350M-ONNX`, `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`, `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
-  - Hidden from the picker after retirement, but kept in config so stored conversations and model-specific tool-calling and thinking behavior still resolve.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `onnx-community/Qwen3-0.6B-ONNX` -> `onnx-community/Qwen3.5-0.8B-ONNX`
-  - `huggingworld/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
-  - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
-  - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 
 Notes:
 
-- Each visible/hidden model explicitly points at its engine driver in config.
+- Each model explicitly points at its engine driver in config.
 - Transformers.js and MediaPipe Tasks GenAI are loaded from locally installed packages and bundled into the app build.
 - Model assets are downloaded at runtime and cached in-browser through the engine-specific path.
 - Model assets are not committed to this repository.
@@ -342,12 +301,6 @@ Per-model limits and defaults:
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"cmd":"..."}` inside `parameters`, no thinking tags
 - `Llama 3.2 3B` keeps the browser-oriented `onnx-web` repo id as its canonical model in this app. The full ONNX repo remains a legacy alias because its browser load path was not reliable here: the `int8` package could fail with `Array buffer allocation failed`, and the `q4` package could fail to preload required `.onnx_data` shards.
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`: runtime dtypes `{ webgpu: q4f16, cpu: int8 }`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
-- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime dtypes `{ webgpu: q4f16, cpu: q4f16 }`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags
 - All listed Llama entries enable `useExternalDataFormat: true` where required for `.onnx_data` loading.
-- `onnx-community/Qwen3.5-0.8B-ONNX`: runtime dtypes `{ webgpu: q4f16, cpu: q8 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `onnx-community/Qwen3.5-2B-ONNX`: runtime dtypes `{ webgpu: q4f16, cpu: q8 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, input limit `maxImageInputs: 1`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
 - `Yoursmiling/Qwen3.5-2B-LiteRT`: engine `mediapipe-genai`, `unavailableReason: "This LiteRT export is not currently compatible with the browser MediaPipe runtime used by this app."`, pinned `modelAssetPath` to `model_multimodal.litertlm`, `promptFormat: "qwen-im"`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, text-only in the current app worker path, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
 - `litert-community/gemma-4-E4B-it-litert-lm`: engine `mediapipe-genai`, `requiresWebGpu: true`, pinned `modelAssetPath` to `gemma-4-E4B-it-web.task`, `promptFormat: "gemma-turns"`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
-- `onnx-community/gemma-4-E2B-it-ONNX`: hidden legacy replacement, runtime dtypes `{ webgpu: q4f16, cpu: q8 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, input limit `maxAudioInputs: 1`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
-- `onnx-community/gemma-3n-E2B-it-ONNX`: runtime dtypes `{ webgpu: q8, cpu: q8 }`, `multimodalGeneration: true`, max context `32768`, default context `8192`, default temperature `0.6`, default top-k `65`, default top-p `0.95`, feature flags `toolCalling`, `imageInput`, and `audioInput`, tool call format `{"name":"tool_name","arguments":{...}}`
-- Hidden LiquidAI LFM compatibility entries keep their existing WebGPU-only runtime, sampling, tool-calling, and thinking defaults in config for stored conversations.

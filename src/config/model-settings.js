@@ -412,7 +412,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
         const toolCalling = normalizeToolCalling(model?.toolCalling, {
           enabled: features.toolCalling,
         });
-        const inputLimits = normalizeInputLimits(model?.inputLimits);
+        const inputLimits = normalizeInputLimits(/** @type {any} */ (model)?.inputLimits);
         return {
           id,
           label,

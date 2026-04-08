@@ -145,7 +145,7 @@ describe('preferences-models', () => {
     expect(harness.deps.setStatus).toHaveBeenCalledWith(expect.stringContaining('CPU'));
   });
 
-  test('restores a stored hidden model as the first visible available model', () => {
+  test('restores a removed model id as the first visible available model', () => {
     const harness = createHarness();
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')

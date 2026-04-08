@@ -230,25 +230,13 @@ Student-facing browser chat UI with local model inference.
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`
   - Uses `q4f16` on WebGPU and `int8` on CPU in this app, with external data loading.
   - Uses the same conservative app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
-- Hidden legacy/replacement model definitions remain in config so stored conversations and model-specific behaviors still resolve correctly:
-  - `onnx-community/gemma-4-E2B-it-ONNX`
-  - `onnx-community/Qwen3.5-0.8B-ONNX`
-  - `onnx-community/Qwen3.5-2B-ONNX`
-  - `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
-  - `onnx-community/gemma-3n-E2B-it-ONNX`
-  - `LiquidAI/LFM2.5-350M-ONNX`, `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`, `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `onnx-community/Qwen3-0.6B-ONNX` -> `onnx-community/Qwen3.5-0.8B-ONNX`
-  - `huggingworld/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
-  - `onnx-community/gemma-3-1b-it-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
-  - `onnx-community/gemma-3-1b-ONNX-GQA` -> `onnx-community/gemma-3n-E2B-it-ONNX`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 
 For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` repo id as the canonical model. The full ONNX repo remains a legacy alias only because its browser load path was not reliable in this app: the `int8` package hit `Array buffer allocation failed`, and the `q4` package failed to preload required `.onnx_data` shards in-browser.
 - Model support configuration lives in `src/config/models.json`:
 - `models`: options shown in the pre-chat model card picker
-- `models[].hidden`: optional flag that keeps a model supported internally while removing its card and picker option
 - `models[].displayName`: friendly name shown on the card
 - `models[].languageSupport`: user-facing language tags shown on the card, with a publisher-linked `and more` suffix when needed
 - `models[].repositoryUrl`: model details link used from the card footer
@@ -317,7 +305,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - See `docs/conversation-domain.md`, `docs/app-state.md`, `docs/app-controller.md`, `docs/orchestrations.md`, and `docs/ui-views.md` for the current boundaries.
 - See `docs/tools.md` for current built-in and MCP tool-calling behavior plus the remaining `SKILL.md` planning.
 - See `docs/web-search-hypothesis.md` for the current low-bandwidth, mobile-assisted search design hypothesis.
-- See `docs/models.md` for the model catalog schema, visible-vs-hidden model policy, and the contributor checklist for adding, replacing, or retiring models.
+- See `docs/models.md` for the model catalog schema and the contributor checklist for adding, disabling, replacing, or retiring models.
 
 ## Orchestrations
 

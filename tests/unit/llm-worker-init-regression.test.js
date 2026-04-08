@@ -164,14 +164,13 @@ describe('llm.worker init regression', () => {
         data: {
           type: 'init',
           payload: {
-            modelId: 'LiquidAI/LFM2.5-350M-ONNX',
+            modelId: 'litert-community/gemma-4-E4B-it-litert-lm',
             backendPreference: 'webgpu',
             runtime: {
-              dtypes: {
-                webgpu: 'q4f16',
-              },
               requiresWebGpu: true,
-              useExternalDataFormat: true,
+              modelAssetPath:
+                'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/439779041cf1a165146a3ee1f9a7653b2f047975/gemma-4-E4B-it-web.task',
+              promptFormat: 'gemma-turns',
             },
           },
         },
@@ -183,7 +182,7 @@ describe('llm.worker init regression', () => {
       type: 'init-error',
       payload: {
         message:
-          'Failed to initialize model. LiquidAI/LFM2.5-350M-ONNX requires WebGPU, but no usable WebGPU adapter was found.',
+          'Failed to initialize model. litert-community/gemma-4-E4B-it-litert-lm requires WebGPU, but no usable WebGPU adapter was found.',
       },
     });
   });
