@@ -175,4 +175,88 @@ if (typeof exports === 'object' && typeof module === 'object') {
       ready: true,
     });
   });
+
+  test('generates responses without reloading the LiteRT model asset', async () => {
+    const closeMock = vi.fn();
+    const clearCancelSignalsMock = vi.fn();
+    const setOptionsMock = vi.fn();
+    const generateResponseMock = vi.fn(async (prompt, progressListener) => {
+      expect(prompt).toBe('<|turn>user\nWhat time is it.<turn|>\n<|turn>model\n');
+      progressListener?.('It is ', false);
+      progressListener?.('It is 11:25 PM.', true);
+      return 'It is 11:25 PM.';
+    });
+
+    createFromOptionsMock.mockResolvedValue({
+      close: closeMock,
+      clearCancelSignals: clearCancelSignalsMock,
+      setOptions: setOptionsMock,
+      generateResponse: generateResponseMock,
+    });
+
+    await import('../../src/workers/mediapipe-llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload: {
+            modelId: 'litert-community/gemma-4-E4B-it-litert-lm',
+            backendPreference: 'webgpu',
+            generationConfig: {
+              maxOutputTokens: 512,
+              maxContextTokens: 8192,
+              temperature: 0.8,
+              topK: 40,
+            },
+            runtime: {
+              requiresWebGpu: true,
+              modelAssetPath:
+                'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/test/gemma-4-E4B-it-web.task',
+            },
+          },
+        },
+      })
+    );
+
+    workerSelf.postMessage.mockClear();
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'generate',
+          payload: {
+            requestId: 'request-1',
+            prompt: 'What time is it.',
+            generationConfig: {
+              maxOutputTokens: 64,
+              maxContextTokens: 4096,
+              temperature: 0.4,
+              topK: 20,
+            },
+            runtime: {},
+          },
+        },
+      })
+    );
+
+    expect(setOptionsMock).not.toHaveBeenCalled();
+    expect(clearCancelSignalsMock).toHaveBeenCalledTimes(1);
+    expect(generateResponseMock).toHaveBeenCalledTimes(1);
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'token',
+      payload: {
+        requestId: 'request-1',
+        text: 'It is ',
+      },
+    });
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'complete',
+      payload: {
+        requestId: 'request-1',
+        text: 'It is 11:25 PM.',
+      },
+    });
+  });
 });

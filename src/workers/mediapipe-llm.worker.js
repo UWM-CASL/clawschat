@@ -558,19 +558,12 @@ async function generate(payload) {
     return;
   }
 
-  const requestGenerationConfig = normalizeGenerationConfig(
-    payload.generationConfig || generationConfig
-  );
-  generationConfig = requestGenerationConfig;
   postStatus('Generating (WEBGPU)...');
   const generationState = createGenerationState(requestId);
   try {
-    await llmInference.setOptions({
-      maxTokens: requestGenerationConfig.maxContextTokens,
-      topK: requestGenerationConfig.topK,
-      temperature: requestGenerationConfig.temperature,
-      randomSeed: 0,
-    });
+    // LiteRT generation runs with the sampler/context settings applied during initialization.
+    // The app reinitializes the engine when generation settings change, so avoid calling
+    // setOptions() here because the current MediaPipe build tries to reload the model asset.
     llmInference.clearCancelSignals?.();
 
     let finalText = '';
