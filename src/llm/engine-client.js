@@ -164,6 +164,7 @@ export class LLMEngineClient {
     this.loadedBackend = null;
     this.loadedEngineType = null;
     this.engineDescriptor = null;
+    this.#clearPendingInitState();
   }
 
   #ensureWorker() {
@@ -178,23 +179,35 @@ export class LLMEngineClient {
     this.worker.addEventListener('message', (event) => {
       this.#handleWorkerMessage(event.data);
     });
+    this.worker.addEventListener('error', (event) => {
+      this.#handleWorkerFailure(event);
+    });
+    this.worker.addEventListener('messageerror', () => {
+      this.#handleWorkerFailure(new Error('Model worker sent an unreadable message.'));
+    });
   }
 
   #sendAndWait(message) {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        this.#clearPendingInitState();
         reject(new Error('Engine initialization timed out.'));
       }, 180000);
+      this.#pendingInitResolve = resolve;
+      this.#pendingInitReject = reject;
+      this.#pendingInitTimeout = timeout;
 
       const onMessage = (event) => {
         const data = event.data;
         if (data.type === 'init-success') {
           clearTimeout(timeout);
+          this.#clearPendingInitState();
           this.worker.removeEventListener('message', onMessage);
           this.onBackendResolved(data.payload.backend);
           resolve(data.payload);
         } else if (data.type === 'init-error') {
           clearTimeout(timeout);
+          this.#clearPendingInitState();
           this.worker.removeEventListener('message', onMessage);
           reject(new Error(data.payload.message));
         }
@@ -266,6 +279,59 @@ export class LLMEngineClient {
     }
   }
 
+  #handleWorkerFailure(eventOrError) {
+    const error = this.#normalizeWorkerFailure(eventOrError);
+
+    if (typeof this.#pendingInitReject === 'function') {
+      this.#pendingInitReject(error);
+    }
+    this.pendingInit = null;
+    this.pendingInitConfigKey = '';
+    this.#clearPendingInitState();
+
+    if (this.pendingGeneration) {
+      if (this.pendingGeneration.requestId === this.pendingCancelRequestId) {
+        if (typeof this.#pendingCancelReject === 'function') {
+          this.#pendingCancelReject(error);
+        }
+      } else if (typeof this.pendingGeneration.onError === 'function') {
+        this.pendingGeneration.onError(error.message);
+      }
+      this.pendingGeneration = null;
+    }
+
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    this.loadedModelId = null;
+    this.loadedBackend = null;
+    this.loadedEngineType = null;
+    this.engineDescriptor = null;
+  }
+
+  #normalizeWorkerFailure(eventOrError) {
+    if (eventOrError instanceof Error) {
+      return eventOrError;
+    }
+    if (eventOrError?.error instanceof Error) {
+      return eventOrError.error;
+    }
+    if (typeof eventOrError?.message === 'string' && eventOrError.message.trim()) {
+      return new Error(eventOrError.message.trim());
+    }
+    return new Error('Model worker failed.');
+  }
+
+  #clearPendingInitState() {
+    if (this.#pendingInitTimeout !== null) {
+      clearTimeout(this.#pendingInitTimeout);
+    }
+    this.#pendingInitTimeout = null;
+    this.#pendingInitResolve = null;
+    this.#pendingInitReject = null;
+  }
+
   #getInitConfigKey(config) {
     return JSON.stringify({
       engineType: normalizeEngineType(config?.engineType),
@@ -287,4 +353,7 @@ export class LLMEngineClient {
 
   #pendingCancelResolve = null;
   #pendingCancelReject = null;
+  #pendingInitResolve = null;
+  #pendingInitReject = null;
+  #pendingInitTimeout = null;
 }

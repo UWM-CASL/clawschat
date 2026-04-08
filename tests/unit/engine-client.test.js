@@ -74,7 +74,20 @@ class MockWorker {
     this.terminated = true;
   }
 
+  emitError(error) {
+    const set = this.listeners.get('error');
+    if (!set) {
+      return;
+    }
+    for (const handler of set) {
+      handler({ error, message: error?.message || 'Worker failed.' });
+    }
+  }
+
   #emit(type, data) {
+    if (this.terminated) {
+      return;
+    }
     const set = this.listeners.get(type);
     if (!set) {
       return;
@@ -151,6 +164,17 @@ describe('LLMEngineClient', () => {
     expect(finalText).toBe('Hello world');
   });
 
+  test('rejects initialization when the worker crashes before init completes', async () => {
+    const client = new LLMEngineClient();
+
+    const initPromise = client.initialize({ modelId: 'example/model' });
+    MockWorker.instances[0].emitError(new Error('Init worker crashed.'));
+
+    await expect(initPromise).rejects.toThrow('Init worker crashed.');
+    expect(client.worker).toBeNull();
+    expect(client.loadedModelId).toBeNull();
+  });
+
   test('merges per-request runtime overrides into generate payloads', async () => {
     const client = new LLMEngineClient();
     await client.initialize({
@@ -216,6 +240,26 @@ describe('LLMEngineClient', () => {
 
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(client.pendingGeneration).toBeNull();
+  });
+
+  test('surfaces worker crashes as generation errors and clears the loaded session', async () => {
+    const client = new LLMEngineClient();
+    await client.initialize({ modelId: 'example/model' });
+
+    const onError = vi.fn();
+    client.generate('prompt', {
+      onToken: vi.fn(),
+      onComplete: vi.fn(),
+      onError,
+      onCancel: vi.fn(),
+    });
+
+    MockWorker.instances[0].emitError(new Error('Worker crashed during generation.'));
+
+    expect(onError).toHaveBeenCalledWith('Worker crashed during generation.');
+    expect(client.pendingGeneration).toBeNull();
+    expect(client.worker).toBeNull();
+    expect(client.loadedModelId).toBeNull();
   });
 
   test('switching models unloads the previous worker before loading the next model', async () => {

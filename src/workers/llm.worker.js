@@ -233,7 +233,7 @@ function resolveBackendLabel(preference, backend) {
   if (backend === 'webgpu') {
     return 'webgpu';
   }
-  if (backend === 'wasm') {
+  if (backend === 'wasm' || backend === 'default') {
     return 'cpu';
   }
   return normalizeBackendPreference(preference);
@@ -384,7 +384,7 @@ function normalizeRuntimeConfig(rawRuntime) {
 }
 
 function resolveRuntimeDtype(runtime = {}, backend = 'webgpu') {
-  const backendKey = backend === 'wasm' ? 'cpu' : 'webgpu';
+  const backendKey = backend === 'webgpu' ? 'webgpu' : 'cpu';
   return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
 }
 
@@ -735,6 +735,9 @@ async function initialize(payload) {
     typeof navigator !== 'undefined' ? navigator : undefined
   );
   const navigatorGpu = navigatorLike?.gpu;
+  const hasNavigatorGpuApi = Boolean(
+    navigatorGpu && typeof navigatorGpu.requestAdapter === 'function'
+  );
   const webGpuProbe = attempts.includes('webgpu')
     ? await probeWebGpuAvailability(navigatorGpu)
     : { available: false, reason: '' };
@@ -780,6 +783,11 @@ async function initialize(payload) {
     }
   } else if (!webGpuProbe.available) {
     attempts = attempts.filter((backend) => backend !== 'webgpu');
+    const shouldTryDefaultCpuFallback =
+      !attempts.includes('default') && (!hasNavigatorGpuApi || Boolean(webGpuProbe.reason));
+    if (shouldTryDefaultCpuFallback) {
+      attempts.push('default');
+    }
   }
 
   if (!attempts.length) {

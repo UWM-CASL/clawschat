@@ -159,6 +159,44 @@ describe('app-controller', () => {
     expect(harness.callLog).toContain('applyPendingGenerationSettingsIfReady');
   });
 
+  test('unloads the current model after a fatal generation memory error', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'What time is it?');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.engine.loadedBackend = 'cpu';
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onError(
+        'failed to call OrtRun(). ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc'
+      );
+    });
+
+    harness.controller.startModelGeneration(
+      conversation,
+      buildPromptForConversationLeaf(conversation),
+      {
+        parentMessageId: userMessage.id,
+      }
+    );
+
+    const modelMessage = conversation.messageNodes.find((message) => message.role === 'model');
+    expect(modelMessage?.text).toContain('Browser memory was exhausted during generation on CPU.');
+    expect(modelMessage?.text).toContain('Lower Context size, choose a smaller model');
+    expect(modelMessage?.isResponseComplete).toBe(true);
+    expect(harness.engine.dispose).toHaveBeenCalledTimes(1);
+    expect(harness.state.modelReady).toBe(false);
+    expect(harness.state.isGenerating).toBe(false);
+    expect(harness.callLog).toContain(
+      'status:Generation failed. Model unloaded after running out of memory.'
+    );
+    expect(harness.callLog).toContain(
+      'debug:Disposed current model worker after fatal generation error.'
+    );
+  });
+
   test('runs rename orchestration through the controller and updates the conversation', async () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', name: 'New Conversation' });

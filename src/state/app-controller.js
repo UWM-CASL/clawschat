@@ -29,6 +29,26 @@ function isAbortError(value) {
     : value instanceof Error && value.name === 'AbortError';
 }
 
+function isFatalGenerationMemoryError(message) {
+  const normalizedMessage = String(message || '');
+  return (
+    /\bstd::bad_alloc\b/i.test(normalizedMessage) ||
+    /\bout of memory\b/i.test(normalizedMessage) ||
+    (/OrtRun\(\)/i.test(normalizedMessage) && /ERROR_CODE:\s*6/i.test(normalizedMessage))
+  );
+}
+
+function formatGenerationFailureMessage(rawMessage, backendLabel = '') {
+  const normalizedMessage = toErrorMessage(rawMessage);
+  if (!isFatalGenerationMemoryError(normalizedMessage)) {
+    return normalizedMessage;
+  }
+  const normalizedBackendLabel =
+    typeof backendLabel === 'string' && backendLabel.trim() ? backendLabel.trim().toUpperCase() : '';
+  const backendText = normalizedBackendLabel ? ` on ${normalizedBackendLabel}` : '';
+  return `Browser memory was exhausted during generation${backendText}. Lower Context size, choose a smaller model, or use WebGPU if available. (${normalizedMessage})`;
+}
+
 function buildFailedToolResultText(toolCall, error) {
   const toolName = typeof toolCall?.name === 'string' ? toolCall.name.trim() : '';
   const result = {
@@ -103,6 +123,63 @@ export function createAppController(dependencies) {
       : 120;
   let activeRenameAbortController = null;
   let activeRenameConversationId = '';
+
+  function getLoadedBackendLabel() {
+    if (typeof dependencies.engine?.loadedBackend === 'string' && dependencies.engine.loadedBackend) {
+      return dependencies.engine.loadedBackend;
+    }
+    if (
+      typeof dependencies.engine?.config?.backendPreference === 'string' &&
+      dependencies.engine.config.backendPreference
+    ) {
+      return dependencies.engine.config.backendPreference;
+    }
+    return '';
+  }
+
+  function handleGenerationFailure(
+    activeConversation,
+    modelMessage,
+    visibleModelTurnMessage,
+    modelBubbleItem,
+    rawMessage,
+    { updateLastSpokenOnComplete = false } = {}
+  ) {
+    const message = formatGenerationFailureMessage(rawMessage, getLoadedBackendLabel());
+    const isFatalMemoryError = isFatalGenerationMemoryError(rawMessage);
+    modelMessage.text = `Generation error: ${message}`;
+    modelMessage.response = modelMessage.text;
+    modelMessage.thoughts = '';
+    modelMessage.hasThinking = false;
+    modelMessage.isThinkingComplete = false;
+    modelMessage.isResponseComplete = true;
+    dependencies.updateModelMessageElement(
+      visibleModelTurnMessage || modelMessage,
+      modelBubbleItem
+    );
+    dependencies.scrollTranscriptToBottom();
+    if (updateLastSpokenOnComplete) {
+      activeConversation.lastSpokenLeafMessageId = modelMessage.id;
+    }
+    if (isFatalMemoryError) {
+      dependencies.engine.dispose();
+      setModelReady(dependencies.state, false);
+    }
+    setGenerating(dependencies.state, false);
+    dependencies.updateActionButtons();
+    dependencies.applyPendingGenerationSettingsIfReady();
+    dependencies.setStatus(
+      isFatalMemoryError
+        ? 'Generation failed. Model unloaded after running out of memory.'
+        : 'Generation failed'
+    );
+    logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
+    dependencies.appendDebug(`Generation error: ${message}`);
+    if (isFatalMemoryError) {
+      dependencies.appendDebug('Disposed current model worker after fatal generation error.');
+    }
+    dependencies.queueConversationStateSave();
+  }
 
   function cancelBackgroundRenameIfNeeded() {
     if (
@@ -789,53 +866,30 @@ export function createAppController(dependencies) {
             return;
           }
           clearPendingStreamUpdate();
-          modelMessage.text = `Generation error: ${message}`;
-          modelMessage.response = modelMessage.text;
-          modelMessage.thoughts = '';
-          modelMessage.hasThinking = false;
-          modelMessage.isThinkingComplete = false;
-          modelMessage.isResponseComplete = true;
-          dependencies.updateModelMessageElement(
-            visibleModelTurnMessage || modelMessage,
-            modelBubbleItem
+          handleGenerationFailure(
+            activeConversation,
+            modelMessage,
+            visibleModelTurnMessage,
+            modelBubbleItem,
+            message,
+            {
+              updateLastSpokenOnComplete,
+            }
           );
-          dependencies.scrollTranscriptToBottom();
-          if (updateLastSpokenOnComplete) {
-            activeConversation.lastSpokenLeafMessageId = modelMessage.id;
-          }
-          setGenerating(dependencies.state, false);
-          dependencies.updateActionButtons();
-          dependencies.applyPendingGenerationSettingsIfReady();
-          dependencies.setStatus('Generation failed');
-          logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
-          dependencies.appendDebug(`Generation error: ${message}`);
-          dependencies.queueConversationStateSave();
         },
       });
     } catch (error) {
       clearPendingStreamUpdate();
-      const message = toErrorMessage(error);
-      modelMessage.text = `Generation error: ${message}`;
-      modelMessage.response = modelMessage.text;
-      modelMessage.thoughts = '';
-      modelMessage.hasThinking = false;
-      modelMessage.isThinkingComplete = false;
-      modelMessage.isResponseComplete = true;
-      dependencies.updateModelMessageElement(
-        visibleModelTurnMessage || modelMessage,
-        modelBubbleItem
+      handleGenerationFailure(
+        activeConversation,
+        modelMessage,
+        visibleModelTurnMessage,
+        modelBubbleItem,
+        error,
+        {
+          updateLastSpokenOnComplete,
+        }
       );
-      dependencies.scrollTranscriptToBottom();
-      if (updateLastSpokenOnComplete) {
-        activeConversation.lastSpokenLeafMessageId = modelMessage.id;
-      }
-      setGenerating(dependencies.state, false);
-      dependencies.updateActionButtons();
-      dependencies.applyPendingGenerationSettingsIfReady();
-      dependencies.setStatus('Generation failed');
-      logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
-      dependencies.appendDebug(`Generation error: ${message}`);
-      dependencies.queueConversationStateSave();
     }
   }
 

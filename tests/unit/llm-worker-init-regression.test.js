@@ -178,4 +178,56 @@ describe('llm.worker init regression', () => {
       },
     });
   });
+
+  test('falls through to the default cpu device when wasm init fails without WebGPU', async () => {
+    pipelineFactory.mockImplementation(async (_task, _modelId, options = {}) => {
+      if (options.device === 'wasm') {
+        throw new Error('WASM backend init failed.');
+      }
+      return {
+        tokenizer: { id: 'tokenizer' },
+      };
+    });
+
+    await import('../../src/workers/llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload: {
+            modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+            backendPreference: 'webgpu',
+            runtime: {
+              dtypes: {
+                webgpu: 'q4f16',
+                cpu: 'q4',
+              },
+              useExternalDataFormat: true,
+            },
+          },
+        },
+      })
+    );
+
+    expect(pipelineFactory).toHaveBeenCalledTimes(2);
+    expect(pipelineFactory.mock.calls[0]?.[2]).toMatchObject({
+      device: 'wasm',
+      dtype: 'q4',
+      use_external_data_format: true,
+    });
+    expect(pipelineFactory.mock.calls[1]?.[2]).toMatchObject({
+      dtype: 'q4',
+      use_external_data_format: true,
+    });
+    expect(pipelineFactory.mock.calls[1]?.[2]?.device).toBeUndefined();
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'init-success',
+      payload: {
+        backend: 'cpu',
+        modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+      },
+    });
+  });
 });
