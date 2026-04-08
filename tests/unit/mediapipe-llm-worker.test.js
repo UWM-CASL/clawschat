@@ -30,6 +30,7 @@ vi.mock('@mediapipe/tasks-genai/genai_wasm_nosimd_internal.wasm?url', () => ({
 
 describe('mediapipe-llm.worker', () => {
   let importTargetHref = '';
+  let fetchMock;
 
   beforeEach(() => {
     vi.resetModules();
@@ -52,16 +53,18 @@ describe('mediapipe-llm.worker', () => {
       },
     });
 
+    fetchMock = vi.fn(async () => {
+      return new globalThis.Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: {
+          'content-length': '3',
+        },
+      });
+    });
+
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true,
-      value: async () => {
-        return new globalThis.Response(new Uint8Array([1, 2, 3]), {
-          status: 200,
-          headers: {
-            'content-length': '3',
-          },
-        });
-      },
+      value: fetchMock,
     });
   });
 
@@ -123,6 +126,53 @@ describe('mediapipe-llm.worker', () => {
         modelId: 'litert-community/gemma-4-E4B-it-litert-lm',
         engineType: 'mediapipe-genai',
       },
+    });
+  });
+
+  test('loads classic WASM loader scripts into worker-global scope', async () => {
+    const classicLoaderSpecifier = 'https://example.test/genai_wasm_internal.js';
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === classicLoaderSpecifier) {
+        return new globalThis.Response(
+          `var ModuleFactory = (() => {
+  function moduleFactory() {
+    return { ready: true };
+  }
+  return moduleFactory;
+})();
+if (typeof exports === 'object' && typeof module === 'object') {
+  module.exports = ModuleFactory;
+  module.exports.default = ModuleFactory;
+}
+`,
+          {
+            status: 200,
+            headers: {
+              'content-type': 'text/javascript',
+            },
+          }
+        );
+      }
+
+      return new globalThis.Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: {
+          'content-length': '3',
+        },
+      });
+    });
+
+    await import('../../src/workers/mediapipe-llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    const importedLoader = await workerSelf.import(classicLoaderSpecifier);
+
+    expect(importedLoader).toEqual({
+      default: workerSelf.ModuleFactory,
+    });
+    expect(typeof workerSelf.ModuleFactory).toBe('function');
+    expect(workerSelf.ModuleFactory()).toEqual({
+      ready: true,
     });
   });
 });

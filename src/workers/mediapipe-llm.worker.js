@@ -6,8 +6,10 @@ import genAiWasmModuleBinaryPath from '@mediapipe/tasks-genai/genai_wasm_module_
 import genAiWasmNoSimdLoaderPath from '@mediapipe/tasks-genai/genai_wasm_nosimd_internal.js?url';
 import genAiWasmNoSimdBinaryPath from '@mediapipe/tasks-genai/genai_wasm_nosimd_internal.wasm?url';
 
-/** @type {typeof self & { import?: (specifier: string) => Promise<unknown> }} */
+/** @type {typeof self & { import?: (specifier: string) => Promise<unknown>, ModuleFactory?: unknown }} */
 const workerGlobal = self;
+/** @type {Map<string, Promise<unknown>>} */
+const classicScriptLoadCache = new Map();
 
 const WORKER_GENERATION_LIMITS = {
   defaultMaxOutputTokens: 1024,
@@ -32,12 +34,79 @@ let loadedModelAssetPath = '';
 let generationConfig = normalizeGenerationConfig(null);
 let activeGenerationState = null;
 
+function resolveModuleFactoryExport(moduleNamespace) {
+  if (!moduleNamespace || typeof moduleNamespace !== 'object') {
+    return null;
+  }
+  if (typeof moduleNamespace.default === 'function') {
+    return moduleNamespace.default;
+  }
+  if (typeof moduleNamespace.ModuleFactory === 'function') {
+    return moduleNamespace.ModuleFactory;
+  }
+  return null;
+}
+
+async function loadClassicWorkerScript(specifier) {
+  const response = await fetch(specifier);
+  if (!response.ok) {
+    throw new Error(`Failed to load worker script: ${specifier} (${response.status})`);
+  }
+  const source = await response.text();
+  const evaluateClassicWorkerScript = new Function(
+    `const module = { exports: {} };
+const exports = module.exports;
+
+${source}
+
+const exportedModuleFactory =
+  typeof ModuleFactory === 'function'
+    ? ModuleFactory
+    : module?.exports?.default ?? module?.exports?.ModuleFactory ?? module?.exports;
+
+if (typeof exportedModuleFactory !== 'function') {
+  throw new Error('ModuleFactory not set.');
+}
+
+self.ModuleFactory = exportedModuleFactory;
+return { default: exportedModuleFactory };
+`
+  );
+  return evaluateClassicWorkerScript();
+}
+
+async function importIntoWorkerGlobal(specifier) {
+  const hadModuleFactoryBeforeImport = typeof workerGlobal.ModuleFactory === 'function';
+  const importedModule = await import(/* @vite-ignore */ specifier).catch(() => null);
+  const exportedModuleFactory = resolveModuleFactoryExport(importedModule);
+  if (typeof exportedModuleFactory === 'function') {
+    workerGlobal.ModuleFactory = exportedModuleFactory;
+    return importedModule;
+  }
+  if (importedModule && Object.keys(importedModule).length > 0) {
+    return importedModule;
+  }
+  if (!hadModuleFactoryBeforeImport && typeof workerGlobal.ModuleFactory === 'function') {
+    return importedModule ?? {};
+  }
+  if (!classicScriptLoadCache.has(specifier)) {
+    classicScriptLoadCache.set(
+      specifier,
+      loadClassicWorkerScript(specifier).catch((error) => {
+        classicScriptLoadCache.delete(specifier);
+        throw error;
+      })
+    );
+  }
+  return classicScriptLoadCache.get(specifier);
+}
+
 function ensureDynamicImportShim() {
   if (typeof workerGlobal.import === 'function') {
     return;
   }
   // MediaPipe's loader falls back to self.import(...) in module workers.
-  workerGlobal.import = (specifier) => import(/* @vite-ignore */ specifier);
+  workerGlobal.import = importIntoWorkerGlobal;
 }
 
 ensureDynamicImportShim();
