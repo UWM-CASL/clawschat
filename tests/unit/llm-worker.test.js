@@ -193,7 +193,7 @@ describe('llm.worker backend selection', () => {
 });
 
 describe('llm.worker wasm backend config', () => {
-  test('enables proxying without forcing a wasm thread count override', () => {
+  test('disables proxying on CPU wasm attempts without forcing a thread override', () => {
     const env = {
       backends: {
         onnx: {
@@ -202,10 +202,28 @@ describe('llm.worker wasm backend config', () => {
       },
     };
 
-    const result = configureOnnxWasmBackend(env);
-    expect(env.backends.onnx.wasm.proxy).toBe(true);
+    const result = configureOnnxWasmBackend(env, 'wasm');
+    expect(env.backends.onnx.wasm.proxy).toBe(false);
     expect(env.backends.onnx.wasm.numThreads).toBeUndefined();
     expect(result).toEqual({
+      backend: 'wasm',
+      proxy: false,
+    });
+  });
+
+  test('keeps proxying enabled for webgpu attempts', () => {
+    const env = {
+      backends: {
+        onnx: {
+          wasm: {},
+        },
+      },
+    };
+
+    const result = configureOnnxWasmBackend(env, 'webgpu');
+    expect(env.backends.onnx.wasm.proxy).toBe(true);
+    expect(result).toEqual({
+      backend: 'webgpu',
       proxy: true,
     });
   });

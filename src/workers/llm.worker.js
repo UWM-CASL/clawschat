@@ -24,6 +24,7 @@ let processor = null;
 let TextStreamer = null;
 let InterruptableStoppingCriteriaClass = null;
 let backendInUse = null;
+let loadedBackendDevice = null;
 let loadedModelId = null;
 let loadedExecutionMode = 'text';
 let loadedBackendPreference = null;
@@ -219,17 +220,20 @@ async function loadTransformers() {
   return cachedModule;
 }
 
-function configureOnnxWasmBackend(env) {
+function configureOnnxWasmBackend(env, backend = 'wasm') {
   if (!env?.backends?.onnx?.wasm) {
     return null;
   }
+  const shouldProxy = backend === 'webgpu';
   const existingNumThreads = env.backends.onnx.wasm.numThreads;
-  env.backends.onnx.wasm.proxy = true;
+  env.backends.onnx.wasm.proxy = shouldProxy;
   const result = {
-    proxy: true,
+    backend,
+    proxy: shouldProxy,
     ...(existingNumThreads !== undefined ? { numThreads: existingNumThreads } : {}),
   };
   logWorkerDebug('onnx-wasm-config', {
+    backend,
     proxy: env.backends.onnx.wasm.proxy,
     numThreads: existingNumThreads ?? '(runtime default)',
   });
@@ -903,13 +907,14 @@ async function initialize(payload) {
     try {
       const resolvedBackendLabel = resolveBackendLabel(backendPreference, backend);
       const runtimeDtype = resolveRuntimeDtype(runtime, backend);
-      configureOnnxWasmBackend(env);
+      const onnxWasmConfig = configureOnnxWasmBackend(env, backend);
       logWorkerDebug('init-backend-attempt', {
         modelId,
         backend,
         resolvedBackendLabel,
         runtimeDtype: runtimeDtype || '(default)',
         executionMode: runtime.multimodalGeneration ? 'multimodal' : 'text',
+        onnxWasmConfig,
       });
       const backendStatusLabel = resolvedBackendLabel.toUpperCase();
       postStatus(`Loading ${modelId} with ${backendStatusLabel}...`);
@@ -980,11 +985,13 @@ async function initialize(payload) {
         loadedExecutionMode = 'text';
       }
       backendInUse = resolvedBackendLabel;
+      loadedBackendDevice = backend;
       loadedBackendPreference = backendPreference;
       loadedModelId = modelId;
       logWorkerDebug('init-success', {
         modelId,
         backendInUse,
+        loadedBackendDevice,
         loadedBackendPreference,
         loadedExecutionMode,
       });
@@ -994,7 +1001,7 @@ async function initialize(payload) {
       });
       self.postMessage({
         type: 'init-success',
-        payload: { backend: backendInUse, modelId },
+        payload: { backend: backendInUse, backendDevice: loadedBackendDevice, modelId },
       });
       postStatus(`Ready (${backendInUse.toUpperCase()})`);
       return;
@@ -1051,6 +1058,7 @@ async function generate(payload) {
       requestId,
       modelId: payload.modelId || loadedModelId || '',
       backendInUse,
+      loadedBackendDevice,
       loadedExecutionMode,
     });
     return;
@@ -1078,6 +1086,7 @@ async function generate(payload) {
       requestId,
       modelId: loadedModelId || payload.modelId || '',
       backendInUse,
+      loadedBackendDevice,
       loadedExecutionMode,
       runtime,
       generationConfig: requestGenerationConfig,
@@ -1220,6 +1229,7 @@ async function generate(payload) {
     logWorkerDebug('generate-complete', {
       requestId,
       backendInUse,
+      loadedBackendDevice,
       outputLength: finalText.length,
       canceled: false,
     });
@@ -1234,6 +1244,7 @@ async function generate(payload) {
       logWorkerDebug('generate-canceled', {
         requestId,
         backendInUse,
+        loadedBackendDevice,
       });
       return;
     }
@@ -1249,6 +1260,7 @@ async function generate(payload) {
       requestId,
       modelId: loadedModelId || payload.modelId || '',
       backendInUse,
+      loadedBackendDevice,
       loadedExecutionMode,
       message: errorMessage,
       name: error?.name || '',
@@ -1282,7 +1294,11 @@ self.onmessage = async (event) => {
     if (!needsReinit) {
       self.postMessage({
         type: 'init-success',
-        payload: { backend: backendInUse, modelId: loadedModelId },
+        payload: {
+          backend: backendInUse,
+          backendDevice: loadedBackendDevice,
+          modelId: loadedModelId,
+        },
       });
       postStatus(`Ready (${backendInUse.toUpperCase()})`);
       return;

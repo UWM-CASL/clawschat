@@ -1,6 +1,7 @@
 import { DEFAULT_ENGINE_TYPE, getEngineDescriptor, normalizeEngineType } from './engines/index.js';
 
 const ENGINE_DEBUG_PREFIX = '[LLMEngineClient]';
+const GENERATION_INACTIVITY_TIMEOUT_MS = 90000;
 
 function logEngineDebug(event, details = undefined) {
   try {
@@ -52,6 +53,7 @@ export class LLMEngineClient {
     this.pendingCancelRequestId = '';
     this.loadedModelId = null;
     this.loadedBackend = null;
+    this.loadedBackendDevice = null;
     this.loadedEngineType = null;
     this.engineDescriptor = null;
     this.config = {
@@ -111,10 +113,12 @@ export class LLMEngineClient {
       const result = await this.pendingInit;
       this.loadedModelId = result?.modelId || modelId;
       this.loadedBackend = result?.backend || null;
+      this.loadedBackendDevice = result?.backendDevice || null;
       this.loadedEngineType = result?.engineType || engineType;
       logEngineDebug('initialize-success', {
         modelId: this.loadedModelId,
         backend: this.loadedBackend,
+        backendDevice: this.loadedBackendDevice,
         engineType: this.loadedEngineType,
       });
       return result;
@@ -150,10 +154,12 @@ export class LLMEngineClient {
       requestId,
       loadedModelId: this.loadedModelId,
       loadedBackend: this.loadedBackend,
+      loadedBackendDevice: this.loadedBackendDevice,
       runtimeKeys: Object.keys(
         handlers.runtime && typeof handlers.runtime === 'object' ? handlers.runtime : {}
       ),
     });
+    this.#armGenerationWatchdog({ announce: true });
 
     this.worker.postMessage({
       type: 'generate',
@@ -220,6 +226,7 @@ export class LLMEngineClient {
       this.worker.terminate();
       this.worker = null;
     }
+    this.#clearGenerationWatchdog();
     this.pendingGeneration = null;
     this.pendingInit = null;
     this.pendingInitConfigKey = '';
@@ -228,6 +235,7 @@ export class LLMEngineClient {
     }
     this.loadedModelId = null;
     this.loadedBackend = null;
+    this.loadedBackendDevice = null;
     this.loadedEngineType = null;
     this.engineDescriptor = null;
     this.#clearPendingInitState();
@@ -259,7 +267,6 @@ export class LLMEngineClient {
         this.#clearPendingInitState();
         reject(new Error('Engine initialization timed out.'));
       }, 180000);
-      this.#pendingInitResolve = resolve;
       this.#pendingInitReject = reject;
       this.#pendingInitTimeout = timeout;
 
@@ -290,6 +297,9 @@ export class LLMEngineClient {
     }
 
     if (data.type === 'status') {
+      if (this.pendingGeneration) {
+        this.#touchGenerationWatchdog();
+      }
       logEngineDebug('worker-status', {
         message: data.payload.message,
       });
@@ -298,6 +308,9 @@ export class LLMEngineClient {
     }
 
     if (data.type === 'progress') {
+      if (this.pendingGeneration) {
+        this.#touchGenerationWatchdog();
+      }
       this.onProgress(data.payload || {});
       return;
     }
@@ -311,6 +324,7 @@ export class LLMEngineClient {
           if (typeof this.pendingGeneration.onCancel === 'function') {
             this.pendingGeneration.onCancel();
           }
+          this.#clearGenerationWatchdog();
           this.pendingGeneration = null;
         }
       }
@@ -326,6 +340,7 @@ export class LLMEngineClient {
     }
 
     if (data.type === 'token') {
+      this.#touchGenerationWatchdog();
       this.pendingGeneration.onToken(data.payload.text);
       return;
     }
@@ -335,6 +350,7 @@ export class LLMEngineClient {
         requestId: data.payload?.requestId || '',
         outputLength: typeof data.payload?.text === 'string' ? data.payload.text.length : 0,
       });
+      this.#clearGenerationWatchdog();
       this.pendingGeneration.onComplete(data.payload.text);
       this.pendingGeneration = null;
       return;
@@ -344,7 +360,9 @@ export class LLMEngineClient {
       logEngineWarn('generate-error', {
         requestId: data.payload?.requestId || '',
         message: data.payload?.message || '',
+        loadedBackendDevice: this.loadedBackendDevice,
       });
+      this.#clearGenerationWatchdog();
       if (data.payload?.requestId === this.pendingCancelRequestId) {
         if (typeof this.#pendingCancelReject === 'function') {
           this.#pendingCancelReject(new Error(data.payload.message));
@@ -358,10 +376,12 @@ export class LLMEngineClient {
 
   #handleWorkerFailure(eventOrError) {
     const error = this.#normalizeWorkerFailure(eventOrError);
+    this.#clearGenerationWatchdog();
     logEngineError('worker-failure', {
       message: error.message,
       loadedModelId: this.loadedModelId,
       loadedBackend: this.loadedBackend,
+      loadedBackendDevice: this.loadedBackendDevice,
       pendingGenerationRequestId: this.pendingGeneration?.requestId || '',
     });
 
@@ -389,6 +409,7 @@ export class LLMEngineClient {
     }
     this.loadedModelId = null;
     this.loadedBackend = null;
+    this.loadedBackendDevice = null;
     this.loadedEngineType = null;
     this.engineDescriptor = null;
   }
@@ -411,8 +432,54 @@ export class LLMEngineClient {
       clearTimeout(this.#pendingInitTimeout);
     }
     this.#pendingInitTimeout = null;
-    this.#pendingInitResolve = null;
     this.#pendingInitReject = null;
+  }
+
+  #armGenerationWatchdog({ announce = false } = {}) {
+    this.#clearGenerationWatchdog();
+    if (!this.pendingGeneration) {
+      return;
+    }
+    const requestId = this.pendingGeneration.requestId;
+    this.#generationWatchdogTimeout = setTimeout(() => {
+      if (!this.pendingGeneration || this.pendingGeneration.requestId !== requestId) {
+        return;
+      }
+      const timeoutSeconds = Math.round(GENERATION_INACTIVITY_TIMEOUT_MS / 1000);
+      const backendLabel = this.loadedBackend ? this.loadedBackend.toUpperCase() : 'UNKNOWN';
+      const deviceLabel = this.loadedBackendDevice || 'unknown';
+      const message = `Generation timed out after ${timeoutSeconds} seconds without worker activity on ${backendLabel} (${deviceLabel}). The worker was terminated so the next request can recover cleanly.`;
+      logEngineError('generate-timeout', {
+        requestId,
+        timeoutMs: GENERATION_INACTIVITY_TIMEOUT_MS,
+        loadedModelId: this.loadedModelId,
+        loadedBackend: this.loadedBackend,
+        loadedBackendDevice: this.loadedBackendDevice,
+      });
+      this.#handleWorkerFailure(new Error(message));
+    }, GENERATION_INACTIVITY_TIMEOUT_MS);
+    if (announce) {
+      logEngineDebug('generate-watchdog-armed', {
+        requestId,
+        timeoutMs: GENERATION_INACTIVITY_TIMEOUT_MS,
+        loadedBackend: this.loadedBackend,
+        loadedBackendDevice: this.loadedBackendDevice,
+      });
+    }
+  }
+
+  #touchGenerationWatchdog() {
+    if (!this.pendingGeneration) {
+      return;
+    }
+    this.#armGenerationWatchdog();
+  }
+
+  #clearGenerationWatchdog() {
+    if (this.#generationWatchdogTimeout !== null) {
+      clearTimeout(this.#generationWatchdogTimeout);
+    }
+    this.#generationWatchdogTimeout = null;
   }
 
   #getInitConfigKey(config) {
@@ -436,7 +503,7 @@ export class LLMEngineClient {
 
   #pendingCancelResolve = null;
   #pendingCancelReject = null;
-  #pendingInitResolve = null;
+  #generationWatchdogTimeout = null;
   #pendingInitReject = null;
   #pendingInitTimeout = null;
 }

@@ -18,9 +18,10 @@ Inference is selected through the engine client boundary and executes through a 
 - Legacy stored preferences are normalized into those two modes:
   - `auto` -> `webgpu`
   - `wasm` -> `cpu`
-- ONNX worker defaults now keep the WASM support path configured in both modes:
-  - `onnx.wasm.proxy = true`
+- ONNX worker defaults keep browser cache support enabled for both modes and now log the exact backend device used for each load/generation attempt:
   - `env.useWasmCache = true`
+  - `onnx.wasm.proxy = true` on `webgpu` attempts
+  - `onnx.wasm.proxy = false` on CPU `wasm`/`default` attempts
 - Models with `requiresWebGpu: true` only attempt WebGPU and are unavailable in CPU mode.
 - `mediapipe-genai` models currently require WebGPU and reject CPU mode.
 - Models with `multimodalGeneration: true` use a processor/model execution path in the worker instead of the text-generation pipeline.
@@ -33,6 +34,7 @@ Initialization is user-triggered on first message send in the chat workspace.
 If model/backend settings change, the next message triggers a fresh load with updated settings.
 If a backend change makes the current model unavailable, the UI switches to the first compatible model and announces that in the status region.
 Generation settings (`maximum output tokens`, `maximum context size`, `temperature`, `top k`, `top p`) apply immediately when idle, or after the current generation completes.
+If a generation request stops emitting worker activity for 90 seconds, the main-thread engine client terminates that worker and returns a recoverable timeout so the next request can reinitialize cleanly.
 
 ## UI boundary
 

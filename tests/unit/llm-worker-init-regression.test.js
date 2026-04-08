@@ -63,6 +63,7 @@ describe('llm.worker init regression', () => {
       type: 'init-success',
       payload: {
         backend: 'cpu',
+        backendDevice: 'wasm',
         modelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX',
       },
     });
@@ -81,6 +82,7 @@ describe('llm.worker init regression', () => {
       type: 'init-success',
       payload: {
         backend: 'cpu',
+        backendDevice: 'wasm',
         modelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX',
       },
     });
@@ -132,6 +134,7 @@ describe('llm.worker init regression', () => {
       type: 'init-success',
       payload: {
         backend: 'cpu',
+        backendDevice: 'wasm',
         modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       },
     });
@@ -226,6 +229,7 @@ describe('llm.worker init regression', () => {
       type: 'init-success',
       payload: {
         backend: 'cpu',
+        backendDevice: 'default',
         modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       },
     });

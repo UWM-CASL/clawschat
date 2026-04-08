@@ -3,6 +3,7 @@ import { LLMEngineClient } from '../../src/llm/engine-client.js';
 
 class MockWorker {
   static instances = [];
+  static generateMode = 'complete';
 
   constructor() {
     this.listeners = new Map();
@@ -34,6 +35,7 @@ class MockWorker {
           type: 'init-success',
           payload: {
             backend: 'cpu',
+            backendDevice: 'wasm',
             modelId: message.payload?.modelId || 'test-model',
           },
         });
@@ -42,6 +44,9 @@ class MockWorker {
     }
 
     if (message.type === 'generate') {
+      if (MockWorker.generateMode === 'stall') {
+        return;
+      }
       const requestId = message.payload.requestId;
       queueMicrotask(() => {
         this.#emit('message', {
@@ -104,10 +109,12 @@ describe('LLMEngineClient', () => {
   beforeEach(() => {
     originalWorker = globalThis.Worker;
     MockWorker.instances = [];
+    MockWorker.generateMode = 'complete';
     globalThis.Worker = /** @type {any} */ (MockWorker);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     globalThis.Worker = originalWorker;
   });
 
@@ -119,8 +126,10 @@ describe('LLMEngineClient', () => {
     const result = await client.initialize({ modelId: 'example/model' });
 
     expect(result.backend).toBe('cpu');
+    expect(result.backendDevice).toBe('wasm');
     expect(result.modelId).toBe('example/model');
     expect(client.loadedEngineType).toBe('transformers-js');
+    expect(client.loadedBackendDevice).toBe('wasm');
     expect(onBackendResolved).toHaveBeenCalledWith('cpu');
     expect(MockWorker.instances).toHaveLength(1);
     expect(MockWorker.instances[0].messages[0].type).toBe('init');
@@ -260,6 +269,34 @@ describe('LLMEngineClient', () => {
     expect(client.pendingGeneration).toBeNull();
     expect(client.worker).toBeNull();
     expect(client.loadedModelId).toBeNull();
+  });
+
+  test('terminates stalled generations after the inactivity timeout', async () => {
+    vi.useFakeTimers();
+    MockWorker.generateMode = 'stall';
+
+    const client = new LLMEngineClient();
+    await client.initialize({ modelId: 'example/model' });
+
+    const onError = vi.fn();
+    client.generate('prompt', {
+      onToken: vi.fn(),
+      onComplete: vi.fn(),
+      onError,
+      onCancel: vi.fn(),
+    });
+
+    await vi.advanceTimersByTimeAsync(90000);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain(
+      'Generation timed out after 90 seconds without worker activity on CPU (wasm).'
+    );
+    expect(client.pendingGeneration).toBeNull();
+    expect(client.worker).toBeNull();
+    expect(client.loadedModelId).toBeNull();
+    expect(client.loadedBackendDevice).toBeNull();
+    expect(MockWorker.instances[0].terminated).toBe(true);
   });
 
   test('switching models unloads the previous worker before loading the next model', async () => {
