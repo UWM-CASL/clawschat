@@ -8,6 +8,7 @@ let buildMultimodalDecodeOptions;
 let getBackendAttemptOrder;
 let resolveBrowserWasmThreadCount;
 let configureOnnxWasmBackend;
+let resolveBackendLabel;
 
 beforeAll(async () => {
   globalThis.self = /** @type {any} */ ({
@@ -23,6 +24,7 @@ beforeAll(async () => {
     getBackendAttemptOrder,
     resolveBrowserWasmThreadCount,
     configureOnnxWasmBackend,
+    resolveBackendLabel,
   } = await import(
     '../../src/workers/llm.worker.js'
   ));
@@ -163,12 +165,22 @@ describe('llm.worker generation options', () => {
 });
 
 describe('llm.worker backend selection', () => {
-  test('auto falls back from webgpu to wasm to the default device in the browser worker', () => {
-    expect(getBackendAttemptOrder('auto', {})).toEqual(['webgpu', 'wasm', 'default']);
+  test('auto falls back from webgpu to wasm in the browser worker', () => {
+    expect(getBackendAttemptOrder('auto', {})).toEqual(['webgpu', 'wasm']);
   });
 
-  test('cpu preference maps to wasm then the default device in the browser worker', () => {
-    expect(getBackendAttemptOrder('cpu', {})).toEqual(['wasm', 'default']);
+  test('cpu preference maps directly to the browser wasm backend', () => {
+    expect(getBackendAttemptOrder('cpu', {})).toEqual(['wasm']);
+  });
+
+  test('labels the browser wasm backend consistently for cpu and wasm preferences', () => {
+    expect(resolveBackendLabel('cpu', 'wasm')).toBe('cpu');
+    expect(resolveBackendLabel('wasm', 'wasm')).toBe('wasm');
+  });
+
+  test('labels a browser default-device fallback as cpu only when the preference is auto', () => {
+    expect(resolveBackendLabel('auto', 'default')).toBe('cpu');
+    expect(resolveBackendLabel('wasm', 'default')).toBe('wasm');
   });
 
   test('webgpu-required models reject wasm-only preference', () => {

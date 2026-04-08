@@ -246,9 +246,9 @@ function getBackendAttemptOrder(preference, runtimeConfig = {}) {
     return ['webgpu'];
   }
   if (normalizedPreference === 'wasm' || normalizedPreference === 'cpu') {
-    return ['wasm', 'default'];
+    return ['wasm'];
   }
-  return ['webgpu', 'wasm', 'default'];
+  return ['webgpu', 'wasm'];
 }
 
 function normalizeBackendPreference(preference) {
@@ -263,6 +263,22 @@ function normalizeBackendPreference(preference) {
   }
   return 'auto';
 }
+
+function resolveBackendLabel(preference, backend) {
+  const normalizedPreference = normalizeBackendPreference(preference);
+  if (backend === 'webgpu') {
+    return 'webgpu';
+  }
+  if (normalizedPreference === 'cpu') {
+    return 'cpu';
+  }
+  if (normalizedPreference === 'wasm' || backend === 'wasm') {
+    return 'wasm';
+  }
+  return 'cpu';
+}
+
+export { resolveBackendLabel };
 
 function extractErrorMessage(error) {
   if (!error) {
@@ -775,10 +791,9 @@ async function initialize(payload) {
     }
 
     try {
-      const resolvedBackendLabel =
-        backend === 'default' || backendPreference === 'cpu' ? 'cpu' : backend;
+      const resolvedBackendLabel = resolveBackendLabel(backendPreference, backend);
       configureOnnxWasmBackend(env, backend);
-      const backendStatusLabel = backend === 'default' ? 'DEFAULT DEVICE' : backend.toUpperCase();
+      const backendStatusLabel = resolvedBackendLabel.toUpperCase();
       postStatus(`Loading ${modelId} with ${backendStatusLabel}...`);
       postProgress({ percent: 5, message: `Preparing ${backendStatusLabel} backend...` });
       const pipelineOptions = {
@@ -827,7 +842,7 @@ async function initialize(payload) {
         tokenizer = null;
         postProgress({ percent: 10, message: `Loading ${modelId} multimodal model...` });
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
-          device: backend,
+          ...(backend !== 'default' ? { device: backend } : {}),
           ...(runtime.dtype ? { dtype: runtime.dtype } : {}),
           ...(runtime.useExternalDataFormat
             ? {
@@ -846,7 +861,7 @@ async function initialize(payload) {
         tokenizer = model.tokenizer;
         loadedExecutionMode = 'text';
       }
-      backendInUse = backend;
+      backendInUse = resolvedBackendLabel;
       loadedModelId = modelId;
       postProgress({
         percent: 100,
@@ -854,9 +869,9 @@ async function initialize(payload) {
       });
       self.postMessage({
         type: 'init-success',
-        payload: { backend: resolvedBackendLabel, modelId },
+        payload: { backend: backendInUse, modelId },
       });
-      postStatus(`Ready (${resolvedBackendLabel.toUpperCase()})`);
+      postStatus(`Ready (${backendInUse.toUpperCase()})`);
       return;
     } catch (error) {
       const rawMessage =
