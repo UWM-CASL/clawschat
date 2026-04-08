@@ -13,14 +13,20 @@ Inference is selected through the engine client boundary and executes through a 
 
 ## Backends
 
-- `auto`: tries `webgpu`, then falls back to the browser CPU path via `wasm`
-- `webgpu`: WebGPU only
-- `wasm`: WASM only
-- `cpu`: CPU only, mapped to Transformers.js browser execution via `wasm`
-- Models with `requiresWebGpu: true` only attempt WebGPU and do not fall back to WASM/CPU.
-- `mediapipe-genai` models currently require WebGPU and reject `wasm` / `cpu` backend selection.
+- `webgpu`: WebGPU execution
+- `cpu`: CPU execution through the ONNX browser WASM backend
+- Legacy stored preferences are normalized into those two modes:
+  - `auto` -> `webgpu`
+  - `wasm` -> `cpu`
+- ONNX worker defaults now keep the WASM support path configured in both modes:
+  - `onnx.wasm.proxy = true`
+  - `onnx.wasm.numThreads = 0` so onnxruntime-web selects the thread count
+  - `env.useWasmCache = true`
+- Models with `requiresWebGpu: true` only attempt WebGPU and are unavailable in CPU mode.
+- `mediapipe-genai` models currently require WebGPU and reject CPU mode.
 - Models with `multimodalGeneration: true` use a processor/model execution path in the worker instead of the text-generation pipeline.
 - For multimodal models, the worker loads the `AutoProcessor` lazily on first generation and then reuses it for later requests.
+- ONNX models may provide mode-specific runtime hints such as `runtime.dtypes.webgpu` and `runtime.dtypes.cpu`.
 - LiteRT-backed models may use engine-specific runtime hints such as `runtime.modelAssetPath` instead of Transformers.js-specific dtype settings.
 
 The resolved backend is shown in the status region in the main UI.

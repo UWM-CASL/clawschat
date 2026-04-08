@@ -32,11 +32,11 @@ function createControllerHarness() {
   const engine = {
     config: {
       modelId: 'test-model',
-      backendPreference: 'auto',
+      backendPreference: 'webgpu',
       generationConfig: state.activeGenerationConfig,
     },
     worker: null,
-    initialize: vi.fn().mockResolvedValue({ backend: 'wasm' }),
+    initialize: vi.fn().mockResolvedValue({ backend: 'cpu' }),
     generate: vi.fn(),
     cancelGeneration: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn(() => {
@@ -59,7 +59,7 @@ function createControllerHarness() {
     fixOrchestration: { id: 'fix-response', steps: [{ prompt: 'Fix {{assistantResponse}}' }] },
     readEngineConfig: () => ({
       modelId: 'test-model',
-      backendPreference: 'auto',
+      backendPreference: 'webgpu',
       runtime: {},
       generationConfig: state.activeGenerationConfig,
     }),
@@ -133,7 +133,7 @@ describe('app-controller', () => {
 
     expect(harness.engine.initialize).toHaveBeenCalledWith({
       modelId: 'test-model',
-      backendPreference: 'auto',
+      backendPreference: 'webgpu',
       runtime: {},
       generationConfig: harness.state.activeGenerationConfig,
     });
@@ -271,7 +271,7 @@ describe('app-controller', () => {
     harness.engine.loadedModelId = 'other-model';
     harness.dependencies.readEngineConfig = () => ({
       modelId: 'test-model',
-      backendPreference: 'auto',
+      backendPreference: 'webgpu',
       runtime: {},
       generationConfig: harness.state.activeGenerationConfig,
     });
@@ -722,8 +722,7 @@ describe('app-controller', () => {
         };
       }
       return {
-        response:
-          text.slice(0, openIndex) + text.slice(closeIndex + thinkingTags.close.length),
+        response: text.slice(0, openIndex) + text.slice(closeIndex + thinkingTags.close.length),
         thoughts: text.slice(openIndex + thinkingTags.open.length, closeIndex),
         hasThinking: true,
         isThinkingComplete: true,

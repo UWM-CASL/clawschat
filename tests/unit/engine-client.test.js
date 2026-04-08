@@ -33,7 +33,7 @@ class MockWorker {
         this.#emit('message', {
           type: 'init-success',
           payload: {
-            backend: 'wasm',
+            backend: 'cpu',
             modelId: message.payload?.modelId || 'test-model',
           },
         });
@@ -105,10 +105,10 @@ describe('LLMEngineClient', () => {
 
     const result = await client.initialize({ modelId: 'example/model' });
 
-    expect(result.backend).toBe('wasm');
+    expect(result.backend).toBe('cpu');
     expect(result.modelId).toBe('example/model');
     expect(client.loadedEngineType).toBe('transformers-js');
-    expect(onBackendResolved).toHaveBeenCalledWith('wasm');
+    expect(onBackendResolved).toHaveBeenCalledWith('cpu');
     expect(MockWorker.instances).toHaveLength(1);
     expect(MockWorker.instances[0].messages[0].type).toBe('init');
     expect(MockWorker.instances[0].messages[0].payload.engineType).toBe('transformers-js');

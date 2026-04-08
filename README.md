@@ -62,11 +62,10 @@ Student-facing browser chat UI with local model inference.
 - If no active conversation exists, a new untitled conversation is created when the first message is sent.
 - New conversations get a UUID-backed route only after the first prompt is sent and the selected model has loaded.
 - Backend selection supports:
-  - `Auto (WebGPU then WASM/CPU)`
-  - `WebGPU only`
-  - `WASM only`
-  - `CPU only (via WASM)`
-- LiteRT-backed models are WebGPU-only in this app and require `Auto` or `WebGPU only`.
+  - `WebGPU`
+  - `CPU`
+- CPU mode runs ONNX models through the browser WASM path. The ONNX worker enables WASM proxying in both modes, sets `onnx.wasm.numThreads = 0` so onnxruntime-web can choose threading, and enables `useWasmCache`.
+- LiteRT-backed models are WebGPU-only in this app and require `WebGPU`.
 - Token controls in Settings:
   - `Maximum output tokens` and `Context size (short-term memory)` are model-aware integer fields.
   - Values are constrained by per-model limits from `src/config/models.json` and use `step=8`.
@@ -90,7 +89,6 @@ Student-facing browser chat UI with local model inference.
   - `Top P (Strangeness)` (nucleus sampling) uses min `0.00`, max `1.00`, and `step=0.05`, with a model-specific default from `src/config/models.json`.
   - `Top K` and `Top P` are persisted per model, like temperature and token limits.
   - The runtime also applies per-model `repetition_penalty` defaults where Transformers.js supports them; unsupported knobs such as `min_p` and `presence_penalty` are intentionally not exposed in this app.
-- `Auto` attempts WebGPU first, then falls back to the browser CPU path via WASM if WebGPU is unavailable or initialization fails.
 - The selected backend and model are stored in `localStorage`.
 - Model files are downloaded on first load and cached in-browser for reuse.
   - Transformers.js-backed models use the Transformers.js browser cache.
@@ -220,25 +218,22 @@ Student-facing browser chat UI with local model inference.
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - Uses `q4` in this app.
+  - Uses `q4f16` on WebGPU and `q4` on CPU in this app.
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`
-  - Uses `q4` in this app with external data loading.
+  - Uses `q4f16` on WebGPU and `int8` on CPU in this app, with external data loading.
   - Uses the same conservative app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
 - `LiquidAI/LFM2.5-350M-ONNX`
-  - Uses `q8` in this app with external data loading.
-  - Requires WebGPU in this app.
+  - Uses `q4f16` on WebGPU and `q8` on CPU in this app, with external data loading.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
   - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format supported by this app.
 - `LiquidAI/LFM2.5-1.2B-Instruct-ONNX`
-  - Uses the published `q4` ONNX export with external data loading.
-  - Requires WebGPU in this app.
+  - Uses `q4f16` on WebGPU and `q8` on CPU in this app, with external data loading.
   - Uses the published low-temperature sampling profile in this app: temperature `0.1`, top-k `50`, repetition penalty `1.05`, with top-p left open at `1.0`.
   - Uses a JSON-formatted `List of tools: [...]` block in the system prompt.
   - Uses Liquid's special-token tool-call format supported by this app.
 - `LiquidAI/LFM2.5-1.2B-Thinking-ONNX`
-  - Uses the published `q4` ONNX export with external data loading.
-  - Requires WebGPU in this app.
+  - Uses `q4f16` on WebGPU and `q8` on CPU in this app, with external data loading.
   - Uses `<think>...</think>` tags for reasoning output.
   - Uses the upstream tokenizer chat template from the ONNX export: ChatML-style `<|im_start|>...<|im_end|>` turns plus a JSON-formatted `List of tools: [...]` block when tools are enabled.
   - The upstream model card recommends `temperature: 0.05`, `top_k: 50`, and `repetition_penalty: 1.05`; this app rounds temperature to its nearest supported step (`0.1`) and leaves top-p open at `1.0` because the card does not publish a nucleus cutoff.
@@ -263,7 +258,7 @@ Student-facing browser chat UI with local model inference.
 - `models[].languageSupport`: user-facing language tags shown on the card, with a publisher-linked `and more` suffix when needed
 - `models[].repositoryUrl`: model details link used from the card footer
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)
-  - `models[].runtime`: per-model runtime hints (`dtype`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
+  - `models[].runtime`: per-model runtime hints (optional `dtypes.webgpu`, optional `dtypes.cpu`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
   - `models[].inputLimits`: optional per-media limits such as `maxImageInputs` and `maxAudioInputs`
   - `models[].thinkingControl`: optional model-specific reasoning control metadata (`defaultEnabled`, optional `runtimeParameter`, optional `enabledInstruction`, optional `disabledInstruction`)
   - `models[].generation`: per-model defaults and limits for output/context tokens, temperature, `defaultTopK`, `defaultTopP`, and optional runtime-supported defaults such as `defaultRepetitionPenalty`

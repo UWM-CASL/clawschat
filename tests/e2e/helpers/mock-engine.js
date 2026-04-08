@@ -77,13 +77,13 @@ function installMockWorker() {
         this._emit('message', {
           type: 'init-success',
           payload: {
-            backend: 'wasm',
+            backend: 'cpu',
             modelId: message.payload?.modelId || 'mock/model',
           },
         });
         this._emit('message', {
           type: 'status',
-          payload: { message: 'Ready (WASM)' },
+          payload: { message: 'Ready (CPU)' },
         });
         return;
       }
@@ -111,31 +111,34 @@ function installMockWorker() {
             ]
           : ['Mock ', 'streamed ', 'response.'];
         let index = 0;
-        this.timer = setInterval(() => {
-          if (this.terminated) {
+        this.timer = setInterval(
+          () => {
+            if (this.terminated) {
+              clearInterval(this.timer);
+              this.timer = null;
+              return;
+            }
+            if (index < chunks.length) {
+              this._emit('message', {
+                type: 'token',
+                payload: { requestId, text: chunks[index] },
+              });
+              index += 1;
+              return;
+            }
             clearInterval(this.timer);
             this.timer = null;
-            return;
-          }
-          if (index < chunks.length) {
             this._emit('message', {
-              type: 'token',
-              payload: { requestId, text: chunks[index] },
+              type: 'complete',
+              payload: { requestId, text: chunks.join('') },
             });
-            index += 1;
-            return;
-          }
-          clearInterval(this.timer);
-          this.timer = null;
-          this._emit('message', {
-            type: 'complete',
-            payload: { requestId, text: chunks.join('') },
-          });
-          this._emit('message', {
-            type: 'status',
-            payload: { message: 'Complete (WASM)' },
-          });
-        }, isLong ? 300 : 60);
+            this._emit('message', {
+              type: 'status',
+              payload: { message: 'Complete (CPU)' },
+            });
+          },
+          isLong ? 300 : 60
+        );
         return;
       }
 
@@ -177,15 +180,17 @@ function installMockWorker() {
     }
   }
 
-  mockWindow.Worker = /** @type {any} */ (class RoutedMockWorker {
-    constructor(url) {
-      const scriptUrl = String(url || '');
-      const worker = scriptUrl.includes('pdf-extract.worker')
-        ? new MockPdfExtractWorker()
-        : new MockLlmWorker();
-      return worker;
+  mockWindow.Worker = /** @type {any} */ (
+    class RoutedMockWorker {
+      constructor(url) {
+        const scriptUrl = String(url || '');
+        const worker = scriptUrl.includes('pdf-extract.worker')
+          ? new MockPdfExtractWorker()
+          : new MockLlmWorker();
+        return worker;
+      }
     }
-  });
+  );
 }
 
 module.exports = { installMockWorker };

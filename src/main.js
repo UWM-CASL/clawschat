@@ -178,7 +178,7 @@ const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
 const TOOL_CONSENT_STORAGE_KEY = 'tool-consents-v1';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
-const SUPPORTED_BACKEND_PREFERENCES = new Set(['auto', 'webgpu', 'wasm', 'cpu']);
+const SUPPORTED_BACKEND_PREFERENCES = new Set(['webgpu', 'cpu']);
 const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
@@ -1267,7 +1267,9 @@ function buildDebugEntry(entryInput) {
   if (entryInput && typeof entryInput === 'object' && !Array.isArray(entryInput)) {
     return {
       id: `debug-entry-${++appState.debugEntryCounter}`,
-      createdAt: Number.isFinite(entryInput.createdAt) ? Math.trunc(entryInput.createdAt) : Date.now(),
+      createdAt: Number.isFinite(entryInput.createdAt)
+        ? Math.trunc(entryInput.createdAt)
+        : Date.now(),
       kind: normalizeDebugEntryKind(entryInput.kind),
       message:
         typeof entryInput.message === 'string'
@@ -1311,7 +1313,10 @@ function clampDebugPageIndex() {
 }
 
 function buildDebugLogCsvFileName() {
-  const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}Z$/, 'Z');
   return `browser-llm-runner-debug-log-${timestamp}.csv`;
 }
 
@@ -2011,7 +2016,7 @@ function createConversation(name) {
     name,
     modelId: getAvailableModelId(
       modelSelect?.value || DEFAULT_MODEL,
-      normalizeBackendPreference(backendSelect?.value || 'auto')
+      normalizeBackendPreference(backendSelect?.value || 'webgpu')
     ),
     untitledPrefix: UNTITLED_CONVERSATION_PREFIX,
     systemPrompt: appState.defaultSystemPrompt,
@@ -2032,7 +2037,7 @@ function getConversationModelId(conversation) {
   const loadedModelId = getLoadedModelId();
   return getAvailableModelId(
     conversation?.modelId || loadedModelId || modelSelect?.value || DEFAULT_MODEL,
-    normalizeBackendPreference(backendSelect?.value || 'auto')
+    normalizeBackendPreference(backendSelect?.value || 'webgpu')
   );
 }
 
@@ -2042,7 +2047,7 @@ function assignConversationModelId(conversation, modelId) {
   }
   const nextModelId = getAvailableModelId(
     modelId || conversation.modelId || DEFAULT_MODEL,
-    normalizeBackendPreference(backendSelect?.value || 'auto')
+    normalizeBackendPreference(backendSelect?.value || 'webgpu')
   );
   const changed = conversation.modelId !== nextModelId;
   conversation.modelId = nextModelId;
@@ -2057,7 +2062,7 @@ function syncConversationModelSelection(
   conversation,
   { announceFallback = false, useDefaults = true } = {}
 ) {
-  const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'auto');
+  const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'webgpu');
   const hasStoredModelId = Boolean(
     typeof conversation?.modelId === 'string' && conversation.modelId.trim()
   );

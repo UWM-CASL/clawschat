@@ -10,7 +10,7 @@ import {
   normalizeSupportedBackendPreference,
 } from '../config/model-settings.js';
 
-const BACKEND_FALLBACK = 'auto';
+const BACKEND_FALLBACK = 'webgpu';
 const DEFAULT_LANGUAGE_TAG_COUNT = 4;
 const INTEGER_FORMATTER = new Intl.NumberFormat('en-US');
 const MODEL_FEATURE_DEFINITIONS = Object.freeze([
@@ -121,15 +121,12 @@ export function createModelPreferencesController({
 
   function formatBackendPreferenceLabel(value) {
     if (value === 'webgpu') {
-      return 'WebGPU only';
-    }
-    if (value === 'wasm') {
-      return 'WASM only';
+      return 'WebGPU';
     }
     if (value === 'cpu') {
-      return 'CPU only';
+      return 'CPU';
     }
-    return 'Auto';
+    return 'WebGPU';
   }
 
   function getWebGpuAvailability() {
@@ -539,15 +536,14 @@ export function createModelPreferencesController({
       }
 
       /** @type {HTMLButtonElement[]} */
-      const navigableButtons = Array.from(modelCardList.querySelectorAll('.model-card-button')).reduce(
-        (buttons, button) => {
-          if (button instanceof HTMLButtonElement && !button.disabled) {
-            buttons.push(button);
-          }
-          return buttons;
-        },
-        []
-      );
+      const navigableButtons = Array.from(
+        modelCardList.querySelectorAll('.model-card-button')
+      ).reduce((buttons, button) => {
+        if (button instanceof HTMLButtonElement && !button.disabled) {
+          buttons.push(button);
+        }
+        return buttons;
+      }, []);
       if (!navigableButtons.length) {
         return;
       }

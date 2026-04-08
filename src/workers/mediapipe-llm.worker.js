@@ -91,10 +91,10 @@ function extractErrorMessage(error) {
 }
 
 function normalizeBackendPreference(preference) {
-  if (preference === 'webgpu') {
-    return 'webgpu';
+  if (preference === 'cpu' || preference === 'wasm') {
+    return 'cpu';
   }
-  return 'auto';
+  return 'webgpu';
 }
 
 function normalizeRuntimeConfig(rawRuntime) {
@@ -254,7 +254,9 @@ function formatGemmaPrompt(messages, runtime = {}) {
   const promptParts = [];
   const normalizedMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
   const firstSystemMessage = normalizedMessages.find((message) => message.role === 'system');
-  const baseSystemPrompt = firstSystemMessage ? formatPromptContent(firstSystemMessage.content) : '';
+  const baseSystemPrompt = firstSystemMessage
+    ? formatPromptContent(firstSystemMessage.content)
+    : '';
   const systemSections = [];
   if (runtime.enableThinking === true) {
     systemSections.push('<|think|>');
@@ -321,7 +323,7 @@ function resolvePrompt(rawPrompt, runtime = {}) {
 
 async function initialize(payload) {
   const modelId = payload.modelId || '';
-  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'auto');
+  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'webgpu');
   const runtime = normalizeRuntimeConfig(payload.runtime);
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
 
@@ -337,11 +339,11 @@ async function initialize(payload) {
     return;
   }
 
-  if (backendPreference !== 'auto' && backendPreference !== 'webgpu') {
+  if (backendPreference !== 'webgpu') {
     self.postMessage({
       type: 'init-error',
       payload: {
-        message: `Failed to initialize model. ${modelId} requires WebGPU. Choose Auto or WebGPU only.`,
+        message: `Failed to initialize model. ${modelId} requires WebGPU. Switch to WebGPU mode.`,
       },
     });
     postProgress({ percent: 0, message: 'Model load failed.' });

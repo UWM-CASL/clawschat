@@ -648,10 +648,8 @@
                     <div class="settings-control-group">
                       <label class="form-label" for="backendSelect">Backend</label>
                       <select id="backendSelect" class="form-select">
-                        <option value="auto" selected>Auto (WebGPU then WASM/CPU)</option>
-                        <option value="webgpu">WebGPU only</option>
-                        <option value="wasm">WASM only</option>
-                        <option value="cpu">CPU only (via WASM)</option>
+                        <option value="webgpu" selected>WebGPU</option>
+                        <option value="cpu">CPU</option>
                       </select>
                     </div>
                     <div class="settings-control-group">
@@ -686,7 +684,11 @@
                       Newest entries appear first. Raw model output is recorded exactly as emitted
                       before transcript parsing or tool handling.
                     </p>
-                    <div id="debugLogPanel" class="debug-log-panel" aria-describedby="settingsDebugHeading"></div>
+                    <div
+                      id="debugLogPanel"
+                      class="debug-log-panel"
+                      aria-describedby="settingsDebugHeading"
+                    ></div>
                   </section>
 
                   <section
@@ -921,15 +923,18 @@
                         visible.
                       </p>
                     </div>
-                    <div class="settings-control-group" aria-labelledby="conversationStorageActionsLabel">
+                    <div
+                      class="settings-control-group"
+                      aria-labelledby="conversationStorageActionsLabel"
+                    >
                       <div class="d-flex flex-column gap-2">
                         <h4 class="h6 mb-0" id="conversationStorageActionsLabel">
                           Conversation storage
                         </h4>
                         <p class="form-text mb-0">
                           Export downloads a zip with JSON, Markdown, and stored artifacts for every
-                          saved conversation. Delete removes all saved conversations and their stored
-                          artifacts from this browser.
+                          saved conversation. Delete removes all saved conversations and their
+                          stored artifacts from this browser.
                         </p>
                         <div class="d-flex flex-wrap gap-2">
                           <button

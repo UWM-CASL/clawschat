@@ -79,13 +79,13 @@ function installSlowRenameMockWorker() {
         this._emit('message', {
           type: 'init-success',
           payload: {
-            backend: 'wasm',
+            backend: 'cpu',
             modelId: message.payload?.modelId || 'mock/model',
           },
         });
         this._emit('message', {
           type: 'status',
-          payload: { message: 'Ready (WASM)' },
+          payload: { message: 'Ready (CPU)' },
         });
         return;
       }
@@ -121,7 +121,7 @@ function installSlowRenameMockWorker() {
           });
           this._emit('message', {
             type: 'status',
-            payload: { message: 'Complete (WASM)' },
+            payload: { message: 'Complete (CPU)' },
           });
         }, intervalMs);
         return;

@@ -6,6 +6,7 @@ import {
   browserSupportsWebGpu,
   getFirstAvailableModelId,
   getModelAvailability,
+  resolveRuntimeDtypeForBackend,
 } from '../../src/config/model-settings.js';
 
 const LIQUID_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX';
@@ -24,60 +25,50 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS[0]?.id).toBe(GEMMA_4_MODEL_ID);
   });
 
-  test('marks the LiquidAI thinking model unavailable without WebGPU', () => {
+  test('keeps the LiquidAI thinking model available in cpu mode without WebGPU', () => {
     expect(
       getModelAvailability(LIQUID_MODEL_ID, {
-        backendPreference: 'auto',
+        backendPreference: 'cpu',
         webGpuAvailable: false,
-      }),
+      })
     ).toEqual({
-      available: false,
-      reason: 'This model requires WebGPU, which is not available in this browser.',
+      available: true,
+      reason: '',
     });
   });
 
-  test('marks the LiquidAI thinking model unavailable for wasm and cpu backends', () => {
+  test('maps legacy wasm preference into cpu mode for the LiquidAI thinking model', () => {
     expect(
       getModelAvailability(LIQUID_MODEL_ID, {
         backendPreference: 'wasm',
         webGpuAvailable: true,
-      }),
+      })
     ).toEqual({
-      available: false,
-      reason: 'This model requires WebGPU. Choose Auto or WebGPU only.',
-    });
-
-    expect(
-      getModelAvailability(LIQUID_MODEL_ID, {
-        backendPreference: 'cpu',
-        webGpuAvailable: true,
-      }),
-    ).toEqual({
-      available: false,
-      reason: 'This model requires WebGPU. Choose Auto or WebGPU only.',
+      available: true,
+      reason: '',
     });
   });
 
-  test('marks the visible LiquidAI models unavailable without WebGPU or on non-WebGPU backends', () => {
+  test('keeps the visible LiquidAI models available on cpu and webgpu backends', () => {
     [LIQUID_SMALL_MODEL_ID, LIQUID_INSTRUCT_MODEL_ID].forEach((modelId) => {
       expect(
         getModelAvailability(modelId, {
-          backendPreference: 'auto',
+          backendPreference: 'cpu',
           webGpuAvailable: false,
-        }),
+        })
       ).toEqual({
-        available: false,
-        reason: 'This model requires WebGPU, which is not available in this browser.',
+        available: true,
+        reason: '',
       });
 
       expect(
         getModelAvailability(modelId, {
-          backendPreference: 'wasm',
+          backendPreference: 'webgpu',
           webGpuAvailable: true,
-        }),
+        })
       ).toEqual({
-        available: false,
-        reason: 'This model requires WebGPU. Choose Auto or WebGPU only.',
+        available: true,
+        reason: '',
       });
     });
   });
@@ -87,19 +78,19 @@ describe('model-settings availability', () => {
       getModelAvailability(LIQUID_MODEL_ID, {
         backendPreference: 'webgpu',
         webGpuAvailable: true,
-      }),
+      })
     ).toEqual({
       available: true,
       reason: '',
     });
   });
 
-  test('falls back to the default model when the current backend cannot use the LiquidAI model', () => {
+  test('falls back to the first cpu-capable visible model when WebGPU mode is unavailable', () => {
     expect(
       getFirstAvailableModelId({
-        backendPreference: 'wasm',
-        webGpuAvailable: true,
-      }),
+        backendPreference: 'cpu',
+        webGpuAvailable: false,
+      })
     ).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
   });
 
@@ -110,7 +101,9 @@ describe('model-settings availability', () => {
   });
 
   test('loads model-specific default sampling settings from config', () => {
-    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.generation).toMatchObject({
+    expect(
+      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.generation
+    ).toMatchObject({
       defaultTemperature: 0.6,
       defaultTopK: 50,
       defaultTopP: 0.9,
@@ -170,14 +163,14 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.hidden).toBe(true);
     expect(MODEL_OPTIONS_BY_ID.get(LEGACY_GEMMA_4_MODEL_ID)?.hidden).toBe(true);
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.hidden).toBe(false);
-    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')?.hidden).toBe(
-      true,
-    );
+    expect(
+      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')?.hidden
+    ).toBe(true);
     expect(
       getModelAvailability(GEMMA_MODEL_ID, {
         backendPreference: 'webgpu',
         webGpuAvailable: true,
-      }),
+      })
     ).toEqual({
       available: true,
       reason: '',
@@ -187,21 +180,50 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS.some((model) => model.id === GEMMA_MODEL_ID)).toBe(false);
     expect(MODEL_OPTIONS.some((model) => model.id === LEGACY_GEMMA_4_MODEL_ID)).toBe(false);
     expect(MODEL_OPTIONS.some((model) => model.id === LIQUID_MODEL_ID)).toBe(true);
-    expect(MODEL_OPTIONS.some((model) => model.id === 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')).toBe(
-      false,
-    );
+    expect(
+      MODEL_OPTIONS.some(
+        (model) => model.id === 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa'
+      )
+    ).toBe(false);
   });
 
-  test('marks the Gemma multimodal model unavailable without WebGPU', () => {
+  test('keeps the Gemma multimodal ONNX model available in cpu mode without WebGPU', () => {
     expect(
       getModelAvailability(GEMMA_MODEL_ID, {
-        backendPreference: 'auto',
+        backendPreference: 'cpu',
         webGpuAvailable: false,
-      }),
+      })
     ).toEqual({
-      available: false,
-      reason: 'This model requires WebGPU, which is not available in this browser.',
+      available: true,
+      reason: '',
     });
+  });
+
+  test('resolves mode-specific runtime dtypes from config', () => {
+    expect(
+      resolveRuntimeDtypeForBackend(
+        MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime,
+        'webgpu'
+      )
+    ).toBe('q4f16');
+    expect(
+      resolveRuntimeDtypeForBackend(
+        MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime,
+        'cpu'
+      )
+    ).toBe('q4');
+    expect(
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime, 'cpu')
+    ).toBe('int8');
+    expect(
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.runtime, 'cpu')
+    ).toBe('q8');
+    expect(
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LIQUID_MODEL_ID)?.runtime, 'webgpu')
+    ).toBe('q4f16');
+    expect(
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.runtime, 'webgpu')
+    ).toBe('q8');
   });
 
   test('exposes model feature flags from config', () => {
@@ -229,7 +251,9 @@ describe('model-settings availability', () => {
       audioInput: false,
       videoInput: false,
     });
-    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.features).toMatchObject({
+    expect(
+      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.features
+    ).toMatchObject({
       streaming: true,
       thinking: false,
       toolCalling: true,
@@ -295,41 +319,56 @@ describe('model-settings availability', () => {
       type: 'transformers-js',
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_MODEL_ID)?.runtime).toMatchObject({
-      requiresWebGpu: true,
       multimodalGeneration: true,
-      dtype: {
-        audio_encoder: 'q4',
-        vision_encoder: 'q4',
-        embed_tokens: 'q4',
-        decoder_model_merged: 'q4',
+      dtypes: {
+        webgpu: 'q8',
+        cpu: 'q8',
       },
     });
-    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime).toMatchObject({
-      dtype: 'q4',
+    expect(
+      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.runtime
+    ).toMatchObject({
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q4',
+      },
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4',
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'int8',
+      },
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_SMALL_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q8',
-      requiresWebGpu: true,
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q8',
+      },
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(LIQUID_INSTRUCT_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4',
-      requiresWebGpu: true,
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q8',
+      },
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q8',
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q8',
+      },
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.runtime?.requiresWebGpu).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_MODEL_ID)?.runtime).toMatchObject({
-      dtype: 'q4',
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q8',
+      },
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });
@@ -340,16 +379,16 @@ describe('model-settings availability', () => {
         'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/439779041cf1a165146a3ee1f9a7653b2f047975/gemma-4-E4B-it-web.task',
     });
     expect(MODEL_OPTIONS_BY_ID.get(LEGACY_GEMMA_4_MODEL_ID)?.runtime).toMatchObject({
-      dtype: {
-        audio_encoder: 'q4',
-        vision_encoder: 'q4',
-        embed_tokens: 'q4',
-        decoder_model_merged: 'q4',
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q8',
       },
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });
-    expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime?.multimodalGeneration).toBeUndefined();
+    expect(
+      MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime?.multimodalGeneration
+    ).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_SMALL_MODEL_ID)?.inputLimits).toEqual({
       maxImageInputs: 1,
     });
@@ -359,7 +398,9 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LEGACY_GEMMA_4_MODEL_ID)?.inputLimits).toEqual({
       maxAudioInputs: 1,
     });
-    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.toolCalling).toEqual({
+    expect(
+      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-3B-Instruct-onnx-web')?.toolCalling
+    ).toEqual({
       format: 'json',
       nameKey: 'name',
       argumentsKey: 'parameters',

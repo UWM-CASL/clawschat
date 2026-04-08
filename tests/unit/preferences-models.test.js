@@ -12,9 +12,7 @@ function createHarness({
       <div id="modelCardList"></div>
       <select id="modelSelect"></select>
       <select id="backendSelect">
-        <option value="auto">Auto</option>
         <option value="webgpu">WebGPU</option>
-        <option value="wasm">WASM</option>
         <option value="cpu">CPU</option>
       </select>
     `,
@@ -54,7 +52,7 @@ function createHarness({
       documentRef: document,
       modelStorageKey: 'model',
       backendStorageKey: 'backend',
-      supportedBackendPreferences: new Set(['auto', 'webgpu', 'wasm', 'cpu']),
+      supportedBackendPreferences: new Set(['webgpu', 'cpu']),
       webGpuRequiredModelSuffix: ' (WebGPU required)',
       modelSelect: document.getElementById('modelSelect'),
       modelCardList: document.getElementById('modelCardList'),
@@ -67,7 +65,9 @@ function createHarness({
 describe('preferences-models', () => {
   test('renders model cards with metadata and supports keyboard navigation', () => {
     const harness = createHarness();
-    const modelCardList = /** @type {HTMLElement} */ (harness.document.getElementById('modelCardList'));
+    const modelCardList = /** @type {HTMLElement} */ (
+      harness.document.getElementById('modelCardList')
+    );
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
     );
@@ -94,7 +94,9 @@ describe('preferences-models', () => {
     expect(modelSelect.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
     expect(gemmaButton?.getAttribute('aria-checked')).toBe('true');
 
-    modelCardList.dispatchEvent(new harness.document.defaultView.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    modelCardList.dispatchEvent(
+      new harness.document.defaultView.KeyboardEvent('keydown', { key: 'Home', bubbles: true })
+    );
 
     const firstButton = /** @type {HTMLButtonElement | null} */ (
       modelCardList.querySelector('.model-card-button')
@@ -114,18 +116,16 @@ describe('preferences-models', () => {
     );
 
     harness.controller.populateModelSelect();
-    modelSelect.value = 'LiquidAI/LFM2.5-350M-ONNX';
+    modelSelect.value = 'litert-community/gemma-4-E4B-it-litert-lm';
     backendSelect.value = 'cpu';
 
     const selectedModel = harness.controller.syncModelSelectionForCurrentEnvironment({
       announceFallback: true,
     });
 
-    expect(selectedModel).not.toBe('LiquidAI/LFM2.5-350M-ONNX');
+    expect(selectedModel).not.toBe('litert-community/gemma-4-E4B-it-litert-lm');
     expect(modelSelect.value).toBe(selectedModel);
-    expect(harness.deps.setStatus).toHaveBeenCalledWith(
-      expect.stringContaining('CPU only')
-    );
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(expect.stringContaining('CPU'));
   });
 
   test('reads and persists inference preferences through the engine-facing contract', () => {
@@ -184,7 +184,7 @@ describe('preferences-models', () => {
     });
 
     harness.controller.populateModelSelect();
-    harness.controller.setSelectedModelId('LiquidAI/LFM2.5-350M-ONNX');
+    harness.controller.setSelectedModelId('litert-community/gemma-4-E4B-it-litert-lm');
 
     const adapterAvailable = await harness.controller.probeWebGpuAvailability();
 
@@ -193,7 +193,7 @@ describe('preferences-models', () => {
     expect(harness.appState.webGpuProbeCompleted).toBe(true);
     expect(harness.appState.webGpuAdapterAvailable).toBe(false);
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      expect.not.stringContaining('LiquidAI/LFM2.5-350M-ONNX'),
+      expect.not.stringContaining('litert-community/gemma-4-E4B-it-litert-lm'),
       true
     );
     expect(harness.deps.setStatus).toHaveBeenCalledWith(

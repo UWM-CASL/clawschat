@@ -6,7 +6,6 @@ let buildGenerationOptions;
 let shouldSkipSpecialTokensInMultimodalOutput;
 let buildMultimodalDecodeOptions;
 let getBackendAttemptOrder;
-let resolveBrowserWasmThreadCount;
 let configureOnnxWasmBackend;
 let resolveBackendLabel;
 
@@ -22,12 +21,9 @@ beforeAll(async () => {
     shouldSkipSpecialTokensInMultimodalOutput,
     buildMultimodalDecodeOptions,
     getBackendAttemptOrder,
-    resolveBrowserWasmThreadCount,
     configureOnnxWasmBackend,
     resolveBackendLabel,
-  } = await import(
-    '../../src/workers/llm.worker.js'
-  ));
+  } = await import('../../src/workers/llm.worker.js'));
 });
 
 describe('llm.worker resolvePrompt', () => {
@@ -165,90 +161,39 @@ describe('llm.worker generation options', () => {
 });
 
 describe('llm.worker backend selection', () => {
-  test('auto falls back from webgpu to wasm in the browser worker', () => {
-    expect(getBackendAttemptOrder('auto', {})).toEqual(['webgpu', 'wasm']);
+  test('webgpu preference loads only the webgpu backend in the browser worker', () => {
+    expect(getBackendAttemptOrder('webgpu', {})).toEqual(['webgpu']);
+  });
+
+  test('legacy auto preference maps to the new webgpu mode', () => {
+    expect(getBackendAttemptOrder('auto', {})).toEqual(['webgpu']);
   });
 
   test('cpu preference maps directly to the browser wasm backend', () => {
     expect(getBackendAttemptOrder('cpu', {})).toEqual(['wasm']);
   });
 
-  test('labels the browser wasm backend consistently for cpu and wasm preferences', () => {
+  test('labels the browser wasm backend as cpu for current and legacy cpu preferences', () => {
     expect(resolveBackendLabel('cpu', 'wasm')).toBe('cpu');
-    expect(resolveBackendLabel('wasm', 'wasm')).toBe('wasm');
+    expect(resolveBackendLabel('wasm', 'wasm')).toBe('cpu');
   });
 
-  test('labels a browser default-device fallback as cpu only when the preference is auto', () => {
-    expect(resolveBackendLabel('auto', 'default')).toBe('cpu');
-    expect(resolveBackendLabel('wasm', 'default')).toBe('wasm');
-  });
-
-  test('webgpu-required models reject wasm-only preference', () => {
-    expect(getBackendAttemptOrder('wasm', { requiresWebGpu: true })).toEqual([]);
+  test('labels webgpu execution consistently for current and legacy webgpu preferences', () => {
+    expect(resolveBackendLabel('webgpu', 'webgpu')).toBe('webgpu');
+    expect(resolveBackendLabel('auto', 'webgpu')).toBe('webgpu');
   });
 
   test('webgpu-required models reject cpu-only preference', () => {
     expect(getBackendAttemptOrder('cpu', { requiresWebGpu: true })).toEqual([]);
   });
-});
 
-describe('llm.worker wasm thread selection', () => {
-  test('uses a conservative threaded wasm count when isolation requirements are met', () => {
-    expect(
-      resolveBrowserWasmThreadCount({
-        navigatorLike: { hardwareConcurrency: 8 },
-        globalLike: {
-          SharedArrayBuffer: class SharedArrayBufferMock {},
-          crossOriginIsolated: true,
-        },
-      })
-    ).toEqual({
-      logicalCores: 8,
-      hasSharedArrayBuffer: true,
-      isCrossOriginIsolated: true,
-      canUseThreadedWasm: true,
-      numThreads: 4,
-    });
-  });
-
-  test('falls back to one wasm thread when cross-origin isolation is unavailable', () => {
-    expect(
-      resolveBrowserWasmThreadCount({
-        navigatorLike: { hardwareConcurrency: 8 },
-        globalLike: {
-          SharedArrayBuffer: class SharedArrayBufferMock {},
-          crossOriginIsolated: false,
-        },
-      })
-    ).toEqual({
-      logicalCores: 8,
-      hasSharedArrayBuffer: true,
-      isCrossOriginIsolated: false,
-      canUseThreadedWasm: false,
-      numThreads: 1,
-    });
-  });
-
-  test('falls back to one wasm thread when SharedArrayBuffer is unavailable', () => {
-    expect(
-      resolveBrowserWasmThreadCount({
-        navigatorLike: { hardwareConcurrency: 8 },
-        globalLike: {
-          crossOriginIsolated: true,
-        },
-      })
-    ).toEqual({
-      logicalCores: 8,
-      hasSharedArrayBuffer: false,
-      isCrossOriginIsolated: true,
-      canUseThreadedWasm: false,
-      numThreads: 1,
-    });
+  test('webgpu-required models keep legacy auto mapped to webgpu mode', () => {
+    expect(getBackendAttemptOrder('auto', { requiresWebGpu: true })).toEqual(['webgpu']);
   });
 });
 
 describe('llm.worker wasm backend config', () => {
-  test('enables proxying for wasm execution', () => {
+  test('enables proxying and defers thread selection to onnxruntime-web', () => {
     const env = {
       backends: {
         onnx: {
@@ -257,68 +202,22 @@ describe('llm.worker wasm backend config', () => {
       },
     };
 
-    const originalSharedArrayBuffer = globalThis.SharedArrayBuffer;
-    const originalCrossOriginIsolated = globalThis.crossOriginIsolated;
-    const originalNavigator = globalThis.navigator;
-    Object.defineProperty(globalThis, 'SharedArrayBuffer', {
-      configurable: true,
-      value: class SharedArrayBufferMock {},
-    });
-    Object.defineProperty(globalThis, 'crossOriginIsolated', {
-      configurable: true,
-      value: true,
-    });
-    Object.defineProperty(globalThis, 'navigator', {
-      configurable: true,
-      value: { hardwareConcurrency: 8 },
-    });
-
-    try {
-      const result = configureOnnxWasmBackend(env, 'wasm');
-      expect(env.backends.onnx.wasm.proxy).toBe(true);
-      expect(env.backends.onnx.wasm.numThreads).toBe(4);
-      expect(result?.proxy).toBe(true);
-    } finally {
-      Object.defineProperty(globalThis, 'SharedArrayBuffer', {
-        configurable: true,
-        value: originalSharedArrayBuffer,
-      });
-      Object.defineProperty(globalThis, 'crossOriginIsolated', {
-        configurable: true,
-        value: originalCrossOriginIsolated,
-      });
-      Object.defineProperty(globalThis, 'navigator', {
-        configurable: true,
-        value: originalNavigator,
-      });
-    }
-  });
-
-  test('disables wasm proxying for webgpu execution', () => {
-    const env = {
-      backends: {
-        onnx: {
-          wasm: {},
-        },
-      },
-    };
-
-    const result = configureOnnxWasmBackend(env, 'webgpu');
-    expect(env.backends.onnx.wasm.proxy).toBe(false);
-    expect(result?.proxy).toBe(false);
-  });
-
-  test('enables proxying for default-device execution', () => {
-    const env = {
-      backends: {
-        onnx: {
-          wasm: {},
-        },
-      },
-    };
-
-    const result = configureOnnxWasmBackend(env, 'default');
+    const result = configureOnnxWasmBackend(env);
     expect(env.backends.onnx.wasm.proxy).toBe(true);
-    expect(result?.proxy).toBe(true);
+    expect(env.backends.onnx.wasm.numThreads).toBe(0);
+    expect(result).toEqual({
+      numThreads: 0,
+      proxy: true,
+    });
+  });
+
+  test('returns null when the onnx wasm backend is unavailable', () => {
+    const env = {
+      backends: {
+        onnx: {},
+      },
+    };
+
+    expect(configureOnnxWasmBackend(env)).toBeNull();
   });
 });

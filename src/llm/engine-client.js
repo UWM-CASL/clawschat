@@ -1,8 +1,4 @@
-import {
-  DEFAULT_ENGINE_TYPE,
-  getEngineDescriptor,
-  normalizeEngineType,
-} from './engines/index.js';
+import { DEFAULT_ENGINE_TYPE, getEngineDescriptor, normalizeEngineType } from './engines/index.js';
 
 /**
  * Browser-facing engine abstraction.
@@ -23,7 +19,7 @@ export class LLMEngineClient {
     this.config = {
       engineType: DEFAULT_ENGINE_TYPE,
       modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
-      backendPreference: 'auto',
+      backendPreference: 'webgpu',
       runtime: {},
       generationConfig: {
         maxOutputTokens: 1024,

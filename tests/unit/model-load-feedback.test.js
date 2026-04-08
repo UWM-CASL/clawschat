@@ -70,9 +70,9 @@ describe('model-load-feedback', () => {
       totalBytes: 2048,
     });
 
-    expect(harness.document.getElementById('modelLoadProgressWrap')?.classList.contains('d-none')).toBe(
-      false
-    );
+    expect(
+      harness.document.getElementById('modelLoadProgressWrap')?.classList.contains('d-none')
+    ).toBe(false);
     expect(harness.document.getElementById('modelLoadProgressLabel')?.textContent).toBe(
       'Downloading model...'
     );
@@ -91,7 +91,7 @@ describe('model-load-feedback', () => {
   test('shows and clears structured load errors', () => {
     const harness = createHarness();
 
-    harness.controller.showLoadError('Top level failure | Try again | Switch to WASM');
+    harness.controller.showLoadError('Top level failure | Try again | Switch to CPU');
 
     expect(harness.document.getElementById('modelLoadError')?.classList.contains('d-none')).toBe(
       false
@@ -104,7 +104,7 @@ describe('model-load-feedback', () => {
         harness.document.querySelectorAll('#modelLoadErrorDetails li'),
         (item) => item.textContent
       )
-    ).toEqual(['Try again', 'Switch to WASM']);
+    ).toEqual(['Try again', 'Switch to CPU']);
 
     harness.controller.clearLoadError();
 

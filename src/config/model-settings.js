@@ -47,10 +47,18 @@ export const MODEL_FEATURE_FLAGS = Object.freeze([
   'audioInput',
   'videoInput',
 ]);
-export const ALLOWED_RUNTIME_DTYPES = Object.freeze(new Set(['q4', 'q8', 'fp32']));
-export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['auto', 'webgpu']));
+export const ALLOWED_RUNTIME_DTYPES = Object.freeze(
+  new Set(['q4', 'q8', 'fp32', 'fp16', 'int8', 'uint8', 'bnb4', 'q4f16'])
+);
+export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['webgpu']));
 export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
-  new Set(['json', 'tagged-json', 'special-token-call', 'xml-tool-call', 'gemma-special-token-call'])
+  new Set([
+    'json',
+    'tagged-json',
+    'special-token-call',
+    'xml-tool-call',
+    'gemma-special-token-call',
+  ])
 );
 export const ALLOWED_TOOL_LIST_FORMATS = Object.freeze(new Set(['markdown', 'json']));
 export const ALLOWED_THINKING_RUNTIME_PARAMETERS = Object.freeze(new Set(['enable_thinking']));
@@ -86,8 +94,24 @@ function normalizeRuntimeDtype(rawDtype) {
   return entries.length ? Object.fromEntries(entries) : null;
 }
 
+function normalizeRuntimeDtypes(rawDtypes) {
+  if (!rawDtypes || typeof rawDtypes !== 'object' || Array.isArray(rawDtypes)) {
+    return null;
+  }
+  const webgpu = normalizeRuntimeDtype(rawDtypes.webgpu);
+  const cpu = normalizeRuntimeDtype(rawDtypes.cpu);
+  if (!webgpu && !cpu) {
+    return null;
+  }
+  return {
+    ...(webgpu ? { webgpu } : {}),
+    ...(cpu ? { cpu } : {}),
+  };
+}
+
 function normalizeRuntime(rawRuntime) {
   const dtype = normalizeRuntimeDtype(rawRuntime?.dtype);
+  const dtypes = normalizeRuntimeDtypes(rawRuntime?.dtypes);
   const modelAssetPath =
     typeof rawRuntime?.modelAssetPath === 'string' && rawRuntime.modelAssetPath.trim()
       ? rawRuntime.modelAssetPath.trim()
@@ -102,6 +126,7 @@ function normalizeRuntime(rawRuntime) {
       : false;
   return {
     ...(dtype ? { dtype } : {}),
+    ...(dtypes ? { dtypes } : {}),
     ...(modelAssetPath ? { modelAssetPath } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
@@ -135,7 +160,11 @@ function normalizeRepositoryUrl(rawUrl, fallbackId) {
 }
 
 function normalizeLanguageSupport(rawLanguageSupport) {
-  if (!rawLanguageSupport || typeof rawLanguageSupport !== 'object' || Array.isArray(rawLanguageSupport)) {
+  if (
+    !rawLanguageSupport ||
+    typeof rawLanguageSupport !== 'object' ||
+    Array.isArray(rawLanguageSupport)
+  ) {
     return null;
   }
   const tags = Array.isArray(rawLanguageSupport.tags)
@@ -166,7 +195,12 @@ function normalizeLanguageSupport(rawLanguageSupport) {
 }
 
 function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
-  if (!enabled || !rawToolCalling || typeof rawToolCalling !== 'object' || Array.isArray(rawToolCalling)) {
+  if (
+    !enabled ||
+    !rawToolCalling ||
+    typeof rawToolCalling !== 'object' ||
+    Array.isArray(rawToolCalling)
+  ) {
     return null;
   }
   const toolListFormat =
@@ -175,7 +209,8 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
       ? rawToolCalling.toolListFormat.trim()
       : '';
   const format =
-    typeof rawToolCalling.format === 'string' && ALLOWED_TOOL_CALLING_FORMATS.has(rawToolCalling.format.trim())
+    typeof rawToolCalling.format === 'string' &&
+    ALLOWED_TOOL_CALLING_FORMATS.has(rawToolCalling.format.trim())
       ? rawToolCalling.format.trim()
       : '';
   if (!format) {
@@ -199,7 +234,8 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
     const argumentsKey =
       typeof rawToolCalling.argumentsKey === 'string' ? rawToolCalling.argumentsKey.trim() : '';
     const openTag = typeof rawToolCalling.openTag === 'string' ? rawToolCalling.openTag.trim() : '';
-    const closeTag = typeof rawToolCalling.closeTag === 'string' ? rawToolCalling.closeTag.trim() : '';
+    const closeTag =
+      typeof rawToolCalling.closeTag === 'string' ? rawToolCalling.closeTag.trim() : '';
     return nameKey && argumentsKey && openTag && closeTag && openTag !== closeTag
       ? {
           format,
@@ -217,8 +253,10 @@ function normalizeToolCalling(rawToolCalling, { enabled = false } = {}) {
       ...(toolListFormat && toolListFormat !== 'markdown' ? { toolListFormat } : {}),
     };
   }
-  const callOpen = typeof rawToolCalling.callOpen === 'string' ? rawToolCalling.callOpen.trim() : '';
-  const callClose = typeof rawToolCalling.callClose === 'string' ? rawToolCalling.callClose.trim() : '';
+  const callOpen =
+    typeof rawToolCalling.callOpen === 'string' ? rawToolCalling.callOpen.trim() : '';
+  const callClose =
+    typeof rawToolCalling.callClose === 'string' ? rawToolCalling.callClose.trim() : '';
   return callOpen && callClose && callOpen !== callClose
     ? {
         format,
@@ -251,7 +289,12 @@ function normalizeInputLimits(rawInputLimits) {
 }
 
 function normalizeThinkingControl(rawThinkingControl, { enabled = false } = {}) {
-  if (!enabled || !rawThinkingControl || typeof rawThinkingControl !== 'object' || Array.isArray(rawThinkingControl)) {
+  if (
+    !enabled ||
+    !rawThinkingControl ||
+    typeof rawThinkingControl !== 'object' ||
+    Array.isArray(rawThinkingControl)
+  ) {
     return null;
   }
   const runtimeParameter =
@@ -300,7 +343,9 @@ function normalizeThinkingTags(rawThinkingTags) {
 }
 
 function normalizeFeatures(rawFeatures, { thinkingTags = null } = {}) {
-  const normalized = Object.fromEntries(MODEL_FEATURE_FLAGS.map((feature) => [feature, rawFeatures?.[feature] === true]));
+  const normalized = Object.fromEntries(
+    MODEL_FEATURE_FLAGS.map((feature) => [feature, rawFeatures?.[feature] === true])
+  );
   if (thinkingTags) {
     normalized.thinking = true;
   }
@@ -313,10 +358,19 @@ function normalizeConfiguredModelId(modelId) {
 }
 
 export function normalizeSupportedBackendPreference(value) {
-  if (value === 'webgpu' || value === 'wasm' || value === 'cpu') {
-    return value;
+  if (value === 'cpu' || value === 'wasm') {
+    return 'cpu';
   }
-  return 'auto';
+  if (value === 'webgpu' || value === 'auto') {
+    return 'webgpu';
+  }
+  return 'webgpu';
+}
+
+export function resolveRuntimeDtypeForBackend(runtime = {}, backendPreference = 'webgpu') {
+  const normalizedBackendPreference = normalizeSupportedBackendPreference(backendPreference);
+  const backendKey = normalizedBackendPreference === 'cpu' ? 'cpu' : 'webgpu';
+  return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
 }
 
 export function browserSupportsWebGpu(navigatorLike = globalThis.navigator) {
@@ -361,7 +415,7 @@ const configuredModels = Array.isArray(modelCatalog?.models)
           generation,
           runtime,
           inputLimits,
-          hidden: normalizeHiddenFlag((/** @type {any} */ (model)).hidden),
+          hidden: normalizeHiddenFlag(/** @type {any} */ (model).hidden),
         };
       })
       .filter(Boolean)
@@ -407,7 +461,7 @@ export const LEGACY_MODEL_ALIASES = Object.fromEntries(
       typeof alias === 'string' ? alias.trim() : '',
       typeof canonical === 'string' ? canonical.trim() : '',
     ])
-    .filter(([alias, canonical]) => alias && canonical),
+    .filter(([alias, canonical]) => alias && canonical)
 );
 export const SUPPORTED_MODELS = new Set(configuredModels.map((model) => model.id));
 
@@ -426,10 +480,7 @@ export function getModelEngineType(modelId) {
 
 export function getModelAvailability(
   modelId,
-  {
-    backendPreference = 'auto',
-    webGpuAvailable = browserSupportsWebGpu(),
-  } = {},
+  { backendPreference = 'webgpu', webGpuAvailable = browserSupportsWebGpu() } = {}
 ) {
   const normalizedBackendPreference = normalizeSupportedBackendPreference(backendPreference);
   const resolvedModelId = normalizeConfiguredModelId(modelId);
@@ -452,7 +503,7 @@ export function getModelAvailability(
     if (!WEBGPU_COMPATIBLE_BACKEND_PREFERENCES.has(normalizedBackendPreference)) {
       return {
         available: false,
-        reason: 'This model requires WebGPU. Choose Auto or WebGPU only.',
+        reason: 'This model requires WebGPU. Switch to WebGPU mode.',
       };
     }
   }
@@ -461,8 +512,8 @@ export function getModelAvailability(
 }
 
 export function getFirstAvailableModelId(options = {}) {
-  const firstAvailableModel = MODEL_OPTIONS.find((model) =>
-    getModelAvailability(model.id, options).available,
+  const firstAvailableModel = MODEL_OPTIONS.find(
+    (model) => getModelAvailability(model.id, options).available
   );
   return firstAvailableModel?.id || DEFAULT_MODEL;
 }

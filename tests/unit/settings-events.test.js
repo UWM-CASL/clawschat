@@ -82,8 +82,8 @@ function createHarness() {
           <option value="model-b">Model B</option>
         </select>
         <select id="backendSelect">
-          <option value="auto">Auto</option>
           <option value="webgpu">WebGPU</option>
+          <option value="cpu">CPU</option>
         </select>
         <input id="maxOutputTokensInput" />
         <input id="maxContextTokensInput" />

@@ -44,9 +44,7 @@ function createPreferencesHarness({
       <div id="modelCardList"></div>
       <select id="modelSelect"></select>
       <select id="backendSelect">
-        <option value="auto">Auto</option>
         <option value="webgpu">WebGPU</option>
-        <option value="wasm">WASM</option>
         <option value="cpu">CPU</option>
       </select>
     `,
@@ -88,7 +86,7 @@ function createPreferencesHarness({
       mcpServersStorageKey: 'mcp-servers',
       modelStorageKey: 'model',
       backendStorageKey: 'backend',
-      supportedBackendPreferences: new Set(['auto', 'webgpu', 'wasm', 'cpu']),
+      supportedBackendPreferences: new Set(['webgpu', 'cpu']),
       webGpuRequiredModelSuffix: ' (WebGPU required)',
       availableToolDefinitions: getEnabledToolDefinitions(),
       themeSelect: document.getElementById('themeSelect'),
@@ -243,9 +241,12 @@ describe('preferences controller', () => {
   test('stores a validated CORS proxy URL and restores it into state and the input', async () => {
     const harness = createPreferencesHarness();
 
-    const savedProxyUrl = await harness.controller.saveCorsProxyPreference('https://proxy.example', {
-      persist: true,
-    });
+    const savedProxyUrl = await harness.controller.saveCorsProxyPreference(
+      'https://proxy.example',
+      {
+        persist: true,
+      }
+    );
 
     expect(savedProxyUrl).toBe('https://proxy.example/');
     expect(harness.controller.getStoredCorsProxyPreference()).toBe('https://proxy.example/');
@@ -391,14 +392,14 @@ describe('preferences controller', () => {
     const backendSelect = harness.document.getElementById('backendSelect');
 
     harness.controller.populateModelSelect();
-    modelSelect.value = 'onnx-community/gemma-3n-E2B-it-ONNX';
-    backendSelect.value = 'wasm';
+    modelSelect.value = 'litert-community/gemma-4-E4B-it-litert-lm';
+    backendSelect.value = 'cpu';
 
     const selectedModel = harness.controller.syncModelSelectionForCurrentEnvironment({
       announceFallback: true,
     });
 
-    expect(selectedModel).not.toBe('onnx-community/gemma-3n-E2B-it-ONNX');
+    expect(selectedModel).not.toBe('litert-community/gemma-4-E4B-it-litert-lm');
     expect(modelSelect.value).toBe(selectedModel);
   });
 
@@ -426,11 +427,10 @@ describe('preferences controller', () => {
     expect(liquidSmallCard?.textContent).toContain('32,768 tokens');
     expect(liquidSmallCard?.textContent).not.toContain('Temp 0.1');
     expect(liquidSmallCard?.textContent).not.toContain('Top P 1.00');
-    expect(liquidSmallCard?.textContent).toContain('This model requires WebGPU.');
+    expect(liquidSmallCard?.textContent).not.toContain('This model requires WebGPU.');
     expect(
-      /** @type {HTMLAnchorElement | null} */ (
-        liquidSmallCard?.querySelector('.model-card-link')
-      )?.href
+      /** @type {HTMLAnchorElement | null} */ (liquidSmallCard?.querySelector('.model-card-link'))
+        ?.href
     ).toBe('https://huggingface.co/LiquidAI/LFM2.5-350M-ONNX');
 
     const liquidInstructCard = cards.find((card) =>
@@ -439,7 +439,7 @@ describe('preferences controller', () => {
     expect(liquidInstructCard?.textContent).toContain('32,768 tokens');
     expect(liquidInstructCard?.textContent).not.toContain('Temp 0.1');
     expect(liquidInstructCard?.textContent).not.toContain('Top P 1.00');
-    expect(liquidInstructCard?.textContent).toContain('This model requires WebGPU.');
+    expect(liquidInstructCard?.textContent).not.toContain('This model requires WebGPU.');
     expect(
       /** @type {HTMLAnchorElement | null} */ (
         liquidInstructCard?.querySelector('.model-card-link')
@@ -469,10 +469,7 @@ describe('preferences controller', () => {
       Array.from(gemmaCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
         node.getAttribute('aria-label')
       )
-    ).toEqual([
-      'Shows a thinking section',
-      'Can use built-in tools',
-    ]);
+    ).toEqual(['Shows a thinking section', 'Can use built-in tools']);
     expect(gemmaCard?.textContent).toContain('This model requires WebGPU.');
 
     expect(
@@ -519,9 +516,7 @@ describe('preferences controller', () => {
     expect(getFeatureLabels('Llama 3.2 3B Instruct')).toEqual(['Can use built-in tools']);
     expect(getFeatureLabels('Llama 3.2 1B Instruct')).toEqual([]);
     expect(getFeatureLabels('Liquid LFM 2.5 350M')).toEqual(['Can use built-in tools']);
-    expect(getFeatureLabels('Liquid LFM 2.5 1.2B Instruct')).toEqual([
-      'Can use built-in tools',
-    ]);
+    expect(getFeatureLabels('Liquid LFM 2.5 1.2B Instruct')).toEqual(['Can use built-in tools']);
     expect(getFeatureLabels('Gemma 4 E4B')).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
@@ -531,11 +526,15 @@ describe('preferences controller', () => {
   test('renders the default model first in the picker cards and select', () => {
     const harness = createPreferencesHarness();
     const modelCardList = harness.document.getElementById('modelCardList');
-    const modelSelect = /** @type {HTMLSelectElement} */ (harness.document.getElementById('modelSelect'));
+    const modelSelect = /** @type {HTMLSelectElement} */ (
+      harness.document.getElementById('modelSelect')
+    );
 
     harness.controller.populateModelSelect();
 
-    const firstCardTitle = modelCardList.querySelector('.model-card .model-card-title')?.textContent;
+    const firstCardTitle = modelCardList.querySelector(
+      '.model-card .model-card-title'
+    )?.textContent;
     expect(firstCardTitle).toBe('Gemma 4 E4B');
     expect(modelSelect.options[0]?.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
   });

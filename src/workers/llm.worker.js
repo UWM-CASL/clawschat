@@ -113,10 +113,13 @@ function queueBufferedToken(generationState, text) {
   if (generationState.flushTimerId !== null) {
     return;
   }
-  generationState.flushTimerId = globalThis.setTimeout(() => {
-    generationState.flushTimerId = null;
-    flushBufferedTokens(generationState);
-  }, Math.max(0, WORKER_STREAM_UPDATE_INTERVAL_MS - elapsed));
+  generationState.flushTimerId = globalThis.setTimeout(
+    () => {
+      generationState.flushTimerId = null;
+      flushBufferedTokens(generationState);
+    },
+    Math.max(0, WORKER_STREAM_UPDATE_INTERVAL_MS - elapsed)
+  );
 }
 
 function createGenerationState(requestId) {
@@ -174,45 +177,15 @@ async function loadTransformers() {
   return cachedModule;
 }
 
-function resolveBrowserWasmThreadCount({
-  navigatorLike = typeof navigator !== 'undefined' ? navigator : undefined,
-  globalLike = globalThis,
-  maxThreads = 4,
-} = {}) {
-  const requestedMaxThreads =
-    Number.isInteger(maxThreads) && maxThreads > 0 ? Math.max(1, maxThreads) : 4;
-  const logicalCores =
-    Number.isInteger(navigatorLike?.hardwareConcurrency) && navigatorLike.hardwareConcurrency > 0
-      ? navigatorLike.hardwareConcurrency
-      : 1;
-  const hasSharedArrayBuffer = typeof globalLike?.SharedArrayBuffer !== 'undefined';
-  const isCrossOriginIsolated = globalLike?.crossOriginIsolated === true;
-  const canUseThreadedWasm = hasSharedArrayBuffer && isCrossOriginIsolated;
-  const numThreads = canUseThreadedWasm
-    ? Math.min(requestedMaxThreads, Math.max(1, Math.ceil(logicalCores / 2)))
-    : 1;
-
-  return {
-    logicalCores,
-    hasSharedArrayBuffer,
-    isCrossOriginIsolated,
-    canUseThreadedWasm,
-    numThreads,
-  };
-}
-
-export { resolveBrowserWasmThreadCount };
-
-function configureOnnxWasmBackend(env, backend) {
+function configureOnnxWasmBackend(env) {
   if (!env?.backends?.onnx?.wasm) {
     return null;
   }
-  const threadConfig = resolveBrowserWasmThreadCount();
-  env.backends.onnx.wasm.numThreads = threadConfig.numThreads;
-  env.backends.onnx.wasm.proxy = backend === 'wasm' || backend === 'default';
+  env.backends.onnx.wasm.numThreads = 0;
+  env.backends.onnx.wasm.proxy = true;
   return {
-    ...threadConfig,
-    proxy: backend === 'wasm' || backend === 'default',
+    numThreads: 0,
+    proxy: true,
   };
 }
 
@@ -237,45 +210,32 @@ function getBackendAttemptOrder(preference, runtimeConfig = {}) {
   const normalizedPreference = normalizeBackendPreference(preference);
   const runtime = normalizeRuntimeConfig(runtimeConfig);
   if (runtime.requiresWebGpu) {
-    if (normalizedPreference === 'wasm' || normalizedPreference === 'cpu') {
+    if (normalizedPreference === 'cpu') {
       return [];
     }
     return ['webgpu'];
   }
-  if (normalizedPreference === 'webgpu') {
-    return ['webgpu'];
-  }
-  if (normalizedPreference === 'wasm' || normalizedPreference === 'cpu') {
+  if (normalizedPreference === 'cpu') {
     return ['wasm'];
   }
-  return ['webgpu', 'wasm'];
+  return ['webgpu'];
 }
 
 function normalizeBackendPreference(preference) {
-  if (preference === 'webgpu') {
-    return 'webgpu';
-  }
-  if (preference === 'wasm') {
-    return 'wasm';
-  }
-  if (preference === 'cpu') {
+  if (preference === 'cpu' || preference === 'wasm') {
     return 'cpu';
   }
-  return 'auto';
+  return 'webgpu';
 }
 
 function resolveBackendLabel(preference, backend) {
-  const normalizedPreference = normalizeBackendPreference(preference);
   if (backend === 'webgpu') {
     return 'webgpu';
   }
-  if (normalizedPreference === 'cpu') {
+  if (backend === 'wasm') {
     return 'cpu';
   }
-  if (normalizedPreference === 'wasm' || backend === 'wasm') {
-    return 'wasm';
-  }
-  return 'cpu';
+  return normalizeBackendPreference(preference);
 }
 
 export { resolveBackendLabel };
@@ -315,24 +275,42 @@ function formatWebGpuInitializationError(error) {
   return rawMessage;
 }
 
-function normalizeRuntimeConfig(rawRuntime) {
-  let dtype = '';
-  if (typeof rawRuntime?.dtype === 'string') {
-    dtype = rawRuntime.dtype.trim();
-  } else if (
-    rawRuntime?.dtype &&
-    typeof rawRuntime.dtype === 'object' &&
-    !Array.isArray(rawRuntime.dtype)
-  ) {
-    const entries = Object.entries(rawRuntime.dtype)
-      .map(([key, value]) => {
-        const normalizedKey = typeof key === 'string' ? key.trim() : '';
-        const normalizedValue = typeof value === 'string' ? value.trim() : '';
-        return normalizedKey && normalizedValue ? [normalizedKey, normalizedValue] : null;
-      })
-      .filter(Boolean);
-    dtype = entries.length ? Object.fromEntries(entries) : '';
+function normalizeRuntimeDtype(rawDtype) {
+  if (typeof rawDtype === 'string') {
+    const normalized = rawDtype.trim();
+    return normalized || '';
   }
+  if (!rawDtype || typeof rawDtype !== 'object' || Array.isArray(rawDtype)) {
+    return '';
+  }
+  const entries = Object.entries(rawDtype)
+    .map(([key, value]) => {
+      const normalizedKey = typeof key === 'string' ? key.trim() : '';
+      const normalizedValue = typeof value === 'string' ? value.trim() : '';
+      return normalizedKey && normalizedValue ? [normalizedKey, normalizedValue] : null;
+    })
+    .filter(Boolean);
+  return entries.length ? Object.fromEntries(entries) : '';
+}
+
+function normalizeRuntimeDtypes(rawDtypes) {
+  if (!rawDtypes || typeof rawDtypes !== 'object' || Array.isArray(rawDtypes)) {
+    return null;
+  }
+  const webgpu = normalizeRuntimeDtype(rawDtypes.webgpu);
+  const cpu = normalizeRuntimeDtype(rawDtypes.cpu);
+  if (!webgpu && !cpu) {
+    return null;
+  }
+  return {
+    ...(webgpu ? { webgpu } : {}),
+    ...(cpu ? { cpu } : {}),
+  };
+}
+
+function normalizeRuntimeConfig(rawRuntime) {
+  const dtype = normalizeRuntimeDtype(rawRuntime?.dtype);
+  const dtypes = normalizeRuntimeDtypes(rawRuntime?.dtypes);
   const enableThinking =
     rawRuntime?.enableThinking === true
       ? true
@@ -363,6 +341,7 @@ function normalizeRuntimeConfig(rawRuntime) {
       : false;
   return {
     ...(dtype ? { dtype } : {}),
+    ...(dtypes ? { dtypes } : {}),
     ...(enableThinking === true || enableThinking === false ? { enableThinking } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
@@ -374,6 +353,12 @@ function normalizeRuntimeConfig(rawRuntime) {
     ...(maxVideoInputs ? { maxVideoInputs } : {}),
     ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
   };
+}
+
+function resolveRuntimeDtype(runtime = {}, backendPreference = 'webgpu') {
+  const normalizedBackendPreference = normalizeBackendPreference(backendPreference);
+  const backendKey = normalizedBackendPreference === 'cpu' ? 'cpu' : 'webgpu';
+  return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
 }
 
 function buildMultimodalChatTemplateOptions(runtime = {}) {
@@ -553,12 +538,15 @@ async function prepareMultimodalInputsFromPrompt(messages, RawImage) {
         continue;
       }
       if (part.type === 'audio') {
-        const samplesBase64 = typeof part.samplesBase64 === 'string' ? part.samplesBase64.trim() : '';
+        const samplesBase64 =
+          typeof part.samplesBase64 === 'string' ? part.samplesBase64.trim() : '';
         if (!samplesBase64) {
           throw new Error('Audio attachment data is missing normalized waveform samples.');
         }
         const sampleRate =
-          Number.isFinite(part.sampleRate) && part.sampleRate > 0 ? Math.round(part.sampleRate) : 16000;
+          Number.isFinite(part.sampleRate) && part.sampleRate > 0
+            ? Math.round(part.sampleRate)
+            : 16000;
         if (sampleRate !== 16000) {
           throw new Error('Audio attachments must be normalized to 16 kHz for this model runtime.');
         }
@@ -711,9 +699,10 @@ function promptContainsStructuredMedia(prompt) {
 
 async function initialize(payload) {
   const modelId = payload.modelId || 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
-  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'auto');
+  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'webgpu');
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
   const runtime = normalizeRuntimeConfig(payload.runtime);
+  const runtimeDtype = resolveRuntimeDtype(runtime, backendPreference);
   const attempts = getBackendAttemptOrder(backendPreference, runtime);
   const errors = [];
   const navigatorLike = /** @type {any} */ (
@@ -725,7 +714,7 @@ async function initialize(payload) {
     self.postMessage({
       type: 'init-error',
       payload: {
-        message: `Failed to initialize model. ${modelId} requires WebGPU. Choose Auto or WebGPU only.`,
+        message: `Failed to initialize model. ${modelId} requires WebGPU. Switch to WebGPU mode.`,
       },
     });
     postProgress({ percent: 0, message: 'Model load failed.' });
@@ -783,6 +772,7 @@ async function initialize(payload) {
   InterruptableStoppingCriteriaClass = InterruptableStoppingCriteria;
   env.allowRemoteModels = true;
   env.useBrowserCache = true;
+  env.useWasmCache = true;
 
   for (const backend of attempts) {
     if (backend === 'webgpu' && !(typeof navigator !== 'undefined' && 'gpu' in navigator)) {
@@ -792,13 +782,13 @@ async function initialize(payload) {
 
     try {
       const resolvedBackendLabel = resolveBackendLabel(backendPreference, backend);
-      configureOnnxWasmBackend(env, backend);
+      configureOnnxWasmBackend(env);
       const backendStatusLabel = resolvedBackendLabel.toUpperCase();
       postStatus(`Loading ${modelId} with ${backendStatusLabel}...`);
       postProgress({ percent: 5, message: `Preparing ${backendStatusLabel} backend...` });
       const pipelineOptions = {
         ...(backend !== 'default' ? { device: backend } : {}),
-        ...(runtime.dtype ? { dtype: runtime.dtype } : {}),
+        ...(runtimeDtype ? { dtype: runtimeDtype } : {}),
         ...(runtime.useExternalDataFormat
           ? {
               use_external_data_format: runtime.useExternalDataFormat,
@@ -843,12 +833,12 @@ async function initialize(payload) {
         postProgress({ percent: 10, message: `Loading ${modelId} multimodal model...` });
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
           ...(backend !== 'default' ? { device: backend } : {}),
-          ...(runtime.dtype ? { dtype: runtime.dtype } : {}),
+          ...(runtimeDtype ? { dtype: runtimeDtype } : {}),
           ...(runtime.useExternalDataFormat
             ? {
                 use_external_data_format: runtime.useExternalDataFormat,
-            }
-          : {}),
+              }
+            : {}),
           progress_callback: pipelineOptions.progress_callback,
         });
         tokenizer = model?.tokenizer || null;
@@ -918,7 +908,8 @@ async function generate(payload) {
   postStatus(`Generating (${backendInUse.toUpperCase()})...`);
 
   if (!InterruptableStoppingCriteriaClass) {
-    ({ InterruptableStoppingCriteria: InterruptableStoppingCriteriaClass } = await loadTransformers());
+    ({ InterruptableStoppingCriteria: InterruptableStoppingCriteriaClass } =
+      await loadTransformers());
   }
 
   const generationState = createGenerationState(requestId);
@@ -1100,7 +1091,7 @@ self.onmessage = async (event) => {
       payload.modelId !== loadedModelId ||
       (requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'multimodal') ||
       (!requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'text') ||
-      (requestedBackendPreference !== 'auto' && requestedBackendPreference !== backendInUse);
+      requestedBackendPreference !== backendInUse;
 
     if (!needsReinit) {
       self.postMessage({
