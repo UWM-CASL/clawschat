@@ -54,6 +54,18 @@ export function bindComposerEvents({
   const WORK_WITH_ATTACHMENT_ACCEPT = '';
   const AUDIO_FILE_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'oga', 'flac', 'aac', 'm4a', 'webm']);
 
+  /**
+   * @param {unknown} value
+   * @returns {value is PromiseLike<unknown>}
+   */
+  const isPromiseLike = (value) => {
+    if (value === null || typeof value !== 'object') {
+      return false;
+    }
+    const candidate = /** @type {{ then?: unknown }} */ (value);
+    return typeof candidate.then === 'function';
+  };
+
   const resolveAttachmentSupport =
     typeof getSelectedModelAttachmentSupport === 'function'
       ? getSelectedModelAttachmentSupport
@@ -490,7 +502,7 @@ export function bindComposerEvents({
     queueConversationStateSave();
     const beforeStartGenerationResult = beforeStartGeneration(activeConversation, userMessage);
     const shouldContinue =
-      beforeStartGenerationResult instanceof Promise
+      isPromiseLike(beforeStartGenerationResult)
         ? await beforeStartGenerationResult
         : beforeStartGenerationResult;
     if (shouldContinue === false) {

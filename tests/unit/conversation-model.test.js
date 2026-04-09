@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  HEARTBEAT_SPEAKER,
   addMessageToConversation,
   buildConversationDownloadMarkdown,
   buildConversationDownloadPayload,
@@ -7,6 +8,7 @@ import {
   createConversation,
   deriveConversationMenuCapabilities,
   findPreferredLeafForVariant,
+  getConversationCardHeading,
   getEffectiveConversationSystemPrompt,
   getModelVariantState,
   getTaskListForConversationLeaf,
@@ -21,6 +23,15 @@ function completeModelMessage(message, text) {
   message.text = text;
   message.isResponseComplete = true;
   return message;
+}
+
+function addHeartbeatMessage(conversation, text) {
+  const heartbeatMessage = addMessageToConversation(conversation, 'user', text);
+  heartbeatMessage.speaker = HEARTBEAT_SPEAKER;
+  if (heartbeatMessage.content && typeof heartbeatMessage.content === 'object') {
+    heartbeatMessage.content.llmRepresentation = text;
+  }
+  return heartbeatMessage;
 }
 
 describe('conversation-model', () => {
@@ -613,6 +624,71 @@ describe('conversation-model', () => {
       'Tool Result Data: {"shellFlavor":"GNU/Linux-like shell subset","currentWorkingDirectory":"/workspace","command":"find . -type f","exitCode":0,"stdout":"/workspace/notes.txt","stderr":""}'
     );
     expect(markdown).toContain('> {"status":"success","body":"/workspace/notes.txt"}');
+  });
+
+  test('treats heartbeat turns as distinct from normal user prompts in headings and exports', () => {
+    const conversation = createConversation({
+      id: 'conversation-heartbeat',
+      conversationType: 'agent',
+      agent: {
+        name: 'Harold',
+        description: 'Helpful and proactive.',
+      },
+    });
+    const firstUser = addMessageToConversation(conversation, 'user', 'Good evening, Harold.');
+    completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstUser.id }),
+      'Good evening to you as well.'
+    );
+    const heartbeat = addHeartbeatMessage(
+      conversation,
+      'Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.'
+    );
+    const secondUser = addMessageToConversation(conversation, 'user', 'Tell me something useful.', {
+      parentId: heartbeat.id,
+    });
+    const secondModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: secondUser.id }),
+      'A short walk can improve alertness.'
+    );
+
+    conversation.activeLeafMessageId = secondModel.id;
+
+    expect(getConversationCardHeading(conversation, heartbeat)).toBe('Heartbeat 1');
+    expect(getConversationCardHeading(conversation, secondUser)).toBe('User Prompt 2');
+    expect(buildPromptForConversationLeaf(conversation)).toEqual([
+      {
+        role: 'system',
+        content: expect.stringContaining('**Agent identity:**'),
+      },
+      { role: 'user', content: 'Good evening, Harold.' },
+      { role: 'assistant', content: 'Good evening to you as well.' },
+      {
+        role: 'user',
+        content:
+          'Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.',
+      },
+      { role: 'user', content: 'Tell me something useful.' },
+      { role: 'assistant', content: 'A short walk can improve alertness.' },
+    ]);
+
+    const payload = buildConversationDownloadPayload(conversation);
+    expect(payload.exchanges[2]).toEqual(
+      expect.objectContaining({
+        heading: 'Heartbeat 3',
+        role: 'user',
+        event: 'heartbeat',
+        speaker: HEARTBEAT_SPEAKER,
+        text:
+          'Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.',
+      })
+    );
+
+    const markdown = buildConversationDownloadMarkdown(payload);
+    expect(markdown).toContain('## Heartbeat 3');
+    expect(markdown).toContain(
+      '> Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.'
+    );
   });
 
   test('preserves conversations without a stored model id', () => {

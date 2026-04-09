@@ -17,7 +17,7 @@ Student-facing browser chat UI with local model inference.
 - Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
 - Clicking `New Agent` returns the workspace to a matching pre-chat flow with agent name and personality fields above the same model picker; the composer then prompts the user to say hello to that agent.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
-- Agent conversations show a person icon in the conversation list, expose a `Pause Agent` header control plus a visible next-check-in countdown while active, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
+- Agent conversations show a person icon in the conversation list, expose a `Pause Agent` header control plus a visible next-heartbeat countdown while active, write each heartbeat into the transcript as a visible `Heartbeat` turn, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
 - Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.
 - From that pre-chat state, users can keep the currently loaded model or choose a different model card before sending the first message.
 - If a different model is selected for the next chat, the currently loaded model worker is unloaded before the replacement model is loaded.
@@ -143,7 +143,7 @@ Student-facing browser chat UI with local model inference.
   - This is intended for parser-first, LLM-guided conversions such as future PDF-to-Markdown attachment preparation.
 - New conversations start untitled and are automatically renamed after the first model response based on conversation content.
 - Automatic conversation renaming now runs through a one-step orchestration loaded from `src/config/orchestrations/rename-chat.json`.
-- Agent conversations can also run a background follow-up orchestration while loaded and unpaused, and they use a separate summarization orchestration to compact older prompt context when the active branch approaches its context limit.
+- Agent conversations can also run a background heartbeat orchestration while loaded and unpaused; each heartbeat tells the model when the user has not replied since the last heartbeat so it can avoid repeating the same prompt, and those conversations use a separate summarization orchestration to compact older prompt context when the active branch approaches its context limit.
 - Conversation title editing is disabled until that automatic model-generated title is available and is available from the active conversation's sidebar kebab menu.
 - The conversation list reveals a kebab actions menu on hover/focus for each conversation instead of a direct delete icon.
 - Conversation menu actions such as `Edit prompt` and `Delete` remain available while background orchestrations (for example automatic conversation renaming) are running; only active model loading/generation locks those controls.

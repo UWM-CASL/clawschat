@@ -40,6 +40,8 @@ export const CONVERSATION_TYPES = Object.freeze({
   AGENT: 'agent',
 });
 
+export const HEARTBEAT_SPEAKER = 'Heartbeat';
+
 function normalizeArtifactRef(rawRef) {
   if (!rawRef || typeof rawRef !== 'object') {
     return null;
@@ -625,6 +627,14 @@ export function isAgentConversation(conversation) {
   return normalizeConversationType(conversation?.conversationType) === CONVERSATION_TYPES.AGENT;
 }
 
+export function isHeartbeatMessage(message) {
+  return (
+    message?.role === 'user' &&
+    typeof message?.speaker === 'string' &&
+    message.speaker.trim().toLowerCase() === HEARTBEAT_SPEAKER.toLowerCase()
+  );
+}
+
 function formatArtifactInventoryLines(artifactRefs) {
   const normalizedRefs = Array.isArray(artifactRefs) ? artifactRefs : [];
   const lines = [];
@@ -885,6 +895,9 @@ function getVisibleMessageRoleSequence(conversation, message) {
   const visiblePath = getConversationPathMessages(conversation);
   for (const pathMessage of visiblePath) {
     if (pathMessage.role === 'user') {
+      if (isHeartbeatMessage(pathMessage)) {
+        continue;
+      }
       userPromptCount += 1;
       if (pathMessage.id === message.id) {
         return userPromptCount;
@@ -904,6 +917,24 @@ function getVisibleMessageRoleSequence(conversation, message) {
       if (pathMessage.id === message.id) {
         return summaryCount;
       }
+    }
+  }
+  return 0;
+}
+
+function getHeartbeatSequence(conversation, message) {
+  if (!conversation || !message?.id || !isHeartbeatMessage(message)) {
+    return 0;
+  }
+  let heartbeatCount = 0;
+  const visiblePath = getConversationPathMessages(conversation);
+  for (const pathMessage of visiblePath) {
+    if (!isHeartbeatMessage(pathMessage)) {
+      continue;
+    }
+    heartbeatCount += 1;
+    if (pathMessage.id === message.id) {
+      return heartbeatCount;
     }
   }
   return 0;
@@ -1019,6 +1050,10 @@ export function getUserVariantState(conversation, userMessage) {
 export function getConversationCardHeading(conversation, message) {
   if (!conversation || !message) {
     return '';
+  }
+  if (isHeartbeatMessage(message)) {
+    const sequence = Math.max(getHeartbeatSequence(conversation, message), 1);
+    return `Heartbeat ${sequence}`;
   }
   const baseLabel =
     message.role === 'user'
@@ -1367,10 +1402,11 @@ export function buildConversationDownloadPayload(
       if (message.role === 'user') {
         const timestamp = toIsoTimestamp(message.createdAt);
         const timestampMs = normalizeTimestamp(message.createdAt);
+        const isHeartbeat = isHeartbeatMessage(message);
         return {
-          heading: `User prompt ${exchangeNumber}`,
+          heading: isHeartbeat ? `Heartbeat ${exchangeNumber}` : `User prompt ${exchangeNumber}`,
           role: message.role,
-          event: 'entered',
+          event: isHeartbeat ? 'heartbeat' : 'entered',
           timestamp,
           timestampMs,
           createdAt: timestamp,
@@ -1378,6 +1414,9 @@ export function buildConversationDownloadPayload(
           date: formatExportDate(timestamp),
           time: formatExportTime(timestamp),
           text: String(message.text || ''),
+          ...(isHeartbeat
+            ? { speaker: typeof message.speaker === 'string' ? message.speaker : HEARTBEAT_SPEAKER }
+            : {}),
         };
       }
       if (message.role === 'tool') {

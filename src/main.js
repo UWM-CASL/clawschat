@@ -83,6 +83,7 @@ import {
 } from './config/model-settings.js';
 import {
   CONVERSATION_TYPES,
+  HEARTBEAT_SPEAKER,
   addMessageToConversation,
   buildConversationDownloadMarkdown,
   buildConversationDownloadPayload,
@@ -100,6 +101,7 @@ import {
   getModelVariantState,
   getUserVariantState,
   isAgentConversation,
+  isHeartbeatMessage,
   normalizeConversationLanguagePreference,
   normalizeConversationName,
   normalizeConversationType,
@@ -3000,7 +3002,7 @@ function updateAgentFollowUpCountdownUi() {
     agentFollowUpCountdown.classList.add('d-none');
     agentFollowUpCountdownText.textContent = '--';
     if (agentFollowUpCountdownLabel instanceof HTMLElement) {
-      agentFollowUpCountdownLabel.textContent = 'Next check-in';
+      agentFollowUpCountdownLabel.textContent = 'Next heartbeat';
     }
     if (agentFollowUpCountdownLive instanceof HTMLElement) {
       agentFollowUpCountdownLive.textContent = '';
@@ -3013,35 +3015,35 @@ function updateAgentFollowUpCountdownUi() {
   const isPaused = activeConversation.agent.paused === true;
   const isRunning = isAgentFollowUpRunning(activeConversation);
   const nextFollowUpAt = Number(activeConversation.agent.nextFollowUpAt) || 0;
-  let labelText = 'Next check-in';
+  let labelText = 'Next heartbeat';
   let valueText = 'waiting';
   let announcementText = '';
   let announcementKey = `${activeConversation.id}:idle`;
   const shouldTick = !isPaused && !isRunning && Number.isFinite(nextFollowUpAt) && nextFollowUpAt > 0;
 
   if (isPaused) {
-    labelText = 'Check-ins';
+    labelText = 'Heartbeats';
     valueText = 'paused';
     announcementKey = `${activeConversation.id}:paused`;
-    announcementText = `${getAgentDisplayName(activeConversation)} automatic check-ins are paused.`;
+    announcementText = `${getAgentDisplayName(activeConversation)} automatic heartbeats are paused.`;
   } else if (isRunning) {
-    labelText = 'Check-in';
-    valueText = 'checking now';
+    labelText = 'Heartbeat';
+    valueText = 'sending now';
     announcementKey = `${activeConversation.id}:running`;
-    announcementText = `${getAgentDisplayName(activeConversation)} is checking whether to follow up now.`;
+    announcementText = `${getAgentDisplayName(activeConversation)} is sending a heartbeat now.`;
   } else if (shouldTick) {
     const remainingMs = Math.max(0, nextFollowUpAt - Date.now());
     valueText =
       remainingMs <= 1000 ? 'due now' : `in ${formatAgentFollowUpCountdown(remainingMs)}`;
     announcementKey = `${activeConversation.id}:scheduled:${Math.trunc(nextFollowUpAt / 1000)}`;
-    announcementText = `${getAgentDisplayName(activeConversation)} may send the next automatic check-in in about ${formatAgentFollowUpAnnouncement(
+    announcementText = `${getAgentDisplayName(activeConversation)} may send the next heartbeat in about ${formatAgentFollowUpAnnouncement(
       remainingMs
     )}.`;
   } else {
-    labelText = 'Check-in';
+    labelText = 'Heartbeat';
     valueText = 'scheduling...';
     announcementKey = `${activeConversation.id}:scheduling`;
-    announcementText = `${getAgentDisplayName(activeConversation)} will schedule the next automatic check-in after the current activity settles.`;
+    announcementText = `${getAgentDisplayName(activeConversation)} will schedule the next heartbeat after the current activity settles.`;
   }
 
   if (agentFollowUpCountdownLabel instanceof HTMLElement) {
@@ -3720,6 +3722,51 @@ function formatArtifactRefsForPrompt(artifactRefs = []) {
   return lines.join('\n');
 }
 
+function hasUserReplySinceLatestHeartbeat(messages = []) {
+  if (!Array.isArray(messages) || !messages.length) {
+    return true;
+  }
+  let latestHeartbeatIndex = -1;
+  messages.forEach((message, index) => {
+    if (isHeartbeatMessage(message)) {
+      latestHeartbeatIndex = index;
+    }
+  });
+  if (latestHeartbeatIndex < 0) {
+    return true;
+  }
+  return messages
+    .slice(latestHeartbeatIndex + 1)
+    .some((message) => message?.role === 'user' && !isHeartbeatMessage(message));
+}
+
+function buildAgentHeartbeatText({ userRepliedSinceLastHeartbeat }) {
+  if (userRepliedSinceLastHeartbeat) {
+    return (
+      'Heartbeat: Review the conversation now. ' +
+      'If you have something concrete, useful, or newly insightful to do, do it now. Otherwise stay quiet.'
+    );
+  }
+  return (
+    'Heartbeat: The user has not replied since the last heartbeat. ' +
+    'Do not press the same question again. If you have a fresh angle, a concrete next step, or something genuinely useful to add, do it now. Otherwise stay quiet.'
+  );
+}
+
+function addAgentHeartbeatMessage(conversation, { userRepliedSinceLastHeartbeat }) {
+  const heartbeatText = buildAgentHeartbeatText({ userRepliedSinceLastHeartbeat });
+  const heartbeatMessage = addMessageToConversation(conversation, 'user', heartbeatText, {
+    parentId: conversation?.activeLeafMessageId || null,
+  });
+  heartbeatMessage.speaker = HEARTBEAT_SPEAKER;
+  if (heartbeatMessage.content && typeof heartbeatMessage.content === 'object') {
+    heartbeatMessage.content.llmRepresentation = heartbeatText;
+  }
+  conversation.activeLeafMessageId = heartbeatMessage.id;
+  conversation.lastSpokenLeafMessageId = heartbeatMessage.id;
+  return heartbeatMessage;
+}
+
 function buildConversationTranscriptForOrchestration(messages = [], { maxMessages = null } = {}) {
   const normalizedMessages = Array.isArray(messages)
     ? messages.filter(
@@ -3743,7 +3790,11 @@ function buildConversationTranscriptForOrchestration(messages = [], { maxMessage
       if (message.role === 'summary') {
         return `[Conversation Summary]\n${String(message.summary || message.text || '').trim()}`;
       }
-      const label = message.role === 'user' ? 'User' : 'Model';
+      const label = isHeartbeatMessage(message)
+        ? 'Heartbeat'
+        : message.role === 'user'
+          ? 'User'
+          : 'Model';
       const body =
         message.role === 'model'
           ? String(message.response || message.text || '').trim()
@@ -3902,7 +3953,10 @@ async function runAgentFollowUpOrchestration(conversationId) {
   }
   const { lastSummary, recentMessages } = getConversationMessagesAfterLatestSummary(conversation);
   const visibleMessages = recentMessages.filter((message) => message.role !== 'summary');
-  if (!visibleMessages.some((message) => message.role === 'user')) {
+  const hasConversationContext =
+    Boolean(lastSummary) ||
+    visibleMessages.some((message) => message.role === 'user' && !isHeartbeatMessage(message));
+  if (!hasConversationContext) {
     conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
     queueConversationStateSave();
     refreshAgentAutomationState();
@@ -3923,15 +3977,26 @@ async function runAgentFollowUpOrchestration(conversationId) {
   updateActionButtons();
   appendDebug(`Agent follow-up started for ${conversation.name}.`);
   try {
+    const heartbeatMessage = addAgentHeartbeatMessage(conversation, {
+      userRepliedSinceLastHeartbeat: hasUserReplySinceLatestHeartbeat(visibleMessages),
+    });
+    conversation.agent.lastFollowUpAt = heartbeatMessage.createdAt || Date.now();
+    scheduleNextAgentFollowUp(conversation, { from: conversation.agent.lastFollowUpAt });
+    renderTranscript({ scrollToBottom: false });
+    scrollTranscriptToBottom();
+    queueConversationStateSave();
     const { finalOutput } = await runOrchestration(
       agentFollowUpOrchestration,
       {
         agentName: getAgentDisplayName(conversation),
         agentDescription: normalizeSystemPrompt(conversation.agent?.description),
         conversationSummary,
-        recentTranscript: buildConversationTranscriptForOrchestration(visibleMessages, {
-          maxMessages: 12,
-        }),
+        recentTranscript: buildConversationTranscriptForOrchestration(
+          [...visibleMessages, heartbeatMessage],
+          {
+            maxMessages: 12,
+          }
+        ),
         uploadedFiles: formatArtifactRefsForPrompt(artifactRefs),
       },
       {
@@ -3945,8 +4010,6 @@ async function runAgentFollowUpOrchestration(conversationId) {
       getActiveConversation()?.id !== conversation.id ||
       conversation.agent?.paused === true
     ) {
-      conversation.agent.lastFollowUpAt = Date.now();
-      scheduleNextAgentFollowUp(conversation, { from: conversation.agent.lastFollowUpAt });
       queueConversationStateSave();
       return;
     }
@@ -3967,7 +4030,7 @@ async function runAgentFollowUpOrchestration(conversationId) {
     renderTranscript({ scrollToBottom: false });
     scrollTranscriptToBottom();
     queueConversationStateSave();
-    setStatus(`${getAgentDisplayName(conversation)} shared a follow-up.`);
+    setStatus(`${getAgentDisplayName(conversation)} sent a heartbeat follow-up.`);
   } catch (error) {
     if (abortController.signal.aborted) {
       appendDebug('Agent follow-up canceled.');
