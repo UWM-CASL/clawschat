@@ -161,6 +161,7 @@ Student-facing browser chat UI with local model inference.
 - Model outputs wrapped in model-configured thinking tags (for example `<think>...</think>`) are shown in collapsible "Thinking" sections at the point they occurred within the model turn during streaming.
   - Gemma 4 channel-style reasoning output (`<|channel>thought ... <channel|>`) is normalized into the same thinking UI without feeding that reasoning back into later turns.
 - Model responses are rendered as Markdown (via `markdown-it`) in the transcript.
+- Expanded visible thinking sections use the same Markdown rendering path as model responses.
 - `Settings -> Conversation -> Render MathML from LaTeX` controls whether LaTeX-delimited math is rendered in the transcript with MathJax (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`).
 - When `Render MathML from LaTeX` is enabled, the effective system prompt adds math-formatting guidance telling the model to format math in LaTeX with proper delimiters.
 - `Settings -> Conversation -> Show thinking` controls whether thought sections are expanded by default (`off` by default).

@@ -3,7 +3,9 @@ import { JSDOM } from 'jsdom';
 import { createTranscriptView } from '../../src/ui/transcript-view.js';
 
 function createViewHarness() {
-  const dom = new JSDOM('<ul id="chatTranscript"></ul>');
+  const dom = new JSDOM('<ul id="chatTranscript"></ul>', {
+    url: 'https://example.test/',
+  });
   const document = dom.window.document;
   globalThis.document = document;
 
@@ -108,7 +110,9 @@ function createDefaultTranscriptView(harness, overrides = {}) {
 
 describe('transcript-view', () => {
   test('window-renders long transcripts and swaps the mounted range on scroll', () => {
-    const dom = new JSDOM('<div id="chatMain"><ul id="chatTranscript"></ul></div>');
+    const dom = new JSDOM('<div id="chatMain"><ul id="chatTranscript"></ul></div>', {
+      url: 'https://example.test/',
+    });
     const document = dom.window.document;
     globalThis.document = document;
     globalThis.HTMLElement = dom.window.HTMLElement;
@@ -412,6 +416,67 @@ describe('transcript-view', () => {
     thinkingBody = harness.container.querySelector('.thoughts-content');
     expect(thinkingToggle?.getAttribute('aria-expanded')).toBe('true');
     expect(thinkingBody?.hasAttribute('hidden')).toBe(false);
+  });
+
+  test('renders expanded thinking blocks with markdown', () => {
+    const harness = createViewHarness();
+    harness.conversation.messageNodes[1].thoughts = '- First item\n- Second item\n\n`code`';
+    harness.conversation.messageNodes[1].hasThinking = true;
+    harness.conversation.messageNodes[1].isThinkingComplete = true;
+    const scheduleMathTypeset = vi.fn();
+
+    const view = createTranscriptView({
+      container: harness.container,
+      getActiveConversation: () => harness.conversation,
+      getConversationPathMessages: (conversation) => conversation.messageNodes,
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user' ? 'User Prompt 1' : 'Model Response 1',
+      getModelVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      getUserVariantState: () => ({
+        index: 0,
+        total: 1,
+        hasVariants: false,
+        canGoPrev: false,
+        canGoNext: false,
+      }),
+      renderModelMarkdown: (content) =>
+        String(content)
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/^- (.+)\n- (.+)$/m, '<ul><li>$1</li><li>$2</li></ul>'),
+      scheduleMathTypeset,
+      getToolDisplayName: (toolName) => toolName,
+      getShowThinkingByDefault: () => true,
+      getActiveUserEditMessageId: () => null,
+      getControlsState: () => ({
+        isGenerating: false,
+        isLoadingModel: false,
+        isRunningOrchestration: false,
+        isSwitchingVariant: false,
+      }),
+      getEmptyStateVisible: () => false,
+      initializeTooltips: vi.fn(),
+      disposeTooltips: vi.fn(),
+      applyVariantCardSignals: vi.fn(),
+      applyFixCardSignals: vi.fn(),
+      scrollTranscriptToBottom: vi.fn(),
+      updateTranscriptNavigationButtonVisibility: vi.fn(),
+      cancelUserMessageEdit: vi.fn(),
+      saveUserMessageEdit: vi.fn(),
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    const thinkingBody = harness.container.querySelector('.thoughts-content');
+    expect(thinkingBody?.hasAttribute('hidden')).toBe(false);
+    expect(thinkingBody?.querySelectorAll('li')).toHaveLength(2);
+    expect(thinkingBody?.querySelector('code')?.textContent).toBe('code');
+    expect(scheduleMathTypeset).toHaveBeenCalledWith(thinkingBody, { immediate: true });
   });
 
   test('shows Please wait while a model response card is still empty', () => {

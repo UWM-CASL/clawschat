@@ -986,12 +986,13 @@ export function createTranscriptView(dependencies) {
         copyButton.innerHTML =
           '<i class="bi bi-copy" aria-hidden="true"></i><span class="visually-hidden">Copy thoughts</span>';
         toolbar.append(toggle, copyButton);
-        const body = documentRef.createElement('p');
+        const body = documentRef.createElement('div');
         body.className = 'thoughts-content';
         body.hidden = !isExpanded;
-        body.textContent = turnMessage.thoughts || '';
+        body.innerHTML = renderModelMarkdown(turnMessage.thoughts || '');
         thinkingRegion.append(heading, toolbar, body);
         timeline.appendChild(thinkingRegion);
+        scheduleMathTypeset(body, { immediate: Boolean(turnMessage.isThinkingComplete) });
       }
 
       const responseContent =
