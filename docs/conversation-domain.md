@@ -1,10 +1,11 @@
 # Conversation Domain
 
-The conversation tree logic now lives in `src/state/conversation-model.js`.
+The conversation tree and export logic live in `src/state/conversation-model.js`.
+Message content normalization and LLM-facing content shaping live in `src/state/conversation-content.js`.
 
 ## Purpose
 
-This module is the pure domain layer for:
+These modules form the pure conversation domain layer for:
 
 - creating conversation records
 - storing the conversation type (`chat` or `agent`) plus optional agent metadata

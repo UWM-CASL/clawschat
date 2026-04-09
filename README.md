@@ -250,6 +250,7 @@ Student-facing browser chat UI with local model inference.
   - `Yoursmiling/Qwen3.5-2B-LiteRT` -> `onnx-community/Qwen3.5-2B-ONNX`
 
 For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` repo id as the canonical model. The full ONNX repo remains a legacy alias only because its browser load path was not reliable in this app: the `int8` package hit `Array buffer allocation failed`, and the `q4` package failed to preload required `.onnx_data` shards in-browser.
+
 - Model support configuration lives in `src/config/models.json`:
 - `models`: options shown in the pre-chat model card picker
 - `models[].displayName`: friendly name shown on the card
@@ -307,7 +308,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 
 ## Architecture notes
 
-- Conversation tree and export domain logic live in `src/state/conversation-model.js`.
+- Conversation tree and export domain logic live in `src/state/conversation-model.js`, with message content normalization and LLM-facing prompt shaping extracted to `src/state/conversation-content.js`.
 - Centralized runtime state and selectors live in `src/state/app-state.js`.
 - App control flow for generation, stop, rename, and fix actions lives in `src/state/app-controller.js`.
 - Orchestration prompt templating, nested placeholder rendering, utility-step execution, and chunk-pipeline support live in `src/llm/orchestration-runner.js`.

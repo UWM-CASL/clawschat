@@ -1,17 +1,19 @@
 import { normalizeModelId } from '../config/model-settings.js';
 import { normalizeWorkspacePath } from '../workspace/workspace-file-system.js';
 import {
+  getTextFromMessageContentParts,
+  normalizeMessageContentParts,
+  setUserMessageText,
+} from './conversation-content.js';
+import {
   normalizeConversationType,
   getConversationPathMessages,
-  getTextFromMessageContentParts,
   normalizeConversationName,
   normalizeConversationLanguagePreference,
   normalizeConversationPromptMode,
   normalizeConversationThinkingEnabled,
-  normalizeMessageContentParts,
   normalizeSystemPrompt,
   parseMessageNodeCounterFromId,
-  setUserMessageText,
 } from './conversation-model.js';
 
 export const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
@@ -40,7 +42,7 @@ function normalizeConversationShellVariables(value) {
   return Object.fromEntries(
     Object.entries(value)
       .filter(([name]) => isValidShellVariableName(name))
-      .map(([name, variableValue]) => [name, String(variableValue ?? '')]),
+      .map(([name, variableValue]) => [name, String(variableValue ?? '')])
   );
 }
 
@@ -56,10 +58,14 @@ function normalizeStoredAgentState(agent, conversationName, startedAt) {
     };
   }
   return {
-    name: normalizeConversationName(agent.name || conversationName || '') || conversationName || 'Agent',
+    name:
+      normalizeConversationName(agent.name || conversationName || '') ||
+      conversationName ||
+      'Agent',
     description: normalizeSystemPrompt(agent.description),
     paused: agent.paused === true,
-    lastActivityAt: normalizeTimestamp(agent.lastActivityAt) || normalizeTimestamp(startedAt) || Date.now(),
+    lastActivityAt:
+      normalizeTimestamp(agent.lastActivityAt) || normalizeTimestamp(startedAt) || Date.now(),
     lastFollowUpAt: normalizeTimestamp(agent.lastFollowUpAt),
     nextFollowUpAt: normalizeTimestamp(agent.nextFollowUpAt),
   };
@@ -122,10 +128,7 @@ function coerceStoredMessageContentParts(rawMessage, artifactLookup) {
           : typeof artifact?.data === 'string'
             ? artifact.data
             : '';
-      const normalizedText =
-        typeof part.normalizedText === 'string'
-          ? part.normalizedText
-          : text;
+      const normalizedText = typeof part.normalizedText === 'string' ? part.normalizedText : text;
       return {
         ...part,
         ...(mimeType ? { mimeType } : {}),
@@ -208,7 +211,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
           ? 'tool'
           : rawMessage.role === 'summary'
             ? 'summary'
-          : '';
+            : '';
   if (!role) {
     return null;
   }
@@ -219,13 +222,15 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
       : fallbackMessageId;
   const contentParts = coerceStoredMessageContentParts(rawMessage, artifactLookup);
   const firstTextPart = contentParts.find(
-    (part) => part?.type === 'text' && typeof part.text === 'string',
+    (part) => part?.type === 'text' && typeof part.text === 'string'
   );
   const llmText =
     typeof rawMessage.content?.llmRepresentation?.text === 'string'
       ? rawMessage.content.llmRepresentation.text
       : '';
-  const text = String(rawMessage.text || rawMessage.response || firstTextPart?.text || llmText || '');
+  const text = String(
+    rawMessage.text || rawMessage.response || firstTextPart?.text || llmText || ''
+  );
   const message = {
     id,
     role,
@@ -254,8 +259,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
               kind: typeof ref.kind === 'string' ? ref.kind : 'binary',
               mimeType: typeof ref.mimeType === 'string' ? ref.mimeType : undefined,
               filename: typeof ref.filename === 'string' ? ref.filename : undefined,
-              workspacePath:
-                typeof ref.workspacePath === 'string' ? ref.workspacePath : undefined,
+              workspacePath: typeof ref.workspacePath === 'string' ? ref.workspacePath : undefined,
               hash:
                 ref.hash && typeof ref.hash === 'object'
                   ? {
@@ -275,7 +279,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
       rawMessage.response ||
         rawMessage.inference?.output?.verbatimText ||
         rawMessage.content?.llmRepresentation?.text ||
-        text,
+        text
     );
     message.rawStreamText = String(
       rawMessage.rawStreamText ||
@@ -283,12 +287,12 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
         rawMessage.response ||
         rawMessage.inference?.output?.verbatimText ||
         rawMessage.content?.llmRepresentation?.text ||
-        text,
+        text
     );
     message.hasThinking = Boolean(rawMessage.hasThinking || message.thoughts.trim());
     message.isThinkingComplete = Boolean(rawMessage.isThinkingComplete);
     message.isResponseComplete = Boolean(
-      rawMessage.isResponseComplete ?? rawMessage.inference?.status?.complete ?? true,
+      rawMessage.isResponseComplete ?? rawMessage.inference?.status?.complete ?? true
     );
     message.text = message.response;
     message.toolCalls = Array.isArray(rawMessage.toolCalls)
@@ -341,7 +345,7 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
       rawMessage.inference?.input?.verbatimText ||
         rawMessage.content?.llmRepresentation?.text ||
         getTextFromMessageContentParts(contentParts, message.text) ||
-        message.text,
+        message.text
     );
     setUserMessageText(message, message.text);
   }
@@ -376,8 +380,7 @@ function serializeMessageArtifactRefs(message) {
             kind: typeof ref.kind === 'string' ? ref.kind : undefined,
             mimeType: typeof ref.mimeType === 'string' ? ref.mimeType : undefined,
             filename: typeof ref.filename === 'string' ? ref.filename : undefined,
-            workspacePath:
-              typeof ref.workspacePath === 'string' ? ref.workspacePath : undefined,
+            workspacePath: typeof ref.workspacePath === 'string' ? ref.workspacePath : undefined,
             hash:
               ref.hash && typeof ref.hash === 'object'
                 ? {
@@ -392,79 +395,82 @@ function serializeMessageArtifactRefs(message) {
 }
 
 function serializeMessageContent(message) {
-  const contentParts = normalizeMessageContentParts(message.content?.parts, message.text || '').map((part) =>
-    part.type === 'image'
-      ? {
-          type: 'image',
-          artifactId: typeof part.artifactId === 'string' ? part.artifactId : undefined,
-          mimeType: typeof part.mimeType === 'string' ? part.mimeType : undefined,
-          filename: typeof part.filename === 'string' ? part.filename : undefined,
-          workspacePath:
-            typeof part.workspacePath === 'string' ? part.workspacePath : undefined,
-          width: Number.isFinite(part.width) ? part.width : undefined,
-          height: Number.isFinite(part.height) ? part.height : undefined,
-          alt: typeof part.alt === 'string' ? part.alt : undefined,
-          base64: typeof part.base64 === 'string' ? part.base64 : undefined,
-          url: typeof part.url === 'string' ? part.url : undefined,
-        }
-      : part.type === 'audio'
+  const contentParts = normalizeMessageContentParts(message.content?.parts, message.text || '').map(
+    (part) =>
+      part.type === 'image'
         ? {
-            type: 'audio',
+            type: 'image',
             artifactId: typeof part.artifactId === 'string' ? part.artifactId : undefined,
             mimeType: typeof part.mimeType === 'string' ? part.mimeType : undefined,
             filename: typeof part.filename === 'string' ? part.filename : undefined,
-            workspacePath:
-              typeof part.workspacePath === 'string' ? part.workspacePath : undefined,
-            size: Number.isFinite(part.size) ? part.size : undefined,
-            durationSeconds:
-              Number.isFinite(part.durationSeconds) && part.durationSeconds >= 0
-                ? part.durationSeconds
-                : undefined,
-            sampleRate: Number.isFinite(part.sampleRate) ? part.sampleRate : undefined,
-            sampleCount: Number.isFinite(part.sampleCount) ? part.sampleCount : undefined,
-            samplesBase64:
-              typeof part.samplesBase64 === 'string' ? part.samplesBase64 : undefined,
+            workspacePath: typeof part.workspacePath === 'string' ? part.workspacePath : undefined,
+            width: Number.isFinite(part.width) ? part.width : undefined,
+            height: Number.isFinite(part.height) ? part.height : undefined,
+            alt: typeof part.alt === 'string' ? part.alt : undefined,
             base64: typeof part.base64 === 'string' ? part.base64 : undefined,
             url: typeof part.url === 'string' ? part.url : undefined,
           }
-      : part.type === 'file'
-        ? {
-            type: 'file',
-            artifactId: typeof part.artifactId === 'string' ? part.artifactId : undefined,
-            mimeType: typeof part.mimeType === 'string' ? part.mimeType : undefined,
-            filename: typeof part.filename === 'string' ? part.filename : undefined,
-            workspacePath:
-              typeof part.workspacePath === 'string' ? part.workspacePath : undefined,
-            extension: typeof part.extension === 'string' ? part.extension : undefined,
-            size: Number.isFinite(part.size) ? part.size : undefined,
-            pageCount: Number.isFinite(part.pageCount) ? part.pageCount : undefined,
-            text: typeof part.text === 'string' ? part.text : undefined,
-            normalizedText: typeof part.normalizedText === 'string' ? part.normalizedText : undefined,
-            normalizedFormat:
-              typeof part.normalizedFormat === 'string' ? part.normalizedFormat : undefined,
-            conversionWarnings: Array.isArray(part.conversionWarnings)
-              ? part.conversionWarnings.filter((warning) => typeof warning === 'string' && warning.trim())
-              : undefined,
-            memoryHint:
-              part.memoryHint && typeof part.memoryHint === 'object'
-                ? {
-                    ingestible: part.memoryHint.ingestible === true ? true : undefined,
-                    preferredSource:
-                      typeof part.memoryHint.preferredSource === 'string'
-                        ? part.memoryHint.preferredSource
-                        : undefined,
-                    documentRole:
-                      typeof part.memoryHint.documentRole === 'string'
-                        ? part.memoryHint.documentRole
-                        : undefined,
-                  }
-                : undefined,
-            llmText: typeof part.llmText === 'string' ? part.llmText : undefined,
-          }
-      : {
-          type: 'text',
-          text: String(part.text || ''),
-        },
+        : part.type === 'audio'
+          ? {
+              type: 'audio',
+              artifactId: typeof part.artifactId === 'string' ? part.artifactId : undefined,
+              mimeType: typeof part.mimeType === 'string' ? part.mimeType : undefined,
+              filename: typeof part.filename === 'string' ? part.filename : undefined,
+              workspacePath:
+                typeof part.workspacePath === 'string' ? part.workspacePath : undefined,
+              size: Number.isFinite(part.size) ? part.size : undefined,
+              durationSeconds:
+                Number.isFinite(part.durationSeconds) && part.durationSeconds >= 0
+                  ? part.durationSeconds
+                  : undefined,
+              sampleRate: Number.isFinite(part.sampleRate) ? part.sampleRate : undefined,
+              sampleCount: Number.isFinite(part.sampleCount) ? part.sampleCount : undefined,
+              samplesBase64:
+                typeof part.samplesBase64 === 'string' ? part.samplesBase64 : undefined,
+              base64: typeof part.base64 === 'string' ? part.base64 : undefined,
+              url: typeof part.url === 'string' ? part.url : undefined,
+            }
+          : part.type === 'file'
+            ? {
+                type: 'file',
+                artifactId: typeof part.artifactId === 'string' ? part.artifactId : undefined,
+                mimeType: typeof part.mimeType === 'string' ? part.mimeType : undefined,
+                filename: typeof part.filename === 'string' ? part.filename : undefined,
+                workspacePath:
+                  typeof part.workspacePath === 'string' ? part.workspacePath : undefined,
+                extension: typeof part.extension === 'string' ? part.extension : undefined,
+                size: Number.isFinite(part.size) ? part.size : undefined,
+                pageCount: Number.isFinite(part.pageCount) ? part.pageCount : undefined,
+                text: typeof part.text === 'string' ? part.text : undefined,
+                normalizedText:
+                  typeof part.normalizedText === 'string' ? part.normalizedText : undefined,
+                normalizedFormat:
+                  typeof part.normalizedFormat === 'string' ? part.normalizedFormat : undefined,
+                conversionWarnings: Array.isArray(part.conversionWarnings)
+                  ? part.conversionWarnings.filter(
+                      (warning) => typeof warning === 'string' && warning.trim()
+                    )
+                  : undefined,
+                memoryHint:
+                  part.memoryHint && typeof part.memoryHint === 'object'
+                    ? {
+                        ingestible: part.memoryHint.ingestible === true ? true : undefined,
+                        preferredSource:
+                          typeof part.memoryHint.preferredSource === 'string'
+                            ? part.memoryHint.preferredSource
+                            : undefined,
+                        documentRole:
+                          typeof part.memoryHint.documentRole === 'string'
+                            ? part.memoryHint.documentRole
+                            : undefined,
+                      }
+                    : undefined,
+                llmText: typeof part.llmText === 'string' ? part.llmText : undefined,
+              }
+            : {
+                type: 'text',
+                text: String(part.text || ''),
+              }
   );
   return {
     parts: contentParts,
@@ -472,7 +478,8 @@ function serializeMessageContent(message) {
       message.role === 'model'
         ? {
             type: 'text',
-            text: typeof message.response === 'string' ? message.response : String(message.text || ''),
+            text:
+              typeof message.response === 'string' ? message.response : String(message.text || ''),
           }
         : Array.isArray(message.content?.llmRepresentation)
           ? message.content.llmRepresentation
@@ -485,12 +492,14 @@ function serializeMessageContent(message) {
                 typeof message.content.llmRepresentation === 'object' &&
                 message.content.llmRepresentation.type === 'text'
               ? message.content.llmRepresentation
-          : contentParts.some((part) => part.type === 'image' || part.type === 'audio')
-            ? contentParts
-            : {
-                type: 'text',
-                text: String(getTextFromMessageContentParts(contentParts, message.text || '') || ''),
-              },
+              : contentParts.some((part) => part.type === 'image' || part.type === 'audio')
+                ? contentParts
+                : {
+                    type: 'text',
+                    text: String(
+                      getTextFromMessageContentParts(contentParts, message.text || '') || ''
+                    ),
+                  },
   };
 }
 
@@ -501,7 +510,8 @@ function serializeConversationMessage(message) {
     speaker: message.speaker,
     text: String(message.text || ''),
     summary: message.role === 'summary' ? String(message.summary || message.text || '') : undefined,
-    isSummaryNode: message.role === 'summary' ? Boolean(message.isSummaryNode !== false) : undefined,
+    isSummaryNode:
+      message.role === 'summary' ? Boolean(message.isSummaryNode !== false) : undefined,
     createdAt: normalizeTimestamp(message.createdAt),
     thoughts: typeof message.thoughts === 'string' ? message.thoughts : '',
     response: typeof message.response === 'string' ? message.response : String(message.text || ''),
@@ -527,7 +537,8 @@ function serializeConversationMessage(message) {
         ? message.toolResultData
         : undefined,
     toolResult: typeof message.toolResult === 'string' ? message.toolResult : undefined,
-    isToolResultComplete: message.role === 'tool' ? Boolean(message.isToolResultComplete ?? true) : undefined,
+    isToolResultComplete:
+      message.role === 'tool' ? Boolean(message.isToolResultComplete ?? true) : undefined,
     parentId: typeof message.parentId === 'string' ? message.parentId : null,
     childIds: Array.isArray(message.childIds)
       ? message.childIds.filter((childId) => typeof childId === 'string' && childId.trim())
@@ -620,7 +631,9 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
         shellVariables: normalizeConversationShellVariables(conversation.shellVariables),
         artifacts: [],
         activeLeafMessageId:
-          typeof conversation.activeLeafMessageId === 'string' ? conversation.activeLeafMessageId : null,
+          typeof conversation.activeLeafMessageId === 'string'
+            ? conversation.activeLeafMessageId
+            : null,
         lastSpokenLeafMessageId:
           typeof conversation.lastSpokenLeafMessageId === 'string'
             ? conversation.lastSpokenLeafMessageId
@@ -628,7 +641,9 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
         messageNodeCounter: Number.isInteger(conversation.messageNodeCounter)
           ? conversation.messageNodeCounter
           : conversation.messageNodes.length,
-        messageNodes: conversation.messageNodes.map((message) => serializeConversationMessage(message)),
+        messageNodes: conversation.messageNodes.map((message) =>
+          serializeConversationMessage(message)
+        ),
         messages: pathMessages.map((message) => serializeConversationMessage(message)),
       };
     }),
@@ -637,7 +652,11 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
   return snapshot;
 }
 
-export function applyStoredConversationState(rawState, appState, { untitledPrefix = 'New Conversation' } = {}) {
+export function applyStoredConversationState(
+  rawState,
+  appState,
+  { untitledPrefix = 'New Conversation' } = {}
+) {
   if (!rawState || typeof rawState !== 'object' || !Array.isArray(rawState.conversations)) {
     return false;
   }
@@ -654,9 +673,8 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
           ? rawConversation.id.trim()
           : `conversation-${conversationIndex + 1}`;
       const normalizedStoredName = normalizeConversationName(rawConversation.name);
-      const isLegacyNumberedUntitled = isLegacyNumberedUntitledConversationName(
-        normalizedStoredName,
-      );
+      const isLegacyNumberedUntitled =
+        isLegacyNumberedUntitledConversationName(normalizedStoredName);
       const name = isLegacyUntitledConversationName(normalizedStoredName)
         ? untitledPrefix
         : normalizedStoredName || untitledPrefix;
@@ -666,17 +684,19 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
           : '';
       const conversationType = normalizeConversationType(rawConversation.conversationType);
       const systemPrompt = normalizeSystemPrompt(rawConversation.systemPrompt);
-      const conversationSystemPrompt = normalizeSystemPrompt(rawConversation.conversationSystemPrompt);
+      const conversationSystemPrompt = normalizeSystemPrompt(
+        rawConversation.conversationSystemPrompt
+      );
       const appendConversationSystemPrompt = normalizeConversationPromptMode(
-        rawConversation.appendConversationSystemPrompt,
+        rawConversation.appendConversationSystemPrompt
       );
       const languagePreference = normalizeConversationLanguagePreference(
-        rawConversation.languagePreference,
+        rawConversation.languagePreference
       );
-      const thinkingEnabled = normalizeConversationThinkingEnabled(
-        rawConversation.thinkingEnabled,
-      );
-      const rawMessageNodes = Array.isArray(rawConversation.messageNodes) ? rawConversation.messageNodes : [];
+      const thinkingEnabled = normalizeConversationThinkingEnabled(rawConversation.thinkingEnabled);
+      const rawMessageNodes = Array.isArray(rawConversation.messageNodes)
+        ? rawConversation.messageNodes
+        : [];
       const hasNodeSchema = rawMessageNodes.length > 0;
       const rawMessages = hasNodeSchema
         ? rawMessageNodes
@@ -687,7 +707,7 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
         .map((rawMessage, messageIndex) =>
           hasNodeSchema
             ? coerceStoredMessageNode(rawMessage, `${id}-node-${messageIndex + 1}`, artifactLookup)
-            : coerceStoredMessage(rawMessage, `${id}-node-${messageIndex + 1}`, artifactLookup),
+            : coerceStoredMessage(rawMessage, `${id}-node-${messageIndex + 1}`, artifactLookup)
         )
         .filter(Boolean);
 
@@ -724,9 +744,12 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
 
       const messageNodeCounterFromIds = messageNodes.reduce(
         (maxCounter, message) => Math.max(maxCounter, parseMessageNodeCounterFromId(message.id)),
-        0,
+        0
       );
-      const storedNodeCounter = Number.parseInt(String(rawConversation.messageNodeCounter || ''), 10);
+      const storedNodeCounter = Number.parseInt(
+        String(rawConversation.messageNodeCounter || ''),
+        10
+      );
       const messageNodeCounter =
         Number.isInteger(storedNodeCounter) && storedNodeCounter > 0
           ? Math.max(storedNodeCounter, messageNodeCounterFromIds)
@@ -743,7 +766,7 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
           ? rawConversation.lastSpokenLeafMessageId
           : activeLeafMessageId;
       const lastSpokenLeafMessageId = messageNodes.some(
-        (message) => message.id === requestedLastSpokenLeaf,
+        (message) => message.id === requestedLastSpokenLeaf
       )
         ? requestedLastSpokenLeaf
         : activeLeafMessageId;
@@ -804,8 +827,9 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
   appState.activeConversationId = null;
 
   const maxCounterFromIds = appState.conversations.reduce(
-    (maxCounter, conversation) => Math.max(maxCounter, parseConversationCounterFromId(conversation.id)),
-    0,
+    (maxCounter, conversation) =>
+      Math.max(maxCounter, parseConversationCounterFromId(conversation.id)),
+    0
   );
   const storedIdCounter = Number.parseInt(String(rawState.conversationIdCounter || ''), 10);
   const storedConversationCount = Number.parseInt(String(rawState.conversationCount || ''), 10);

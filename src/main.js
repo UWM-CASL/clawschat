@@ -81,6 +81,7 @@ import {
   normalizeGenerationLimits,
   normalizeModelId,
 } from './config/model-settings.js';
+import { normalizeMessageContentParts, setUserMessageText } from './state/conversation-content.js';
 import {
   CONVERSATION_TYPES,
   HEARTBEAT_SPEAKER,
@@ -105,12 +106,10 @@ import {
   normalizeConversationLanguagePreference,
   normalizeConversationName,
   normalizeConversationType,
-  normalizeMessageContentParts,
   normalizeConversationPromptMode,
   normalizeConversationThinkingEnabled,
   normalizeSystemPrompt,
   pruneDescendantsFromMessage,
-  setUserMessageText,
 } from './state/conversation-model.js';
 import { createAppController } from './state/app-controller.js';
 import {
@@ -355,7 +354,9 @@ const conversationSystemPromptModal = document.getElementById('conversationSyste
 const conversationSystemPromptModalLabel = document.getElementById(
   'conversationSystemPromptModalLabel'
 );
-const conversationSystemPromptModalHelp = document.getElementById('conversationSystemPromptModalHelp');
+const conversationSystemPromptModalHelp = document.getElementById(
+  'conversationSystemPromptModalHelp'
+);
 const conversationSystemPromptComputedLabel = document.getElementById(
   'conversationSystemPromptComputedLabel'
 );
@@ -1816,7 +1817,8 @@ function buildComputedConversationSystemPromptPreview({
     ? getConversationModelId(activeConversation)
     : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
   const normalizedConversationPrompt = normalizeSystemPrompt(conversationPrompt);
-  const normalizedAppendConversationPrompt = normalizeConversationPromptMode(appendConversationPrompt);
+  const normalizedAppendConversationPrompt =
+    normalizeConversationPromptMode(appendConversationPrompt);
   const normalizedAgentName = normalizeConversationName(agentName);
   const normalizedAgentDescription = normalizeSystemPrompt(agentDescription);
   const promptTarget = activeConversation
@@ -1824,7 +1826,10 @@ function buildComputedConversationSystemPromptPreview({
         ...activeConversation,
         name:
           previewConversationType === CONVERSATION_TYPES.AGENT
-            ? normalizedAgentName || activeConversation?.agent?.name || activeConversation.name || 'Agent'
+            ? normalizedAgentName ||
+              activeConversation?.agent?.name ||
+              activeConversation.name ||
+              'Agent'
             : activeConversation.name,
         conversationSystemPrompt: normalizedConversationPrompt,
         appendConversationSystemPrompt: normalizedAppendConversationPrompt,
@@ -1833,7 +1838,10 @@ function buildComputedConversationSystemPromptPreview({
             ? {
                 ...(activeConversation.agent || {}),
                 name:
-                  normalizedAgentName || activeConversation?.agent?.name || activeConversation.name || 'Agent',
+                  normalizedAgentName ||
+                  activeConversation?.agent?.name ||
+                  activeConversation.name ||
+                  'Agent',
                 description: normalizedAgentDescription,
               }
             : activeConversation.agent,
@@ -1868,15 +1876,17 @@ function buildComputedConversationSystemPromptPreview({
     .map((section) => normalizeSystemPrompt(section))
     .filter(Boolean)
     .join('\n\n');
-  const promptMessages = buildPromptForConversationLeaf(promptTarget, promptTarget.activeLeafMessageId, {
-    systemPromptSuffix,
-  });
+  const promptMessages = buildPromptForConversationLeaf(
+    promptTarget,
+    promptTarget.activeLeafMessageId,
+    {
+      systemPromptSuffix,
+    }
+  );
   return (
     promptMessages.find(
       (message) =>
-        message?.role === 'system' &&
-        typeof message.content === 'string' &&
-        message.content.trim()
+        message?.role === 'system' && typeof message.content === 'string' && message.content.trim()
     )?.content || ''
   );
 }
@@ -2128,9 +2138,7 @@ function createConversation(name) {
   const agentName = normalizeConversationName(appState.pendingAgentName);
   const agentDescription = normalizeSystemPrompt(appState.pendingAgentDescription);
   const conversationName =
-    conversationType === CONVERSATION_TYPES.AGENT
-      ? agentName || 'New Agent'
-      : name;
+    conversationType === CONVERSATION_TYPES.AGENT ? agentName || 'New Agent' : name;
   const conversation = createConversationRecord({
     id: conversationId,
     name: conversationName,
@@ -2860,7 +2868,7 @@ function applyAppRouteFromHash() {
     } else {
       setPreparingNewConversation(appState, true);
       appState.pendingConversationType = normalizeConversationType(
-        routeState.pendingConversationType || CONVERSATION_TYPES.CHAT,
+        routeState.pendingConversationType || CONVERSATION_TYPES.CHAT
       );
       if (appState.pendingConversationType !== CONVERSATION_TYPES.AGENT) {
         clearPendingAgentDraft();
@@ -2999,7 +3007,10 @@ function isAgentFollowUpRunning(conversation = getActiveConversation()) {
 function updateAgentFollowUpCountdownUi() {
   const activeConversation = getActiveConversation();
   const showControls = shouldShowAgentAutomationControls(activeConversation);
-  if (!(agentFollowUpCountdown instanceof HTMLElement) || !(agentFollowUpCountdownText instanceof HTMLElement)) {
+  if (
+    !(agentFollowUpCountdown instanceof HTMLElement) ||
+    !(agentFollowUpCountdownText instanceof HTMLElement)
+  ) {
     clearAgentFollowUpCountdownTimer();
     return;
   }
@@ -3020,7 +3031,8 @@ function updateAgentFollowUpCountdownUi() {
   let valueText = 'waiting';
   let announcementText = '';
   let announcementKey = `${activeConversation.id}:idle`;
-  const shouldTick = !isPaused && !isRunning && Number.isFinite(nextFollowUpAt) && nextFollowUpAt > 0;
+  const shouldTick =
+    !isPaused && !isRunning && Number.isFinite(nextFollowUpAt) && nextFollowUpAt > 0;
 
   if (isPaused) {
     valueText = 'paused';
@@ -3032,8 +3044,7 @@ function updateAgentFollowUpCountdownUi() {
     announcementText = `${getAgentDisplayName(activeConversation)} is sending a heartbeat now.`;
   } else if (shouldTick) {
     const remainingMs = Math.max(0, nextFollowUpAt - Date.now());
-    valueText =
-      remainingMs <= 1000 ? 'due now' : `in ${formatAgentFollowUpCountdown(remainingMs)}`;
+    valueText = remainingMs <= 1000 ? 'due now' : `in ${formatAgentFollowUpCountdown(remainingMs)}`;
     announcementKey = `${activeConversation.id}:scheduled:${Math.trunc(nextFollowUpAt / 1000)}`;
     announcementText = `${getAgentDisplayName(activeConversation)} may send the next heartbeat in about ${formatAgentFollowUpAnnouncement(
       remainingMs
@@ -3623,7 +3634,10 @@ function clearPendingAgentDraft() {
 
 function getAgentDisplayName(conversation = getActiveConversation()) {
   if (isAgentConversation(conversation)) {
-    return normalizeConversationName(conversation?.agent?.name || conversation?.name || 'Agent') || 'Agent';
+    return (
+      normalizeConversationName(conversation?.agent?.name || conversation?.name || 'Agent') ||
+      'Agent'
+    );
   }
   const draftName = normalizeConversationName(appState.pendingAgentName);
   return draftName || 'Agent';
@@ -3664,8 +3678,7 @@ function getConversationMessagesAfterLatestSummary(
       lastSummaryIndex >= 0 && pathMessages[lastSummaryIndex]?.role === 'summary'
         ? pathMessages[lastSummaryIndex]
         : null,
-    recentMessages:
-      lastSummaryIndex >= 0 ? pathMessages.slice(lastSummaryIndex + 1) : pathMessages,
+    recentMessages: lastSummaryIndex >= 0 ? pathMessages.slice(lastSummaryIndex + 1) : pathMessages,
   };
 }
 
@@ -3701,7 +3714,9 @@ function formatArtifactRefsForPrompt(artifactRefs = []) {
       return;
     }
     lines.push(
-      workspacePath && filename ? `- ${filename} (${workspacePath})` : `- ${filename || workspacePath}`
+      workspacePath && filename
+        ? `- ${filename} (${workspacePath})`
+        : `- ${filename || workspacePath}`
     );
   });
   return lines.join('\n');
@@ -3832,10 +3847,9 @@ function scheduleNextAgentFollowUp(conversation, { from = Date.now(), persist = 
   if (!isAgentConversation(conversation) || !conversation.agent) {
     return null;
   }
-  conversation.agent.nextFollowUpAt = Math.max(
-    Math.trunc(from),
-    conversation.agent.lastActivityAt || Math.trunc(from)
-  ) + AGENT_FOLLOW_UP_INTERVAL_MS;
+  conversation.agent.nextFollowUpAt =
+    Math.max(Math.trunc(from), conversation.agent.lastActivityAt || Math.trunc(from)) +
+    AGENT_FOLLOW_UP_INTERVAL_MS;
   if (persist) {
     queueConversationStateSave();
   }
@@ -3868,7 +3882,9 @@ async function cancelActiveAgentFollowUp({ preserveSchedule = true } = {}) {
   try {
     await engine.cancelGeneration();
   } catch (error) {
-    appendDebug(`Agent follow-up cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
+    appendDebug(
+      `Agent follow-up cancellation failed: ${error instanceof Error ? error.message : String(error)}`
+    );
   } finally {
     setOrchestrationRunning(appState, false);
     updateActionButtons();
@@ -3898,7 +3914,10 @@ function refreshAgentAutomationState({ forceReschedule = false } = {}) {
   }
   if (forceReschedule || !Number.isFinite(activeConversation.agent.nextFollowUpAt)) {
     scheduleNextAgentFollowUp(activeConversation, {
-      from: activeConversation.agent.lastFollowUpAt || activeConversation.agent.lastActivityAt || Date.now(),
+      from:
+        activeConversation.agent.lastFollowUpAt ||
+        activeConversation.agent.lastActivityAt ||
+        Date.now(),
     });
     queueConversationStateSave();
   }
@@ -3942,7 +3961,9 @@ async function runAgentFollowUpOrchestration(conversationId) {
     refreshAgentAutomationState();
     return;
   }
-  const conversationSummary = lastSummary ? String(lastSummary.summary || lastSummary.text || '') : '';
+  const conversationSummary = lastSummary
+    ? String(lastSummary.summary || lastSummary.text || '')
+    : '';
   const artifactRefs = collectArtifactRefsFromMessages([
     ...(lastSummary ? [lastSummary] : []),
     ...visibleMessages,
@@ -4016,7 +4037,9 @@ async function runAgentFollowUpOrchestration(conversationId) {
       appendDebug('Agent follow-up canceled.');
       return;
     }
-    appendDebug(`Agent follow-up failed: ${error instanceof Error ? error.message : String(error)}`);
+    appendDebug(
+      `Agent follow-up failed: ${error instanceof Error ? error.message : String(error)}`
+    );
     if (conversation.agent) {
       conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
       queueConversationStateSave();
@@ -4032,7 +4055,12 @@ async function runAgentFollowUpOrchestration(conversationId) {
   }
 }
 
-function insertSummaryNodeBeforeMessage(conversation, targetMessage, summaryText, artifactRefs = []) {
+function insertSummaryNodeBeforeMessage(
+  conversation,
+  targetMessage,
+  summaryText,
+  artifactRefs = []
+) {
   if (!conversation || !targetMessage?.id || !targetMessage.parentId) {
     return null;
   }
@@ -4044,7 +4072,9 @@ function insertSummaryNodeBeforeMessage(conversation, targetMessage, summaryText
     parentId: previousParent.id,
     artifactRefs,
   });
-  previousParent.childIds = (previousParent.childIds || []).filter((childId) => childId !== targetMessage.id);
+  previousParent.childIds = (previousParent.childIds || []).filter(
+    (childId) => childId !== targetMessage.id
+  );
   if (!(previousParent.childIds || []).includes(summaryMessage.id)) {
     previousParent.childIds.push(summaryMessage.id);
   }
@@ -4064,7 +4094,9 @@ async function ensureAgentConversationSummaryBeforeSend(conversation, userMessag
   ) {
     return true;
   }
-  const estimatedPromptTokens = estimatePromptTokenCount(buildPromptForActiveConversation(conversation));
+  const estimatedPromptTokens = estimatePromptTokenCount(
+    buildPromptForActiveConversation(conversation)
+  );
   const contextLimit = Number(appState.activeGenerationConfig?.maxContextTokens) || 0;
   if (
     !contextLimit ||
@@ -4105,7 +4137,9 @@ async function ensureAgentConversationSummaryBeforeSend(conversation, userMessag
     renderTranscript({ scrollToBottom: false });
     return true;
   } catch (error) {
-    appendDebug(`Conversation summary failed: ${error instanceof Error ? error.message : String(error)}`);
+    appendDebug(
+      `Conversation summary failed: ${error instanceof Error ? error.message : String(error)}`
+    );
     setStatus('Conversation summary failed. Continuing without compaction.');
     return true;
   } finally {
