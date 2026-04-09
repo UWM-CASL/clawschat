@@ -245,7 +245,7 @@ function getStandardToolFollowUpMessage(toolName, { failed = false } = {}) {
     case 'get_current_date_time':
       return 'Present the time in a concise, useful way suitible for the conversation.';
     case 'get_user_location':
-      return 'Use this location detail directly in your response.';
+      return "Present the user's reported location in a concise, useful way suitable for the conversation.";
     case 'tasklist':
       return 'Use this planner state to decide the next step and continue.';
     case 'web_lookup':
@@ -929,7 +929,7 @@ function getToolInstructionNotes(name) {
   const notes = [];
   if (normalizedName === 'get_user_location') {
     notes.push({
-      text: 'Use the returned location and coordinate directly in the answer.',
+      text: "Present the user's reported location concisely and only mention coordinates when they are relevant.",
       bulleted: false,
     });
   }

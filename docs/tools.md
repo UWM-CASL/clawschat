@@ -102,7 +102,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 - Model-facing envelope:
   - `status: "successful"` or `status: "failed"`
   - `body`: markdown summary of the resolved location details
-  - `message`: short follow-up telling the model how to proceed with or without the location
+  - `message`: short follow-up telling the model to present the user's reported location concisely for the conversation, or how to proceed without it on failure
 
 This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Development/browser-llm-runner/src/llm/tool-calling.js).
 

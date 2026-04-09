@@ -1846,6 +1846,12 @@ describe('tool-calling prompt builder', () => {
         longitude: -87.9065,
       },
     });
+    expect(JSON.parse(result.resultText)).toMatchObject({
+      status: 'successful',
+      body: expect.stringContaining('- Location: Milwaukee, Wisconsin, United States'),
+      message:
+        "Present the user's reported location in a concise, useful way suitable for the conversation.",
+    });
   });
 
   test('falls back to an approximate location when geolocation permission is denied', async () => {
