@@ -172,4 +172,21 @@ describe('shortcut-events', () => {
     expect(handleFocusedMessageShortcut(copyEvent)).toBe(true);
     expect(harness.deps.handleMessageCopyAction).toHaveBeenCalledWith('model-1', 'response');
   });
+
+  test('opens the prompt editor shortcut for agent conversations', () => {
+    const harness = createHarness();
+    harness.activeConversation.conversationType = 'agent';
+    const { handleGlobalShortcut } = createShortcutHandlers(harness.deps);
+
+    const handled = handleGlobalShortcut(
+      new harness.dom.window.KeyboardEvent('keydown', {
+        key: 'p',
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+
+    expect(handled).toBe(true);
+    expect(harness.deps.beginConversationSystemPromptEdit).toHaveBeenCalledTimes(1);
+  });
 });

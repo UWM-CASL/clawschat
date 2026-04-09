@@ -945,7 +945,7 @@ export function deriveConversationMenuCapabilities(conversation) {
   );
   return {
     canEditName: Boolean(conversation?.hasGeneratedName),
-    canEditPrompt: Boolean(conversation) && !isAgentConversation(conversation),
+    canEditPrompt: Boolean(conversation),
     canDownload: hasCompletedGeneration,
   };
 }

@@ -19,6 +19,8 @@ function createHarness() {
         <button id="cancelChatTitleBtn"></button>
         <textarea id="conversationSystemPromptInput"></textarea>
         <input id="conversationSystemPromptAppendToggle" type="checkbox" />
+        <input id="agentPromptNameInput" />
+        <textarea id="agentPromptPersonalityInput"></textarea>
         <button id="saveConversationSystemPromptBtn"></button>
         <input id="chatTitleInput" />
       </div>
@@ -116,9 +118,12 @@ function createHarness() {
       conversationSystemPromptAppendToggle: document.getElementById(
         'conversationSystemPromptAppendToggle',
       ),
+      agentPromptNameInput: document.getElementById('agentPromptNameInput'),
+      agentPromptPersonalityInput: document.getElementById('agentPromptPersonalityInput'),
       saveConversationSystemPromptBtn: document.getElementById('saveConversationSystemPromptBtn'),
       saveConversationSystemPromptEdit: vi.fn(),
       updateConversationSystemPromptPreview: vi.fn(),
+      focusConversationSystemPromptEditor: vi.fn(),
       chatTitleInput: document.getElementById('chatTitleInput'),
       updateChatTitleEditorVisibility: vi.fn(),
       resetPendingConversationModelPreferences: vi.fn(),
@@ -179,8 +184,14 @@ describe('shell-events', () => {
     harness.document.getElementById('conversationSystemPromptAppendToggle')?.dispatchEvent(
       new harness.dom.window.Event('change', { bubbles: true }),
     );
+    harness.document.getElementById('agentPromptNameInput')?.dispatchEvent(
+      new harness.dom.window.Event('input', { bubbles: true }),
+    );
+    harness.document.getElementById('agentPromptPersonalityInput')?.dispatchEvent(
+      new harness.dom.window.Event('input', { bubbles: true }),
+    );
 
-    expect(harness.deps.updateConversationSystemPromptPreview).toHaveBeenCalledTimes(2);
+    expect(harness.deps.updateConversationSystemPromptPreview).toHaveBeenCalledTimes(4);
   });
 
   test('new conversation enters pre-chat mode without creating a conversation record', () => {

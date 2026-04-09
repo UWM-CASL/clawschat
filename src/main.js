@@ -94,7 +94,6 @@ import {
   deriveConversationName,
   findPreferredLeafForVariant,
   getConversationCardHeading,
-  getEffectiveConversationSystemPrompt,
   getConversationPathMessages,
   getTaskListForConversationLeaf,
   getMessageNodeById,
@@ -332,8 +331,16 @@ const preChatEditConversationSystemPromptBtn = document.getElementById(
   'preChatEditConversationSystemPromptBtn'
 );
 const chatTitle = document.getElementById('chatTitle');
+const agentAutomationControls = document.getElementById('agentAutomationControls');
 const pauseAgentBtn = document.getElementById('pauseAgentBtn');
 const pauseAgentBtnLabel = document.getElementById('pauseAgentBtnLabel');
+const agentFollowUpCountdown = document.getElementById('agentFollowUpCountdown');
+const agentFollowUpCountdownLabel = agentFollowUpCountdown?.querySelector(
+  '.agent-follow-up-status-label'
+);
+const agentFollowUpCountdownText = document.getElementById('agentFollowUpCountdownText');
+const agentFollowUpAutomationHelp = document.getElementById('agentFollowUpAutomationHelp');
+const agentFollowUpCountdownLive = document.getElementById('agentFollowUpCountdownLive');
 const chatTitleInput = document.getElementById('chatTitleInput');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
@@ -344,6 +351,13 @@ const conversationPanelCollapseButtonText = document.getElementById(
   'conversationPanelCollapseButtonText'
 );
 const conversationSystemPromptModal = document.getElementById('conversationSystemPromptModal');
+const conversationSystemPromptModalLabel = document.getElementById(
+  'conversationSystemPromptModalLabel'
+);
+const conversationSystemPromptModalHelp = document.getElementById('conversationSystemPromptModalHelp');
+const conversationSystemPromptComputedLabel = document.getElementById(
+  'conversationSystemPromptComputedLabel'
+);
 const conversationSystemPromptInput = document.getElementById('conversationSystemPromptInput');
 const conversationSystemPromptAppendToggle = document.getElementById(
   'conversationSystemPromptAppendToggle'
@@ -351,6 +365,10 @@ const conversationSystemPromptAppendToggle = document.getElementById(
 const conversationSystemPromptComputedPreview = document.getElementById(
   'conversationSystemPromptComputedPreview'
 );
+const conversationPromptFields = document.getElementById('conversationPromptFields');
+const agentPromptFields = document.getElementById('agentPromptFields');
+const agentPromptNameInput = document.getElementById('agentPromptNameInput');
+const agentPromptPersonalityInput = document.getElementById('agentPromptPersonalityInput');
 const saveConversationSystemPromptBtn = document.getElementById('saveConversationSystemPromptBtn');
 const openSettingsButton = document.getElementById('openSettingsButton');
 const closeSettingsButton = document.getElementById('closeSettingsButton');
@@ -384,8 +402,10 @@ let markdownRendererLoadPromise = null;
 let hasQueuedMarkdownRendererRefresh = false;
 let hasLoggedMarkdownRendererError = false;
 let agentFollowUpTimerId = null;
+let agentFollowUpCountdownIntervalId = null;
 let activeAgentFollowUpAbortController = null;
 let activeAgentFollowUpConversationId = '';
+let lastAgentFollowUpAnnouncementKey = '';
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
 
@@ -1788,27 +1808,81 @@ function syncConversationLanguageAndThinkingControls(conversation = getActiveCon
 function buildComputedConversationSystemPromptPreview({
   conversationPrompt = '',
   appendConversationPrompt = true,
+  conversationType = '',
+  agentName = '',
+  agentDescription = '',
 } = {}) {
   const activeConversation = getActiveConversation();
+  const previewConversationType = normalizeConversationType(
+    conversationType || activeConversation?.conversationType || getPendingConversationType()
+  );
   const modelId = activeConversation
     ? getConversationModelId(activeConversation)
     : normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const normalizedConversationPrompt = normalizeSystemPrompt(conversationPrompt);
+  const normalizedAppendConversationPrompt = normalizeConversationPromptMode(appendConversationPrompt);
+  const normalizedAgentName = normalizeConversationName(agentName);
+  const normalizedAgentDescription = normalizeSystemPrompt(agentDescription);
   const promptTarget = activeConversation
     ? {
         ...activeConversation,
-        conversationSystemPrompt: normalizeSystemPrompt(conversationPrompt),
-        appendConversationSystemPrompt: normalizeConversationPromptMode(appendConversationPrompt),
+        name:
+          previewConversationType === CONVERSATION_TYPES.AGENT
+            ? normalizedAgentName || activeConversation?.agent?.name || activeConversation.name || 'Agent'
+            : activeConversation.name,
+        conversationSystemPrompt: normalizedConversationPrompt,
+        appendConversationSystemPrompt: normalizedAppendConversationPrompt,
+        agent:
+          previewConversationType === CONVERSATION_TYPES.AGENT
+            ? {
+                ...(activeConversation.agent || {}),
+                name:
+                  normalizedAgentName || activeConversation?.agent?.name || activeConversation.name || 'Agent',
+                description: normalizedAgentDescription,
+              }
+            : activeConversation.agent,
       }
     : {
-        systemPrompt: appState.defaultSystemPrompt,
-        conversationSystemPrompt: normalizeSystemPrompt(conversationPrompt),
-        appendConversationSystemPrompt: normalizeConversationPromptMode(appendConversationPrompt),
-        languagePreference: appState.pendingConversationLanguagePreference,
-        thinkingEnabled: appState.pendingConversationThinkingEnabled,
+        ...createConversationRecord({
+          id: 'conversation-system-prompt-preview',
+          name:
+            previewConversationType === CONVERSATION_TYPES.AGENT
+              ? normalizedAgentName || 'Agent'
+              : 'Prompt Preview',
+          modelId,
+          conversationType: previewConversationType,
+          systemPrompt: appState.defaultSystemPrompt,
+          languagePreference: appState.pendingConversationLanguagePreference,
+          thinkingEnabled: appState.pendingConversationThinkingEnabled,
+          agent:
+            previewConversationType === CONVERSATION_TYPES.AGENT
+              ? {
+                  name: normalizedAgentName || 'Agent',
+                  description: normalizedAgentDescription,
+                }
+              : null,
+        }),
+        conversationSystemPrompt: normalizedConversationPrompt,
+        appendConversationSystemPrompt: normalizedAppendConversationPrompt,
       };
-  return getEffectiveConversationSystemPrompt(promptTarget, {
-    suffix: getConversationSystemPromptSuffix(modelId, promptTarget),
+  const systemPromptSuffix = [
+    getConversationSystemPromptSuffix(modelId, promptTarget),
+    'Below is your conversation with the user.',
+  ]
+    .map((section) => normalizeSystemPrompt(section))
+    .filter(Boolean)
+    .join('\n\n');
+  const promptMessages = buildPromptForConversationLeaf(promptTarget, promptTarget.activeLeafMessageId, {
+    systemPromptSuffix,
   });
+  return (
+    promptMessages.find(
+      (message) =>
+        message?.role === 'system' &&
+        typeof message.content === 'string' &&
+        message.content.trim()
+    )?.content || ''
+  );
 }
 
 function detectToolCallsForModel(rawText, modelId) {
@@ -2850,19 +2924,160 @@ function setActiveConversationById(
   }
 }
 
+function shouldShowAgentAutomationControls(conversation = getActiveConversation()) {
+  return (
+    isAgentConversation(conversation) &&
+    !appState.isPreparingNewConversation &&
+    selectHasStartedWorkspace(appState) &&
+    !isSettingsView(appState)
+  );
+}
+
+function clearAgentFollowUpCountdownTimer() {
+  if (agentFollowUpCountdownIntervalId !== null) {
+    window.clearInterval(agentFollowUpCountdownIntervalId);
+    agentFollowUpCountdownIntervalId = null;
+  }
+}
+
+function startAgentFollowUpCountdownTimer() {
+  if (agentFollowUpCountdownIntervalId !== null) {
+    return;
+  }
+  agentFollowUpCountdownIntervalId = window.setInterval(() => {
+    updateAgentFollowUpCountdownUi();
+  }, 1000);
+}
+
+function formatAgentFollowUpCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  }
+  return `${seconds}s`;
+}
+
+function formatAgentFollowUpAnnouncement(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts = [];
+  if (hours > 0) {
+    parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+  }
+  if (!hours && (!minutes || seconds > 0)) {
+    parts.push(`${seconds} second${seconds === 1 ? '' : 's'}`);
+  }
+  return parts.join(' ');
+}
+
+function isAgentFollowUpRunning(conversation = getActiveConversation()) {
+  return (
+    Boolean(activeAgentFollowUpAbortController) &&
+    Boolean(conversation?.id) &&
+    activeAgentFollowUpConversationId === conversation.id
+  );
+}
+
+function updateAgentFollowUpCountdownUi() {
+  const activeConversation = getActiveConversation();
+  const showControls = shouldShowAgentAutomationControls(activeConversation);
+  if (!(agentFollowUpCountdown instanceof HTMLElement) || !(agentFollowUpCountdownText instanceof HTMLElement)) {
+    clearAgentFollowUpCountdownTimer();
+    return;
+  }
+  if (!showControls || !activeConversation?.agent) {
+    agentFollowUpCountdown.classList.add('d-none');
+    agentFollowUpCountdownText.textContent = '--';
+    if (agentFollowUpCountdownLabel instanceof HTMLElement) {
+      agentFollowUpCountdownLabel.textContent = 'Next check-in';
+    }
+    if (agentFollowUpCountdownLive instanceof HTMLElement) {
+      agentFollowUpCountdownLive.textContent = '';
+    }
+    lastAgentFollowUpAnnouncementKey = '';
+    clearAgentFollowUpCountdownTimer();
+    return;
+  }
+  agentFollowUpCountdown.classList.remove('d-none');
+  const isPaused = activeConversation.agent.paused === true;
+  const isRunning = isAgentFollowUpRunning(activeConversation);
+  const nextFollowUpAt = Number(activeConversation.agent.nextFollowUpAt) || 0;
+  let labelText = 'Next check-in';
+  let valueText = 'waiting';
+  let announcementText = '';
+  let announcementKey = `${activeConversation.id}:idle`;
+  const shouldTick = !isPaused && !isRunning && Number.isFinite(nextFollowUpAt) && nextFollowUpAt > 0;
+
+  if (isPaused) {
+    labelText = 'Check-ins';
+    valueText = 'paused';
+    announcementKey = `${activeConversation.id}:paused`;
+    announcementText = `${getAgentDisplayName(activeConversation)} automatic check-ins are paused.`;
+  } else if (isRunning) {
+    labelText = 'Check-in';
+    valueText = 'checking now';
+    announcementKey = `${activeConversation.id}:running`;
+    announcementText = `${getAgentDisplayName(activeConversation)} is checking whether to follow up now.`;
+  } else if (shouldTick) {
+    const remainingMs = Math.max(0, nextFollowUpAt - Date.now());
+    valueText =
+      remainingMs <= 1000 ? 'due now' : `in ${formatAgentFollowUpCountdown(remainingMs)}`;
+    announcementKey = `${activeConversation.id}:scheduled:${Math.trunc(nextFollowUpAt / 1000)}`;
+    announcementText = `${getAgentDisplayName(activeConversation)} may send the next automatic check-in in about ${formatAgentFollowUpAnnouncement(
+      remainingMs
+    )}.`;
+  } else {
+    labelText = 'Check-in';
+    valueText = 'scheduling...';
+    announcementKey = `${activeConversation.id}:scheduling`;
+    announcementText = `${getAgentDisplayName(activeConversation)} will schedule the next automatic check-in after the current activity settles.`;
+  }
+
+  if (agentFollowUpCountdownLabel instanceof HTMLElement) {
+    agentFollowUpCountdownLabel.textContent = labelText;
+  }
+  agentFollowUpCountdownText.textContent = valueText;
+  if (
+    agentFollowUpCountdownLive instanceof HTMLElement &&
+    announcementKey !== lastAgentFollowUpAnnouncementKey
+  ) {
+    agentFollowUpCountdownLive.textContent = announcementText;
+    lastAgentFollowUpAnnouncementKey = announcementKey;
+  }
+  if (shouldTick) {
+    startAgentFollowUpCountdownTimer();
+  } else {
+    clearAgentFollowUpCountdownTimer();
+  }
+}
+
 function updatePauseAgentButton() {
   if (!(pauseAgentBtn instanceof HTMLButtonElement)) {
+    clearAgentFollowUpCountdownTimer();
     return;
   }
   const activeConversation = getActiveConversation();
-  const showButton =
-    isAgentConversation(activeConversation) &&
-    !appState.isPreparingNewConversation &&
-    selectHasStartedWorkspace(appState) &&
-    !isSettingsView(appState);
-  pauseAgentBtn.classList.toggle('d-none', !showButton);
+  const showButton = shouldShowAgentAutomationControls(activeConversation);
+  if (agentAutomationControls instanceof HTMLElement) {
+    agentAutomationControls.classList.toggle('d-none', !showButton);
+  } else {
+    pauseAgentBtn.classList.toggle('d-none', !showButton);
+  }
   if (!showButton) {
     pauseAgentBtn.disabled = true;
+    pauseAgentBtn.removeAttribute('aria-describedby');
+    updateAgentFollowUpCountdownUi();
     return;
   }
   const isPaused = activeConversation?.agent?.paused === true;
@@ -2872,6 +3087,15 @@ function updatePauseAgentButton() {
   pauseAgentBtn.setAttribute('aria-label', buttonLabel);
   pauseAgentBtn.setAttribute('data-bs-title', buttonLabel);
   pauseAgentBtn.title = buttonLabel;
+  const describedBy = [agentFollowUpAutomationHelp, agentFollowUpCountdown]
+    .filter((element) => element instanceof HTMLElement)
+    .map((element) => element.id)
+    .join(' ');
+  if (describedBy) {
+    pauseAgentBtn.setAttribute('aria-describedby', describedBy);
+  } else {
+    pauseAgentBtn.removeAttribute('aria-describedby');
+  }
   const icon = pauseAgentBtn.querySelector('[data-agent-toggle-icon="true"]');
   if (icon instanceof HTMLElement) {
     icon.className = `bi ${isPaused ? 'bi-play-fill' : 'bi-pause-fill'}`;
@@ -2879,6 +3103,7 @@ function updatePauseAgentButton() {
   if (pauseAgentBtnLabel instanceof HTMLElement) {
     pauseAgentBtnLabel.textContent = isPaused ? 'Resume Agent' : 'Pause Agent';
   }
+  updateAgentFollowUpCountdownUi();
   const tooltipInstance = Tooltip.getInstance(pauseAgentBtn);
   if (tooltipInstance) {
     tooltipInstance.dispose();
@@ -3119,15 +3344,23 @@ const {
   updateConversationSystemPromptPreview,
   beginConversationSystemPromptEdit,
   saveConversationSystemPromptEdit,
+  focusConversationSystemPromptEditor,
   beginChatTitleEdit,
   cancelChatTitleEdit,
   saveChatTitleEdit,
 } = createConversationEditors({
   appState,
   conversationSystemPromptModal,
+  conversationSystemPromptModalLabel,
+  conversationSystemPromptModalHelp,
+  conversationSystemPromptComputedLabel,
   conversationSystemPromptInput,
   conversationSystemPromptAppendToggle,
   conversationSystemPromptComputedPreview,
+  conversationPromptFields,
+  agentPromptFields,
+  agentPromptNameInput,
+  agentPromptPersonalityInput,
   chatTitle,
   chatTitleInput,
   saveChatTitleBtn,
@@ -4354,9 +4587,12 @@ bindShellEvents({
   cancelChatTitleEdit,
   conversationSystemPromptInput,
   conversationSystemPromptAppendToggle,
+  agentPromptNameInput,
+  agentPromptPersonalityInput,
   saveConversationSystemPromptBtn,
   saveConversationSystemPromptEdit,
   updateConversationSystemPromptPreview,
+  focusConversationSystemPromptEditor,
   chatTitleInput,
   updateChatTitleEditorVisibility,
   onConversationSystemPromptModalShown: () => {

@@ -1,9 +1,16 @@
 export function createConversationEditors({
   appState,
   conversationSystemPromptModal,
+  conversationSystemPromptModalLabel,
+  conversationSystemPromptModalHelp,
+  conversationSystemPromptComputedLabel,
   conversationSystemPromptInput,
   conversationSystemPromptAppendToggle,
   conversationSystemPromptComputedPreview,
+  conversationPromptFields,
+  agentPromptFields,
+  agentPromptNameInput,
+  agentPromptPersonalityInput,
   chatTitle,
   chatTitleInput,
   saveChatTitleBtn,
@@ -36,10 +43,44 @@ export function createConversationEditors({
     return appState.conversationSystemPromptModalInstance;
   }
 
+  function getConversationPromptEditorMode() {
+    const activeConversation = getActiveConversation();
+    return activeConversation?.conversationType === 'agent' || appState.pendingConversationType === 'agent'
+      ? 'agent'
+      : 'chat';
+  }
+
+  function updateConversationSystemPromptModalMode(mode = getConversationPromptEditorMode()) {
+    const isAgentMode = mode === 'agent';
+    if (conversationSystemPromptModalLabel instanceof HTMLElement) {
+      conversationSystemPromptModalLabel.textContent = isAgentMode
+        ? 'Edit agent prompt'
+        : 'Edit conversation system prompt';
+    }
+    if (conversationSystemPromptModalHelp instanceof HTMLElement) {
+      conversationSystemPromptModalHelp.textContent = isAgentMode
+        ? 'Update the agent identity that is folded into the system prompt for automatic and normal agent replies.'
+        : 'When enabled, this conversation prompt is appended to the captured default prompt. When disabled, it replaces the captured default prompt for this conversation. Tool instructions are only included for models that support tool calling.';
+    }
+    if (conversationSystemPromptComputedLabel instanceof HTMLElement) {
+      conversationSystemPromptComputedLabel.textContent = isAgentMode
+        ? 'Computed prompt for this agent'
+        : 'Computed system prompt';
+    }
+    if (conversationPromptFields instanceof HTMLElement) {
+      conversationPromptFields.classList.toggle('d-none', isAgentMode);
+    }
+    if (agentPromptFields instanceof HTMLElement) {
+      agentPromptFields.classList.toggle('d-none', !isAgentMode);
+    }
+  }
+
   function updateConversationSystemPromptPreview() {
     if (!(conversationSystemPromptComputedPreview instanceof HTMLTextAreaElement)) {
       return;
     }
+    const mode = getConversationPromptEditorMode();
+    updateConversationSystemPromptModalMode(mode);
     const normalizedPrompt = normalizeSystemPrompt(
       conversationSystemPromptInput instanceof HTMLTextAreaElement
         ? conversationSystemPromptInput.value
@@ -50,11 +91,22 @@ export function createConversationEditors({
         ? conversationSystemPromptAppendToggle.checked
         : true,
     );
+    const normalizedAgentName = normalizeConversationName(
+      agentPromptNameInput instanceof HTMLInputElement ? agentPromptNameInput.value : '',
+    );
+    const normalizedAgentDescription = normalizeSystemPrompt(
+      agentPromptPersonalityInput instanceof HTMLTextAreaElement
+        ? agentPromptPersonalityInput.value
+        : '',
+    );
     const computedPrompt =
       typeof buildComputedConversationSystemPromptPreview === 'function'
         ? buildComputedConversationSystemPromptPreview({
             conversationPrompt: normalizedPrompt,
             appendConversationPrompt: appendPrompt,
+            conversationType: mode,
+            agentName: normalizedAgentName,
+            agentDescription: normalizedAgentDescription,
           })
         : '';
     conversationSystemPromptComputedPreview.value =
@@ -80,30 +132,46 @@ export function createConversationEditors({
   }
 
   function beginConversationSystemPromptEdit({ trigger = null } = {}) {
-    if (
-      isUiBusy() ||
-      !(conversationSystemPromptInput instanceof HTMLTextAreaElement) ||
-      !(conversationSystemPromptAppendToggle instanceof HTMLInputElement)
-    ) {
+    if (isUiBusy()) {
       return;
     }
     const activeConversation = getActiveConversation();
-    if (activeConversation?.conversationType === 'agent' || appState.pendingConversationType === 'agent') {
-      return;
-    }
+    const mode = getConversationPromptEditorMode();
     if (trigger instanceof HTMLElement) {
       appState.lastConversationSystemPromptTrigger = trigger;
     }
-    conversationSystemPromptInput.value = normalizeSystemPrompt(
-      activeConversation
-        ? activeConversation.conversationSystemPrompt
-        : appState.pendingConversationSystemPrompt,
-    );
-    conversationSystemPromptAppendToggle.checked = normalizeConversationPromptMode(
-      activeConversation
-        ? activeConversation.appendConversationSystemPrompt
-        : appState.pendingAppendConversationSystemPrompt,
-    );
+    updateConversationSystemPromptModalMode(mode);
+    if (
+      conversationSystemPromptInput instanceof HTMLTextAreaElement &&
+      conversationSystemPromptAppendToggle instanceof HTMLInputElement
+    ) {
+      conversationSystemPromptInput.value = normalizeSystemPrompt(
+        activeConversation
+          ? activeConversation.conversationSystemPrompt
+          : appState.pendingConversationSystemPrompt,
+      );
+      conversationSystemPromptAppendToggle.checked = normalizeConversationPromptMode(
+        activeConversation
+          ? activeConversation.appendConversationSystemPrompt
+          : appState.pendingAppendConversationSystemPrompt,
+      );
+    }
+    if (mode === 'agent') {
+      const agentNameValue =
+        activeConversation?.conversationType === 'agent'
+          ? normalizeConversationName(activeConversation?.agent?.name || activeConversation?.name || '')
+          : normalizeConversationName(appState.pendingAgentName);
+      const agentDescriptionValue =
+        activeConversation?.conversationType === 'agent'
+          ? normalizeSystemPrompt(activeConversation?.agent?.description)
+          : normalizeSystemPrompt(appState.pendingAgentDescription);
+      if (agentPromptNameInput instanceof HTMLInputElement) {
+        agentPromptNameInput.value = agentNameValue;
+      }
+      if (agentPromptPersonalityInput instanceof HTMLTextAreaElement) {
+        agentPromptPersonalityInput.value = agentDescriptionValue;
+      }
+    }
     updateConversationSystemPromptPreview();
     const modalInstance = getConversationSystemPromptModalInstance();
     if (modalInstance) {
@@ -112,14 +180,51 @@ export function createConversationEditors({
   }
 
   function saveConversationSystemPromptEdit() {
+    const activeConversation = getActiveConversation();
+    const mode = getConversationPromptEditorMode();
+    if (mode === 'agent') {
+      const normalizedAgentName = normalizeConversationName(
+        agentPromptNameInput instanceof HTMLInputElement ? agentPromptNameInput.value : '',
+      );
+      const normalizedAgentDescription = normalizeSystemPrompt(
+        agentPromptPersonalityInput instanceof HTMLTextAreaElement
+          ? agentPromptPersonalityInput.value
+          : '',
+      );
+      if (!normalizedAgentName) {
+        setStatus('Agent name cannot be empty.');
+        if (agentPromptNameInput instanceof HTMLInputElement) {
+          agentPromptNameInput.focus();
+          agentPromptNameInput.select();
+        }
+        return;
+      }
+      if (activeConversation?.conversationType === 'agent') {
+        if (!activeConversation.agent || typeof activeConversation.agent !== 'object') {
+          activeConversation.agent = {};
+        }
+        activeConversation.agent.name = normalizedAgentName;
+        activeConversation.agent.description = normalizedAgentDescription;
+        activeConversation.name = normalizedAgentName;
+        activeConversation.hasGeneratedName = true;
+        renderConversationList();
+        updateChatTitle();
+        queueConversationStateSave();
+      } else {
+        appState.pendingAgentName = normalizedAgentName;
+        appState.pendingAgentDescription = normalizedAgentDescription;
+      }
+      setStatus('Agent prompt saved.');
+      const modalInstance = getConversationSystemPromptModalInstance();
+      if (modalInstance) {
+        modalInstance.hide();
+      }
+      return;
+    }
     if (
       !(conversationSystemPromptInput instanceof HTMLTextAreaElement) ||
       !(conversationSystemPromptAppendToggle instanceof HTMLInputElement)
     ) {
-      return;
-    }
-    const activeConversation = getActiveConversation();
-    if (activeConversation?.conversationType === 'agent' || appState.pendingConversationType === 'agent') {
       return;
     }
     const normalizedPrompt = normalizeSystemPrompt(conversationSystemPromptInput.value);
@@ -136,6 +241,25 @@ export function createConversationEditors({
     const modalInstance = getConversationSystemPromptModalInstance();
     if (modalInstance) {
       modalInstance.hide();
+    }
+  }
+
+  function focusConversationSystemPromptEditor() {
+    const mode = getConversationPromptEditorMode();
+    if (mode === 'agent' && agentPromptNameInput instanceof HTMLInputElement) {
+      agentPromptNameInput.focus();
+      agentPromptNameInput.setSelectionRange(
+        agentPromptNameInput.value.length,
+        agentPromptNameInput.value.length,
+      );
+      return;
+    }
+    if (conversationSystemPromptInput instanceof HTMLTextAreaElement) {
+      conversationSystemPromptInput.focus();
+      conversationSystemPromptInput.setSelectionRange(
+        conversationSystemPromptInput.value.length,
+        conversationSystemPromptInput.value.length,
+      );
     }
   }
 
@@ -203,6 +327,7 @@ export function createConversationEditors({
     updateConversationSystemPromptPreview,
     beginConversationSystemPromptEdit,
     saveConversationSystemPromptEdit,
+    focusConversationSystemPromptEditor,
     beginChatTitleEdit,
     cancelChatTitleEdit,
     saveChatTitleEdit,

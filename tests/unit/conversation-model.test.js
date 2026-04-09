@@ -620,6 +620,27 @@ describe('conversation-model', () => {
       canEditPrompt: true,
       canDownload: true,
     });
+    const agentConversation = createConversation({
+      id: 'conversation-agent-1',
+      name: 'Research Partner',
+      conversationType: 'agent',
+      agent: {
+        name: 'Research Partner',
+        description: 'Curious and proactive.',
+      },
+    });
+    agentConversation.hasGeneratedName = true;
+    const firstAgentUser = addMessageToConversation(agentConversation, 'user', 'Check in later.');
+    completeModelMessage(
+      addMessageToConversation(agentConversation, 'model', '', { parentId: firstAgentUser.id }),
+      'I will circle back if anything stands out.',
+    );
+
+    expect(deriveConversationMenuCapabilities(agentConversation)).toEqual({
+      canEditName: true,
+      canEditPrompt: true,
+      canDownload: true,
+    });
     expect(deriveConversationMenuCapabilities(null)).toEqual({
       canEditName: false,
       canEditPrompt: false,

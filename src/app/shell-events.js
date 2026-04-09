@@ -43,9 +43,12 @@ export function bindShellEvents({
   cancelChatTitleEdit,
   conversationSystemPromptInput,
   conversationSystemPromptAppendToggle,
+  agentPromptNameInput,
+  agentPromptPersonalityInput,
   saveConversationSystemPromptBtn,
   saveConversationSystemPromptEdit,
   updateConversationSystemPromptPreview,
+  focusConversationSystemPromptEditor = () => {},
   chatTitleInput,
   updateChatTitleEditorVisibility,
   onConversationSystemPromptModalShown = () => {},
@@ -193,13 +196,7 @@ export function bindShellEvents({
     conversationSystemPromptModal.addEventListener('shown.bs.modal', () => {
       onConversationSystemPromptModalShown();
       updateConversationSystemPromptPreview();
-      if (conversationSystemPromptInput instanceof HTMLTextAreaElement) {
-        conversationSystemPromptInput.focus();
-        conversationSystemPromptInput.setSelectionRange(
-          conversationSystemPromptInput.value.length,
-          conversationSystemPromptInput.value.length
-        );
-      }
+      focusConversationSystemPromptEditor();
     });
     conversationSystemPromptModal.addEventListener('hidden.bs.modal', () => {
       onConversationSystemPromptModalHidden();
@@ -225,6 +222,18 @@ export function bindShellEvents({
 
   if (conversationSystemPromptAppendToggle instanceof HTMLInputElement) {
     conversationSystemPromptAppendToggle.addEventListener('change', () => {
+      updateConversationSystemPromptPreview();
+    });
+  }
+
+  if (agentPromptNameInput instanceof HTMLInputElement) {
+    agentPromptNameInput.addEventListener('input', () => {
+      updateConversationSystemPromptPreview();
+    });
+  }
+
+  if (agentPromptPersonalityInput instanceof HTMLTextAreaElement) {
+    agentPromptPersonalityInput.addEventListener('input', () => {
       updateConversationSystemPromptPreview();
     });
   }

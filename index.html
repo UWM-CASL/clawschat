@@ -71,7 +71,7 @@
               <button
                 id="newAgentBtn"
                 type="button"
-                class="btn btn-outline-secondary square-icon-button top-bar-new-conversation"
+                class="btn btn-primary square-icon-button top-bar-new-conversation"
                 aria-label="New agent"
                 data-bs-toggle="tooltip"
                 data-bs-title="New agent"
@@ -122,22 +122,47 @@
               </button>
             </div>
             <div class="top-bar-actions">
-              <button
-                id="pauseAgentBtn"
-                type="button"
-                class="btn btn-outline-secondary top-bar-agent-toggle d-none"
-                aria-label="Pause agent"
-                aria-pressed="false"
-                data-bs-toggle="tooltip"
-                data-bs-title="Pause agent"
-              >
-                <i
-                  class="bi bi-pause-fill"
-                  aria-hidden="true"
-                  data-agent-toggle-icon="true"
-                ></i>
-                <span id="pauseAgentBtnLabel" class="pause-agent-btn-label">Pause Agent</span>
-              </button>
+              <div id="agentAutomationControls" class="agent-automation-controls d-none">
+                <button
+                  id="pauseAgentBtn"
+                  type="button"
+                  class="btn btn-primary top-bar-agent-toggle"
+                  aria-label="Pause agent"
+                  aria-pressed="false"
+                  data-bs-toggle="tooltip"
+                  data-bs-title="Pause agent"
+                >
+                  <i
+                    class="bi bi-pause-fill"
+                    aria-hidden="true"
+                    data-agent-toggle-icon="true"
+                  ></i>
+                  <span id="pauseAgentBtnLabel" class="pause-agent-btn-label">Pause Agent</span>
+                </button>
+                <span
+                  id="agentFollowUpCountdown"
+                  class="status-pill agent-follow-up-status"
+                  aria-live="off"
+                  aria-atomic="true"
+                >
+                  <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                  <span class="agent-follow-up-status-label">Next check-in</span>
+                  <span id="agentFollowUpCountdownText" class="agent-follow-up-status-value">
+                    --
+                  </span>
+                </span>
+                <span id="agentFollowUpAutomationHelp" class="visually-hidden">
+                  Automatic agent check-ins can send a proactive follow-up after the conversation
+                  has been quiet. The countdown shows when the next automatic check-in may run.
+                </span>
+                <span
+                  id="agentFollowUpCountdownLive"
+                  class="visually-hidden"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                ></span>
+              </div>
               <button
                 id="openKeyboardShortcutsButton"
                 type="button"
@@ -1425,28 +1450,54 @@
             ></button>
           </div>
           <div class="modal-body">
-            <div class="mb-3">
-              <label class="form-label" for="conversationSystemPromptInput"
-                >Conversation system prompt</label
-              >
-              <textarea
-                id="conversationSystemPromptInput"
-                class="form-control"
-                rows="8"
-                placeholder="Optional instructions for this conversation."
-              ></textarea>
+            <div id="agentPromptFields" class="d-none">
+              <div class="mb-3">
+                <label class="form-label" for="agentPromptNameInput">Agent name</label>
+                <input
+                  id="agentPromptNameInput"
+                  type="text"
+                  class="form-control"
+                  maxlength="64"
+                  autocomplete="off"
+                  placeholder="Research Partner"
+                />
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="agentPromptPersonalityInput">
+                  Personality description
+                </label>
+                <textarea
+                  id="agentPromptPersonalityInput"
+                  class="form-control"
+                  rows="5"
+                  placeholder="Curious, reflective, concise, and proactive about useful follow-ups."
+                ></textarea>
+              </div>
             </div>
-            <div class="form-check form-switch">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                role="switch"
-                id="conversationSystemPromptAppendToggle"
-                checked
-              />
-              <label class="form-check-label" for="conversationSystemPromptAppendToggle">
-                Append after default prompt
-              </label>
+            <div id="conversationPromptFields">
+              <div class="mb-3">
+                <label class="form-label" for="conversationSystemPromptInput"
+                  >Conversation system prompt</label
+                >
+                <textarea
+                  id="conversationSystemPromptInput"
+                  class="form-control"
+                  rows="8"
+                  placeholder="Optional instructions for this conversation."
+                ></textarea>
+              </div>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="conversationSystemPromptAppendToggle"
+                  checked
+                />
+                <label class="form-check-label" for="conversationSystemPromptAppendToggle">
+                  Append after default prompt
+                </label>
+              </div>
             </div>
             <p id="conversationSystemPromptModalHelp" class="form-text mb-0 mt-2">
               When enabled, this conversation prompt is appended to the captured default prompt.
@@ -1454,7 +1505,11 @@
               instructions are only included for models that support tool calling.
             </p>
             <div class="mt-3">
-              <label class="form-label" for="conversationSystemPromptComputedPreview">
+              <label
+                id="conversationSystemPromptComputedLabel"
+                class="form-label"
+                for="conversationSystemPromptComputedPreview"
+              >
                 Computed system prompt
               </label>
               <textarea
@@ -1465,9 +1520,9 @@
                 aria-describedby="conversationSystemPromptComputedHelp"
               ></textarea>
               <p id="conversationSystemPromptComputedHelp" class="form-text mb-0 mt-2">
-                This live preview shows the full system prompt that will be sent, including the
-                captured default prompt, optional feature flags, and any model-supported tool
-                instructions.
+                This live preview shows the exact system prompt that will be sent, including the
+                captured default prompt, conversation memory when present, optional feature flags,
+                and any model-supported tool instructions.
               </p>
             </div>
           </div>

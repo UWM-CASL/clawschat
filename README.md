@@ -17,7 +17,7 @@ Student-facing browser chat UI with local model inference.
 - Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
 - Clicking `New Agent` returns the workspace to a matching pre-chat flow with agent name and personality fields above the same model picker; the composer then prompts the user to say hello to that agent.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
-- Agent conversations show a person icon in the conversation list, expose a `Pause Agent` header control while active, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
+- Agent conversations show a person icon in the conversation list, expose a `Pause Agent` header control plus a visible next-check-in countdown while active, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
 - Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.
 - From that pre-chat state, users can keep the currently loaded model or choose a different model card before sending the first message.
 - If a different model is selected for the next chat, the currently loaded model worker is unloaded before the replacement model is loaded.
@@ -147,6 +147,7 @@ Student-facing browser chat UI with local model inference.
 - Conversation title editing is disabled until that automatic model-generated title is available and is available from the active conversation's sidebar kebab menu.
 - The conversation list reveals a kebab actions menu on hover/focus for each conversation instead of a direct delete icon.
 - Conversation menu actions such as `Edit prompt` and `Delete` remain available while background orchestrations (for example automatic conversation renaming) are running; only active model loading/generation locks those controls.
+- `Edit prompt` now also opens for agent conversations, where it shows editable agent name and personality fields plus the exact computed system prompt preview used for that agent thread.
 - After the first completed model response on the visible branch, that kebab menu includes a nested `Download` submenu.
 - Download submenu options:
   - `JSON (.llm.json) File`: exports only the currently visible branch as `<conversation-name>.llm.json` with top-level `conversation` metadata (`name`, `startedAt`, `exportedAt`), the conversation's `model`, `temperature`, optional `systemPrompt` (when present on that conversation), optional `toolCalling` metadata when tool calling is enabled at export time, and an `exchanges` array containing per-exchange `heading`, explicit created-at ISO/ms fields plus UTC date/time fields, model `toolCalls`, and tool-result metadata including structured `toolResultData` when present.

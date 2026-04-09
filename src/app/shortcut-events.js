@@ -289,9 +289,6 @@ export function createShortcutHandlers({
     if (normalizedKey === shortcutKeys.systemPrompt) {
       const activeConversation = getActiveConversation();
       if (activeConversation) {
-        if (isAgentConversation(activeConversation)) {
-          return false;
-        }
         event.preventDefault();
         beginConversationSystemPromptEdit();
         return true;
