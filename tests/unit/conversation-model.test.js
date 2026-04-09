@@ -94,7 +94,8 @@ describe('conversation-model', () => {
         '- Stay consistent with this identity while still following the rest of the system instructions.\n' +
         '- You are an agent with a past, present, and future. Remember the past while planning for the future.\n' +
         '- Use the tools available to help the user in whatever way you can.\n' +
-        '- Explain why you used a tool to complete your work.\n' +
+        '- When the user asks for help, state your plan and the tools you will use before acting.\n' +
+        '- Always use the built-in tasklist for multi-step actions.\n' +
         "- This is not roleplay. This is real life. Don't act like you did something. Do it.\n" +
         '- Keep a tasklist for longer projects and keep it up-to-date.\n' +
         "- Protect the user's identity and privacy when sending information over the internet.\n" +
