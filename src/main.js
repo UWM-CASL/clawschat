@@ -336,9 +336,6 @@ const agentAutomationControls = document.getElementById('agentAutomationControls
 const pauseAgentBtn = document.getElementById('pauseAgentBtn');
 const pauseAgentBtnLabel = document.getElementById('pauseAgentBtnLabel');
 const agentFollowUpCountdown = document.getElementById('agentFollowUpCountdown');
-const agentFollowUpCountdownLabel = agentFollowUpCountdown?.querySelector(
-  '.agent-follow-up-status-label'
-);
 const agentFollowUpCountdownText = document.getElementById('agentFollowUpCountdownText');
 const agentFollowUpAutomationHelp = document.getElementById('agentFollowUpAutomationHelp');
 const agentFollowUpCountdownLive = document.getElementById('agentFollowUpCountdownLive');
@@ -2983,9 +2980,6 @@ function updateAgentFollowUpCountdownUi() {
   if (!showControls || !activeConversation?.agent) {
     agentFollowUpCountdown.classList.add('d-none');
     agentFollowUpCountdownText.textContent = '--';
-    if (agentFollowUpCountdownLabel instanceof HTMLElement) {
-      agentFollowUpCountdownLabel.textContent = 'Next heartbeat';
-    }
     if (agentFollowUpCountdownLive instanceof HTMLElement) {
       agentFollowUpCountdownLive.textContent = '';
     }
@@ -2997,19 +2991,16 @@ function updateAgentFollowUpCountdownUi() {
   const isPaused = activeConversation.agent.paused === true;
   const isRunning = isAgentFollowUpRunning(activeConversation);
   const nextFollowUpAt = Number(activeConversation.agent.nextFollowUpAt) || 0;
-  let labelText = 'Next heartbeat';
   let valueText = 'waiting';
   let announcementText = '';
   let announcementKey = `${activeConversation.id}:idle`;
   const shouldTick = !isPaused && !isRunning && Number.isFinite(nextFollowUpAt) && nextFollowUpAt > 0;
 
   if (isPaused) {
-    labelText = 'Heartbeats';
     valueText = 'paused';
     announcementKey = `${activeConversation.id}:paused`;
     announcementText = `${getAgentDisplayName(activeConversation)} automatic heartbeats are paused.`;
   } else if (isRunning) {
-    labelText = 'Heartbeat';
     valueText = 'sending now';
     announcementKey = `${activeConversation.id}:running`;
     announcementText = `${getAgentDisplayName(activeConversation)} is sending a heartbeat now.`;
@@ -3022,15 +3013,11 @@ function updateAgentFollowUpCountdownUi() {
       remainingMs
     )}.`;
   } else {
-    labelText = 'Heartbeat';
     valueText = 'scheduling...';
     announcementKey = `${activeConversation.id}:scheduling`;
     announcementText = `${getAgentDisplayName(activeConversation)} will schedule the next heartbeat after the current activity settles.`;
   }
 
-  if (agentFollowUpCountdownLabel instanceof HTMLElement) {
-    agentFollowUpCountdownLabel.textContent = labelText;
-  }
   agentFollowUpCountdownText.textContent = valueText;
   if (
     agentFollowUpCountdownLive instanceof HTMLElement &&
@@ -3890,6 +3877,7 @@ function refreshAgentAutomationState({ forceReschedule = false } = {}) {
     if (activeAgentFollowUpAbortController) {
       void cancelActiveAgentFollowUp();
     }
+    updateAgentFollowUpCountdownUi();
     return;
   }
   if (forceReschedule || !Number.isFinite(activeConversation.agent.nextFollowUpAt)) {
@@ -3903,6 +3891,7 @@ function refreshAgentAutomationState({ forceReschedule = false } = {}) {
   agentFollowUpTimerId = window.setTimeout(() => {
     void runAgentFollowUpOrchestration(activeConversation.id);
   }, delay);
+  updateAgentFollowUpCountdownUi();
 }
 
 async function runAgentFollowUpOrchestration(conversationId) {

@@ -548,13 +548,6 @@
   line-height: 1;
 }
 
-.agent-follow-up-status-label {
-  font-size: 0.78rem;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-
 .agent-follow-up-status-value {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -2641,10 +2634,6 @@
   .agent-follow-up-status {
     padding-inline: 0.55rem 0.65rem;
     gap: 0.3rem;
-  }
-
-  .agent-follow-up-status-label {
-    display: none;
   }
 
   .app-footer {
