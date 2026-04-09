@@ -8,11 +8,14 @@ Rendering-heavy DOM code is now split into small view modules under `src/ui/`.
   - transcript message rendering
   - user attachment rendering for images and text-backed files, including image attachments from either composer menu path, HTML-to-Markdown reference imports, and parser-derived PDF text attachments
   - per-message DOM updates for model and user rows
+  - dedicated rendering for `summary` nodes inserted during agent-context compaction
+  - suppression of edit/branch/regenerate/fix/variant controls when the active conversation is an agent thread
   - long-transcript windowing with spacer-backed scroll preservation so older rows can drop out of the DOM until the user scrolls back
   - inline rendering for emitted tool calls and tool results inside the originating model card
   - transcript empty state
 - `src/ui/conversation-list-view.js`
   - conversation sidebar list rendering
+  - per-conversation type icon rendering (`file` for normal chats, `person` for agent chats)
 - `src/ui/task-list-tray.js`
   - bottom-of-chat task list tray derived from the latest `tasklist` tool result on the visible branch
   - compact and expanded tray states

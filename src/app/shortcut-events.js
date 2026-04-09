@@ -66,6 +66,7 @@ export function createShortcutHandlers({
   handleMessageCopyAction,
   beginUserMessageEdit,
   branchFromUserMessage,
+  isAgentConversation = (_conversation = null) => false,
 }) {
   function getFocusedMessageShortcutContext() {
     const activeElement = documentRef.activeElement;
@@ -88,7 +89,7 @@ export function createShortcutHandlers({
     if (!message) {
       return null;
     }
-    return { message, messageRow };
+    return { conversation: activeConversation, message, messageRow };
   }
 
   function handleFocusedMessageShortcut(event) {
@@ -102,12 +103,16 @@ export function createShortcutHandlers({
     if (!context) {
       return false;
     }
-    const { message, messageRow } = context;
+    const { conversation, message, messageRow } = context;
+    const isAgentThread = isAgentConversation(conversation);
     const normalizedKey = String(event.key || '').toLowerCase();
     if (event.altKey || event.ctrlKey || event.metaKey) {
       return false;
     }
     if (event.key === '[') {
+      if (isAgentThread) {
+        return false;
+      }
       event.preventDefault();
       if (message.role === 'model') {
         switchModelVariant(message.id, -1);
@@ -120,6 +125,9 @@ export function createShortcutHandlers({
       return false;
     }
     if (event.key === ']') {
+      if (isAgentThread) {
+        return false;
+      }
       event.preventDefault();
       if (message.role === 'model') {
         switchModelVariant(message.id, 1);
@@ -132,6 +140,14 @@ export function createShortcutHandlers({
       return false;
     }
     if (message.role === 'model') {
+      if (normalizedKey === shortcutKeys.copy) {
+        event.preventDefault();
+        void handleMessageCopyAction(message.id, event.shiftKey ? 'thoughts' : 'response');
+        return true;
+      }
+      if (isAgentThread) {
+        return false;
+      }
       if (normalizedKey === shortcutKeys.regenerate) {
         event.preventDefault();
         regenerateFromMessage(message.id);
@@ -142,14 +158,17 @@ export function createShortcutHandlers({
         void fixResponseFromMessage(message.id);
         return true;
       }
-      if (normalizedKey === shortcutKeys.copy) {
-        event.preventDefault();
-        void handleMessageCopyAction(message.id, event.shiftKey ? 'thoughts' : 'response');
-        return true;
-      }
       return false;
     }
     if (message.role === 'user') {
+      if (normalizedKey === shortcutKeys.copy) {
+        event.preventDefault();
+        void handleMessageCopyAction(message.id, 'message');
+        return true;
+      }
+      if (isAgentThread) {
+        return false;
+      }
       if (normalizedKey === shortcutKeys.edit) {
         event.preventDefault();
         beginUserMessageEdit(message.id);
@@ -158,11 +177,6 @@ export function createShortcutHandlers({
       if (normalizedKey === shortcutKeys.branch) {
         event.preventDefault();
         branchFromUserMessage(message.id);
-        return true;
-      }
-      if (normalizedKey === shortcutKeys.copy) {
-        event.preventDefault();
-        void handleMessageCopyAction(message.id, 'message');
         return true;
       }
       const editor = messageRow.querySelector('.user-message-editor');
@@ -273,11 +287,16 @@ export function createShortcutHandlers({
     }
 
     if (normalizedKey === shortcutKeys.systemPrompt) {
-      event.preventDefault();
-      if (getActiveConversation()) {
+      const activeConversation = getActiveConversation();
+      if (activeConversation) {
+        if (isAgentConversation(activeConversation)) {
+          return false;
+        }
+        event.preventDefault();
         beginConversationSystemPromptEdit();
         return true;
       }
+      event.preventDefault();
       return clickShortcutTarget(preChatEditConversationSystemPromptBtn);
     }
 

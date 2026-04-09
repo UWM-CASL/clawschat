@@ -184,6 +184,53 @@ function normalizeStoredShellVariables(value) {
   );
 }
 
+function normalizeStoredConversationType(value) {
+  return value === 'agent' ? 'agent' : 'chat';
+}
+
+function normalizeStoredConversationName(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized.length <= 64) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 61).trimEnd()}...`;
+}
+
+function normalizeStoredAgentState(agent, conversationName, startedAt) {
+  if (!agent || typeof agent !== 'object') {
+    return {
+      name: normalizeStoredConversationName(conversationName) || 'Agent',
+      description: '',
+      paused: false,
+      lastActivityAt: Number.isFinite(startedAt) ? startedAt : Date.now(),
+      lastFollowUpAt: null,
+      nextFollowUpAt: null,
+    };
+  }
+  return {
+    name: normalizeStoredConversationName(agent.name || conversationName) || 'Agent',
+    description: typeof agent.description === 'string' ? agent.description.trim() : '',
+    paused: agent.paused === true,
+    lastActivityAt:
+      Number.isFinite(agent.lastActivityAt) && agent.lastActivityAt > 0
+        ? Math.trunc(agent.lastActivityAt)
+        : Number.isFinite(startedAt)
+          ? Math.trunc(startedAt)
+          : Date.now(),
+    lastFollowUpAt:
+      Number.isFinite(agent.lastFollowUpAt) && agent.lastFollowUpAt > 0
+        ? Math.trunc(agent.lastFollowUpAt)
+        : null,
+    nextFollowUpAt:
+      Number.isFinite(agent.nextFollowUpAt) && agent.nextFollowUpAt > 0
+        ? Math.trunc(agent.nextFollowUpAt)
+        : null,
+  };
+}
+
 function base64ToBytes(base64) {
   const normalized = typeof base64 === 'string' ? base64.trim() : '';
   if (!normalized) {
@@ -781,11 +828,16 @@ async function normalizeStateForStorage(state) {
     sortOrder,
     name: conversation.name,
     modelId: conversation.modelId,
+    conversationType: normalizeStoredConversationType(conversation.conversationType),
     systemPrompt: conversation.systemPrompt,
     conversationSystemPrompt: conversation.conversationSystemPrompt,
     appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
     languagePreference: conversation.languagePreference,
     thinkingEnabled: conversation.thinkingEnabled,
+    agent:
+      normalizeStoredConversationType(conversation.conversationType) === 'agent'
+        ? normalizeStoredAgentState(conversation.agent, conversation.name, conversation.startedAt)
+        : null,
     startedAt: conversation.startedAt,
     hasGeneratedName: Boolean(conversation.hasGeneratedName),
     currentWorkingDirectory: normalizeStoredConversationWorkingDirectory(
@@ -891,12 +943,17 @@ async function rebuildStateFromNormalizedRecords(rootRecord, conversationRecords
       id: conversation.id,
       name: conversation.name,
       modelId: conversation.modelId,
-        systemPrompt: conversation.systemPrompt,
-        conversationSystemPrompt: conversation.conversationSystemPrompt,
-        appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
-        languagePreference: conversation.languagePreference,
-        thinkingEnabled: conversation.thinkingEnabled,
-        startedAt: conversation.startedAt,
+      conversationType: normalizeStoredConversationType(conversation.conversationType),
+      systemPrompt: conversation.systemPrompt,
+      conversationSystemPrompt: conversation.conversationSystemPrompt,
+      appendConversationSystemPrompt: conversation.appendConversationSystemPrompt,
+      languagePreference: conversation.languagePreference,
+      thinkingEnabled: conversation.thinkingEnabled,
+      agent:
+        normalizeStoredConversationType(conversation.conversationType) === 'agent'
+          ? normalizeStoredAgentState(conversation.agent, conversation.name, conversation.startedAt)
+          : null,
+      startedAt: conversation.startedAt,
       hasGeneratedName: Boolean(conversation.hasGeneratedName),
       currentWorkingDirectory: normalizeStoredConversationWorkingDirectory(
         conversation.currentWorkingDirectory

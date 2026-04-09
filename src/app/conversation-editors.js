@@ -88,6 +88,9 @@ export function createConversationEditors({
       return;
     }
     const activeConversation = getActiveConversation();
+    if (activeConversation?.conversationType === 'agent' || appState.pendingConversationType === 'agent') {
+      return;
+    }
     if (trigger instanceof HTMLElement) {
       appState.lastConversationSystemPromptTrigger = trigger;
     }
@@ -116,6 +119,9 @@ export function createConversationEditors({
       return;
     }
     const activeConversation = getActiveConversation();
+    if (activeConversation?.conversationType === 'agent' || appState.pendingConversationType === 'agent') {
+      return;
+    }
     const normalizedPrompt = normalizeSystemPrompt(conversationSystemPromptInput.value);
     const appendPrompt = Boolean(conversationSystemPromptAppendToggle.checked);
     if (activeConversation) {

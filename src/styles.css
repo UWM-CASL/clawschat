@@ -179,10 +179,35 @@
   border: 1px solid transparent;
 }
 
+.conversation-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
+  color: var(--ink-muted);
+  box-shadow: 0 10px 18px rgba(14, 26, 48, 0.08);
+}
+
+.conversation-item-icon .bi {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
 .conversation-item.is-active {
   background: var(--conversation-active-bg);
   border-color: var(--conversation-active-border);
   box-shadow: 0 12px 22px rgba(13, 25, 46, 0.18);
+}
+
+.conversation-item.is-active .conversation-item-icon {
+  background: color-mix(in srgb, var(--conversation-active-bg) 72%, var(--surface));
+  border-color: color-mix(in srgb, var(--conversation-active-border) 84%, transparent);
+  color: var(--conversation-active-ink);
 }
 
 .conversation-item.is-active .conversation-select {
@@ -467,6 +492,26 @@
   gap: 0.35rem;
 }
 
+.top-bar-agent-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.8rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.top-bar-agent-toggle .bi {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.pause-agent-btn-label {
+  line-height: 1.1;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -730,6 +775,25 @@
 
 .pre-chat-context-button {
   flex: 0 0 auto;
+}
+
+.pre-chat-lead {
+  color: var(--ink-muted);
+  max-width: 62ch;
+}
+
+.pre-chat-agent-fields {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.pre-chat-agent-field .form-control {
+  background: color-mix(in srgb, var(--control-bg) 82%, var(--surface));
+}
+
+.pre-chat-agent-field textarea {
+  min-height: 7rem;
+  resize: vertical;
 }
 
 .pre-chat-model-picker .form-select {
@@ -1132,6 +1196,10 @@
   align-items: flex-start;
 }
 
+.summary-message {
+  align-items: center;
+}
+
 .message-speaker {
   margin: 0 0 0.25rem;
   font-size: 0.8rem;
@@ -1150,6 +1218,10 @@
 
 .message-meta .message-speaker {
   margin-bottom: 0;
+}
+
+.summary-message .message-meta {
+  text-align: center;
 }
 
 .message-bubble {
@@ -1175,6 +1247,19 @@
 .model-message .response-content,
 .model-message .response-content * {
   color: var(--model-response-ink, var(--ink-strong));
+}
+
+.summary-message .message-bubble {
+  max-width: min(72ch, 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-elevated) 88%, transparent),
+    color-mix(in srgb, var(--surface) 94%, transparent)
+  );
+  color: var(--ink-strong);
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--border-soft) 82%, transparent);
+  box-shadow: 0 14px 28px rgba(18, 28, 42, 0.12);
 }
 
 .model-message .message-bubble::before,
@@ -1544,9 +1629,52 @@
   gap: 0.7rem;
 }
 
+.summary-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-muted) 72%, transparent);
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .message-bubble-text {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.message-summary-text {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--ink-strong);
+}
+
+.message-summary-files {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.message-summary-files-label {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.message-summary-file-list {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.message-summary-file-list li {
+  overflow-wrap: anywhere;
 }
 
 .message-image-gallery {
@@ -2507,6 +2635,17 @@
 
   .composer-attach-button {
     width: 2.75rem;
+  }
+
+  .top-bar-agent-toggle {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    padding-inline: 0;
+    justify-content: center;
+  }
+
+  .pause-agent-btn-label {
+    display: none;
   }
 
   .app-footer {

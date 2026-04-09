@@ -9,6 +9,7 @@ function createViewHarness() {
 
   const conversation = {
     id: 'conversation-1',
+    conversationType: 'chat',
     activeLeafMessageId: 'model-1',
     messageNodes: [
       {
@@ -80,6 +81,7 @@ function createDefaultTranscriptView(harness, overrides = {}) {
       canGoPrev: false,
       canGoNext: false,
     }),
+    isAgentConversation: (conversation) => conversation?.conversationType === 'agent',
     renderModelMarkdown: (content) => `<p>${content}</p>`,
     scheduleMathTypeset: vi.fn(),
     getToolDisplayName: (toolName) => toolName,
@@ -231,6 +233,64 @@ describe('transcript-view', () => {
     expect(harness.container.querySelector('.copy-mathml-btn')?.classList.contains('d-none')).toBe(
       true
     );
+  });
+
+  test('renders summary nodes with carried-forward files', () => {
+    const harness = createViewHarness();
+    harness.conversation.messageNodes.splice(1, 0, /** @type {any} */ ({
+      id: 'summary-1',
+      role: 'summary',
+      speaker: 'Summary',
+      text: 'Summary:\nThe user wants a tighter recap.\n\nFiles carried forward:\n- hello.md (/workspace/hello.md)',
+      summary:
+        'Summary:\nThe user wants a tighter recap.\n\nFiles carried forward:\n- hello.md (/workspace/hello.md)',
+      artifactRefs: [{ filename: 'hello.md', workspacePath: '/workspace/hello.md' }],
+      createdAt: Date.UTC(2026, 0, 2, 3, 4, 45),
+    }));
+
+    const view = createDefaultTranscriptView(harness, {
+      getConversationCardHeading: (_conversation, message) =>
+        message.role === 'user'
+          ? 'User Prompt 1'
+          : message.role === 'summary'
+            ? 'Conversation Summary 1'
+            : 'Model Response 1',
+    });
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    expect(harness.container.querySelector('.summary-message')).not.toBeNull();
+    expect(harness.container.querySelector('.summary-badge')?.textContent).toBe('Memory Snapshot');
+    expect(harness.container.querySelector('.message-summary-text')?.textContent).toContain(
+      'The user wants a tighter recap.'
+    );
+    expect(harness.container.querySelector('.message-summary-file-list')?.textContent).toContain(
+      'hello.md (/workspace/hello.md)'
+    );
+  });
+
+  test('hides mutation controls for agent conversations', () => {
+    const harness = createViewHarness();
+    harness.conversation.conversationType = 'agent';
+    const view = createDefaultTranscriptView(harness);
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    expect(
+      harness.container.querySelector('.regenerate-response-btn')?.classList.contains('d-none')
+    ).toBe(true);
+    expect(harness.container.querySelector('.fix-response-btn')?.classList.contains('d-none')).toBe(
+      true
+    );
+    expect(
+      harness.container.querySelector('.edit-user-message-btn')?.classList.contains('d-none')
+    ).toBe(true);
+    expect(
+      harness.container.querySelector('.branch-user-message-btn')?.classList.contains('d-none')
+    ).toBe(true);
+    expect(
+      harness.container.querySelector('.copy-message-btn')?.classList.contains('d-none')
+    ).toBe(false);
   });
 
   test('shows a dedicated MathML copy action for math responses', () => {

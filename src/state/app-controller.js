@@ -96,6 +96,7 @@ function buildFailedToolResultText(toolCall, error) {
  *   executeToolCall?: (toolCall: any) => Promise<any>;
  *   getSelectedModelId: () => string;
  *   getRuntimeConfigForConversation?: (conversation: any) => any;
+ *   isAgentConversation?: (conversation: any) => boolean;
  *   addMessageToConversation: (conversation: any, role: string, text: string, options?: any) => any;
  *   buildPromptForConversationLeaf: (conversation: any, leafMessageId?: string) => any;
  *   getMessageNodeById: (conversation: any, messageId: string) => any;
@@ -122,6 +123,7 @@ function buildFailedToolResultText(toolCall, error) {
  *   showLoadError: (message: string) => void;
  *   applyPendingGenerationSettingsIfReady: () => void;
  *   markActiveIncompleteModelMessageComplete: () => void;
+ *   onModelMessageComplete?: (conversation: any, message: any) => void;
  *   scheduleTask?: (callback: () => void) => void;
  *   streamUpdateIntervalMs?: number;
  * }} dependencies
@@ -150,6 +152,12 @@ export function createAppController(dependencies) {
       return dependencies.engine.config.backendPreference;
     }
     return '';
+  }
+
+  function isAgentConversationState(conversation) {
+    return typeof dependencies.isAgentConversation === 'function'
+      ? dependencies.isAgentConversation(conversation)
+      : conversation?.conversationType === 'agent';
   }
 
   function handleGenerationFailure(
@@ -877,6 +885,9 @@ export function createAppController(dependencies) {
           setGenerating(dependencies.state, false);
           dependencies.updateActionButtons();
           dependencies.applyPendingGenerationSettingsIfReady();
+          if (typeof dependencies.onModelMessageComplete === 'function') {
+            dependencies.onModelMessageComplete(activeConversation, modelMessage);
+          }
         },
         onError: (message) => {
           if (isInterceptingToolCall) {
@@ -953,6 +964,10 @@ export function createAppController(dependencies) {
 
     const activeConversation = dependencies.getActiveConversation();
     if (!activeConversation) {
+      return;
+    }
+    if (isAgentConversationState(activeConversation)) {
+      dependencies.setStatus('Regenerate is unavailable in agent conversations.');
       return;
     }
     const pendingBackgroundRenameCancellation = cancelBackgroundRenameIfNeeded();
@@ -1063,6 +1078,10 @@ export function createAppController(dependencies) {
 
     const activeConversation = dependencies.getActiveConversation();
     if (!activeConversation) {
+      return;
+    }
+    if (isAgentConversationState(activeConversation)) {
+      dependencies.setStatus('Fix is unavailable in agent conversations.');
       return;
     }
     const pendingBackgroundRenameCancellation = cancelBackgroundRenameIfNeeded();

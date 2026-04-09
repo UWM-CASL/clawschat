@@ -11,6 +11,7 @@ function createHarness() {
         <div id="conversationSystemPromptModal" class="modal"></div>
         <button id="startConversationButton"></button>
         <button id="newConversationBtn"></button>
+        <button id="newAgentBtn"></button>
         <textarea id="messageInput"></textarea>
         <button id="preChatEditConversationSystemPromptBtn"></button>
         <button id="preChatLoadModelBtn"></button>
@@ -41,6 +42,9 @@ function createHarness() {
     isPreparingNewConversation: false,
     pendingConversationSystemPrompt: 'Existing draft',
     pendingAppendConversationSystemPrompt: false,
+    pendingConversationType: 'chat',
+    pendingAgentName: '',
+    pendingAgentDescription: '',
     lastKeyboardShortcutsTrigger: null,
     lastConversationSystemPromptTrigger: null,
   };
@@ -68,6 +72,7 @@ function createHarness() {
       startConversationButton: document.getElementById('startConversationButton'),
       messageInput: document.getElementById('messageInput'),
       newConversationBtn: document.getElementById('newConversationBtn'),
+      newAgentBtn: document.getElementById('newAgentBtn'),
       isGeneratingResponse: vi.fn(() => false),
       setChatWorkspaceStarted: vi.fn(),
       setPreparingNewConversation: vi.fn((state, value) => {
@@ -77,6 +82,15 @@ function createHarness() {
       clearUserMessageEditSession: vi.fn(),
       setChatTitleEditing: vi.fn(),
       clearPendingComposerAttachments: vi.fn(),
+      clearPendingAgentDraft: vi.fn(() => {
+        appState.pendingAgentName = '';
+        appState.pendingAgentDescription = '';
+      }),
+      preparePendingConversationDraft: vi.fn((conversationType = 'chat') => {
+        appState.pendingConversationType = conversationType;
+        appState.pendingConversationSystemPrompt = '';
+        appState.pendingAppendConversationSystemPrompt = true;
+      }),
       renderConversationList: vi.fn(),
       renderTranscript: vi.fn(),
       updateChatTitle: vi.fn(),
@@ -185,6 +199,26 @@ describe('shell-events', () => {
     expect(harness.appState.pendingAppendConversationSystemPrompt).toBe(true);
     expect(harness.deps.clearPendingComposerAttachments).toHaveBeenCalledTimes(1);
     expect(harness.deps.updateWelcomePanelVisibility).toHaveBeenCalledWith({ replaceRoute: false });
+    expect(harness.deps.renderConversationList).toHaveBeenCalledTimes(1);
+    expect(harness.deps.queueConversationStateSave).toHaveBeenCalledTimes(1);
+    expect(harness.document.activeElement).toBe(harness.document.getElementById('messageInput'));
+  });
+
+  test('new agent enters agent pre-chat mode and clears the pending agent draft', () => {
+    const harness = createHarness();
+    harness.appState.pendingAgentName = 'Old agent';
+    harness.appState.pendingAgentDescription = 'Old description';
+    bindShellEvents(harness.deps);
+
+    harness.document.getElementById('newAgentBtn')?.dispatchEvent(
+      new harness.dom.window.MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(harness.deps.clearPendingAgentDraft).toHaveBeenCalledTimes(1);
+    expect(harness.deps.preparePendingConversationDraft).toHaveBeenCalledWith('agent');
+    expect(harness.appState.pendingConversationType).toBe('agent');
+    expect(harness.appState.pendingAgentName).toBe('');
+    expect(harness.appState.pendingAgentDescription).toBe('');
     expect(harness.deps.renderConversationList).toHaveBeenCalledTimes(1);
     expect(harness.deps.queueConversationStateSave).toHaveBeenCalledTimes(1);
     expect(harness.document.activeElement).toBe(harness.document.getElementById('messageInput'));

@@ -29,6 +29,8 @@ export const ORCHESTRATION_KINDS = Object.freeze({
   NONE: 'none',
   RENAME: 'rename',
   FIX: 'fix',
+  AGENT_FOLLOW_UP: 'agent-follow-up',
+  SUMMARY: 'summary',
   GENERIC: 'generic',
 });
 
@@ -67,6 +69,9 @@ export function createAppState({
     conversationIdCounter: 0,
     activeConversationId: null,
     pendingConversationDraftId: '',
+    pendingConversationType: 'chat',
+    pendingAgentName: '',
+    pendingAgentDescription: '',
     conversations: [],
     debugEntries: [],
     debugEntryCounter: 0,

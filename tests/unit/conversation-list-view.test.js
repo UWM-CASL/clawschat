@@ -11,7 +11,7 @@ describe('conversation-list-view', () => {
       container,
       conversations: [
         { id: 'conversation-1', name: 'First' },
-        { id: 'conversation-2', name: 'Second' },
+        { id: 'conversation-2', name: 'Second', conversationType: 'agent' },
       ],
       activeConversationId: 'conversation-2',
       getConversationMenuState: (conversation) => ({
@@ -54,5 +54,20 @@ describe('conversation-list-view', () => {
       container.querySelector('[data-conversation-id="conversation-2"] .conversation-delete')
         ?.textContent,
     ).toBe('Delete');
+    expect(
+      container
+        .querySelector('[data-conversation-id="conversation-1"] .conversation-item-icon .bi')
+        ?.classList.contains('bi-file-earmark'),
+    ).toBe(true);
+    expect(
+      container
+        .querySelector('[data-conversation-id="conversation-2"] .conversation-item-icon .bi')
+        ?.classList.contains('bi-person-fill'),
+    ).toBe(true);
+    expect(
+      container.querySelector('[data-conversation-id="conversation-2"]')?.getAttribute(
+        'data-conversation-type',
+      ),
+    ).toBe('agent');
   });
 });

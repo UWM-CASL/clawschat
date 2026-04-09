@@ -15,7 +15,9 @@ Student-facing browser chat UI with local model inference.
 - Switching to a saved conversation with a different model keeps the current model loaded until the next send for that conversation.
 - When that continued send needs a different model, the app unloads the previous worker, loads the conversation's model, and shows load progress at the bottom of the transcript view.
 - Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
+- Clicking `New Agent` returns the workspace to a matching pre-chat flow with agent name and personality fields above the same model picker; the composer then prompts the user to say hello to that agent.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
+- Agent conversations show a person icon in the conversation list, expose a `Pause Agent` header control while active, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
 - Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.
 - From that pre-chat state, users can keep the currently loaded model or choose a different model card before sending the first message.
 - If a different model is selected for the next chat, the currently loaded model worker is unloaded before the replacement model is loaded.
@@ -59,6 +61,7 @@ Student-facing browser chat UI with local model inference.
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - The pre-chat panel is shown when no active conversation exists or when `New Conversation` is preparing a fresh chat; the bottom message composer keeps the same size before and after model load.
+- The agent pre-chat panel reuses the same model cards but adds `Agent name` and `Personality description` fields and hides per-conversation prompt customization.
 - If no active conversation exists, a new untitled conversation is created when the first message is sent.
 - New conversations get a UUID-backed route only after the first prompt is sent and the selected model has loaded.
 - Backend selection supports:
@@ -105,6 +108,7 @@ Student-facing browser chat UI with local model inference.
 - The transcript includes a note that each exchange has a heading so assistive technologies can index the conversation structure.
 - The transcript shows a simple local date/time stamp above each visible user and model exchange.
 - Long transcripts use a spacer-backed sliding render window so older exchanges can scroll back into view without keeping the entire conversation mounted in the DOM.
+- Agent conversations can insert visible summary nodes into the transcript when older context is compacted; those nodes keep relisted uploaded files alongside the memory summary while prompt assembly drops older pre-summary turns.
 - Conversations are persisted locally in browser IndexedDB and restored on reload.
 - Legacy conversation snapshots are migrated automatically into the current normalized IndexedDB layout on load.
 - Saved conversation state includes stable IDs and forward-compatible metadata for future export/import:
@@ -139,6 +143,7 @@ Student-facing browser chat UI with local model inference.
   - This is intended for parser-first, LLM-guided conversions such as future PDF-to-Markdown attachment preparation.
 - New conversations start untitled and are automatically renamed after the first model response based on conversation content.
 - Automatic conversation renaming now runs through a one-step orchestration loaded from `src/config/orchestrations/rename-chat.json`.
+- Agent conversations can also run a background follow-up orchestration while loaded and unpaused, and they use a separate summarization orchestration to compact older prompt context when the active branch approaches its context limit.
 - Conversation title editing is disabled until that automatic model-generated title is available and is available from the active conversation's sidebar kebab menu.
 - The conversation list reveals a kebab actions menu on hover/focus for each conversation instead of a direct delete icon.
 - Conversation menu actions such as `Edit prompt` and `Delete` remain available while background orchestrations (for example automatic conversation renaming) are running; only active model loading/generation locks those controls.
@@ -160,6 +165,7 @@ Student-facing browser chat UI with local model inference.
 - `Settings -> Conversation -> Default system prompt` sets an optional system prompt for newly created conversations only.
   - Existing conversations are not retroactively changed.
   - New generations in a conversation use that conversation's captured system prompt.
+- Agent conversations still use that captured default system prompt, but they ignore per-conversation custom prompt overrides and instead append agent identity/personality context plus any latest summary node.
 - When prompt-driven feature guidance is enabled, the effective system prompt appends that guidance before any tool-calling instructions.
 - The effective system prompt also appends conversation-level language steering when a response language is selected and model-specific thinking-mode switch instructions when the selected model exposes them.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
@@ -212,6 +218,7 @@ Student-facing browser chat UI with local model inference.
   - `Save` (floppy icon) commits the edit and removes all later turns on that branch from that point forward.
   - `Branch` (terminal-split icon) opens branch-edit mode at that turn. A sibling user-message branch is only created when `Save` is used with changed text; canceling or saving unchanged text creates no branch.
   - If multiple user branches exist at the same turn, left/right controls and an `x/y` indicator let users switch between those branch variants.
+- Agent conversations hide per-turn editing, branch creation, regenerate/fix actions, and variant navigation so those histories stay linear from the user's perspective.
 
 ## Supported models
 

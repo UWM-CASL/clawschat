@@ -1,0 +1,17 @@
+{
+  "id": "agent-follow-up",
+  "description": "Review an active agent conversation and decide whether to send a short proactive follow-up.",
+  "steps": [
+    {
+      "stepName": "Draft follow-up",
+      "prompt": "You are reviewing an ongoing local agent conversation in the background.\nDecide whether the agent should send one short, useful follow-up message right now.\nOnly send a follow-up when there is a concrete reason. Avoid filler, generic encouragement, or repetitive check-ins.\nGood follow-ups can answer or revisit an unresolved question, point out a next step, surface a concise reflective thought, or reconnect an older thread that still matters.\nIf nothing stands out, return [NO_FOLLOW_UP].\n\nAgent name:\n{{agentName}}\n\nAgent personality:\n{{agentDescription}}\n\nConversation memory summary:\n{{conversationSummary}}\n\nRecent transcript:\n{{recentTranscript}}\n\nUploaded files still in context:\n{{uploadedFiles}}",
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return either exactly [NO_FOLLOW_UP] or one concise follow-up message written in the agent's voice. Do not add analysis, labels, or quotation marks."
+      },
+      "outputProcessing": {
+        "stripThinking": true
+      }
+    }
+  ]
+}

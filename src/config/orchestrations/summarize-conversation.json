@@ -1,0 +1,17 @@
+{
+  "id": "summarize-conversation",
+  "description": "Compress earlier agent conversation context into a durable memory summary before older turns are dropped from prompt context.",
+  "steps": [
+    {
+      "stepName": "Summarize earlier context",
+      "prompt": "You are compressing earlier conversation context for a local agent so the app can drop older prompt turns without losing important memory.\nCreate a compact but information-dense summary that preserves anything later turns may depend on.\nPreserve decisions, unresolved questions, user goals, preferences, constraints, promised follow-ups, corrections, and important facts established earlier.\nIf a previous summary is provided, merge it forward instead of repeating it word-for-word.\n\nPrevious summary:\n{{previousSummary}}\n\nConversation transcript to compress:\n{{recentTranscript}}\n\nUploaded files currently attached or referenced:\n{{uploadedFiles}}",
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return plain text using these section headings exactly when content exists:\nSummary:\nOpen threads:\nUser preferences and constraints:\nFiles carried forward:\nUnder Files carried forward, relist every uploaded file from the provided file inventory one per line, even if already mentioned elsewhere."
+      },
+      "outputProcessing": {
+        "stripThinking": true
+      }
+    }
+  ]
+}

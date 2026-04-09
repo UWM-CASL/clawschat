@@ -1,10 +1,11 @@
 import { normalizeModelId } from '../config/model-settings.js';
 import { normalizeWorkspacePath } from '../workspace/workspace-file-system.js';
 import {
+  normalizeConversationType,
   getConversationPathMessages,
   getTextFromMessageContentParts,
-  normalizeConversationLanguagePreference,
   normalizeConversationName,
+  normalizeConversationLanguagePreference,
   normalizeConversationPromptMode,
   normalizeConversationThinkingEnabled,
   normalizeMessageContentParts,
@@ -14,7 +15,7 @@ import {
 } from './conversation-model.js';
 
 export const CONVERSATION_COLLECTION_FORMAT = 'browser-llm-runner.conversation-collection';
-export const CONVERSATION_SCHEMA_VERSION = 8;
+export const CONVERSATION_SCHEMA_VERSION = 9;
 
 function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
@@ -41,6 +42,27 @@ function normalizeConversationShellVariables(value) {
       .filter(([name]) => isValidShellVariableName(name))
       .map(([name, variableValue]) => [name, String(variableValue ?? '')]),
   );
+}
+
+function normalizeStoredAgentState(agent, conversationName, startedAt) {
+  if (!agent || typeof agent !== 'object') {
+    return {
+      name: normalizeConversationName(conversationName || '') || 'Agent',
+      description: '',
+      paused: false,
+      lastActivityAt: normalizeTimestamp(startedAt) || Date.now(),
+      lastFollowUpAt: null,
+      nextFollowUpAt: null,
+    };
+  }
+  return {
+    name: normalizeConversationName(agent.name || conversationName || '') || conversationName || 'Agent',
+    description: normalizeSystemPrompt(agent.description),
+    paused: agent.paused === true,
+    lastActivityAt: normalizeTimestamp(agent.lastActivityAt) || normalizeTimestamp(startedAt) || Date.now(),
+    lastFollowUpAt: normalizeTimestamp(agent.lastFollowUpAt),
+    nextFollowUpAt: normalizeTimestamp(agent.nextFollowUpAt),
+  };
 }
 
 function parseConversationCounterFromId(conversationId) {
@@ -184,6 +206,8 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
         ? 'model'
         : rawMessage.role === 'tool'
           ? 'tool'
+          : rawMessage.role === 'summary'
+            ? 'summary'
           : '';
   if (!role) {
     return null;
@@ -205,7 +229,14 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
   const message = {
     id,
     role,
-    speaker: role === 'user' ? 'User' : role === 'tool' ? 'Tool' : 'Model',
+    speaker:
+      role === 'user'
+        ? 'User'
+        : role === 'tool'
+          ? 'Tool'
+          : role === 'summary'
+            ? 'Summary'
+            : 'Model',
     text,
     createdAt: normalizeTimestamp(rawMessage.createdAt ?? rawMessage.timestamp),
     content: {
@@ -301,6 +332,10 @@ function coerceStoredMessage(rawMessage, fallbackMessageId, artifactLookup = new
     message.toolResult = String(rawMessage.toolResult || text);
     message.isToolResultComplete = Boolean(rawMessage.isToolResultComplete ?? true);
     message.text = message.toolResult;
+  } else if (role === 'summary') {
+    message.summary = text;
+    message.isSummaryNode = rawMessage.isSummaryNode !== false;
+    message.text = text;
   } else {
     message.text = String(
       rawMessage.inference?.input?.verbatimText ||
@@ -465,6 +500,8 @@ function serializeConversationMessage(message) {
     role: message.role,
     speaker: message.speaker,
     text: String(message.text || ''),
+    summary: message.role === 'summary' ? String(message.summary || message.text || '') : undefined,
+    isSummaryNode: message.role === 'summary' ? Boolean(message.isSummaryNode !== false) : undefined,
     createdAt: normalizeTimestamp(message.createdAt),
     thoughts: typeof message.thoughts === 'string' ? message.thoughts : '',
     response: typeof message.response === 'string' ? message.response : String(message.text || ''),
@@ -550,6 +587,10 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
           typeof conversation.modelId === 'string' && conversation.modelId.trim()
             ? normalizeModelId(conversation.modelId)
             : undefined,
+        conversationType:
+          normalizeConversationType(conversation.conversationType) !== 'chat'
+            ? normalizeConversationType(conversation.conversationType)
+            : undefined,
         systemPrompt:
           typeof conversation.systemPrompt === 'string' && conversation.systemPrompt.trim()
             ? conversation.systemPrompt
@@ -566,6 +607,11 @@ export function buildConversationStateSnapshot(appState, { getMessageArtifacts =
             ? normalizeConversationLanguagePreference(conversation.languagePreference)
             : undefined,
         thinkingEnabled: conversation.thinkingEnabled === false ? false : undefined,
+        agent: normalizeStoredAgentState(
+          conversation.agent,
+          String(conversation.name || ''),
+          conversation.startedAt
+        ),
         startedAt: normalizeTimestamp(conversation.startedAt),
         hasGeneratedName: Boolean(conversation.hasGeneratedName),
         currentWorkingDirectory: normalizeConversationWorkingDirectory(
@@ -618,6 +664,7 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
         typeof rawConversation.modelId === 'string' && rawConversation.modelId.trim()
           ? normalizeModelId(rawConversation.modelId)
           : '';
+      const conversationType = normalizeConversationType(rawConversation.conversationType);
       const systemPrompt = normalizeSystemPrompt(rawConversation.systemPrompt);
       const conversationSystemPrompt = normalizeSystemPrompt(rawConversation.conversationSystemPrompt);
       const appendConversationSystemPrompt = normalizeConversationPromptMode(
@@ -711,6 +758,7 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
         normalizeTimestamp(rawConversation.startedAt ?? rawConversation.createdAt) ||
         earliestMessageTimestamp ||
         Date.now();
+      const agent = normalizeStoredAgentState(rawConversation.agent, name, startedAt);
       const currentWorkingDirectory = normalizeConversationWorkingDirectory(
         rawConversation.currentWorkingDirectory
       );
@@ -728,11 +776,13 @@ export function applyStoredConversationState(rawState, appState, { untitledPrefi
         id,
         name,
         modelId,
+        conversationType,
         systemPrompt,
         conversationSystemPrompt,
         appendConversationSystemPrompt,
         languagePreference,
         thinkingEnabled,
+        agent: conversationType === 'agent' ? agent : null,
         startedAt,
         messageNodes,
         messageNodeCounter,

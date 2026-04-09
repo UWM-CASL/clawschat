@@ -8,6 +8,10 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - Generates a 2-5 word conversation title from the first user/model exchange (single step).
 - `src/config/orchestrations/fix-response.json`
   - Critiques, revises, and validates a model response against the originating user prompt (multi-step).
+- `src/config/orchestrations/agent-follow-up.json`
+  - Reviews the active agent conversation and decides whether to post one short proactive follow-up.
+- `src/config/orchestrations/summarize-conversation.json`
+  - Compresses older agent-context turns into a durable memory summary and explicitly relists uploaded files.
 - `src/config/orchestrations/pdf-to-markdown.json`
   - Prepares extracted document text for future PDF-to-Markdown conversion using chunking, per-chunk conversion, and a final merge pass.
   - The current shipped PDF attachment import is still deterministic parser-first extraction; this orchestration is the intended next-stage semantic conversion path.
@@ -38,7 +42,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - Nested paths such as `{{chunk.text}}` are supported.
   - Array values render as paragraph-separated text when possible, otherwise JSON.
 - The app renders prompt templates and sends prompt/forEach prompt steps through `LLMEngineClient` in order.
-- `src/state/app-controller.js` calls the orchestration runner for rename/fix flows and keeps transcript/UI state in sync around those runs.
+- `src/state/app-controller.js` calls the orchestration runner for rename/fix flows, while `src/main.js` coordinates agent follow-up and summary-compaction runs around the active conversation lifecycle.
 - Each completed step output is available to later steps via:
   - `{{previousStepOutput}}` and `{{lastStepOutput}}`
   - `{{step1Output}}`, `{{step2Output}}`, etc.
@@ -50,6 +54,8 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - `{{<outputKey>}}` for the full array value when that step defines `outputKey`
 - `Fix` executes all preparation steps first, then streams the final step output into the transcript as a new response variant.
 - `Fix` creates a new model variant at the same turn (like regenerate), so prior variants stay navigable.
+- Agent follow-up orchestration runs only while the matching agent conversation is the loaded chat and not paused.
+- Agent summary-compaction orchestration inserts a visible `summary` node into the conversation tree, then later prompt assembly drops older turns before that node while exports still preserve the full transcript.
 
 ## Utility step contract
 

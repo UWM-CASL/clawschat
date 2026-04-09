@@ -16,6 +16,15 @@ export function renderConversationListView({
     const item = documentRef.createElement('li');
     item.className = `conversation-item${conversation.id === activeConversationId ? ' is-active' : ''}`;
     item.dataset.conversationId = conversation.id;
+    item.dataset.conversationType =
+      conversation?.conversationType === 'agent' ? 'agent' : 'chat';
+
+    const iconWrap = documentRef.createElement('span');
+    iconWrap.className = 'conversation-item-icon';
+    iconWrap.setAttribute('aria-hidden', 'true');
+    iconWrap.innerHTML = `<i class="bi ${
+      conversation?.conversationType === 'agent' ? 'bi-person-fill' : 'bi-file-earmark'
+    }"></i>`;
 
     const selectButton = documentRef.createElement('button');
     selectButton.type = 'button';
@@ -102,7 +111,7 @@ export function renderConversationListView({
     menu.append(editNameButton, editPromptButton, downloadGroup, deleteButton);
     menuWrap.append(menuToggle, menu);
 
-    item.append(selectButton, menuWrap);
+    item.append(iconWrap, selectButton, menuWrap);
     container.appendChild(item);
   });
 }

@@ -7,6 +7,7 @@ export function createTranscriptView(dependencies) {
     getConversationCardHeading,
     getModelVariantState,
     getUserVariantState,
+    isAgentConversation,
     renderModelMarkdown,
     scheduleMathTypeset,
     shouldShowMathMlCopyAction,
@@ -32,6 +33,8 @@ export function createTranscriptView(dependencies) {
     scrollContainer instanceof view.HTMLElement ? scrollContainer : null;
   const canShowMathMlCopyAction =
     typeof shouldShowMathMlCopyAction === 'function' ? shouldShowMathMlCopyAction : () => false;
+  const resolveIsAgentConversation =
+    typeof isAgentConversation === 'function' ? isAgentConversation : () => false;
   const resolveToolDisplayName =
     typeof getToolDisplayName === 'function'
       ? getToolDisplayName
@@ -418,6 +421,22 @@ export function createTranscriptView(dependencies) {
     );
   }
 
+  function getSummaryArtifactRefs(message) {
+    return Array.isArray(message?.artifactRefs) ? message.artifactRefs : [];
+  }
+
+  function formatSummaryArtifactLabel(ref) {
+    if (!ref || typeof ref !== 'object') {
+      return '';
+    }
+    const filename = typeof ref.filename === 'string' ? ref.filename.trim() : '';
+    const workspacePath = typeof ref.workspacePath === 'string' ? ref.workspacePath.trim() : '';
+    if (filename && workspacePath) {
+      return `${filename} (${workspacePath})`;
+    }
+    return filename || workspacePath;
+  }
+
   function formatAttachmentSize(bytes) {
     if (!Number.isFinite(bytes) || bytes <= 0) {
       return '';
@@ -675,6 +694,47 @@ export function createTranscriptView(dependencies) {
       text.className = 'message-bubble-text';
       text.textContent = message.text;
       content.appendChild(text);
+    }
+
+    bubble.appendChild(content);
+  }
+
+  function renderSummaryBubbleContent(message, bubble) {
+    if (!bubble) {
+      return;
+    }
+    bubble.replaceChildren();
+    const content = documentRef.createElement('div');
+    content.className = 'message-bubble-content';
+
+    const badge = documentRef.createElement('p');
+    badge.className = 'summary-badge';
+    badge.textContent = 'Memory Snapshot';
+    content.appendChild(badge);
+
+    const summaryText = documentRef.createElement('p');
+    summaryText.className = 'message-summary-text';
+    summaryText.textContent = String(message.summary || message.text || '').trim();
+    content.appendChild(summaryText);
+
+    const artifactRefs = getSummaryArtifactRefs(message)
+      .map(formatSummaryArtifactLabel)
+      .filter(Boolean);
+    if (artifactRefs.length) {
+      const filesSection = documentRef.createElement('section');
+      filesSection.className = 'message-summary-files';
+      const filesLabel = documentRef.createElement('p');
+      filesLabel.className = 'message-summary-files-label';
+      filesLabel.textContent = 'Files carried forward';
+      const fileList = documentRef.createElement('ul');
+      fileList.className = 'message-summary-file-list';
+      artifactRefs.forEach((label) => {
+        const item = documentRef.createElement('li');
+        item.textContent = label;
+        fileList.appendChild(item);
+      });
+      filesSection.append(filesLabel, fileList);
+      content.appendChild(filesSection);
     }
 
     bubble.appendChild(content);
@@ -1048,11 +1108,14 @@ export function createTranscriptView(dependencies) {
     }
     const shouldScroll = options.scroll !== false;
     const activeConversation = getActiveConversation();
+    const isAgentThread = resolveIsAgentConversation(activeConversation);
     const cardHeading = getConversationCardHeading(activeConversation, message);
     const item = documentRef.createElement('li');
     item.className = `message-row ${
       message.role === 'user'
         ? 'user-message'
+        : message.role === 'summary'
+          ? 'summary-message'
         : message.role === 'tool'
           ? 'tool-message'
           : 'model-message'
@@ -1060,6 +1123,7 @@ export function createTranscriptView(dependencies) {
     item.dataset.messageId = message.id;
 
     if (message.role === 'model') {
+      const canMutateModelTurn = !isAgentThread;
       const variantState = getModelVariantState(activeConversation, message);
       const variantLabel = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
       item.innerHTML = `
@@ -1071,7 +1135,7 @@ export function createTranscriptView(dependencies) {
         <section class="response-actions">
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary regenerate-response-btn"
+            class="btn btn-sm btn-outline-primary regenerate-response-btn${canMutateModelTurn ? '' : ' d-none'}"
             data-message-id="${message.id}"
             aria-label="Regenerate response"
             aria-keyshortcuts="R"
@@ -1083,7 +1147,7 @@ export function createTranscriptView(dependencies) {
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary fix-response-btn"
+            class="btn btn-sm btn-outline-primary fix-response-btn${canMutateModelTurn ? '' : ' d-none'}"
             data-message-id="${message.id}"
             aria-label="Fix response"
             aria-keyshortcuts="F"
@@ -1117,7 +1181,7 @@ export function createTranscriptView(dependencies) {
           >
             MathML
           </button>
-          <div class="response-variant-nav${variantState.hasVariants ? '' : ' d-none'}">
+          <div class="response-variant-nav${variantState.hasVariants && canMutateModelTurn ? '' : ' d-none'}">
             <button
               type="button"
               class="btn btn-sm btn-outline-primary response-variant-prev"
@@ -1201,9 +1265,10 @@ export function createTranscriptView(dependencies) {
       applyVariantCardSignals(item, variantState);
       applyFixCardSignals(item, message);
     } else if (message.role === 'user') {
+      const canMutateUserTurn = !isAgentThread;
       const variantState = getUserVariantState(activeConversation, message);
       const variantLabel = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
-      const isEditing = getActiveUserEditMessageId() === message.id;
+      const isEditing = canMutateUserTurn && getActiveUserEditMessageId() === message.id;
       item.innerHTML = `
         <h3 class="visually-hidden">${cardHeading}</h3>
         ${buildMessageMetaMarkup(message)}
@@ -1216,7 +1281,7 @@ export function createTranscriptView(dependencies) {
         <section class="message-actions">
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary edit-user-message-btn${isEditing ? ' d-none' : ''}"
+            class="btn btn-sm btn-outline-primary edit-user-message-btn${isEditing || !canMutateUserTurn ? ' d-none' : ''}"
             data-message-id="${message.id}"
             aria-label="Edit message"
             aria-keyshortcuts="E"
@@ -1228,7 +1293,7 @@ export function createTranscriptView(dependencies) {
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary save-user-message-btn${isEditing ? '' : ' d-none'}"
+            class="btn btn-sm btn-outline-primary save-user-message-btn${isEditing && canMutateUserTurn ? '' : ' d-none'}"
             data-message-id="${message.id}"
             aria-label="Save edited message"
             aria-keyshortcuts="Control+Enter"
@@ -1240,7 +1305,7 @@ export function createTranscriptView(dependencies) {
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary cancel-user-edit-btn${isEditing ? '' : ' d-none'}"
+            class="btn btn-sm btn-outline-primary cancel-user-edit-btn${isEditing && canMutateUserTurn ? '' : ' d-none'}"
             data-message-id="${message.id}"
             aria-label="Cancel editing message"
             aria-keyshortcuts="Escape"
@@ -1252,7 +1317,7 @@ export function createTranscriptView(dependencies) {
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary branch-user-message-btn${isEditing ? ' d-none' : ''}"
+            class="btn btn-sm btn-outline-primary branch-user-message-btn${isEditing || !canMutateUserTurn ? ' d-none' : ''}"
             data-message-id="${message.id}"
             aria-label="Branch from this user message"
             aria-keyshortcuts="B"
@@ -1275,7 +1340,7 @@ export function createTranscriptView(dependencies) {
             <i class="bi bi-copy" aria-hidden="true"></i>
             <span class="visually-hidden">Copy message</span>
           </button>
-          <div class="response-variant-nav user-variant-nav${variantState.hasVariants && !isEditing ? '' : ' d-none'}">
+          <div class="response-variant-nav user-variant-nav${variantState.hasVariants && !isEditing && canMutateUserTurn ? '' : ' d-none'}">
             <button
               type="button"
               class="btn btn-sm btn-outline-primary user-variant-prev"
@@ -1361,6 +1426,16 @@ export function createTranscriptView(dependencies) {
         };
         updateUserMessageElement(message, item);
       }
+    } else if (message.role === 'summary') {
+      item.innerHTML = `
+        <h3 class="visually-hidden">${cardHeading}</h3>
+        ${buildMessageMetaMarkup(message)}
+        <div class="message-bubble"></div>
+      `;
+      const bubble = item.querySelector('.message-bubble');
+      if (bubble) {
+        renderSummaryBubbleContent(message, bubble);
+      }
     } else {
       item.innerHTML = `
         <h3 class="visually-hidden">${cardHeading}</h3>
@@ -1394,9 +1469,18 @@ export function createTranscriptView(dependencies) {
     /** @type {any} */ (item)._modelMessage = message;
     const activeConversation = getActiveConversation();
     const isTurnComplete = isModelTurnComplete(activeConversation, message);
+    const canMutateModelTurn = !resolveIsAgentConversation(activeConversation);
     const responseActions = item.querySelector('.response-actions');
     if (responseActions) {
       responseActions.classList.toggle('d-none', !isTurnComplete);
+      const regenerateButton = responseActions.querySelector('.regenerate-response-btn');
+      const fixButton = responseActions.querySelector('.fix-response-btn');
+      if (regenerateButton instanceof view.HTMLButtonElement) {
+        regenerateButton.classList.toggle('d-none', !canMutateModelTurn);
+      }
+      if (fixButton instanceof view.HTMLButtonElement) {
+        fixButton.classList.toggle('d-none', !canMutateModelTurn);
+      }
     }
     const variantState = getModelVariantState(activeConversation, message);
     const variantNav = item.querySelector('.response-variant-nav');
@@ -1404,7 +1488,10 @@ export function createTranscriptView(dependencies) {
     const prevButton = item.querySelector('.response-variant-prev');
     const nextButton = item.querySelector('.response-variant-next');
     if (variantNav) {
-      variantNav.classList.toggle('d-none', !variantState.hasVariants || !isTurnComplete);
+      variantNav.classList.toggle(
+        'd-none',
+        !variantState.hasVariants || !isTurnComplete || !canMutateModelTurn
+      );
     }
     if (variantLabel) {
       variantLabel.textContent = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
@@ -1435,7 +1522,8 @@ export function createTranscriptView(dependencies) {
     renderUserBubbleContent(message, refs.bubble);
     const activeConversation = getActiveConversation();
     const variantState = getUserVariantState(activeConversation, message);
-    const isEditing = getActiveUserEditMessageId() === message.id;
+    const canMutateUserTurn = !resolveIsAgentConversation(activeConversation);
+    const isEditing = canMutateUserTurn && getActiveUserEditMessageId() === message.id;
     const controlsState = getControlsState();
     const controlsDisabled =
       controlsState.isLoadingModel ||
@@ -1444,21 +1532,26 @@ export function createTranscriptView(dependencies) {
       controlsState.isSwitchingVariant ||
       Boolean(getActiveUserEditMessageId() && !isEditing);
     refs.bubble.classList.toggle('d-none', isEditing);
-    refs.editor.classList.toggle('d-none', !isEditing);
-    refs.editor.disabled = controlsDisabled;
-    refs.editButton.classList.toggle('d-none', isEditing);
-    refs.branchButton.classList.toggle('d-none', isEditing);
+    refs.editor.classList.toggle('d-none', !isEditing || !canMutateUserTurn);
+    refs.editor.disabled = controlsDisabled || !canMutateUserTurn;
+    refs.editButton.classList.toggle('d-none', isEditing || !canMutateUserTurn);
+    refs.branchButton.classList.toggle('d-none', isEditing || !canMutateUserTurn);
     refs.copyButton.classList.toggle('d-none', isEditing);
-    refs.saveButton.classList.toggle('d-none', !isEditing);
-    refs.cancelButton.classList.toggle('d-none', !isEditing);
-    refs.editButton.disabled = controlsDisabled;
-    refs.branchButton.disabled = controlsDisabled;
+    refs.saveButton.classList.toggle('d-none', !isEditing || !canMutateUserTurn);
+    refs.cancelButton.classList.toggle('d-none', !isEditing || !canMutateUserTurn);
+    refs.editButton.disabled = controlsDisabled || !canMutateUserTurn;
+    refs.branchButton.disabled = controlsDisabled || !canMutateUserTurn;
     refs.copyButton.disabled = controlsDisabled;
     refs.saveButton.disabled =
-      controlsDisabled || (!refs.editor.value.trim() && getUserAttachmentCount(message) === 0);
-    refs.cancelButton.disabled = controlsDisabled;
+      controlsDisabled ||
+      !canMutateUserTurn ||
+      (!refs.editor.value.trim() && getUserAttachmentCount(message) === 0);
+    refs.cancelButton.disabled = controlsDisabled || !canMutateUserTurn;
     if (refs.variantNav) {
-      refs.variantNav.classList.toggle('d-none', !variantState.hasVariants || isEditing);
+      refs.variantNav.classList.toggle(
+        'd-none',
+        !variantState.hasVariants || isEditing || !canMutateUserTurn
+      );
     }
     if (refs.variantLabel) {
       refs.variantLabel.textContent = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
@@ -1490,7 +1583,7 @@ export function createTranscriptView(dependencies) {
         const emptyItem = documentRef.createElement('li');
         emptyItem.className = 'transcript-empty-state text-body-secondary';
         emptyItem.textContent =
-          'Select a conversation from the left panel, or start a new conversation.';
+          'Select a conversation from the left panel, or start a new conversation or agent.';
         container.appendChild(emptyItem);
       }
       updateTranscriptNavigationButtonVisibility();

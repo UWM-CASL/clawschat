@@ -30,6 +30,10 @@ export function createTranscriptActions({
   ensureModelVariantControlsVisible,
   setStatus,
 }) {
+  function isAgentConversationState(conversation) {
+    return conversation?.conversationType === 'agent';
+  }
+
   function focusUserMessageEditor(messageId) {
     const editor = chatTranscript?.querySelector(
       `[data-message-id="${messageId}"] .user-message-editor`,
@@ -109,6 +113,9 @@ export function createTranscriptActions({
     if (!activeConversation) {
       return;
     }
+    if (isAgentConversationState(activeConversation)) {
+      return;
+    }
     const modelMessage = getMessageNodeById(activeConversation, messageId);
     if (!modelMessage || modelMessage.role !== 'model') {
       return;
@@ -148,6 +155,9 @@ export function createTranscriptActions({
     if (!activeConversation) {
       return;
     }
+    if (isAgentConversationState(activeConversation)) {
+      return;
+    }
     const userMessage = getMessageNodeById(activeConversation, messageId);
     if (!userMessage || userMessage.role !== 'user') {
       return;
@@ -182,6 +192,10 @@ export function createTranscriptActions({
     }
     const activeConversation = getActiveConversation();
     if (!activeConversation) {
+      return;
+    }
+    if (isAgentConversationState(activeConversation)) {
+      setStatus('Editing past messages is unavailable in agent conversations.');
       return;
     }
     const userMessage = getMessageNodeById(activeConversation, messageId);
@@ -221,6 +235,10 @@ export function createTranscriptActions({
     }
     const activeConversation = getActiveConversation();
     if (!activeConversation) {
+      return;
+    }
+    if (isAgentConversationState(activeConversation)) {
+      setStatus('Editing past messages is unavailable in agent conversations.');
       return;
     }
     const userMessage = getMessageNodeById(activeConversation, messageId);
@@ -308,6 +326,10 @@ export function createTranscriptActions({
     }
     const activeConversation = getActiveConversation();
     if (!activeConversation) {
+      return;
+    }
+    if (isAgentConversationState(activeConversation)) {
+      setStatus('Branching is unavailable in agent conversations.');
       return;
     }
     const userMessage = getMessageNodeById(activeConversation, messageId);

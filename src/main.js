@@ -56,6 +56,8 @@ import {
 } from './skills/skill-packages.js';
 import renameChatOrchestration from './config/orchestrations/rename-chat.json';
 import fixResponseOrchestration from './config/orchestrations/fix-response.json';
+import agentFollowUpOrchestration from './config/orchestrations/agent-follow-up.json';
+import summarizeConversationOrchestration from './config/orchestrations/summarize-conversation.json';
 import {
   buildDefaultGenerationConfig,
   sanitizeGenerationConfig,
@@ -80,6 +82,7 @@ import {
   normalizeModelId,
 } from './config/model-settings.js';
 import {
+  CONVERSATION_TYPES,
   addMessageToConversation,
   buildConversationDownloadMarkdown,
   buildConversationDownloadPayload,
@@ -97,8 +100,10 @@ import {
   getMessageNodeById,
   getModelVariantState,
   getUserVariantState,
+  isAgentConversation,
   normalizeConversationLanguagePreference,
   normalizeConversationName,
+  normalizeConversationType,
   normalizeMessageContentParts,
   normalizeConversationPromptMode,
   normalizeConversationThinkingEnabled,
@@ -113,6 +118,7 @@ import {
 } from './state/conversation-serialization.js';
 import { loadSkillPackages, removeSkillPackage, saveSkillPackage } from './state/skill-store.js';
 import {
+  ORCHESTRATION_KINDS,
   beginAttachmentOperation,
   clearTerminalDismissal,
   clearUserMessageEditState,
@@ -139,6 +145,7 @@ import {
   isVariantSwitchingState,
   isLoadingModelState,
   openTerminalForConversation,
+  setOrchestrationRunning,
   setPreparingNewConversation,
   setChatTitleEditing,
   setChatWorkspaceStarted,
@@ -185,6 +192,11 @@ const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
 const STREAM_UPDATE_INTERVAL_MS = 100;
+const AGENT_FOLLOW_UP_MIN_INTERVAL_MS = 10 * 60 * 1000;
+const AGENT_FOLLOW_UP_MAX_INTERVAL_MS = 15 * 60 * 1000;
+const AGENT_FOLLOW_UP_BUSY_RETRY_MS = 30 * 1000;
+const AGENT_SUMMARY_TRIGGER_RATIO = 0.9;
+const AGENT_SUMMARY_MIN_MESSAGES = 8;
 const DEBUG_LOG_PAGE_SIZE = 20;
 const TRANSCRIPT_BOTTOM_THRESHOLD_PX = 24;
 const MARKDOWN_LINK_REL = 'noopener noreferrer nofollow';
@@ -283,6 +295,7 @@ const modelLoadErrorDetails = document.getElementById('modelLoadErrorDetails');
 const sendButton = document.getElementById('sendButton');
 const conversationList = document.getElementById('conversationList');
 const newConversationBtn = document.getElementById('newConversationBtn');
+const newAgentBtn = document.getElementById('newAgentBtn');
 const chatForm = document.querySelector('.composer');
 const imageAttachmentInput = document.getElementById('imageAttachmentInput');
 const composerAttachmentTray = document.getElementById('composerAttachmentTray');
@@ -303,6 +316,11 @@ const chatMain = document.querySelector('.chat-main');
 let isTaskListTrayExpanded = false;
 const homePanel = document.getElementById('homePanel');
 const preChatPanel = document.getElementById('preChatPanel');
+const preChatHeading = document.getElementById('preChatHeading');
+const preChatLead = document.getElementById('preChatLead');
+const preChatAgentFields = document.getElementById('preChatAgentFields');
+const agentNameInput = document.getElementById('agentNameInput');
+const agentPersonalityInput = document.getElementById('agentPersonalityInput');
 const topBar = document.getElementById('topBar');
 const conversationPanel = document.getElementById('conversationPanel');
 const onboardingStatusRegion = document.getElementById('onboardingStatusRegion');
@@ -314,6 +332,8 @@ const preChatEditConversationSystemPromptBtn = document.getElementById(
   'preChatEditConversationSystemPromptBtn'
 );
 const chatTitle = document.getElementById('chatTitle');
+const pauseAgentBtn = document.getElementById('pauseAgentBtn');
+const pauseAgentBtnLabel = document.getElementById('pauseAgentBtnLabel');
 const chatTitleInput = document.getElementById('chatTitleInput');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
@@ -363,6 +383,9 @@ let markdownRenderer = null;
 let markdownRendererLoadPromise = null;
 let hasQueuedMarkdownRendererRefresh = false;
 let hasLoggedMarkdownRendererError = false;
+let agentFollowUpTimerId = null;
+let activeAgentFollowUpAbortController = null;
+let activeAgentFollowUpConversationId = '';
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
 
@@ -2014,25 +2037,50 @@ function createConversation(name) {
       : createConversationId();
   appState.pendingConversationDraftId = '';
   appState.conversationIdCounter += 1;
+  const conversationType = getPendingConversationType();
+  const agentName = normalizeConversationName(appState.pendingAgentName);
+  const agentDescription = normalizeSystemPrompt(appState.pendingAgentDescription);
+  const conversationName =
+    conversationType === CONVERSATION_TYPES.AGENT
+      ? agentName || 'New Agent'
+      : name;
   const conversation = createConversationRecord({
     id: conversationId,
-    name,
+    name: conversationName,
     modelId: getAvailableModelId(
       modelSelect?.value || DEFAULT_MODEL,
       normalizeBackendPreference(backendSelect?.value || 'webgpu')
     ),
+    conversationType,
     untitledPrefix: UNTITLED_CONVERSATION_PREFIX,
     systemPrompt: appState.defaultSystemPrompt,
     languagePreference: appState.pendingConversationLanguagePreference,
     thinkingEnabled: appState.pendingConversationThinkingEnabled,
+    agent:
+      conversationType === CONVERSATION_TYPES.AGENT
+        ? {
+            name: agentName || 'Agent',
+            description: agentDescription,
+            paused: false,
+            lastActivityAt: Date.now(),
+            lastFollowUpAt: null,
+            nextFollowUpAt: null,
+          }
+        : null,
     startedAt: Date.now(),
   });
-  conversation.conversationSystemPrompt = normalizeSystemPrompt(
-    appState.pendingConversationSystemPrompt
-  );
-  conversation.appendConversationSystemPrompt = normalizeConversationPromptMode(
-    appState.pendingAppendConversationSystemPrompt
-  );
+  if (conversationType === CONVERSATION_TYPES.AGENT) {
+    conversation.hasGeneratedName = true;
+    conversation.conversationSystemPrompt = '';
+    conversation.appendConversationSystemPrompt = true;
+  } else {
+    conversation.conversationSystemPrompt = normalizeSystemPrompt(
+      appState.pendingConversationSystemPrompt
+    );
+    conversation.appendConversationSystemPrompt = normalizeConversationPromptMode(
+      appState.pendingAppendConversationSystemPrompt
+    );
+  }
   return conversation;
 }
 
@@ -2283,6 +2331,7 @@ const transcriptView = createTranscriptView({
   getConversationCardHeading,
   getModelVariantState,
   getUserVariantState,
+  isAgentConversation,
   renderModelMarkdown,
   scheduleMathTypeset,
   shouldShowMathMlCopyAction: (content) => appState.renderMathMl && containsMathDelimiters(content),
@@ -2588,6 +2637,8 @@ function updatePreChatActionButtons() {
   const canShowPreChatActions =
     isPreChatAvailable && !isEngineReady(appState) && Boolean(activeConversation);
   const isBusy = isUiBusy();
+  const isAgentDraft = !activeConversation && isPendingAgentConversation();
+  const isAgentPreChatConversation = isAgentDraft || isAgentConversation(activeConversation);
 
   if (preChatActions instanceof HTMLElement) {
     preChatActions.classList.toggle('d-none', !canShowPreChatActions);
@@ -2597,8 +2648,61 @@ function updatePreChatActionButtons() {
     preChatLoadModelBtn.disabled = !canShowPreChatActions || !hasExistingConversation || isBusy;
   }
   if (preChatEditConversationSystemPromptBtn instanceof HTMLButtonElement) {
-    preChatEditConversationSystemPromptBtn.disabled = !isPreChatAvailable || isBusy;
+    preChatEditConversationSystemPromptBtn.classList.toggle('d-none', isAgentPreChatConversation);
+    preChatEditConversationSystemPromptBtn.disabled =
+      !isPreChatAvailable || isBusy || isAgentPreChatConversation;
   }
+}
+
+function updateMessageInputPlaceholder() {
+  if (!(messageInput instanceof HTMLTextAreaElement)) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  if (!activeConversation && isPendingAgentConversation()) {
+    messageInput.placeholder = `Say hello to ${getAgentDisplayName(null)}...`;
+    return;
+  }
+  if (isAgentConversation(activeConversation) && !hasConversationHistory(activeConversation)) {
+    messageInput.placeholder = `Say hello to ${getAgentDisplayName(activeConversation)}...`;
+    return;
+  }
+  messageInput.placeholder = 'Type your message...';
+}
+
+function updatePreChatModeUi() {
+  const activeConversation = getActiveConversation();
+  const isAgentDraft = !activeConversation && isPendingAgentConversation();
+  const isAgentPreChatConversation = isAgentDraft || isAgentConversation(activeConversation);
+  const agentNameValue = isAgentConversation(activeConversation)
+    ? normalizeConversationName(activeConversation?.agent?.name || activeConversation?.name || '')
+    : appState.pendingAgentName;
+  const agentDescriptionValue = isAgentConversation(activeConversation)
+    ? normalizeSystemPrompt(activeConversation?.agent?.description)
+    : appState.pendingAgentDescription;
+  if (preChatHeading instanceof HTMLElement) {
+    preChatHeading.textContent = isAgentPreChatConversation
+      ? 'Create a New Agent'
+      : 'Start a New Chat';
+  }
+  if (preChatLead instanceof HTMLElement) {
+    preChatLead.textContent = isAgentPreChatConversation
+      ? 'Name your agent, describe its personality, choose a model, then say hello below to begin.'
+      : 'Choose a model, then send your first message below to begin.';
+  }
+  if (preChatAgentFields instanceof HTMLElement) {
+    preChatAgentFields.classList.toggle('d-none', !isAgentPreChatConversation);
+  }
+  if (agentNameInput instanceof HTMLInputElement && agentNameInput.value !== agentNameValue) {
+    agentNameInput.value = agentNameValue;
+  }
+  if (
+    agentPersonalityInput instanceof HTMLTextAreaElement &&
+    agentPersonalityInput.value !== agentDescriptionValue
+  ) {
+    agentPersonalityInput.value = agentDescriptionValue;
+  }
+  updateMessageInputPlaceholder();
 }
 
 function updateComposerVisibility() {
@@ -2615,6 +2719,7 @@ function updateComposerVisibility() {
   if (messageInput instanceof HTMLTextAreaElement) {
     messageInput.disabled = shouldDisableComposerForPreChatConversationSelection();
   }
+  updatePreChatModeUi();
 }
 
 function updateChatTitle() {
@@ -2692,6 +2797,7 @@ function applyAppRouteFromHash() {
   }
 
   routingShell.applyRouteFromHash();
+  refreshAgentAutomationState();
 
   if (
     routeState.showSystemPrompt &&
@@ -2738,9 +2844,46 @@ function setActiveConversationById(
   renderTranscript();
   updateChatTitle();
   queueConversationStateSave();
+  refreshAgentAutomationState();
   if (syncRoute) {
     syncRouteToCurrentState({ replace: replaceRoute });
   }
+}
+
+function updatePauseAgentButton() {
+  if (!(pauseAgentBtn instanceof HTMLButtonElement)) {
+    return;
+  }
+  const activeConversation = getActiveConversation();
+  const showButton =
+    isAgentConversation(activeConversation) &&
+    !appState.isPreparingNewConversation &&
+    selectHasStartedWorkspace(appState) &&
+    !isSettingsView(appState);
+  pauseAgentBtn.classList.toggle('d-none', !showButton);
+  if (!showButton) {
+    pauseAgentBtn.disabled = true;
+    return;
+  }
+  const isPaused = activeConversation?.agent?.paused === true;
+  pauseAgentBtn.disabled = isUiBusy();
+  pauseAgentBtn.setAttribute('aria-pressed', String(isPaused));
+  const buttonLabel = isPaused ? 'Resume agent' : 'Pause agent';
+  pauseAgentBtn.setAttribute('aria-label', buttonLabel);
+  pauseAgentBtn.setAttribute('data-bs-title', buttonLabel);
+  pauseAgentBtn.title = buttonLabel;
+  const icon = pauseAgentBtn.querySelector('[data-agent-toggle-icon="true"]');
+  if (icon instanceof HTMLElement) {
+    icon.className = `bi ${isPaused ? 'bi-play-fill' : 'bi-pause-fill'}`;
+  }
+  if (pauseAgentBtnLabel instanceof HTMLElement) {
+    pauseAgentBtnLabel.textContent = isPaused ? 'Resume Agent' : 'Pause Agent';
+  }
+  const tooltipInstance = Tooltip.getInstance(pauseAgentBtn);
+  if (tooltipInstance) {
+    tooltipInstance.dispose();
+  }
+  initializeTooltips(pauseAgentBtn.parentElement || pauseAgentBtn);
 }
 
 function updateActionButtons() {
@@ -2748,6 +2891,7 @@ function updateActionButtons() {
   updateGenerationSettingsEnabledState();
   updateChatTitleEditorVisibility();
   updatePreChatActionButtons();
+  updatePauseAgentButton();
   const disableComposerForPreChatSelection = shouldDisableComposerForPreChatConversationSelection();
   const attachmentsAreProcessing = isProcessingAttachments(appState);
   const composerControlsDisabled =
@@ -2813,14 +2957,27 @@ function updateActionButtons() {
       appState.isPreparingNewConversation ||
       !selectHasStartedWorkspace(appState);
   }
+  if (newAgentBtn) {
+    newAgentBtn.classList.toggle('d-none', !shouldShowNewConversationButton());
+    newAgentBtn.disabled =
+      attachmentsAreProcessing ||
+      isGeneratingResponse(appState) ||
+      isBlockingOrchestrationState(appState) ||
+      (appState.isPreparingNewConversation && isPendingAgentConversation()) ||
+      !selectHasStartedWorkspace(appState);
+  }
+  updateMessageInputPlaceholder();
   updateRegenerateButtons();
   updateUserMessageButtons();
+  refreshAgentAutomationState();
 }
 
 function updateRegenerateButtons() {
   if (!chatTranscript) {
     return;
   }
+  const activeConversation = getActiveConversation();
+  const isAgentThread = isAgentConversation(activeConversation);
   const disabled =
     isLoadingModelState(appState) ||
     isGeneratingResponse(appState) ||
@@ -2833,7 +2990,6 @@ function updateRegenerateButtons() {
       return;
     }
     const messageId = item.dataset.messageId;
-    const activeConversation = getActiveConversation();
     const modelMessage = activeConversation?.messageNodes.find(
       (message) => message.id === messageId && message.role === 'model'
     );
@@ -2845,7 +3001,8 @@ function updateRegenerateButtons() {
         .querySelectorAll('.regenerate-response-btn, .fix-response-btn')
         .forEach((button) => {
           if (button instanceof HTMLButtonElement) {
-            button.disabled = disabled || hideActions;
+            button.classList.toggle('d-none', isAgentThread);
+            button.disabled = disabled || hideActions || isAgentThread;
           }
         });
       const prevButton = responseActions.querySelector('.response-variant-prev');
@@ -2854,16 +3011,19 @@ function updateRegenerateButtons() {
       const variantLabel = responseActions.querySelector('.response-variant-status');
       const variantState = getModelVariantState(activeConversation, modelMessage);
       if (variantNav) {
-        variantNav.classList.toggle('d-none', !variantState.hasVariants || hideActions);
+        variantNav.classList.toggle(
+          'd-none',
+          !variantState.hasVariants || hideActions || isAgentThread
+        );
       }
       if (variantLabel) {
         variantLabel.textContent = `${Math.max(variantState.index + 1, 1)}/${Math.max(variantState.total, 1)}`;
       }
       if (prevButton instanceof HTMLButtonElement) {
-        prevButton.disabled = disabled || hideActions || !variantState.canGoPrev;
+        prevButton.disabled = disabled || hideActions || isAgentThread || !variantState.canGoPrev;
       }
       if (nextButton instanceof HTMLButtonElement) {
-        nextButton.disabled = disabled || hideActions || !variantState.canGoNext;
+        nextButton.disabled = disabled || hideActions || isAgentThread || !variantState.canGoNext;
       }
     }
   });
@@ -3228,6 +3388,38 @@ function resetPendingConversationModelPreferences() {
     getThinkingControlForModel(selectedModelId)?.defaultEnabled !== false;
 }
 
+function getPendingConversationType() {
+  return normalizeConversationType(appState.pendingConversationType);
+}
+
+function isPendingAgentConversation() {
+  return getPendingConversationType() === CONVERSATION_TYPES.AGENT;
+}
+
+function clearPendingAgentDraft() {
+  appState.pendingAgentName = '';
+  appState.pendingAgentDescription = '';
+}
+
+function getAgentDisplayName(conversation = getActiveConversation()) {
+  if (isAgentConversation(conversation)) {
+    return normalizeConversationName(conversation?.agent?.name || conversation?.name || 'Agent') || 'Agent';
+  }
+  const draftName = normalizeConversationName(appState.pendingAgentName);
+  return draftName || 'Agent';
+}
+
+function preparePendingConversationDraft(conversationType = CONVERSATION_TYPES.CHAT) {
+  appState.pendingConversationType = normalizeConversationType(conversationType);
+  appState.pendingConversationDraftId = '';
+  appState.pendingConversationSystemPrompt = '';
+  appState.pendingAppendConversationSystemPrompt = true;
+  if (appState.pendingConversationType !== CONVERSATION_TYPES.AGENT) {
+    clearPendingAgentDraft();
+  }
+  resetPendingConversationModelPreferences();
+}
+
 const runOrchestration = createOrchestrationRunner({
   generateText: requestSingleGeneration,
   formatStepOutput: (step, rawOutput) => {
@@ -3236,6 +3428,444 @@ const runOrchestration = createOrchestrationRunner({
   },
   onDebug: appendDebug,
 });
+
+function getConversationMessagesAfterLatestSummary(
+  conversation,
+  leafMessageId = conversation?.activeLeafMessageId
+) {
+  const pathMessages = getConversationPathMessages(conversation, leafMessageId);
+  const lastSummaryIndex = pathMessages.reduce(
+    (latestIndex, message, index) => (message?.role === 'summary' ? index : latestIndex),
+    -1
+  );
+  return {
+    pathMessages,
+    lastSummary:
+      lastSummaryIndex >= 0 && pathMessages[lastSummaryIndex]?.role === 'summary'
+        ? pathMessages[lastSummaryIndex]
+        : null,
+    recentMessages:
+      lastSummaryIndex >= 0 ? pathMessages.slice(lastSummaryIndex + 1) : pathMessages,
+  };
+}
+
+function collectArtifactRefsFromMessages(messages = []) {
+  const refs = [];
+  const seenKeys = new Set();
+  messages.forEach((message) => {
+    const messageRefs = Array.isArray(message?.artifactRefs) ? message.artifactRefs : [];
+    messageRefs.forEach((ref) => {
+      if (!ref || typeof ref !== 'object') {
+        return;
+      }
+      const id = typeof ref.id === 'string' ? ref.id.trim() : '';
+      const filename = typeof ref.filename === 'string' ? ref.filename.trim() : '';
+      const workspacePath = typeof ref.workspacePath === 'string' ? ref.workspacePath.trim() : '';
+      const key = id || `${filename}::${workspacePath}`;
+      if (!key || seenKeys.has(key)) {
+        return;
+      }
+      seenKeys.add(key);
+      refs.push(ref);
+    });
+  });
+  return refs;
+}
+
+function formatArtifactRefsForPrompt(artifactRefs = []) {
+  const lines = [];
+  collectArtifactRefsFromMessages([{ artifactRefs }]).forEach((ref) => {
+    const filename = typeof ref.filename === 'string' ? ref.filename.trim() : '';
+    const workspacePath = typeof ref.workspacePath === 'string' ? ref.workspacePath.trim() : '';
+    if (!filename && !workspacePath) {
+      return;
+    }
+    lines.push(
+      workspacePath && filename ? `- ${filename} (${workspacePath})` : `- ${filename || workspacePath}`
+    );
+  });
+  return lines.join('\n');
+}
+
+function buildConversationTranscriptForOrchestration(messages = [], { maxMessages = null } = {}) {
+  const normalizedMessages = Array.isArray(messages)
+    ? messages.filter(
+        (message) =>
+          message &&
+          (message.role === 'user' ||
+            message.role === 'model' ||
+            message.role === 'tool' ||
+            message.role === 'summary')
+      )
+    : [];
+  const visibleMessages =
+    Number.isInteger(maxMessages) && maxMessages > 0
+      ? normalizedMessages.slice(-maxMessages)
+      : normalizedMessages;
+  return visibleMessages
+    .map((message) => {
+      if (message.role === 'tool') {
+        return `[Tool:${message.toolName || 'unknown'}]\n${String(message.toolResult || message.text || '').trim()}`;
+      }
+      if (message.role === 'summary') {
+        return `[Conversation Summary]\n${String(message.summary || message.text || '').trim()}`;
+      }
+      const label = message.role === 'user' ? 'User' : 'Model';
+      const body =
+        message.role === 'model'
+          ? String(message.response || message.text || '').trim()
+          : String(message.text || '').trim();
+      return `[${label}]\n${body}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function estimatePromptContentTokens(content) {
+  if (Array.isArray(content)) {
+    return content.reduce((total, part) => total + estimatePromptContentTokens(part), 0);
+  }
+  if (content && typeof content === 'object') {
+    if (content.type === 'text' && typeof content.text === 'string') {
+      return Math.max(1, Math.ceil(content.text.length / 4));
+    }
+    if (content.type === 'image' || content.type === 'audio') {
+      return 128;
+    }
+    return estimatePromptContentTokens(Object.values(content));
+  }
+  const text = String(content || '');
+  return text.trim() ? Math.max(1, Math.ceil(text.length / 4)) : 0;
+}
+
+function estimatePromptTokenCount(prompt) {
+  if (!Array.isArray(prompt)) {
+    return estimatePromptContentTokens(prompt);
+  }
+  return prompt.reduce(
+    (total, message) => total + 6 + estimatePromptContentTokens(message?.content),
+    4
+  );
+}
+
+function clearAgentFollowUpTimer() {
+  if (agentFollowUpTimerId !== null) {
+    window.clearTimeout(agentFollowUpTimerId);
+    agentFollowUpTimerId = null;
+  }
+}
+
+function getRandomAgentFollowUpIntervalMs() {
+  return Math.floor(
+    AGENT_FOLLOW_UP_MIN_INTERVAL_MS +
+      Math.random() * (AGENT_FOLLOW_UP_MAX_INTERVAL_MS - AGENT_FOLLOW_UP_MIN_INTERVAL_MS)
+  );
+}
+
+function isAgentConversationLoaded() {
+  return appState.workspaceView === 'chat' && isAgentConversation(getActiveConversation());
+}
+
+function scheduleNextAgentFollowUp(conversation, { from = Date.now(), persist = false } = {}) {
+  if (!isAgentConversation(conversation) || !conversation.agent) {
+    return null;
+  }
+  conversation.agent.nextFollowUpAt = Math.max(
+    Math.trunc(from),
+    conversation.agent.lastActivityAt || Math.trunc(from)
+  ) + getRandomAgentFollowUpIntervalMs();
+  if (persist) {
+    queueConversationStateSave();
+  }
+  return conversation.agent.nextFollowUpAt;
+}
+
+function recordAgentActivity(conversation, { timestamp = Date.now(), persist = false } = {}) {
+  if (!isAgentConversation(conversation) || !conversation.agent) {
+    return;
+  }
+  conversation.agent.lastActivityAt = Math.trunc(timestamp);
+  scheduleNextAgentFollowUp(conversation, { from: conversation.agent.lastActivityAt });
+  if (persist) {
+    queueConversationStateSave();
+  }
+}
+
+async function cancelActiveAgentFollowUp({ preserveSchedule = true } = {}) {
+  clearAgentFollowUpTimer();
+  if (!activeAgentFollowUpAbortController) {
+    return;
+  }
+  const abortController = activeAgentFollowUpAbortController;
+  const conversationId = activeAgentFollowUpConversationId;
+  activeAgentFollowUpAbortController = null;
+  activeAgentFollowUpConversationId = '';
+  if (!abortController.signal.aborted) {
+    abortController.abort();
+  }
+  try {
+    await engine.cancelGeneration();
+  } catch (error) {
+    appendDebug(`Agent follow-up cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    setOrchestrationRunning(appState, false);
+    updateActionButtons();
+    if (!preserveSchedule) {
+      const conversation = findConversationById(conversationId);
+      if (conversation?.agent) {
+        conversation.agent.nextFollowUpAt = null;
+        queueConversationStateSave();
+      }
+    }
+  }
+}
+
+function refreshAgentAutomationState({ forceReschedule = false } = {}) {
+  clearAgentFollowUpTimer();
+  const activeConversation = getActiveConversation();
+  if (
+    !isAgentConversationLoaded() ||
+    !activeConversation?.agent ||
+    activeConversation.agent.paused === true
+  ) {
+    if (activeAgentFollowUpAbortController) {
+      void cancelActiveAgentFollowUp();
+    }
+    return;
+  }
+  if (forceReschedule || !Number.isFinite(activeConversation.agent.nextFollowUpAt)) {
+    scheduleNextAgentFollowUp(activeConversation, {
+      from: activeConversation.agent.lastFollowUpAt || activeConversation.agent.lastActivityAt || Date.now(),
+    });
+    queueConversationStateSave();
+  }
+  const nextFollowUpAt = Number(activeConversation.agent.nextFollowUpAt) || 0;
+  const delay = Math.max(0, nextFollowUpAt - Date.now());
+  agentFollowUpTimerId = window.setTimeout(() => {
+    void runAgentFollowUpOrchestration(activeConversation.id);
+  }, delay);
+}
+
+async function runAgentFollowUpOrchestration(conversationId) {
+  const conversation = findConversationById(conversationId);
+  if (
+    !conversation ||
+    !isAgentConversation(conversation) ||
+    conversation.agent?.paused === true ||
+    getActiveConversation()?.id !== conversation.id ||
+    !isAgentConversationLoaded()
+  ) {
+    return;
+  }
+  if (
+    isGeneratingResponse(appState) ||
+    isLoadingModelState(appState) ||
+    isBlockingOrchestrationState(appState)
+  ) {
+    conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
+    queueConversationStateSave();
+    refreshAgentAutomationState();
+    return;
+  }
+  const { lastSummary, recentMessages } = getConversationMessagesAfterLatestSummary(conversation);
+  const visibleMessages = recentMessages.filter((message) => message.role !== 'summary');
+  if (!visibleMessages.some((message) => message.role === 'user')) {
+    conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
+    queueConversationStateSave();
+    refreshAgentAutomationState();
+    return;
+  }
+  const conversationSummary = lastSummary ? String(lastSummary.summary || lastSummary.text || '') : '';
+  const artifactRefs = collectArtifactRefsFromMessages([
+    ...(lastSummary ? [lastSummary] : []),
+    ...visibleMessages,
+  ]);
+  const abortController = new AbortController();
+  activeAgentFollowUpAbortController = abortController;
+  activeAgentFollowUpConversationId = conversation.id;
+  setOrchestrationRunning(appState, true, {
+    kind: ORCHESTRATION_KINDS.AGENT_FOLLOW_UP,
+    blocksUi: false,
+  });
+  updateActionButtons();
+  appendDebug(`Agent follow-up started for ${conversation.name}.`);
+  try {
+    const { finalOutput } = await runOrchestration(
+      agentFollowUpOrchestration,
+      {
+        agentName: getAgentDisplayName(conversation),
+        agentDescription: normalizeSystemPrompt(conversation.agent?.description),
+        conversationSummary,
+        recentTranscript: buildConversationTranscriptForOrchestration(visibleMessages, {
+          maxMessages: 12,
+        }),
+        uploadedFiles: formatArtifactRefsForPrompt(artifactRefs),
+      },
+      {
+        signal: abortController.signal,
+      }
+    );
+    const normalizedOutput = String(finalOutput || '').trim();
+    if (
+      !normalizedOutput ||
+      normalizedOutput === '[NO_FOLLOW_UP]' ||
+      getActiveConversation()?.id !== conversation.id ||
+      conversation.agent?.paused === true
+    ) {
+      conversation.agent.lastFollowUpAt = Date.now();
+      scheduleNextAgentFollowUp(conversation, { from: conversation.agent.lastFollowUpAt });
+      queueConversationStateSave();
+      return;
+    }
+    const followUpMessage = addMessageToConversation(conversation, 'model', normalizedOutput, {
+      parentId: conversation.activeLeafMessageId,
+      response: normalizedOutput,
+    });
+    followUpMessage.response = normalizedOutput;
+    followUpMessage.text = normalizedOutput;
+    followUpMessage.rawStreamText = normalizedOutput;
+    followUpMessage.thoughts = '';
+    followUpMessage.hasThinking = false;
+    followUpMessage.isThinkingComplete = false;
+    followUpMessage.isResponseComplete = true;
+    conversation.lastSpokenLeafMessageId = followUpMessage.id;
+    conversation.agent.lastFollowUpAt = Date.now();
+    recordAgentActivity(conversation, { timestamp: conversation.agent.lastFollowUpAt });
+    renderTranscript({ scrollToBottom: false });
+    scrollTranscriptToBottom();
+    queueConversationStateSave();
+    setStatus(`${getAgentDisplayName(conversation)} shared a follow-up.`);
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      appendDebug('Agent follow-up canceled.');
+      return;
+    }
+    appendDebug(`Agent follow-up failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (conversation.agent) {
+      conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
+      queueConversationStateSave();
+    }
+  } finally {
+    if (activeAgentFollowUpAbortController === abortController) {
+      activeAgentFollowUpAbortController = null;
+      activeAgentFollowUpConversationId = '';
+    }
+    setOrchestrationRunning(appState, false);
+    updateActionButtons();
+    refreshAgentAutomationState();
+  }
+}
+
+function insertSummaryNodeBeforeMessage(conversation, targetMessage, summaryText, artifactRefs = []) {
+  if (!conversation || !targetMessage?.id || !targetMessage.parentId) {
+    return null;
+  }
+  const previousParent = getMessageNodeById(conversation, targetMessage.parentId);
+  if (!previousParent) {
+    return null;
+  }
+  const summaryMessage = addMessageToConversation(conversation, 'summary', summaryText, {
+    parentId: previousParent.id,
+    artifactRefs,
+  });
+  previousParent.childIds = (previousParent.childIds || []).filter((childId) => childId !== targetMessage.id);
+  if (!(previousParent.childIds || []).includes(summaryMessage.id)) {
+    previousParent.childIds.push(summaryMessage.id);
+  }
+  summaryMessage.childIds = [targetMessage.id];
+  targetMessage.parentId = summaryMessage.id;
+  conversation.activeLeafMessageId = targetMessage.id;
+  return summaryMessage;
+}
+
+async function ensureAgentConversationSummaryBeforeSend(conversation, userMessage) {
+  if (
+    !conversation ||
+    !userMessage ||
+    !isAgentConversation(conversation) ||
+    !conversation.agent ||
+    !userMessage.parentId
+  ) {
+    return true;
+  }
+  const estimatedPromptTokens = estimatePromptTokenCount(buildPromptForActiveConversation(conversation));
+  const contextLimit = Number(appState.activeGenerationConfig?.maxContextTokens) || 0;
+  if (
+    !contextLimit ||
+    estimatedPromptTokens < Math.floor(contextLimit * AGENT_SUMMARY_TRIGGER_RATIO)
+  ) {
+    return true;
+  }
+  const { lastSummary, recentMessages } = getConversationMessagesAfterLatestSummary(
+    conversation,
+    userMessage.parentId
+  );
+  const messagesToSummarize = recentMessages.filter((message) => message.role !== 'summary');
+  if (messagesToSummarize.length < AGENT_SUMMARY_MIN_MESSAGES) {
+    return true;
+  }
+  const artifactRefs = collectArtifactRefsFromMessages([
+    ...(lastSummary ? [lastSummary] : []),
+    ...messagesToSummarize,
+  ]);
+  setOrchestrationRunning(appState, true, {
+    kind: ORCHESTRATION_KINDS.SUMMARY,
+    blocksUi: true,
+  });
+  updateActionButtons();
+  setStatus('Summarizing earlier conversation context...');
+  try {
+    const { finalOutput } = await runOrchestration(summarizeConversationOrchestration, {
+      previousSummary: lastSummary ? String(lastSummary.summary || lastSummary.text || '') : '',
+      recentTranscript: buildConversationTranscriptForOrchestration(messagesToSummarize),
+      uploadedFiles: formatArtifactRefsForPrompt(artifactRefs),
+    });
+    const summaryText = String(finalOutput || '').trim();
+    if (!summaryText) {
+      return true;
+    }
+    insertSummaryNodeBeforeMessage(conversation, userMessage, summaryText, artifactRefs);
+    queueConversationStateSave();
+    renderTranscript({ scrollToBottom: false });
+    return true;
+  } catch (error) {
+    appendDebug(`Conversation summary failed: ${error instanceof Error ? error.message : String(error)}`);
+    setStatus('Conversation summary failed. Continuing without compaction.');
+    return true;
+  } finally {
+    setOrchestrationRunning(appState, false);
+    updateActionButtons();
+  }
+}
+
+function toggleAgentPauseState() {
+  const activeConversation = getActiveConversation();
+  if (!isAgentConversation(activeConversation) || !activeConversation?.agent) {
+    return;
+  }
+  activeConversation.agent.paused = activeConversation.agent.paused !== true;
+  if (activeConversation.agent.paused) {
+    activeConversation.agent.nextFollowUpAt = null;
+    void cancelActiveAgentFollowUp({ preserveSchedule: false });
+    setStatus(`${getAgentDisplayName(activeConversation)} paused.`);
+  } else {
+    scheduleNextAgentFollowUp(activeConversation, { from: Date.now() });
+    refreshAgentAutomationState();
+    setStatus(`${getAgentDisplayName(activeConversation)} resumed.`);
+  }
+  queueConversationStateSave();
+  updateActionButtons();
+}
+
+function handleCompletedModelMessage(conversation, message) {
+  if (!conversation || !message || message.role !== 'model') {
+    return;
+  }
+  if (isAgentConversation(conversation)) {
+    recordAgentActivity(conversation, { timestamp: Date.now(), persist: true });
+    refreshAgentAutomationState();
+  }
+}
 
 const appController = createAppController({
   state: appState,
@@ -3271,6 +3901,7 @@ const appController = createAppController({
     }),
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
   getRuntimeConfigForConversation: (conversation) => buildConversationRuntimeConfig(conversation),
+  isAgentConversation,
   addMessageToConversation,
   buildPromptForConversationLeaf: buildPromptForActiveConversation,
   getMessageNodeById,
@@ -3297,6 +3928,7 @@ const appController = createAppController({
   showLoadError,
   applyPendingGenerationSettingsIfReady,
   markActiveIncompleteModelMessageComplete,
+  onModelMessageComplete: handleCompletedModelMessage,
   streamUpdateIntervalMs: STREAM_UPDATE_INTERVAL_MS,
 });
 
@@ -3368,6 +4000,7 @@ const { handleFocusedMessageShortcut, handleGlobalShortcut } = createShortcutHan
   handleMessageCopyAction,
   beginUserMessageEdit,
   branchFromUserMessage,
+  isAgentConversation,
 });
 
 engine.onStatus = (message) => {
@@ -3413,6 +4046,22 @@ renderDebugLog();
 updateActionButtons();
 setActiveSettingsTab(appState.activeSettingsTab);
 updateWelcomePanelVisibility({ syncRoute: false });
+if (pauseAgentBtn instanceof HTMLButtonElement) {
+  pauseAgentBtn.addEventListener('click', () => {
+    toggleAgentPauseState();
+  });
+}
+if (agentNameInput instanceof HTMLInputElement) {
+  agentNameInput.addEventListener('input', () => {
+    appState.pendingAgentName = agentNameInput.value;
+    updatePreChatModeUi();
+  });
+}
+if (agentPersonalityInput instanceof HTMLTextAreaElement) {
+  agentPersonalityInput.addEventListener('input', () => {
+    appState.pendingAgentDescription = agentPersonalityInput.value;
+  });
+}
 skipLinkElements.forEach((link) => {
   if (!(link instanceof HTMLElement)) {
     return;
@@ -3619,6 +4268,15 @@ bindComposerEvents({
   appendDebug,
   syncRouteToState: syncRouteToCurrentState,
   buildUserMessageAttachmentPayload,
+  beforeStartGeneration: async (conversation, userMessage) => {
+    await cancelActiveAgentFollowUp();
+    return ensureAgentConversationSummaryBeforeSend(conversation, userMessage);
+  },
+  onUserMessageAdded: (conversation) => {
+    if (isAgentConversation(conversation)) {
+      recordAgentActivity(conversation, { timestamp: Date.now() });
+    }
+  },
   addMessageToConversation,
   addMessageElement,
   buildPromptForActiveConversation,
@@ -3661,6 +4319,7 @@ bindShellEvents({
   startConversationButton,
   messageInput,
   newConversationBtn,
+  newAgentBtn,
   isGeneratingResponse,
   setChatWorkspaceStarted,
   setPreparingNewConversation,
@@ -3668,6 +4327,8 @@ bindShellEvents({
   clearUserMessageEditSession,
   setChatTitleEditing,
   clearPendingComposerAttachments,
+  clearPendingAgentDraft,
+  preparePendingConversationDraft,
   resetPendingConversationModelPreferences,
   renderConversationList,
   renderTranscript,

@@ -38,6 +38,7 @@ function createHarness() {
   };
   const activeConversation = {
     id: 'conversation-1',
+    conversationType: 'chat',
     messageNodes: [{ id: 'model-1', role: 'model' }],
   };
 
@@ -98,6 +99,7 @@ function createHarness() {
       handleMessageCopyAction: vi.fn(async () => {}),
       beginUserMessageEdit: vi.fn(),
       branchFromUserMessage: vi.fn(),
+      isAgentConversation: vi.fn((conversation) => conversation?.conversationType === 'agent'),
     },
   };
 }
@@ -138,6 +140,36 @@ describe('shortcut-events', () => {
     const handled = handleFocusedMessageShortcut(event);
 
     expect(handled).toBe(true);
+    expect(harness.deps.handleMessageCopyAction).toHaveBeenCalledWith('model-1', 'response');
+  });
+
+  test('blocks mutation shortcuts inside agent conversations while leaving copy available', () => {
+    const harness = createHarness();
+    harness.activeConversation.conversationType = 'agent';
+    const { handleFocusedMessageShortcut } = createShortcutHandlers(harness.deps);
+    const messageRow = harness.document.querySelector('.message-row');
+    messageRow.focus();
+
+    const regenerateEvent = new harness.dom.window.KeyboardEvent('keydown', {
+      key: 'r',
+      bubbles: true,
+    });
+    Object.defineProperty(regenerateEvent, 'target', {
+      value: messageRow,
+    });
+
+    expect(handleFocusedMessageShortcut(regenerateEvent)).toBe(false);
+    expect(harness.deps.regenerateFromMessage).not.toHaveBeenCalled();
+
+    const copyEvent = new harness.dom.window.KeyboardEvent('keydown', {
+      key: 'c',
+      bubbles: true,
+    });
+    Object.defineProperty(copyEvent, 'target', {
+      value: messageRow,
+    });
+
+    expect(handleFocusedMessageShortcut(copyEvent)).toBe(true);
     expect(harness.deps.handleMessageCopyAction).toHaveBeenCalledWith('model-1', 'response');
   });
 });

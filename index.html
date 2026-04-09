@@ -69,6 +69,17 @@
                 <span class="visually-hidden">New conversation</span>
               </button>
               <button
+                id="newAgentBtn"
+                type="button"
+                class="btn btn-outline-secondary square-icon-button top-bar-new-conversation"
+                aria-label="New agent"
+                data-bs-toggle="tooltip"
+                data-bs-title="New agent"
+              >
+                <i class="bi bi-person-fill-add" aria-hidden="true"></i>
+                <span class="visually-hidden">New agent</span>
+              </button>
+              <button
                 type="button"
                 class="btn btn-outline-secondary d-md-none"
                 data-bs-toggle="offcanvas"
@@ -111,6 +122,22 @@
               </button>
             </div>
             <div class="top-bar-actions">
+              <button
+                id="pauseAgentBtn"
+                type="button"
+                class="btn btn-outline-secondary top-bar-agent-toggle d-none"
+                aria-label="Pause agent"
+                aria-pressed="false"
+                data-bs-toggle="tooltip"
+                data-bs-title="Pause agent"
+              >
+                <i
+                  class="bi bi-pause-fill"
+                  aria-hidden="true"
+                  data-agent-toggle-icon="true"
+                ></i>
+                <span id="pauseAgentBtnLabel" class="pause-agent-btn-label">Pause Agent</span>
+              </button>
               <button
                 id="openKeyboardShortcutsButton"
                 type="button"
@@ -250,6 +277,33 @@
                         <i class="bi bi-card-checklist" aria-hidden="true"></i>
                         <span class="visually-hidden">Edit custom context for this chat</span>
                       </button>
+                    </div>
+                    <p id="preChatLead" class="pre-chat-lead mb-0">
+                      Choose a model, then send your first message below to begin.
+                    </p>
+                    <div id="preChatAgentFields" class="pre-chat-agent-fields d-none">
+                      <div class="pre-chat-agent-field">
+                        <label for="agentNameInput" class="form-label">Agent name</label>
+                        <input
+                          id="agentNameInput"
+                          type="text"
+                          class="form-control"
+                          maxlength="64"
+                          autocomplete="off"
+                          placeholder="Research Partner"
+                        />
+                      </div>
+                      <div class="pre-chat-agent-field">
+                        <label for="agentPersonalityInput" class="form-label">
+                          Personality description
+                        </label>
+                        <textarea
+                          id="agentPersonalityInput"
+                          class="form-control"
+                          rows="4"
+                          placeholder="Curious, reflective, concise, and proactive about useful follow-ups."
+                        ></textarea>
+                      </div>
                     </div>
                     <div class="pre-chat-model-picker">
                       <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">

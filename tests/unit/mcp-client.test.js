@@ -370,11 +370,6 @@ describe('mcp client', () => {
     );
 
     expect(result).toEqual({
-      status: 'success',
-      server: 'docs-server',
-      command: 'search_docs',
-      body: 'Search results.',
-      structuredContent: null,
       content: [
         {
           type: 'text',

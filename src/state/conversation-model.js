@@ -35,6 +35,11 @@ function normalizeTimestamp(value) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
 }
 
+export const CONVERSATION_TYPES = Object.freeze({
+  CHAT: 'chat',
+  AGENT: 'agent',
+});
+
 function normalizeArtifactRef(rawRef) {
   if (!rawRef || typeof rawRef !== 'object') {
     return null;
@@ -576,6 +581,110 @@ export function normalizeConversationThinkingEnabled(value, defaultValue = true)
   return defaultValue !== false;
 }
 
+export function normalizeConversationType(value) {
+  return value === CONVERSATION_TYPES.AGENT
+    ? CONVERSATION_TYPES.AGENT
+    : CONVERSATION_TYPES.CHAT;
+}
+
+function normalizeAgentName(value, fallback = '') {
+  const normalizedName = normalizeConversationName(value);
+  if (normalizedName) {
+    return normalizedName;
+  }
+  return normalizeConversationName(fallback);
+}
+
+function normalizeAgentDescription(value) {
+  return normalizeSystemPrompt(value);
+}
+
+function normalizeAgentState(agent, conversationName, startedAt) {
+  if (!agent || typeof agent !== 'object') {
+    return {
+      name: normalizeAgentName('', conversationName),
+      description: '',
+      paused: false,
+      lastActivityAt: normalizeTimestamp(startedAt) || Date.now(),
+      lastFollowUpAt: null,
+      nextFollowUpAt: null,
+    };
+  }
+  const normalizedStartedAt = normalizeTimestamp(startedAt) || Date.now();
+  return {
+    name: normalizeAgentName(agent.name, conversationName),
+    description: normalizeAgentDescription(agent.description),
+    paused: agent.paused === true,
+    lastActivityAt: normalizeTimestamp(agent.lastActivityAt) || normalizedStartedAt,
+    lastFollowUpAt: normalizeTimestamp(agent.lastFollowUpAt),
+    nextFollowUpAt: normalizeTimestamp(agent.nextFollowUpAt),
+  };
+}
+
+export function isAgentConversation(conversation) {
+  return normalizeConversationType(conversation?.conversationType) === CONVERSATION_TYPES.AGENT;
+}
+
+function formatArtifactInventoryLines(artifactRefs) {
+  const normalizedRefs = Array.isArray(artifactRefs) ? artifactRefs : [];
+  const lines = [];
+  const seenKeys = new Set();
+  normalizedRefs.forEach((ref) => {
+    if (!ref || typeof ref !== 'object') {
+      return;
+    }
+    const filename = typeof ref.filename === 'string' ? ref.filename.trim() : '';
+    const workspacePath = typeof ref.workspacePath === 'string' ? ref.workspacePath.trim() : '';
+    if (!filename && !workspacePath) {
+      return;
+    }
+    const key = `${filename}::${workspacePath}`;
+    if (seenKeys.has(key)) {
+      return;
+    }
+    seenKeys.add(key);
+    lines.push(
+      workspacePath && filename ? `- ${filename} (${workspacePath})` : `- ${filename || workspacePath}`
+    );
+  });
+  return lines;
+}
+
+function buildAgentIdentityPrompt(conversation) {
+  if (!isAgentConversation(conversation)) {
+    return '';
+  }
+  const agentName = normalizeAgentName(conversation?.agent?.name, conversation?.name || 'Agent');
+  const agentDescription = normalizeAgentDescription(conversation?.agent?.description);
+  const parts = [
+    'Agent identity:',
+    `- Your name is ${agentName || 'Agent'}.`,
+    '- Stay consistent with this identity while still following the rest of the system instructions.',
+  ];
+  if (agentDescription) {
+    parts.push('- Personality and behavior:');
+    parts.push(agentDescription);
+  }
+  return parts.join('\n');
+}
+
+function buildSummarySystemPromptSection(summaryMessage) {
+  if (!summaryMessage || summaryMessage.role !== 'summary') {
+    return '';
+  }
+  const summaryText = normalizeSystemPrompt(summaryMessage.summary || summaryMessage.text);
+  if (!summaryText) {
+    return '';
+  }
+  const parts = ['Conversation memory summary:', summaryText];
+  const artifactLines = formatArtifactInventoryLines(summaryMessage.artifactRefs);
+  if (artifactLines.length) {
+    parts.push('Files carried forward from earlier conversation context:');
+    parts.push(artifactLines.join('\n'));
+  }
+  return parts.join('\n\n');
+}
+
 function joinSystemPromptSections(parts) {
   return parts
     .map((part) => normalizeSystemPrompt(part))
@@ -586,8 +695,14 @@ function joinSystemPromptSections(parts) {
 export function getEffectiveConversationSystemPrompt(conversation, { suffix = '' } = {}) {
   const capturedDefaultPrompt = normalizeSystemPrompt(conversation?.systemPrompt);
   const conversationPrompt = normalizeSystemPrompt(conversation?.conversationSystemPrompt);
-  const shouldAppendPrompt = normalizeConversationPromptMode(conversation?.appendConversationSystemPrompt);
+  const shouldAppendPrompt = normalizeConversationPromptMode(
+    conversation?.appendConversationSystemPrompt
+  );
+  const agentPrompt = buildAgentIdentityPrompt(conversation);
   const basePrompt = (() => {
+    if (isAgentConversation(conversation)) {
+      return joinSystemPromptSections([capturedDefaultPrompt, agentPrompt]);
+    }
     if (!conversationPrompt) {
       return capturedDefaultPrompt;
     }
@@ -627,9 +742,18 @@ function buildToolMetadata(toolContext) {
  *   name?: string;
  *   untitledPrefix?: string;
  *   modelId?: string;
+ *   conversationType?: string;
  *   systemPrompt?: string;
  *   languagePreference?: string;
  *   thinkingEnabled?: boolean;
+ *   agent?: {
+ *     name?: string;
+ *     description?: string;
+ *     paused?: boolean;
+ *     lastActivityAt?: number;
+ *     lastFollowUpAt?: number;
+ *     nextFollowUpAt?: number;
+ *   } | null;
  *   startedAt?: number;
  * }} [options]
  */
@@ -639,24 +763,34 @@ export function createConversation(options) {
     name,
     untitledPrefix = 'New Conversation',
     modelId = '',
+    conversationType = CONVERSATION_TYPES.CHAT,
     systemPrompt = '',
     languagePreference = 'auto',
     thinkingEnabled = true,
+    agent = null,
     startedAt = Date.now(),
   } = options || {};
   if (typeof id !== 'string' || !id.trim()) {
     throw new Error('Conversation id is required.');
   }
+  const normalizedConversationType = normalizeConversationType(conversationType);
+  const normalizedName = normalizeConversationName(name || untitledPrefix) || untitledPrefix;
+  const normalizedStartedAt = normalizeTimestamp(startedAt) || Date.now();
   return {
     id: id.trim(),
-    name: name || untitledPrefix,
+    name: normalizedName,
     modelId: typeof modelId === 'string' ? modelId.trim() : '',
+    conversationType: normalizedConversationType,
     systemPrompt: normalizeSystemPrompt(systemPrompt),
     conversationSystemPrompt: '',
     appendConversationSystemPrompt: true,
     languagePreference: normalizeConversationLanguagePreference(languagePreference),
     thinkingEnabled: normalizeConversationThinkingEnabled(thinkingEnabled),
-    startedAt: normalizeTimestamp(startedAt) || Date.now(),
+    agent:
+      normalizedConversationType === CONVERSATION_TYPES.AGENT
+        ? normalizeAgentState(agent, normalizedName, normalizedStartedAt)
+        : null,
+    startedAt: normalizedStartedAt,
     messageNodes: [],
     messageNodeCounter: 0,
     activeLeafMessageId: null,
@@ -740,6 +874,7 @@ function getVisibleMessageRoleSequence(conversation, message) {
   let userPromptCount = 0;
   let modelResponseCount = 0;
   let toolResultCount = 0;
+  let summaryCount = 0;
   const visiblePath = getConversationPathMessages(conversation);
   for (const pathMessage of visiblePath) {
     if (pathMessage.role === 'user') {
@@ -756,6 +891,11 @@ function getVisibleMessageRoleSequence(conversation, message) {
       toolResultCount += 1;
       if (pathMessage.id === message.id) {
         return toolResultCount;
+      }
+    } else if (pathMessage.role === 'summary') {
+      summaryCount += 1;
+      if (pathMessage.id === message.id) {
+        return summaryCount;
       }
     }
   }
@@ -805,7 +945,7 @@ export function deriveConversationMenuCapabilities(conversation) {
   );
   return {
     canEditName: Boolean(conversation?.hasGeneratedName),
-    canEditPrompt: Boolean(conversation),
+    canEditPrompt: Boolean(conversation) && !isAgentConversation(conversation),
     canDownload: hasCompletedGeneration,
   };
 }
@@ -876,10 +1016,12 @@ export function getConversationCardHeading(conversation, message) {
   const baseLabel =
     message.role === 'user'
       ? 'User Prompt'
+      : message.role === 'summary'
+        ? 'Conversation Summary'
       : message.role === 'tool'
         ? 'Tool Result'
         : 'Model Response';
-  if (message.role === 'tool') {
+  if (message.role === 'tool' || message.role === 'summary') {
     const sequence = Math.max(getVisibleMessageRoleSequence(conversation, message), 1);
     return `${baseLabel} ${sequence}`;
   }
@@ -896,7 +1038,14 @@ export function getConversationCardHeading(conversation, message) {
 }
 
 export function addMessageToConversation(conversation, role, text, options = {}) {
-  const normalizedRole = role === 'user' ? 'user' : role === 'tool' ? 'tool' : 'model';
+  const normalizedRole =
+    role === 'user'
+      ? 'user'
+      : role === 'tool'
+        ? 'tool'
+        : role === 'summary'
+          ? 'summary'
+          : 'model';
   const normalizedText = String(text || '');
   const hasExplicitParentId = Object.prototype.hasOwnProperty.call(options, 'parentId');
   const requestedParentId = hasExplicitParentId
@@ -909,7 +1058,14 @@ export function addMessageToConversation(conversation, role, text, options = {})
   const message = {
     id: `${conversation.id}-node-${++conversation.messageNodeCounter}`,
     role: normalizedRole,
-    speaker: normalizedRole === 'user' ? 'User' : normalizedRole === 'tool' ? 'Tool' : 'Model',
+    speaker:
+      normalizedRole === 'user'
+        ? 'User'
+        : normalizedRole === 'tool'
+          ? 'Tool'
+          : normalizedRole === 'summary'
+            ? 'Summary'
+            : 'Model',
     text: normalizedText,
     createdAt: normalizeTimestamp(options.createdAt) || Date.now(),
     parentId: parentId || null,
@@ -955,6 +1111,15 @@ export function addMessageToConversation(conversation, role, text, options = {})
         : undefined;
     message.toolResult = normalizedText;
     message.isToolResultComplete = true;
+    message.content = {
+      parts: normalizeMessageContentParts(options.contentParts, normalizedText),
+      llmRepresentation: normalizedText,
+    };
+    message.artifactRefs = normalizeMessageArtifactRefs(options.artifactRefs);
+  }
+  if (normalizedRole === 'summary') {
+    message.summary = normalizedText;
+    message.isSummaryNode = true;
     message.content = {
       parts: normalizeMessageContentParts(options.contentParts, normalizedText),
       llmRepresentation: normalizedText,
@@ -1068,7 +1233,16 @@ export function buildConversationMessages(messages, systemPrompt = '') {
     });
   }
   messages.forEach((message) => {
-    if (!message || (message.role !== 'user' && message.role !== 'model' && message.role !== 'tool')) {
+    if (
+      !message ||
+      (message.role !== 'user' &&
+        message.role !== 'model' &&
+        message.role !== 'tool' &&
+        message.role !== 'summary')
+    ) {
+      return;
+    }
+    if (message.role === 'summary') {
       return;
     }
     const content = buildMessagePromptContent(message);
@@ -1094,9 +1268,21 @@ export function buildPromptForConversationLeaf(
   leafMessageId = conversation?.activeLeafMessageId,
   { systemPromptSuffix = '' } = {},
 ) {
+  const pathMessages = getConversationPathMessages(conversation, leafMessageId);
+  const lastSummaryIndex = pathMessages.reduce(
+    (latestIndex, message, index) => (message?.role === 'summary' ? index : latestIndex),
+    -1
+  );
+  const summaryMessage = lastSummaryIndex >= 0 ? pathMessages[lastSummaryIndex] : null;
+  const promptMessages =
+    lastSummaryIndex >= 0 ? pathMessages.slice(lastSummaryIndex + 1) : pathMessages;
+  const combinedSuffix = [buildSummarySystemPromptSection(summaryMessage), systemPromptSuffix]
+    .map((part) => normalizeSystemPrompt(part))
+    .filter(Boolean)
+    .join('\n\n');
   return buildConversationMessages(
-    getConversationPathMessages(conversation, leafMessageId),
-    getEffectiveConversationSystemPrompt(conversation, { suffix: systemPromptSuffix }),
+    promptMessages,
+    getEffectiveConversationSystemPrompt(conversation, { suffix: combinedSuffix }),
   );
 }
 
@@ -1162,7 +1348,13 @@ export function buildConversationDownloadPayload(
 ) {
   const startedAt = normalizeTimestamp(conversation?.startedAt);
   const exchanges = getConversationPathMessages(conversation)
-    .filter((message) => message?.role === 'user' || message?.role === 'model' || message?.role === 'tool')
+    .filter(
+      (message) =>
+        message?.role === 'user' ||
+        message?.role === 'model' ||
+        message?.role === 'tool' ||
+        message?.role === 'summary'
+    )
     .map((message, index) => {
       const exchangeNumber = index + 1;
       if (message.role === 'user') {
@@ -1201,6 +1393,23 @@ export function buildConversationDownloadPayload(
             message.toolResultData && typeof message.toolResultData === 'object'
               ? message.toolResultData
               : undefined,
+        };
+      }
+      if (message.role === 'summary') {
+        const timestamp = toIsoTimestamp(message.createdAt);
+        const timestampMs = normalizeTimestamp(message.createdAt);
+        return {
+          heading: `Conversation summary ${exchangeNumber}`,
+          role: message.role,
+          event: 'summary',
+          timestamp,
+          timestampMs,
+          createdAt: timestamp,
+          createdAtMs: timestampMs,
+          date: formatExportDate(timestamp),
+          time: formatExportTime(timestamp),
+          text: String(message.summary || message.text || ''),
+          artifactRefs: normalizeMessageArtifactRefs(message.artifactRefs),
         };
       }
       const timestamp = toIsoTimestamp(message.createdAt);
@@ -1312,6 +1521,16 @@ export function buildConversationDownloadMarkdown(payload) {
     if (exchange?.role === 'model' && Array.isArray(exchange.toolCalls) && exchange.toolCalls.length) {
       lines.push('');
       lines.push(`Tool Calls: ${JSON.stringify(exchange.toolCalls)}`);
+    }
+    if (exchange?.role === 'summary') {
+      const summaryFiles = Array.isArray(exchange.artifactRefs)
+        ? formatArtifactInventoryLines(exchange.artifactRefs)
+        : [];
+      if (summaryFiles.length) {
+        lines.push('');
+        lines.push('Files carried forward:');
+        lines.push(...summaryFiles);
+      }
     }
     lines.push('');
     lines.push(toMarkdownBlockquote(exchange?.text || ''));

@@ -8,6 +8,7 @@ export function bindShellEvents({
   startConversationButton,
   messageInput,
   newConversationBtn,
+  newAgentBtn,
   isGeneratingResponse,
   setChatWorkspaceStarted,
   setPreparingNewConversation,
@@ -15,7 +16,9 @@ export function bindShellEvents({
   clearUserMessageEditSession,
   setChatTitleEditing,
   clearPendingComposerAttachments,
-  resetPendingConversationModelPreferences,
+  clearPendingAgentDraft = () => {},
+  preparePendingConversationDraft = (_conversationType = 'chat') => {},
+  resetPendingConversationModelPreferences: _resetPendingConversationModelPreferences,
   renderConversationList,
   renderTranscript,
   syncConversationLanguageAndThinkingControls,
@@ -106,12 +109,34 @@ export function bindShellEvents({
       setChatWorkspaceStarted(appState, true);
       setPreparingNewConversation(appState, true);
       appState.activeConversationId = null;
-      appState.pendingConversationDraftId = '';
-      appState.pendingConversationSystemPrompt = '';
-      appState.pendingAppendConversationSystemPrompt = true;
-      if (typeof resetPendingConversationModelPreferences === 'function') {
-        resetPendingConversationModelPreferences();
+      preparePendingConversationDraft('chat');
+      clearUserMessageEditSession();
+      setChatTitleEditing(appState, false);
+      clearPendingComposerAttachments();
+      updateWelcomePanelVisibility({ replaceRoute: false });
+      renderConversationList();
+      renderTranscript();
+      if (typeof syncConversationLanguageAndThinkingControls === 'function') {
+        syncConversationLanguageAndThinkingControls(null);
       }
+      updateChatTitle();
+      queueConversationStateSave();
+      if (messageInput instanceof HTMLTextAreaElement) {
+        messageInput.focus();
+      }
+    });
+  }
+
+  if (newAgentBtn) {
+    newAgentBtn.addEventListener('click', () => {
+      if (isGeneratingResponse(appState)) {
+        return;
+      }
+      setChatWorkspaceStarted(appState, true);
+      setPreparingNewConversation(appState, true);
+      appState.activeConversationId = null;
+      clearPendingAgentDraft();
+      preparePendingConversationDraft('agent');
       clearUserMessageEditSession();
       setChatTitleEditing(appState, false);
       clearPendingComposerAttachments();

@@ -42,6 +42,8 @@ export function bindComposerEvents({
   setModelLoadFeedbackContext = (_context = 'selected-model') => {},
   syncRouteToState = (_options = {}) => {},
   buildUserMessageAttachmentPayload,
+  beforeStartGeneration = (_conversation, _userMessage) => true,
+  onUserMessageAdded = (_conversation, _userMessage) => {},
   addMessageToConversation,
   addMessageElement,
   buildPromptForActiveConversation,
@@ -480,11 +482,20 @@ export function bindComposerEvents({
       ],
       artifactRefs: attachmentPayload.artifactRefs,
     });
+    onUserMessageAdded(activeConversation, userMessage);
     activeConversation.lastSpokenLeafMessageId = userMessage.id;
     addMessageElement(userMessage);
     messageInput.value = '';
     clearPendingComposerAttachments();
     queueConversationStateSave();
+    const beforeStartGenerationResult = beforeStartGeneration(activeConversation, userMessage);
+    const shouldContinue =
+      beforeStartGenerationResult instanceof Promise
+        ? await beforeStartGenerationResult
+        : beforeStartGenerationResult;
+    if (shouldContinue === false) {
+      return;
+    }
     startModelGeneration(activeConversation, buildPromptForActiveConversation(activeConversation), {
       updateLastSpokenOnComplete: true,
     });
