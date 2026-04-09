@@ -13,7 +13,6 @@ import {
 const LLAMA_3B_MODEL_ID = 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
 const LLAMA_1B_MODEL_ID = 'onnx-community/Llama-3.2-1B-Instruct-ONNX';
 const QWEN_2B_MODEL_ID = 'onnx-community/Qwen3.5-2B-ONNX';
-const QWEN_17B_MODEL_ID = 'onnx-community/Qwen3-1.7B-ONNX';
 const GEMMA_4_MODEL_ID = 'litert-community/gemma-4-E4B-it-litert-lm';
 
 describe('model-settings availability', () => {
@@ -83,7 +82,7 @@ describe('model-settings availability', () => {
   });
 
   test('only exposes the current visible catalog', () => {
-    expect(MODEL_OPTIONS).toHaveLength(5);
+    expect(MODEL_OPTIONS).toHaveLength(4);
     expect(MODEL_OPTIONS_BY_ID.get('LiquidAI/LFM2.5-350M-ONNX')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('LiquidAI/LFM2.5-1.2B-Instruct-ONNX')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('LiquidAI/LFM2.5-1.2B-Thinking-ONNX')).toBeUndefined();
@@ -93,7 +92,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_2B_MODEL_ID)?.hidden).toBe(false);
     expect(MODEL_OPTIONS.some((model) => model.id === QWEN_2B_MODEL_ID)).toBe(true);
-    expect(MODEL_OPTIONS.some((model) => model.id === QWEN_17B_MODEL_ID)).toBe(true);
+    expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Qwen3-1.7B-ONNX')).toBeUndefined();
   });
 
   test('keeps the ONNX Qwen model available on both cpu and webgpu paths', () => {
@@ -115,24 +114,6 @@ describe('model-settings availability', () => {
       available: true,
       reason: '',
     });
-    expect(
-      getModelAvailability(QWEN_17B_MODEL_ID, {
-        backendPreference: 'cpu',
-        webGpuAvailable: false,
-      })
-    ).toEqual({
-      available: true,
-      reason: '',
-    });
-    expect(
-      getModelAvailability(QWEN_17B_MODEL_ID, {
-        backendPreference: 'webgpu',
-        webGpuAvailable: true,
-      })
-    ).toEqual({
-      available: true,
-      reason: '',
-    });
   });
 
   test('resolves mode-specific runtime dtypes from config', () => {
@@ -144,12 +125,6 @@ describe('model-settings availability', () => {
     ).toBe('q4');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime, 'cpu')
-    ).toBe('uint8');
-    expect(
-      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.runtime, 'webgpu')
-    ).toBe('q4');
-    expect(
-      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.runtime, 'cpu')
     ).toBe('uint8');
   });
 
@@ -201,14 +176,6 @@ describe('model-settings availability', () => {
       audioInput: false,
       videoInput: false,
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.features).toMatchObject({
-      streaming: true,
-      thinking: true,
-      toolCalling: true,
-      imageInput: false,
-      audioInput: false,
-      videoInput: false,
-    });
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.engine).toEqual({
       type: 'transformers-js',
     });
@@ -248,16 +215,9 @@ describe('model-settings availability', () => {
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.runtime).toMatchObject({
-      dtypes: {
-        webgpu: 'q4',
-        cpu: 'uint8',
-      },
-    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_2B_MODEL_ID)?.inputLimits).toMatchObject({
       maxImageInputs: 1,
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.inputLimits).toMatchObject({});
     expect(
       MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime?.multimodalGeneration
     ).toBeUndefined();
@@ -276,14 +236,7 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_2B_MODEL_ID)?.toolCalling).toEqual({
       format: 'xml-tool-call',
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.toolCalling).toEqual({
-      format: 'xml-tool-call',
-    });
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_2B_MODEL_ID)?.thinkingControl).toEqual({
-      defaultEnabled: false,
-      runtimeParameter: 'enable_thinking',
-    });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.thinkingControl).toEqual({
       defaultEnabled: false,
       runtimeParameter: 'enable_thinking',
     });
@@ -300,10 +253,6 @@ describe('model-settings availability', () => {
       open: '<think>',
       close: '</think>',
     });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)?.thinkingTags).toEqual({
-      open: '<think>',
-      close: '</think>',
-    });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.toolCalling).toEqual({
       format: 'gemma-special-token-call',
     });
@@ -314,17 +263,6 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(QWEN_2B_MODEL_ID)).toMatchObject({
       displayName: 'Qwen3.5 2B Instruct',
       repositoryUrl: 'https://huggingface.co/onnx-community/Qwen3.5-2B-ONNX',
-    });
-    expect(MODEL_OPTIONS_BY_ID.get(QWEN_17B_MODEL_ID)).toMatchObject({
-      displayName: 'Qwen3 1.7B Instruct',
-      repositoryUrl: 'https://huggingface.co/onnx-community/Qwen3-1.7B-ONNX',
-      generation: {
-        defaultTemperature: 0.7,
-        defaultTopK: 20,
-        defaultTopP: 0.8,
-        maxContextTokens: 32768,
-        maxOutputTokens: 32768,
-      },
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)).toMatchObject({
       displayName: 'Gemma 4 E4B',

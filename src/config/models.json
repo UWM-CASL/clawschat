@@ -228,64 +228,6 @@
       "inputLimits": {
         "maxImageInputs": 1
       }
-    },
-    {
-      "id": "onnx-community/Qwen3-1.7B-ONNX",
-      "label": "onnx-community/Qwen3-1.7B-ONNX",
-      "displayName": "Qwen3 1.7B Instruct",
-      "engine": {
-        "type": "transformers-js"
-      },
-      "languageSupport": {
-        "tags": [
-          { "code": "en", "name": "English" },
-          { "code": "zh", "name": "Chinese" },
-          { "code": "es", "name": "Spanish" },
-          { "code": "fr", "name": "French" },
-          { "code": "de", "name": "German" },
-          { "code": "ja", "name": "Japanese" }
-        ],
-        "hasMore": true,
-        "sourceUrl": "https://huggingface.co/Qwen/Qwen3-1.7B"
-      },
-      "repositoryUrl": "https://huggingface.co/onnx-community/Qwen3-1.7B-ONNX",
-      "runtime": {
-        "dtypes": {
-          "webgpu": "q4",
-          "cpu": "uint8"
-        }
-      },
-      "toolCalling": {
-        "format": "xml-tool-call"
-      },
-      "thinkingControl": {
-        "defaultEnabled": false,
-        "runtimeParameter": "enable_thinking"
-      },
-      "thinkingTags": {
-        "open": "<think>",
-        "close": "</think>"
-      },
-      "generation": {
-        "defaultMaxOutputTokens": 1024,
-        "maxOutputTokens": 32768,
-        "defaultMaxContextTokens": 8192,
-        "maxContextTokens": 32768,
-        "minTemperature": 0.1,
-        "maxTemperature": 2.0,
-        "defaultTemperature": 0.7,
-        "defaultTopK": 20,
-        "defaultTopP": 0.8,
-        "defaultRepetitionPenalty": 1.0
-      },
-      "features": {
-        "streaming": true,
-        "thinking": true,
-        "toolCalling": true,
-        "imageInput": false,
-        "audioInput": false,
-        "videoInput": false
-      }
     }
   ],
   "legacyAliases": {

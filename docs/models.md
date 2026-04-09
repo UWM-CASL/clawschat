@@ -270,12 +270,6 @@ Current models in Settings:
   - Uses `thinkingControl` with runtime `enable_thinking`.
   - Uses Qwen's `<think>` / `</think>` reasoning tags plus the XML tool-call format already supported elsewhere in the app.
   - Keeps image input enabled in the app with `inputLimits.maxImageInputs = 1`.
-- `onnx-community/Qwen3-1.7B-ONNX`
-  - Uses the `transformers-js` engine.
-  - Uses runtime dtypes `{ webgpu: q4, cpu: uint8 }`.
-  - Uses `thinkingControl` with runtime `enable_thinking`.
-  - Uses Qwen3's `<think>` / `</think>` reasoning tags plus the XML tool-call format already supported elsewhere in the app.
-  - Stays text-only in the current app path.
 - `litert-community/gemma-4-E4B-it-litert-lm`
   - Uses the `mediapipe-genai` engine with a pinned `gemma-4-E4B-it-web.task` asset URL.
   - Requires WebGPU and currently exposes text-only generation in this app.
@@ -315,5 +309,4 @@ Per-model limits and defaults:
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`: runtime dtypes `{ webgpu: q4f16, cpu: uint8 }`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}`, no thinking tags
 - All listed Llama entries enable `useExternalDataFormat: true` where required for `.onnx_data` loading.
 - `onnx-community/Qwen3.5-2B-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `onnx-community/Qwen3-1.7B-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4, cpu: uint8 }`, max context `32768`, default context `8192`, default temperature `0.7`, default top-k `20`, default top-p `0.8`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
 - `litert-community/gemma-4-E4B-it-litert-lm`: engine `mediapipe-genai`, `requiresWebGpu: true`, pinned `modelAssetPath` to `gemma-4-E4B-it-web.task`, `promptFormat: "gemma-turns"`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
