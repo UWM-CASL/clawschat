@@ -181,7 +181,7 @@ Student-facing browser chat UI with local model inference.
 - The fetch-backed `web_lookup` page/search tool is exposed to models when enabled in `Settings -> Tools`.
   - `web_lookup` accepts one `input` string and returns a compact `{"status","body","message"}` envelope.
   - If `input` is a direct `https` URL, `web_lookup` returns MIME type, title, and a summary excerpt in markdown inside `body`.
-  - If `input` is a search query, `web_lookup` opens a right-side lightweight DuckDuckGo HTML results panel in a portrait 9:16 phone-like frame for that query, then attempts an in-app DuckDuckGo fetch and returns concise search results in `body`.
+  - If `input` is a search query, `web_lookup` fetches DuckDuckGo result data directly through the browser/proxy-aware fetch helper and returns concise search results in `body`.
   - Failed `web_lookup` responses use `status: "failed"` plus retry guidance in `message`.
   - `web_lookup`, shell `curl`, reverse-geocoding fetches, and MCP HTTP requests share the same browser fetch helper, which can retry through the validated proxy setting only after a likely CORS block.
   - The shell tool keeps a conversation-local current working directory, defaults it to `/workspace`, and resolves relative paths from that pointer.

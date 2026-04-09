@@ -379,11 +379,6 @@ const settingsPage = document.getElementById('settingsPage');
 const terminalPanel = document.getElementById('terminalPanel');
 const terminalHost = document.getElementById('terminalHost');
 const closeTerminalButton = document.getElementById('closeTerminalButton');
-const webLookupPanel = document.getElementById('webLookupPanel');
-const webLookupFrame = document.getElementById('webLookupFrame');
-const webLookupPanelTitle = document.getElementById('webLookupPanelTitle');
-const webLookupPanelDescription = document.getElementById('webLookupPanelDescription');
-const closeWebLookupPanelButton = document.getElementById('closeWebLookupPanelButton');
 const settingsTabContainer = document.querySelector('.settings-tabs');
 const settingsTabButtons = settingsTabContainer
   ? settingsTabContainer.querySelectorAll('[data-settings-tab]')
@@ -2432,22 +2427,14 @@ const transcriptView = createTranscriptView({
 
 const {
   handleCloseTerminalPanel,
-  handleCloseWebLookupPanel,
   handleShellCommandComplete,
   handleShellCommandStart,
-  handleWebLookupSearchComplete,
-  handleWebLookupSearchStart,
   renderWorkspaceSidePanels,
 } = createWorkspaceSidePanelsController({
   appState,
   documentRef: document,
-  windowRef: window,
   terminalPanel,
   terminalHost,
-  webLookupPanel,
-  webLookupFrame,
-  webLookupPanelTitle,
-  webLookupPanelDescription,
   getActiveConversation,
   getConversationPathMessages,
   findConversationById,
@@ -2462,10 +2449,6 @@ const {
 
 if (closeTerminalButton instanceof HTMLButtonElement) {
   closeTerminalButton.addEventListener('click', handleCloseTerminalPanel);
-}
-
-if (closeWebLookupPanelButton instanceof HTMLButtonElement) {
-  closeWebLookupPanelButton.addEventListener('click', handleCloseWebLookupPanel);
 }
 
 function renderConversationList() {
@@ -4179,8 +4162,6 @@ const appController = createAppController({
       requestToolConsent,
       onShellCommandStart: handleShellCommandStart,
       onShellCommandComplete: handleShellCommandComplete,
-      onWebLookupSearchStart: handleWebLookupSearchStart,
-      onWebLookupSearchComplete: handleWebLookupSearchComplete,
       fetchRef: corsAwareFetch,
       onDebug: appendDebug,
       generationConfig: appState.activeGenerationConfig,

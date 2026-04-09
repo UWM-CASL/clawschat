@@ -4421,7 +4421,7 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
-  test('supports web_lookup search queries and opens the search panel before fetching results', async () => {
+  test('supports web_lookup search queries through direct fetch extraction', async () => {
     const events = [];
     const fetchRef = vi.fn(async (url) => {
       events.push(`fetch:${url}`);
@@ -4449,13 +4449,6 @@ describe('tool-calling prompt builder', () => {
       }
       throw new Error(`Unexpected URL: ${url}`);
     });
-    const onWebLookupSearchStart = vi.fn(async ({ searchUrl }) => {
-      events.push(`panel:${searchUrl}`);
-    });
-    const onWebLookupSearchComplete = vi.fn(({ resultCount }) => {
-      events.push(`complete:${resultCount}`);
-    });
-
     const result = await executeToolCall(
       {
         name: 'web_lookup',
@@ -4465,19 +4458,10 @@ describe('tool-calling prompt builder', () => {
       },
       {
         fetchRef,
-        onWebLookupSearchStart,
-        onWebLookupSearchComplete,
       }
     );
 
-    expect(onWebLookupSearchStart).toHaveBeenCalledWith({
-      conversationId: null,
-      query: 'latest news about europa',
-      panelUrl: 'https://duckduckgo.com/html/?q=latest+news+about+europa',
-      searchUrl: 'https://duckduckgo.com/?q=latest+news+about+europa&ia=web',
-    });
-    expect(events[0]).toBe('panel:https://duckduckgo.com/?q=latest+news+about+europa&ia=web');
-    expect(events[1]).toBe('fetch:https://duckduckgo.com/?q=latest+news+about+europa&ia=web');
+    expect(events[0]).toBe('fetch:https://duckduckgo.com/?q=latest+news+about+europa&ia=web');
     expect(result.result).toEqual({
       status: 'successful',
       body:
@@ -4489,13 +4473,6 @@ describe('tool-calling prompt builder', () => {
         '   Source: example.com\n' +
         '   Snippet: A short summary of the latest Europa update.',
       message: 'Use web_lookup again with one of the result URLs to read the page.',
-    });
-    expect(onWebLookupSearchComplete).toHaveBeenCalledWith({
-      conversationId: null,
-      query: 'latest news about europa',
-      panelUrl: 'https://duckduckgo.com/html/?q=latest+news+about+europa',
-      searchUrl: 'https://duckduckgo.com/?q=latest+news+about+europa&ia=web',
-      resultCount: 1,
     });
     expect(result.resultText).toBe(
       JSON.stringify({

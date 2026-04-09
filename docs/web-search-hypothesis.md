@@ -4,7 +4,7 @@ Status: design note only. Nothing in this document is implemented yet.
 
 ## Why this exists
 
-The current app can fetch and summarize a direct `https` URL through `web_lookup`, but it does not have a true search capability yet.
+The current app can fetch and summarize a direct `https` URL through `web_lookup`, and it can extract lightweight DuckDuckGo search results in-browser, but it still does not have a richer provider-style search capability.
 
 Any future search design still has to respect this repo's hard constraints:
 

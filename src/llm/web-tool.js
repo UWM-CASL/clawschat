@@ -395,12 +395,6 @@ function buildDuckDuckGoSearchPageUrl(query) {
   return url.toString();
 }
 
-function buildDuckDuckGoPanelUrl(query) {
-  const url = new URL(DDG_SEARCH_HTML_URL);
-  url.searchParams.set('q', query);
-  return url.toString();
-}
-
 function buildDuckDuckGoHtmlResultsUrl(query) {
   const url = new URL(DDG_SEARCH_HTML_URL);
   url.searchParams.set('q', query);
@@ -584,18 +578,6 @@ function getValidatedWebLookupArguments(argumentsValue = {}) {
 
 async function executeWebSearchLookup(query, runtimeContext = {}) {
   const searchPageUrl = buildDuckDuckGoSearchPageUrl(query);
-  const panelUrl = buildDuckDuckGoPanelUrl(query);
-  const conversationId =
-    typeof runtimeContext?.conversation?.id === 'string' ? runtimeContext.conversation.id : null;
-  if (typeof runtimeContext?.onWebLookupSearchStart === 'function') {
-    await runtimeContext.onWebLookupSearchStart({
-      conversationId,
-      query,
-      panelUrl,
-      searchUrl: searchPageUrl,
-    });
-  }
-
   const fetchRef = getFetchRef(runtimeContext);
   if (typeof fetchRef !== 'function') {
     return buildWebLookupFailure(
@@ -651,16 +633,6 @@ async function executeWebSearchLookup(query, runtimeContext = {}) {
 
   if (!results.length && searchFailure) {
     throw searchFailure;
-  }
-
-  if (typeof runtimeContext?.onWebLookupSearchComplete === 'function') {
-    await runtimeContext.onWebLookupSearchComplete({
-      conversationId,
-      query,
-      panelUrl,
-      searchUrl: searchPageUrl,
-      resultCount: results.length,
-    });
   }
 
   return {

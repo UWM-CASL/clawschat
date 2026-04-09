@@ -126,7 +126,6 @@ export function createAppState({
     terminalDismissedConversationIds: new Set(),
     pendingShellCommand: null,
     completedShellCommand: null,
-    webLookupPanelsByConversationId: new Map(),
     activeWorkspaceSidePanel: null,
   };
 }

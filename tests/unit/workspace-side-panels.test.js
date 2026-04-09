@@ -11,22 +11,12 @@ function createHarness({
     <body>
       <div id="terminalPanel"></div>
       <div id="terminalHost"></div>
-      <div id="webLookupPanel"></div>
-      <iframe id="webLookupFrame"></iframe>
-      <h2 id="webLookupPanelTitle"></h2>
-      <p id="webLookupPanelDescription"></p>
     </body>
   `);
   const document = dom.window.document;
   globalThis.document = document;
   globalThis.window = dom.window;
-  globalThis.HTMLElement = dom.window.HTMLElement;
-  globalThis.HTMLIFrameElement = dom.window.HTMLIFrameElement;
 
-  const browserView = {
-    renderSession: vi.fn(),
-    setVisible: vi.fn(),
-  };
   const terminalView = {
     dispose: vi.fn(),
     renderSession: vi.fn(),
@@ -38,7 +28,6 @@ function createHarness({
     completedShellCommand: null,
     terminalOpenConversationId: null,
     terminalDismissedConversationIds: new Set(),
-    webLookupPanelsByConversationId: new Map(),
     activeWorkspaceSidePanel: null,
   };
 
@@ -72,38 +61,16 @@ function createHarness({
   const loadTerminalView = vi.fn(async () => ({
     createTerminalView: () => terminalView,
   }));
-  const createBrowserViewRef = vi.fn(() => browserView);
 
   return {
     appState,
-    browserView,
     terminalView,
-    getConversationPathMessages,
     findConversationById,
-    isSettingsView,
-    isTerminalOpenForConversation,
-    hasDismissedTerminalForConversation,
-    openTerminalForConversation,
-    closeTerminal,
-    clearTerminalDismissal,
-    appendDebug,
-    loadTerminalView,
-    createBrowserViewRef,
     controller: createWorkspaceSidePanelsController({
       appState,
       documentRef: document,
-      windowRef: {
-        requestAnimationFrame(callback) {
-          callback(0);
-          return 1;
-        },
-      },
       terminalPanel: document.getElementById('terminalPanel'),
       terminalHost: document.getElementById('terminalHost'),
-      webLookupPanel: document.getElementById('webLookupPanel'),
-      webLookupFrame: document.getElementById('webLookupFrame'),
-      webLookupPanelTitle: document.getElementById('webLookupPanelTitle'),
-      webLookupPanelDescription: document.getElementById('webLookupPanelDescription'),
       getActiveConversation: vi.fn(() => activeConversation),
       getConversationPathMessages,
       findConversationById,
@@ -115,7 +82,6 @@ function createHarness({
       clearTerminalDismissal,
       appendDebug,
       loadTerminalView,
-      createBrowserViewRef,
     }),
   };
 }
@@ -170,37 +136,6 @@ describe('workspace-side-panels', () => {
       historyCount: 1,
       stdout: 'notes.md',
     });
-  });
-
-  test('opens and updates the web lookup side panel session', async () => {
-    const activeConversation = { id: 'conversation-1', activeLeafMessageId: 'leaf-1' };
-    const harness = createHarness({
-      activeConversation,
-      conversationsById: new Map([[activeConversation.id, activeConversation]]),
-    });
-
-    await harness.controller.handleWebLookupSearchStart({
-      query: 'duckduckgo bangs',
-      panelUrl: 'https://duckduckgo.com/html/?q=duckduckgo+bangs',
-    });
-
-    expect(harness.appState.activeWorkspaceSidePanel).toBe('web_lookup');
-    expect(harness.appState.webLookupPanelsByConversationId.get(activeConversation.id)).toMatchObject({
-      heading: 'DuckDuckGo search',
-      query: 'duckduckgo bangs',
-      searchUrl: 'https://duckduckgo.com/html/?q=duckduckgo+bangs',
-    });
-
-    harness.controller.handleWebLookupSearchComplete({
-      query: 'duckduckgo bangs',
-      resultCount: 3,
-    });
-
-    expect(harness.appState.webLookupPanelsByConversationId.get(activeConversation.id)?.description).toBe(
-      'The lightweight DuckDuckGo results view is open for "duckduckgo bangs". 3 results extracted in-app.'
-    );
-    expect(harness.browserView.setVisible).toHaveBeenCalledWith(true);
-    expect(harness.browserView.renderSession).toHaveBeenCalled();
   });
 
   test('dismisses the terminal panel for the active conversation', () => {

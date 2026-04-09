@@ -1,16 +1,9 @@
-import { createBrowserView } from '../ui/browser-view.js';
-
 /**
  * @param {{
  *   appState: any;
  *   documentRef?: Document;
- *   windowRef?: { requestAnimationFrame: (callback: FrameRequestCallback) => number };
  *   terminalPanel?: HTMLElement | null;
  *   terminalHost?: HTMLElement | null;
- *   webLookupPanel?: HTMLElement | null;
- *   webLookupFrame?: HTMLIFrameElement | null;
- *   webLookupPanelTitle?: HTMLElement | null;
- *   webLookupPanelDescription?: HTMLElement | null;
  *   getActiveConversation: () => any;
  *   getConversationPathMessages: (conversation: any) => any[];
  *   findConversationById: (conversationId: string) => any;
@@ -28,22 +21,13 @@ import { createBrowserView } from '../ui/browser-view.js';
  *       setVisible: (visible: any) => void;
  *     };
  *   }>;
- *   createBrowserViewRef?: (options?: any) => {
- *     renderSession: (session?: any) => void;
- *     setVisible: (visible: any) => void;
- *   };
  * }} options
  */
 export function createWorkspaceSidePanelsController({
   appState,
   documentRef = document,
-  windowRef = window,
   terminalPanel,
   terminalHost,
-  webLookupPanel,
-  webLookupFrame,
-  webLookupPanelTitle,
-  webLookupPanelDescription,
   getActiveConversation,
   getConversationPathMessages,
   findConversationById,
@@ -55,16 +39,9 @@ export function createWorkspaceSidePanelsController({
   clearTerminalDismissal,
   appendDebug = (_message) => {},
   loadTerminalView = () => import('../ui/terminal-view.js'),
-  createBrowserViewRef = createBrowserView,
 }) {
   let terminalView = null;
   let terminalViewLoadPromise = null;
-  const browserView = createBrowserViewRef({
-    panel: webLookupPanel,
-    frame: webLookupFrame,
-    title: webLookupPanelTitle,
-    description: webLookupPanelDescription,
-  });
 
   function parseShellToolResult(message) {
     if (message?.toolResultData && typeof message.toolResultData === 'object') {
@@ -254,26 +231,10 @@ export function createWorkspaceSidePanelsController({
     return terminalViewLoadPromise;
   }
 
-  function getWebLookupPanelSessionForConversation(conversation = getActiveConversation()) {
-    if (!(appState.webLookupPanelsByConversationId instanceof Map) || !conversation?.id) {
-      return null;
-    }
-    return appState.webLookupPanelsByConversationId.get(conversation.id) || null;
-  }
-
   function renderWorkspaceSidePanels() {
     const activeConversation = getActiveConversation();
-    const webLookupSession = getWebLookupPanelSessionForConversation(activeConversation);
-    const shouldShowWebLookupPanel =
-      !isSettingsView(appState) &&
-      Boolean(activeConversation?.id) &&
-      appState.activeWorkspaceSidePanel === 'web_lookup' &&
-      webLookupSession &&
-      typeof webLookupSession.searchUrl === 'string' &&
-      webLookupSession.searchUrl.trim();
     const session = getTerminalSessionForConversation(activeConversation);
     const shouldShowTerminal =
-      !shouldShowWebLookupPanel &&
       !isSettingsView(appState) &&
       Boolean(activeConversation?.id) &&
       session.hasVisibleContent &&
@@ -289,48 +250,24 @@ export function createWorkspaceSidePanelsController({
       openTerminalForConversation(appState, activeConversation.id);
     }
 
-    if (shouldShowWebLookupPanel) {
-      documentRef.body.classList.remove('terminal-open');
-      documentRef.body.classList.add('web-lookup-open');
-      terminalView?.setVisible(false);
-      browserView.setVisible(true);
-      browserView.renderSession({
-        heading: webLookupSession.heading,
-        details: webLookupSession.description,
-        url: webLookupSession.searchUrl,
-      });
-      return;
-    }
-
     if (!shouldShowTerminal) {
       if (!session.hasVisibleContent) {
         closeTerminal(appState, { conversationId: activeConversation?.id || null });
       }
       documentRef.body.classList.remove('terminal-open');
-      documentRef.body.classList.remove('web-lookup-open');
       terminalView?.setVisible(false);
-      browserView.setVisible(false);
       return;
     }
 
-    documentRef.body.classList.remove('web-lookup-open');
     documentRef.body.classList.add('terminal-open');
-    browserView.setVisible(false);
     void ensureTerminalView()
       .then((loadedTerminalView) => {
         const latestConversation = getActiveConversation();
-        const latestWebLookupSession = getWebLookupPanelSessionForConversation(latestConversation);
         const latestSession = getTerminalSessionForConversation(latestConversation);
         const shouldStillShowTerminal =
           !isSettingsView(appState) &&
           Boolean(latestConversation?.id) &&
           latestSession.hasVisibleContent &&
-          !(
-            appState.activeWorkspaceSidePanel === 'web_lookup' &&
-            latestWebLookupSession &&
-            typeof latestWebLookupSession.searchUrl === 'string' &&
-            latestWebLookupSession.searchUrl.trim()
-          ) &&
           (isTerminalOpenForConversation(appState, latestConversation.id) ||
             (!hasDismissedTerminalForConversation(appState, latestConversation.id) &&
               latestSession.entries.length > 0));
@@ -346,7 +283,6 @@ export function createWorkspaceSidePanelsController({
           `Terminal view failed to load: ${error instanceof Error ? error.message : String(error)}`
         );
         documentRef.body.classList.remove('terminal-open');
-        browserView.setVisible(false);
       });
   }
 
@@ -357,17 +293,6 @@ export function createWorkspaceSidePanelsController({
       dismissed: true,
     });
     if (appState.activeWorkspaceSidePanel === 'terminal') {
-      appState.activeWorkspaceSidePanel = null;
-    }
-    renderWorkspaceSidePanels();
-  }
-
-  function handleCloseWebLookupPanel() {
-    const activeConversation = getActiveConversation();
-    if (activeConversation?.id && appState.webLookupPanelsByConversationId instanceof Map) {
-      appState.webLookupPanelsByConversationId.delete(activeConversation.id);
-    }
-    if (appState.activeWorkspaceSidePanel === 'web_lookup') {
       appState.activeWorkspaceSidePanel = null;
     }
     renderWorkspaceSidePanels();
@@ -426,83 +351,12 @@ export function createWorkspaceSidePanelsController({
     renderWorkspaceSidePanels();
   }
 
-  function handleWebLookupSearchStart({
-    conversationId = null,
-    query = '',
-    panelUrl = '',
-    searchUrl = '',
-  } = {}) {
-    const resolvedConversationId =
-      typeof conversationId === 'string' && conversationId.trim()
-        ? conversationId.trim()
-        : getActiveConversation()?.id || null;
-    const resolvedPanelUrl =
-      typeof panelUrl === 'string' && panelUrl.trim()
-        ? panelUrl.trim()
-        : String(searchUrl || '').trim();
-    if (!resolvedConversationId || !resolvedPanelUrl) {
-      return Promise.resolve();
-    }
-    if (!(appState.webLookupPanelsByConversationId instanceof Map)) {
-      appState.webLookupPanelsByConversationId = new Map();
-    }
-    appState.webLookupPanelsByConversationId.set(resolvedConversationId, {
-      heading: 'DuckDuckGo search',
-      description:
-        typeof query === 'string' && query.trim()
-          ? `Opening the lightweight DuckDuckGo results view for "${query.trim()}" before the in-app search fetch runs.`
-          : 'Opening the lightweight DuckDuckGo results view before the in-app search fetch runs.',
-      query: typeof query === 'string' ? query.trim() : '',
-      searchUrl: resolvedPanelUrl,
-    });
-    appState.activeWorkspaceSidePanel = 'web_lookup';
-    renderWorkspaceSidePanels();
-    return new Promise((resolve) => {
-      windowRef.requestAnimationFrame(() => resolve());
-    });
-  }
-
-  function handleWebLookupSearchComplete({
-    conversationId = null,
-    query = '',
-    resultCount = 0,
-    panelUrl = '',
-    searchUrl = '',
-  } = {}) {
-    const resolvedConversationId =
-      typeof conversationId === 'string' && conversationId.trim()
-        ? conversationId.trim()
-        : getActiveConversation()?.id || null;
-    if (!resolvedConversationId || !(appState.webLookupPanelsByConversationId instanceof Map)) {
-      return;
-    }
-    const existingPanel = appState.webLookupPanelsByConversationId.get(resolvedConversationId) || {};
-    appState.webLookupPanelsByConversationId.set(resolvedConversationId, {
-      ...existingPanel,
-      heading: 'DuckDuckGo search',
-      description:
-        typeof query === 'string' && query.trim()
-          ? `The lightweight DuckDuckGo results view is open for "${query.trim()}". ${resultCount} result${resultCount === 1 ? '' : 's'} extracted in-app.`
-          : `The lightweight DuckDuckGo results view is open. ${resultCount} result${resultCount === 1 ? '' : 's'} extracted in-app.`,
-      searchUrl:
-        typeof panelUrl === 'string' && panelUrl.trim()
-          ? panelUrl.trim()
-          : typeof searchUrl === 'string' && searchUrl.trim()
-            ? searchUrl.trim()
-            : existingPanel.searchUrl || '',
-    });
-    renderWorkspaceSidePanels();
-  }
-
   return {
     getShellTerminalEntries,
     getTerminalSessionForConversation,
     handleCloseTerminalPanel,
-    handleCloseWebLookupPanel,
     handleShellCommandComplete,
     handleShellCommandStart,
-    handleWebLookupSearchComplete,
-    handleWebLookupSearchStart,
     renderWorkspaceSidePanels,
   };
 }
