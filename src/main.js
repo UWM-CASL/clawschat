@@ -193,8 +193,7 @@ const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
 const STREAM_UPDATE_INTERVAL_MS = 100;
-const AGENT_FOLLOW_UP_MIN_INTERVAL_MS = 10 * 60 * 1000;
-const AGENT_FOLLOW_UP_MAX_INTERVAL_MS = 15 * 60 * 1000;
+const AGENT_FOLLOW_UP_INTERVAL_MS = 15 * 60 * 1000;
 const AGENT_FOLLOW_UP_BUSY_RETRY_MS = 30 * 1000;
 const AGENT_SUMMARY_TRIGGER_RATIO = 0.9;
 const AGENT_SUMMARY_MIN_MESSAGES = 8;
@@ -3839,13 +3838,6 @@ function clearAgentFollowUpTimer() {
   }
 }
 
-function getRandomAgentFollowUpIntervalMs() {
-  return Math.floor(
-    AGENT_FOLLOW_UP_MIN_INTERVAL_MS +
-      Math.random() * (AGENT_FOLLOW_UP_MAX_INTERVAL_MS - AGENT_FOLLOW_UP_MIN_INTERVAL_MS)
-  );
-}
-
 function isAgentConversationLoaded() {
   return appState.workspaceView === 'chat' && isAgentConversation(getActiveConversation());
 }
@@ -3857,7 +3849,7 @@ function scheduleNextAgentFollowUp(conversation, { from = Date.now(), persist = 
   conversation.agent.nextFollowUpAt = Math.max(
     Math.trunc(from),
     conversation.agent.lastActivityAt || Math.trunc(from)
-  ) + getRandomAgentFollowUpIntervalMs();
+  ) + AGENT_FOLLOW_UP_INTERVAL_MS;
   if (persist) {
     queueConversationStateSave();
   }

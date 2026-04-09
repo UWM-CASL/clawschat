@@ -54,7 +54,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - `{{<outputKey>}}` for the full array value when that step defines `outputKey`
 - `Fix` executes all preparation steps first, then streams the final step output into the transcript as a new response variant.
 - `Fix` creates a new model variant at the same turn (like regenerate), so prior variants stay navigable.
-- Agent follow-up orchestration runs only while the matching agent conversation is the loaded chat and not paused, writes each heartbeat into the transcript before the model reviews it, and the active-chat header surfaces that schedule with a visible next-heartbeat countdown beside the pause/resume control.
+- Agent follow-up orchestration runs only while the matching agent conversation is the loaded chat and not paused, writes each heartbeat into the transcript before the model reviews it, and the active-chat header surfaces that schedule with a visible next-heartbeat countdown beside the pause/resume control. The countdown resets to a fixed 15-minute delay after each exchange.
 - Agent summary-compaction orchestration inserts a visible `summary` node into the conversation tree, then later prompt assembly drops older turns before that node while exports still preserve the full transcript.
 
 ## Utility step contract
