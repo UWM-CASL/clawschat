@@ -7,6 +7,7 @@ import Modal from 'bootstrap/js/dist/modal';
 import Tooltip from 'bootstrap/js/dist/tooltip';
 import { bindComposerEvents } from './app/composer-events.js';
 import { createComposerRuntimeController } from './app/composer-runtime.js';
+import { createAgentAutomationController } from './app/agent-automation.js';
 import {
   formatAttachmentSize,
   getAttachmentButtonAcceptValue,
@@ -84,7 +85,6 @@ import {
 import { normalizeMessageContentParts, setUserMessageText } from './state/conversation-content.js';
 import {
   CONVERSATION_TYPES,
-  HEARTBEAT_SPEAKER,
   addMessageToConversation,
   buildConversationDownloadMarkdown,
   buildConversationDownloadPayload,
@@ -398,11 +398,9 @@ let markdownRenderer = null;
 let markdownRendererLoadPromise = null;
 let hasQueuedMarkdownRendererRefresh = false;
 let hasLoggedMarkdownRendererError = false;
-let agentFollowUpTimerId = null;
 let agentFollowUpCountdownIntervalId = null;
-let activeAgentFollowUpAbortController = null;
-let activeAgentFollowUpConversationId = '';
 let lastAgentFollowUpAnnouncementKey = '';
+let agentAutomationController = null;
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
 
@@ -2997,11 +2995,7 @@ function formatAgentFollowUpAnnouncement(ms) {
 }
 
 function isAgentFollowUpRunning(conversation = getActiveConversation()) {
-  return (
-    Boolean(activeAgentFollowUpAbortController) &&
-    Boolean(conversation?.id) &&
-    activeAgentFollowUpConversationId === conversation.id
-  );
+  return agentAutomationController?.isFollowUpRunning(conversation) === true;
 }
 
 function updateAgentFollowUpCountdownUi() {
@@ -3663,518 +3657,67 @@ const runOrchestration = createOrchestrationRunner({
   onDebug: appendDebug,
 });
 
-function getConversationMessagesAfterLatestSummary(
-  conversation,
-  leafMessageId = conversation?.activeLeafMessageId
-) {
-  const pathMessages = getConversationPathMessages(conversation, leafMessageId);
-  const lastSummaryIndex = pathMessages.reduce(
-    (latestIndex, message, index) => (message?.role === 'summary' ? index : latestIndex),
-    -1
-  );
-  return {
-    pathMessages,
-    lastSummary:
-      lastSummaryIndex >= 0 && pathMessages[lastSummaryIndex]?.role === 'summary'
-        ? pathMessages[lastSummaryIndex]
-        : null,
-    recentMessages: lastSummaryIndex >= 0 ? pathMessages.slice(lastSummaryIndex + 1) : pathMessages,
-  };
-}
-
-function collectArtifactRefsFromMessages(messages = []) {
-  const refs = [];
-  const seenKeys = new Set();
-  messages.forEach((message) => {
-    const messageRefs = Array.isArray(message?.artifactRefs) ? message.artifactRefs : [];
-    messageRefs.forEach((ref) => {
-      if (!ref || typeof ref !== 'object') {
-        return;
-      }
-      const id = typeof ref.id === 'string' ? ref.id.trim() : '';
-      const filename = typeof ref.filename === 'string' ? ref.filename.trim() : '';
-      const workspacePath = typeof ref.workspacePath === 'string' ? ref.workspacePath.trim() : '';
-      const key = id || `${filename}::${workspacePath}`;
-      if (!key || seenKeys.has(key)) {
-        return;
-      }
-      seenKeys.add(key);
-      refs.push(ref);
-    });
-  });
-  return refs;
-}
-
-function formatArtifactRefsForPrompt(artifactRefs = []) {
-  const lines = [];
-  collectArtifactRefsFromMessages([{ artifactRefs }]).forEach((ref) => {
-    const filename = typeof ref.filename === 'string' ? ref.filename.trim() : '';
-    const workspacePath = typeof ref.workspacePath === 'string' ? ref.workspacePath.trim() : '';
-    if (!filename && !workspacePath) {
-      return;
-    }
-    lines.push(
-      workspacePath && filename
-        ? `- ${filename} (${workspacePath})`
-        : `- ${filename || workspacePath}`
-    );
-  });
-  return lines.join('\n');
-}
-
-function hasUserReplySinceLatestHeartbeat(messages = []) {
-  if (!Array.isArray(messages) || !messages.length) {
-    return true;
-  }
-  let latestHeartbeatIndex = -1;
-  messages.forEach((message, index) => {
-    if (isHeartbeatMessage(message)) {
-      latestHeartbeatIndex = index;
-    }
-  });
-  if (latestHeartbeatIndex < 0) {
-    return true;
-  }
-  return messages
-    .slice(latestHeartbeatIndex + 1)
-    .some((message) => message?.role === 'user' && !isHeartbeatMessage(message));
-}
-
-function buildAgentHeartbeatText({ userRepliedSinceLastHeartbeat }) {
-  if (userRepliedSinceLastHeartbeat) {
-    return (
-      'Heartbeat: Review the conversation now. ' +
-      'If you have something concrete, useful, or newly insightful to do, do it now. Otherwise stay quiet.'
-    );
-  }
-  return (
-    'Heartbeat: The user has not replied since the last heartbeat. ' +
-    'Do not press the same question again. If you have a fresh angle, a concrete next step, or something genuinely useful to add, do it now. Otherwise stay quiet.'
-  );
-}
-
-function addAgentHeartbeatMessage(conversation, { userRepliedSinceLastHeartbeat }) {
-  const heartbeatText = buildAgentHeartbeatText({ userRepliedSinceLastHeartbeat });
-  const heartbeatMessage = addMessageToConversation(conversation, 'user', heartbeatText, {
-    parentId: conversation?.activeLeafMessageId || null,
-  });
-  heartbeatMessage.speaker = HEARTBEAT_SPEAKER;
-  if (heartbeatMessage.content && typeof heartbeatMessage.content === 'object') {
-    heartbeatMessage.content.llmRepresentation = heartbeatText;
-  }
-  conversation.activeLeafMessageId = heartbeatMessage.id;
-  conversation.lastSpokenLeafMessageId = heartbeatMessage.id;
-  return heartbeatMessage;
-}
-
-function buildConversationTranscriptForOrchestration(messages = [], { maxMessages = null } = {}) {
-  const normalizedMessages = Array.isArray(messages)
-    ? messages.filter(
-        (message) =>
-          message &&
-          (message.role === 'user' ||
-            message.role === 'model' ||
-            message.role === 'tool' ||
-            message.role === 'summary')
-      )
-    : [];
-  const visibleMessages =
-    Number.isInteger(maxMessages) && maxMessages > 0
-      ? normalizedMessages.slice(-maxMessages)
-      : normalizedMessages;
-  return visibleMessages
-    .map((message) => {
-      if (message.role === 'tool') {
-        return `[Tool:${message.toolName || 'unknown'}]\n${String(message.toolResult || message.text || '').trim()}`;
-      }
-      if (message.role === 'summary') {
-        return `[Conversation Summary]\n${String(message.summary || message.text || '').trim()}`;
-      }
-      const label = isHeartbeatMessage(message)
-        ? 'Heartbeat'
-        : message.role === 'user'
-          ? 'User'
-          : 'Model';
-      const body =
-        message.role === 'model'
-          ? String(message.response || message.text || '').trim()
-          : String(message.text || '').trim();
-      return `[${label}]\n${body}`;
-    })
-    .filter(Boolean)
-    .join('\n\n');
-}
-
-function estimatePromptContentTokens(content) {
-  if (Array.isArray(content)) {
-    return content.reduce((total, part) => total + estimatePromptContentTokens(part), 0);
-  }
-  if (content && typeof content === 'object') {
-    if (content.type === 'text' && typeof content.text === 'string') {
-      return Math.max(1, Math.ceil(content.text.length / 4));
-    }
-    if (content.type === 'image' || content.type === 'audio') {
-      return 128;
-    }
-    return estimatePromptContentTokens(Object.values(content));
-  }
-  const text = String(content || '');
-  return text.trim() ? Math.max(1, Math.ceil(text.length / 4)) : 0;
-}
-
-function estimatePromptTokenCount(prompt) {
-  if (!Array.isArray(prompt)) {
-    return estimatePromptContentTokens(prompt);
-  }
-  return prompt.reduce(
-    (total, message) => total + 6 + estimatePromptContentTokens(message?.content),
-    4
-  );
-}
-
-function clearAgentFollowUpTimer() {
-  if (agentFollowUpTimerId !== null) {
-    window.clearTimeout(agentFollowUpTimerId);
-    agentFollowUpTimerId = null;
-  }
-}
-
 function isAgentConversationLoaded() {
   return appState.workspaceView === 'chat' && isAgentConversation(getActiveConversation());
 }
 
-function scheduleNextAgentFollowUp(conversation, { from = Date.now(), persist = false } = {}) {
-  if (!isAgentConversation(conversation) || !conversation.agent) {
-    return null;
-  }
-  conversation.agent.nextFollowUpAt =
-    Math.max(Math.trunc(from), conversation.agent.lastActivityAt || Math.trunc(from)) +
-    AGENT_FOLLOW_UP_INTERVAL_MS;
-  if (persist) {
-    queueConversationStateSave();
-  }
-  return conversation.agent.nextFollowUpAt;
+agentAutomationController = createAgentAutomationController({
+  appState,
+  engine,
+  runOrchestration,
+  agentFollowUpOrchestration,
+  summarizeConversationOrchestration,
+  getActiveConversation,
+  findConversationById,
+  getConversationPathMessages,
+  addMessageToConversation,
+  buildPromptForConversation: buildPromptForActiveConversation,
+  getMessageNodeById,
+  isAgentConversation,
+  isHeartbeatMessage,
+  isAgentConversationLoaded,
+  getAgentDisplayName,
+  isGeneratingResponse,
+  isLoadingModelState,
+  isBlockingOrchestrationState,
+  setOrchestrationRunning,
+  queueConversationStateSave,
+  renderTranscript,
+  scrollTranscriptToBottom,
+  updateActionButtons,
+  setStatus,
+  appendDebug,
+  onScheduleChanged: updateAgentFollowUpCountdownUi,
+  followUpOrchestrationKind: ORCHESTRATION_KINDS.AGENT_FOLLOW_UP,
+  summaryOrchestrationKind: ORCHESTRATION_KINDS.SUMMARY,
+  followUpIntervalMs: AGENT_FOLLOW_UP_INTERVAL_MS,
+  busyRetryMs: AGENT_FOLLOW_UP_BUSY_RETRY_MS,
+  summaryTriggerRatio: AGENT_SUMMARY_TRIGGER_RATIO,
+  summaryMinMessages: AGENT_SUMMARY_MIN_MESSAGES,
+});
+
+function cancelActiveAgentFollowUp(options) {
+  return agentAutomationController?.cancelActiveFollowUp(options) || Promise.resolve();
 }
 
-function recordAgentActivity(conversation, { timestamp = Date.now(), persist = false } = {}) {
-  if (!isAgentConversation(conversation) || !conversation.agent) {
-    return;
-  }
-  conversation.agent.lastActivityAt = Math.trunc(timestamp);
-  scheduleNextAgentFollowUp(conversation, { from: conversation.agent.lastActivityAt });
-  if (persist) {
-    queueConversationStateSave();
-  }
+function refreshAgentAutomationState(options) {
+  agentAutomationController?.refreshState(options);
 }
 
-async function cancelActiveAgentFollowUp({ preserveSchedule = true } = {}) {
-  clearAgentFollowUpTimer();
-  if (!activeAgentFollowUpAbortController) {
-    return;
-  }
-  const abortController = activeAgentFollowUpAbortController;
-  const conversationId = activeAgentFollowUpConversationId;
-  activeAgentFollowUpAbortController = null;
-  activeAgentFollowUpConversationId = '';
-  if (!abortController.signal.aborted) {
-    abortController.abort();
-  }
-  try {
-    await engine.cancelGeneration();
-  } catch (error) {
-    appendDebug(
-      `Agent follow-up cancellation failed: ${error instanceof Error ? error.message : String(error)}`
-    );
-  } finally {
-    setOrchestrationRunning(appState, false);
-    updateActionButtons();
-    if (!preserveSchedule) {
-      const conversation = findConversationById(conversationId);
-      if (conversation?.agent) {
-        conversation.agent.nextFollowUpAt = null;
-        queueConversationStateSave();
-      }
-    }
-  }
+function recordAgentActivity(conversation, options) {
+  agentAutomationController?.recordActivity(conversation, options);
 }
 
-function refreshAgentAutomationState({ forceReschedule = false } = {}) {
-  clearAgentFollowUpTimer();
-  const activeConversation = getActiveConversation();
-  if (
-    !isAgentConversationLoaded() ||
-    !activeConversation?.agent ||
-    activeConversation.agent.paused === true
-  ) {
-    if (activeAgentFollowUpAbortController) {
-      void cancelActiveAgentFollowUp();
-    }
-    updateAgentFollowUpCountdownUi();
-    return;
-  }
-  if (forceReschedule || !Number.isFinite(activeConversation.agent.nextFollowUpAt)) {
-    scheduleNextAgentFollowUp(activeConversation, {
-      from:
-        activeConversation.agent.lastFollowUpAt ||
-        activeConversation.agent.lastActivityAt ||
-        Date.now(),
-    });
-    queueConversationStateSave();
-  }
-  const nextFollowUpAt = Number(activeConversation.agent.nextFollowUpAt) || 0;
-  const delay = Math.max(0, nextFollowUpAt - Date.now());
-  agentFollowUpTimerId = window.setTimeout(() => {
-    void runAgentFollowUpOrchestration(activeConversation.id);
-  }, delay);
-  updateAgentFollowUpCountdownUi();
-}
-
-async function runAgentFollowUpOrchestration(conversationId) {
-  const conversation = findConversationById(conversationId);
-  if (
-    !conversation ||
-    !isAgentConversation(conversation) ||
-    conversation.agent?.paused === true ||
-    getActiveConversation()?.id !== conversation.id ||
-    !isAgentConversationLoaded()
-  ) {
-    return;
-  }
-  if (
-    isGeneratingResponse(appState) ||
-    isLoadingModelState(appState) ||
-    isBlockingOrchestrationState(appState)
-  ) {
-    conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
-    queueConversationStateSave();
-    refreshAgentAutomationState();
-    return;
-  }
-  const { lastSummary, recentMessages } = getConversationMessagesAfterLatestSummary(conversation);
-  const visibleMessages = recentMessages.filter((message) => message.role !== 'summary');
-  const hasConversationContext =
-    Boolean(lastSummary) ||
-    visibleMessages.some((message) => message.role === 'user' && !isHeartbeatMessage(message));
-  if (!hasConversationContext) {
-    conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
-    queueConversationStateSave();
-    refreshAgentAutomationState();
-    return;
-  }
-  const conversationSummary = lastSummary
-    ? String(lastSummary.summary || lastSummary.text || '')
-    : '';
-  const artifactRefs = collectArtifactRefsFromMessages([
-    ...(lastSummary ? [lastSummary] : []),
-    ...visibleMessages,
-  ]);
-  const abortController = new AbortController();
-  activeAgentFollowUpAbortController = abortController;
-  activeAgentFollowUpConversationId = conversation.id;
-  setOrchestrationRunning(appState, true, {
-    kind: ORCHESTRATION_KINDS.AGENT_FOLLOW_UP,
-    blocksUi: false,
-  });
-  updateActionButtons();
-  appendDebug(`Agent follow-up started for ${conversation.name}.`);
-  try {
-    const heartbeatMessage = addAgentHeartbeatMessage(conversation, {
-      userRepliedSinceLastHeartbeat: hasUserReplySinceLatestHeartbeat(visibleMessages),
-    });
-    conversation.agent.lastFollowUpAt = heartbeatMessage.createdAt || Date.now();
-    scheduleNextAgentFollowUp(conversation, { from: conversation.agent.lastFollowUpAt });
-    renderTranscript({ scrollToBottom: false });
-    scrollTranscriptToBottom();
-    queueConversationStateSave();
-    const { finalOutput } = await runOrchestration(
-      agentFollowUpOrchestration,
-      {
-        agentName: getAgentDisplayName(conversation),
-        agentDescription: normalizeSystemPrompt(conversation.agent?.description),
-        conversationSummary,
-        recentTranscript: buildConversationTranscriptForOrchestration(
-          [...visibleMessages, heartbeatMessage],
-          {
-            maxMessages: 12,
-          }
-        ),
-        uploadedFiles: formatArtifactRefsForPrompt(artifactRefs),
-      },
-      {
-        signal: abortController.signal,
-      }
-    );
-    const normalizedOutput = String(finalOutput || '').trim();
-    if (
-      !normalizedOutput ||
-      normalizedOutput === '[NO_FOLLOW_UP]' ||
-      getActiveConversation()?.id !== conversation.id ||
-      conversation.agent?.paused === true
-    ) {
-      queueConversationStateSave();
-      return;
-    }
-    const followUpMessage = addMessageToConversation(conversation, 'model', normalizedOutput, {
-      parentId: conversation.activeLeafMessageId,
-      response: normalizedOutput,
-    });
-    followUpMessage.response = normalizedOutput;
-    followUpMessage.text = normalizedOutput;
-    followUpMessage.rawStreamText = normalizedOutput;
-    followUpMessage.thoughts = '';
-    followUpMessage.hasThinking = false;
-    followUpMessage.isThinkingComplete = false;
-    followUpMessage.isResponseComplete = true;
-    conversation.lastSpokenLeafMessageId = followUpMessage.id;
-    conversation.agent.lastFollowUpAt = Date.now();
-    recordAgentActivity(conversation, { timestamp: conversation.agent.lastFollowUpAt });
-    renderTranscript({ scrollToBottom: false });
-    scrollTranscriptToBottom();
-    queueConversationStateSave();
-    setStatus(`${getAgentDisplayName(conversation)} sent a heartbeat follow-up.`);
-  } catch (error) {
-    if (abortController.signal.aborted) {
-      appendDebug('Agent follow-up canceled.');
-      return;
-    }
-    appendDebug(
-      `Agent follow-up failed: ${error instanceof Error ? error.message : String(error)}`
-    );
-    if (conversation.agent) {
-      conversation.agent.nextFollowUpAt = Date.now() + AGENT_FOLLOW_UP_BUSY_RETRY_MS;
-      queueConversationStateSave();
-    }
-  } finally {
-    if (activeAgentFollowUpAbortController === abortController) {
-      activeAgentFollowUpAbortController = null;
-      activeAgentFollowUpConversationId = '';
-    }
-    setOrchestrationRunning(appState, false);
-    updateActionButtons();
-    refreshAgentAutomationState();
-  }
-}
-
-function insertSummaryNodeBeforeMessage(
-  conversation,
-  targetMessage,
-  summaryText,
-  artifactRefs = []
-) {
-  if (!conversation || !targetMessage?.id || !targetMessage.parentId) {
-    return null;
-  }
-  const previousParent = getMessageNodeById(conversation, targetMessage.parentId);
-  if (!previousParent) {
-    return null;
-  }
-  const summaryMessage = addMessageToConversation(conversation, 'summary', summaryText, {
-    parentId: previousParent.id,
-    artifactRefs,
-  });
-  previousParent.childIds = (previousParent.childIds || []).filter(
-    (childId) => childId !== targetMessage.id
-  );
-  if (!(previousParent.childIds || []).includes(summaryMessage.id)) {
-    previousParent.childIds.push(summaryMessage.id);
-  }
-  summaryMessage.childIds = [targetMessage.id];
-  targetMessage.parentId = summaryMessage.id;
-  conversation.activeLeafMessageId = targetMessage.id;
-  return summaryMessage;
-}
-
-async function ensureAgentConversationSummaryBeforeSend(conversation, userMessage) {
-  if (
-    !conversation ||
-    !userMessage ||
-    !isAgentConversation(conversation) ||
-    !conversation.agent ||
-    !userMessage.parentId
-  ) {
-    return true;
-  }
-  const estimatedPromptTokens = estimatePromptTokenCount(
-    buildPromptForActiveConversation(conversation)
-  );
-  const contextLimit = Number(appState.activeGenerationConfig?.maxContextTokens) || 0;
-  if (
-    !contextLimit ||
-    estimatedPromptTokens < Math.floor(contextLimit * AGENT_SUMMARY_TRIGGER_RATIO)
-  ) {
-    return true;
-  }
-  const { lastSummary, recentMessages } = getConversationMessagesAfterLatestSummary(
-    conversation,
-    userMessage.parentId
-  );
-  const messagesToSummarize = recentMessages.filter((message) => message.role !== 'summary');
-  if (messagesToSummarize.length < AGENT_SUMMARY_MIN_MESSAGES) {
-    return true;
-  }
-  const artifactRefs = collectArtifactRefsFromMessages([
-    ...(lastSummary ? [lastSummary] : []),
-    ...messagesToSummarize,
-  ]);
-  setOrchestrationRunning(appState, true, {
-    kind: ORCHESTRATION_KINDS.SUMMARY,
-    blocksUi: true,
-  });
-  updateActionButtons();
-  setStatus('Summarizing earlier conversation context...');
-  try {
-    const { finalOutput } = await runOrchestration(summarizeConversationOrchestration, {
-      previousSummary: lastSummary ? String(lastSummary.summary || lastSummary.text || '') : '',
-      recentTranscript: buildConversationTranscriptForOrchestration(messagesToSummarize),
-      uploadedFiles: formatArtifactRefsForPrompt(artifactRefs),
-    });
-    const summaryText = String(finalOutput || '').trim();
-    if (!summaryText) {
-      return true;
-    }
-    insertSummaryNodeBeforeMessage(conversation, userMessage, summaryText, artifactRefs);
-    queueConversationStateSave();
-    renderTranscript({ scrollToBottom: false });
-    return true;
-  } catch (error) {
-    appendDebug(
-      `Conversation summary failed: ${error instanceof Error ? error.message : String(error)}`
-    );
-    setStatus('Conversation summary failed. Continuing without compaction.');
-    return true;
-  } finally {
-    setOrchestrationRunning(appState, false);
-    updateActionButtons();
-  }
+function ensureAgentConversationSummaryBeforeSend(conversation, userMessage) {
+  return agentAutomationController?.ensureSummaryBeforeSend(conversation, userMessage) || Promise.resolve(true);
 }
 
 function toggleAgentPauseState() {
-  const activeConversation = getActiveConversation();
-  if (!isAgentConversation(activeConversation) || !activeConversation?.agent) {
-    return;
-  }
-  activeConversation.agent.paused = activeConversation.agent.paused !== true;
-  if (activeConversation.agent.paused) {
-    activeConversation.agent.nextFollowUpAt = null;
-    void cancelActiveAgentFollowUp({ preserveSchedule: false });
-    setStatus(`${getAgentDisplayName(activeConversation)} paused.`);
-  } else {
-    scheduleNextAgentFollowUp(activeConversation, { from: Date.now() });
-    refreshAgentAutomationState();
-    setStatus(`${getAgentDisplayName(activeConversation)} resumed.`);
-  }
-  queueConversationStateSave();
-  updateActionButtons();
+  agentAutomationController?.togglePauseState();
 }
 
 function handleCompletedModelMessage(conversation, message) {
-  if (!conversation || !message || message.role !== 'model') {
-    return;
-  }
-  if (isAgentConversation(conversation)) {
-    recordAgentActivity(conversation, { timestamp: Date.now(), persist: true });
-    refreshAgentAutomationState();
-  }
+  agentAutomationController?.handleCompletedModelMessage(conversation, message);
 }
 
 const appController = createAppController({

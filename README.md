@@ -311,6 +311,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Conversation tree and export domain logic live in `src/state/conversation-model.js`, with message content normalization and LLM-facing prompt shaping extracted to `src/state/conversation-content.js`.
 - Centralized runtime state and selectors live in `src/state/app-state.js`.
 - App control flow for generation, stop, rename, and fix actions lives in `src/state/app-controller.js`.
+- Agent heartbeat scheduling, follow-up orchestration, and agent-thread summary compaction live in `src/app/agent-automation.js`.
 - Orchestration prompt templating, nested placeholder rendering, utility-step execution, and chunk-pipeline support live in `src/llm/orchestration-runner.js`.
 - Settings persistence and cross-domain wiring live in `src/app/preferences.js`, with tool/MCP settings extracted to `src/app/preferences-tooling.js` and model/backend picker logic extracted to `src/app/preferences-models.js`.
 - Settings page event wiring lives in `src/app/settings-events.js`, with tool/network handlers extracted to `src/app/settings-events-tooling.js` and conversation/model handlers extracted to `src/app/settings-events-models.js`.

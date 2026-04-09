@@ -42,6 +42,10 @@ The same centralized state also now carries uploaded skill-package metadata so t
   - action sequencing and async lifecycle updates
 - `src/app/composer-runtime.js`
   - pending attachment rendering, payload shaping, and attachment filtering/status text
+- `src/app/agent-automation.js`
+  - agent heartbeat scheduling
+  - agent follow-up orchestration
+  - agent-thread summary compaction before send
 - `src/app/workspace-side-panels.js`
   - terminal/web-lookup panel session shaping and visibility control
 - `src/main.js`
