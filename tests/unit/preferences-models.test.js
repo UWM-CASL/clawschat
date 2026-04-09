@@ -81,10 +81,9 @@ describe('preferences-models', () => {
     const cards = Array.from(modelCardList.querySelectorAll('.model-card'));
     expect(cards.length).toBe(modelSelect.querySelectorAll('option').length);
 
-    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E4B'));
+    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E2B'));
     expect(gemmaCard?.textContent).toContain('131,072 tokens');
-    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(2);
-    expect(gemmaCard?.textContent).toContain('This model requires WebGPU.');
+    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(4);
     expect(
       gemmaCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')
     ).toBe(
@@ -115,7 +114,7 @@ describe('preferences-models', () => {
       gemmaCard?.querySelector('.model-card-button')
     );
     gemmaButton?.click();
-    expect(modelSelect.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
+    expect(modelSelect.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
     expect(gemmaButton?.getAttribute('aria-checked')).toBe('true');
 
     modelCardList.dispatchEvent(
@@ -130,7 +129,7 @@ describe('preferences-models', () => {
     expect(firstButton?.getAttribute('aria-checked')).toBe('true');
   });
 
-  test('falls back from WebGPU-only models when the backend cannot run them', () => {
+  test('keeps Gemma available when CPU mode is selected', () => {
     const harness = createHarness();
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
@@ -140,16 +139,16 @@ describe('preferences-models', () => {
     );
 
     harness.controller.populateModelSelect();
-    modelSelect.value = 'litert-community/gemma-4-E4B-it-litert-lm';
+    modelSelect.value = 'onnx-community/gemma-4-E2B-it-ONNX';
     backendSelect.value = 'cpu';
 
     const selectedModel = harness.controller.syncModelSelectionForCurrentEnvironment({
       announceFallback: true,
     });
 
-    expect(selectedModel).not.toBe('litert-community/gemma-4-E4B-it-litert-lm');
+    expect(selectedModel).toBe('onnx-community/gemma-4-E2B-it-ONNX');
     expect(modelSelect.value).toBe(selectedModel);
-    expect(harness.deps.setStatus).toHaveBeenCalledWith(expect.stringContaining('CPU'));
+    expect(harness.deps.setStatus).not.toHaveBeenCalled();
   });
 
   test('restores a removed model id as the first visible available model', () => {
@@ -240,7 +239,7 @@ describe('preferences-models', () => {
     expect(cpuThreadsInput.max).toBe('6');
   });
 
-  test('probes WebGPU availability and falls back when no adapter is available', async () => {
+  test('probes WebGPU availability and keeps cpu-capable Gemma selected when no adapter is available', async () => {
     const requestAdapter = vi.fn(async () => null);
     const harness = createHarness({
       navigatorRef: /** @type {any} */ ({
@@ -255,7 +254,7 @@ describe('preferences-models', () => {
     });
 
     harness.controller.populateModelSelect();
-    harness.controller.setSelectedModelId('litert-community/gemma-4-E4B-it-litert-lm');
+    harness.controller.setSelectedModelId('onnx-community/gemma-4-E2B-it-ONNX');
 
     const adapterAvailable = await harness.controller.probeWebGpuAvailability();
 
@@ -264,11 +263,9 @@ describe('preferences-models', () => {
     expect(harness.appState.webGpuProbeCompleted).toBe(true);
     expect(harness.appState.webGpuAdapterAvailable).toBe(false);
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      expect.not.stringContaining('litert-community/gemma-4-E4B-it-litert-lm'),
+      'onnx-community/gemma-4-E2B-it-ONNX',
       true
     );
-    expect(harness.deps.setStatus).toHaveBeenCalledWith(
-      expect.stringContaining('no usable WebGPU adapter was found')
-    );
+    expect(harness.deps.setStatus).not.toHaveBeenCalled();
   });
 });

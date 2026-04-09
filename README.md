@@ -71,7 +71,7 @@ Student-facing browser chat UI with local model inference.
 - `WebGPU` mode prefers WebGPU and falls back to CPU/WASM for ONNX models that do not require WebGPU.
 - CPU mode runs CPU-capable ONNX models through the browser WASM path. The ONNX worker keeps `useWasmCache` enabled, enables WASM proxying across ONNX backends, and now lets `Settings -> System -> Transformers.js CPU threads` control `onnx.wasm.numThreads` (`0` keeps ORT auto).
 - If a generation request stops producing worker activity for 90 seconds, the engine client terminates that worker and surfaces a recoverable timeout instead of leaving the UI stuck indefinitely.
-- LiteRT-backed models in the current browser app path require WebGPU. The bundled Gemma 4 LiteRT entry is supported.
+- The bundled ONNX Gemma 4 E2B entry runs through the Transformers.js worker path on both WebGPU and CPU.
 - The bundled LiteRT runtime in this app does not currently expose a matching CPU-thread setting, so the System-tab thread control applies only to the Transformers.js/ONNX path.
 - Token controls in Settings:
   - `Maximum output tokens` and `Context size (short-term memory)` are model-aware integer fields.
@@ -237,16 +237,18 @@ Student-facing browser chat UI with local model inference.
   - Enables multimodal generation for image input in the current worker path.
   - Reuses the existing lazy multimodal processor load path so preprocessing assets are not pulled during initial model load.
   - Uses `<think>...</think>` reasoning tags and the app's XML tool-call format support.
-- `litert-community/gemma-4-E4B-it-litert-lm`
-  - Uses the LiteRT/MediaPipe GenAI worker path in this app.
-  - Requires WebGPU in-browser and is text-only in the current app path.
-  - Loads the pinned `gemma-4-E4B-it-web.task` artifact from the model repository at runtime.
+- `onnx-community/gemma-4-E2B-it-ONNX`
+  - Uses the Transformers.js worker path in this app.
+  - Uses `q4` on WebGPU and `q4` on CPU, with external ONNX data loading.
+  - Enables multimodal generation for image and audio input in the current worker path.
+  - Reuses the existing lazy multimodal processor load path so preprocessing assets are not pulled during initial model load.
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Yoursmiling/Qwen3.5-2B-LiteRT` -> `onnx-community/Qwen3.5-2B-ONNX`
+  - `litert-community/gemma-4-E4B-it-litert-lm` -> `onnx-community/gemma-4-E2B-it-ONNX`
 
 For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` repo id as the canonical model. The full ONNX repo remains a legacy alias only because its browser load path was not reliable in this app: the `int8` package hit `Array buffer allocation failed`, and the `q4` package failed to preload required `.onnx_data` shards in-browser.
 - Model support configuration lives in `src/config/models.json`:

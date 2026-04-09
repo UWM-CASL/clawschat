@@ -23,10 +23,8 @@ Inference is selected through the engine client boundary and executes through a 
   - `onnx.wasm.proxy = true`
   - `onnx.wasm.numThreads = 0` by default, or the user-selected value from `Settings -> System -> Transformers.js CPU threads`
 - Models with `requiresWebGpu: true` only attempt WebGPU and are unavailable in CPU mode.
-- `mediapipe-genai` models currently use the browser WebGPU path in this app:
-  - the bundled Gemma 4 LiteRT entry is supported on WebGPU
-  - the pinned LiteRT package used by this app does not expose a matching CPU-thread control, so the System-tab thread preference does not apply there
 - `onnx-community/Qwen3.5-2B-ONNX` now runs through the `transformers-js` worker with `q4f16` on WebGPU and `q4` on CPU.
+- `onnx-community/gemma-4-E2B-it-ONNX` now runs through the `transformers-js` worker with `q4` on both WebGPU and CPU.
 - Models with `multimodalGeneration: true` use a processor/model execution path in the worker instead of the text-generation pipeline.
 - For multimodal models, the worker loads the `AutoProcessor` lazily on first generation and then reuses it for later requests, so multimodal preprocessing assets are not fetched during initial model load.
 - ONNX models may provide mode-specific runtime hints such as `runtime.dtypes.webgpu` and `runtime.dtypes.cpu`.

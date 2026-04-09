@@ -270,16 +270,18 @@ Current models in Settings:
   - Uses `thinkingControl` with runtime `enable_thinking`.
   - Uses Qwen's `<think>` / `</think>` reasoning tags plus the XML tool-call format already supported elsewhere in the app.
   - Keeps image input enabled in the app with `inputLimits.maxImageInputs = 1`.
-- `litert-community/gemma-4-E4B-it-litert-lm`
-  - Uses the `mediapipe-genai` engine with a pinned `gemma-4-E4B-it-web.task` asset URL.
-  - Requires WebGPU and currently exposes text-only generation in this app.
+- `onnx-community/gemma-4-E2B-it-ONNX`
+  - Uses the `transformers-js` engine.
+  - Uses runtime dtypes `{ webgpu: q4, cpu: q4 }`, `multimodalGeneration: true`, and `useExternalDataFormat: true`.
   - Uses `thinkingControl` with runtime `enable_thinking`.
   - Uses Gemma's channel-style thought markers via `thinkingTags { open: "<|channel>", close: "<channel|>", stripLeadingText: "thought" }`.
   - Uses the Gemma special-token tool-call format.
+  - Keeps image and audio input enabled in the app with `inputLimits.maxImageInputs = 1` and `inputLimits.maxAudioInputs = 1`.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Yoursmiling/Qwen3.5-2B-LiteRT` -> `onnx-community/Qwen3.5-2B-ONNX`
+  - `litert-community/gemma-4-E4B-it-litert-lm` -> `onnx-community/gemma-4-E2B-it-ONNX`
 
 Notes:
 
@@ -287,7 +289,6 @@ Notes:
 - Transformers.js and MediaPipe Tasks GenAI are loaded from locally installed packages and bundled into the app build.
 - Model assets are downloaded at runtime and cached in-browser through the engine-specific path.
 - Model assets are not committed to this repository.
-- The LiteRT Gemma 4 asset is revision-pinned to a specific Hugging Face commit via `runtime.modelAssetPath`.
 - Other model artifacts are not uniformly revision-pinned yet; this remains a documented accepted risk.
 - The pre-chat picker presents each model as a single-select horizontal row with capability chips, language tags, and short-term memory shown as tokens plus a rough word estimate rounded to the nearest 100.
 - Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
@@ -309,4 +310,4 @@ Per-model limits and defaults:
 - `onnx-community/Llama-3.2-1B-Instruct-ONNX`: runtime dtypes `{ webgpu: q4f16, cpu: uint8 }`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}`, no thinking tags
 - All listed Llama entries enable `useExternalDataFormat: true` where required for `.onnx_data` loading.
 - `onnx-community/Qwen3.5-2B-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `litert-community/gemma-4-E4B-it-litert-lm`: engine `mediapipe-genai`, `requiresWebGpu: true`, pinned `modelAssetPath` to `gemma-4-E4B-it-web.task`, `promptFormat: "gemma-turns"`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
+- `onnx-community/gemma-4-E2B-it-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4, cpu: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, `inputLimits.maxAudioInputs: 1`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`

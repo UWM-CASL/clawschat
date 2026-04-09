@@ -395,14 +395,14 @@ describe('preferences controller', () => {
     const backendSelect = harness.document.getElementById('backendSelect');
 
     harness.controller.populateModelSelect();
-    modelSelect.value = 'litert-community/gemma-4-E4B-it-litert-lm';
+    modelSelect.value = 'onnx-community/gemma-4-E2B-it-ONNX';
     backendSelect.value = 'cpu';
 
     const selectedModel = harness.controller.syncModelSelectionForCurrentEnvironment({
       announceFallback: true,
     });
 
-    expect(selectedModel).not.toBe('litert-community/gemma-4-E4B-it-litert-lm');
+    expect(selectedModel).toBe('onnx-community/gemma-4-E2B-it-ONNX');
     expect(modelSelect.value).toBe(selectedModel);
   });
 
@@ -434,7 +434,7 @@ describe('preferences controller', () => {
       false
     );
 
-    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E4B'));
+    const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E2B'));
     expect(gemmaCard?.textContent).toContain('131,072 tokens');
     expect(gemmaCard?.textContent).toContain('about 98,300 words');
     expect(gemmaCard?.textContent).not.toContain('Default context 8,192');
@@ -444,21 +444,25 @@ describe('preferences controller', () => {
     expect(gemmaCard?.textContent).toContain('ZH');
     expect(gemmaCard?.textContent).not.toContain('HI');
     expect(gemmaCard?.textContent).toContain('and more');
-    expect(gemmaCard?.textContent).not.toContain('litert-community/gemma-4-E4B-it-litert-lm');
+    expect(gemmaCard?.textContent).not.toContain('onnx-community/gemma-4-E2B-it-ONNX');
     expect(
       /** @type {HTMLAnchorElement | null} */ (gemmaCard?.querySelector('.model-card-link'))?.href
-    ).toBe('https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm');
+    ).toBe('https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX');
     expect(
       /** @type {HTMLAnchorElement | null} */ (gemmaCard?.querySelector('.model-card-link'))
         ?.textContent
     ).toBe('Model details');
-    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(2);
+    expect(gemmaCard?.querySelectorAll('.model-feature-pill')).toHaveLength(4);
     expect(
       Array.from(gemmaCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
         node.getAttribute('aria-label')
       )
-    ).toEqual(['Shows a thinking section', 'Can use built-in tools']);
-    expect(gemmaCard?.textContent).toContain('This model requires WebGPU.');
+    ).toEqual([
+      'Shows a thinking section',
+      'Can use built-in tools',
+      'Accepts image input',
+      'Accepts audio input',
+    ]);
 
     expect(
       gemmaCard?.querySelector('.model-card-languages .bi-translate')?.getAttribute('aria-label')
@@ -482,7 +486,7 @@ describe('preferences controller', () => {
     );
     gemmaButton?.click();
 
-    expect(modelSelect.value).toBe('litert-community/gemma-4-E4B-it-litert-lm');
+    expect(modelSelect.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
     expect(gemmaButton?.getAttribute('aria-checked')).toBe('true');
   });
 
@@ -508,9 +512,11 @@ describe('preferences controller', () => {
       'Can use built-in tools',
       'Accepts image input',
     ]);
-    expect(getFeatureLabels('Gemma 4 E4B')).toEqual([
+    expect(getFeatureLabels('Gemma 4 E2B')).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
+      'Accepts image input',
+      'Accepts audio input',
     ]);
   });
 

@@ -146,7 +146,7 @@ describe('llm.worker init regression', () => {
     });
   });
 
-  test('stops before model loading when a WebGPU-required model has no usable adapter', async () => {
+  test('falls back to cpu before multimodal Gemma model loading when WebGPU has no usable adapter', async () => {
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
       value: {
@@ -164,25 +164,36 @@ describe('llm.worker init regression', () => {
         data: {
           type: 'init',
           payload: {
-            modelId: 'litert-community/gemma-4-E4B-it-litert-lm',
+            modelId: 'onnx-community/gemma-4-E2B-it-ONNX',
             backendPreference: 'webgpu',
             runtime: {
-              requiresWebGpu: true,
-              modelAssetPath:
-                'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/439779041cf1a165146a3ee1f9a7653b2f047975/gemma-4-E4B-it-web.task',
-              promptFormat: 'gemma-turns',
+              dtypes: {
+                webgpu: 'q4',
+                cpu: 'q4',
+              },
+              multimodalGeneration: true,
+              useExternalDataFormat: true,
             },
           },
         },
       })
     );
 
-    expect(pipelineFactory).not.toHaveBeenCalled();
+    expect(multimodalFactory).toHaveBeenCalledTimes(1);
+    expect(multimodalFactory).toHaveBeenCalledWith(
+      'onnx-community/gemma-4-E2B-it-ONNX',
+      expect.objectContaining({
+        device: 'wasm',
+        dtype: 'q4',
+        use_external_data_format: true,
+      })
+    );
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
-      type: 'init-error',
+      type: 'init-success',
       payload: {
-        message:
-          'Failed to initialize model. litert-community/gemma-4-E4B-it-litert-lm requires WebGPU, but no usable WebGPU adapter was found.',
+        backend: 'cpu',
+        backendDevice: 'wasm',
+        modelId: 'onnx-community/gemma-4-E2B-it-ONNX',
       },
     });
   });
