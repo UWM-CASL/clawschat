@@ -16,6 +16,8 @@ export function bindComposerEvents({
   setChatWorkspaceStarted,
   setPreparingNewConversation,
   updateWelcomePanelVisibility,
+  preparePendingConversationDraft = (_conversationType = 'chat') => {},
+  syncConversationLanguageAndThinkingControls = (_conversation = null) => {},
   getPendingComposerAttachments,
   selectedModelSupportsImageInput,
   getSelectedModelAttachmentSupport,
@@ -53,6 +55,10 @@ export function bindComposerEvents({
   const REFERENCE_AUDIO_ATTACHMENT_ACCEPT = 'audio/*,.mp3,.wav,.ogg,.oga,.flac,.aac,.m4a,.webm';
   const WORK_WITH_ATTACHMENT_ACCEPT = '';
   const AUDIO_FILE_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'oga', 'flac', 'aac', 'm4a', 'webm']);
+  const PICARD_SLASH_COMMAND = '/picard';
+  const PICARD_AGENT_NAME = 'Captain Picard';
+  const PICARD_AGENT_DESCRIPTION =
+    'Calm, diplomatic, principled, and concise. Leads with thoughtful questions, measured confidence, empathy, and strategic clarity. Avoid filler and use "Make it so" sparingly.';
 
   /**
    * @param {unknown} value
@@ -177,6 +183,34 @@ export function bindComposerEvents({
       imageAttachmentInput.accept = WORK_WITH_ATTACHMENT_ACCEPT;
     }
     imageAttachmentInput.dataset.attachmentMode = mode;
+  };
+
+  const parsePicardSlashCommand = (rawValue) => {
+    const normalizedValue = typeof rawValue === 'string' ? rawValue.trim() : '';
+    const match = normalizedValue.match(/^\/picard(?:\s+([\s\S]*))?$/i);
+    if (!match) {
+      return null;
+    }
+    return {
+      initialMessage: typeof match[1] === 'string' ? match[1].trim() : '',
+    };
+  };
+
+  const startPicardAgentDraft = () => {
+    setChatWorkspaceStarted(appState, true);
+    setPreparingNewConversation(appState, true);
+    appState.activeConversationId = null;
+    preparePendingConversationDraft('agent');
+    appState.pendingAgentName = PICARD_AGENT_NAME;
+    appState.pendingAgentDescription = PICARD_AGENT_DESCRIPTION;
+    clearUserMessageEditSession();
+    setChatTitleEditing(appState, false);
+    updateWelcomePanelVisibility({ replaceRoute: false });
+    renderConversationList();
+    renderTranscript();
+    syncConversationLanguageAndThinkingControls(null);
+    updateChatTitle();
+    queueConversationStateSave();
   };
 
   if (sendButton) {
@@ -407,7 +441,7 @@ export function bindComposerEvents({
 
   chatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const value = messageInput.value.trim();
+    let value = messageInput.value.trim();
     const attachments = getPendingComposerAttachments();
     const hasAttachments = attachments.length > 0;
     if (
@@ -425,6 +459,25 @@ export function bindComposerEvents({
         setStatus('Please wait for the current orchestration step to finish.');
       }
       return;
+    }
+
+    const picardSlashCommand = parsePicardSlashCommand(value);
+    if (picardSlashCommand) {
+      if (hasAttachments) {
+        setStatus(`Remove pending attachments before using ${PICARD_SLASH_COMMAND}.`);
+        return;
+      }
+      startPicardAgentDraft();
+      if (!picardSlashCommand.initialMessage) {
+        messageInput.value = '';
+        if (messageInput instanceof HTMLTextAreaElement) {
+          messageInput.focus();
+        }
+        setStatus('Picard agent ready. Say hello below to begin.');
+        return;
+      }
+      value = picardSlashCommand.initialMessage;
+      messageInput.value = value;
     }
 
     if (!hasStartedWorkspace(appState)) {

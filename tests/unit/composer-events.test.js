@@ -34,9 +34,16 @@ function createHarness() {
     activeGenerationConfig: { temperature: 0.7 },
     pendingComposerAttachments: [{ filename: 'diagram.png' }],
     pendingAttachmentOperationCount: 0,
+    pendingConversationType: 'chat',
+    pendingConversationDraftId: '',
+    pendingAgentName: '',
+    pendingAgentDescription: '',
+    pendingConversationSystemPrompt: 'Existing draft',
+    pendingAppendConversationSystemPrompt: false,
     conversations: [],
     activeConversationId: null,
     isPreparingNewConversation: false,
+    hasStartedChatWorkspace: false,
   };
   const messageInput = document.getElementById('messageInput');
   const sendButton = document.getElementById('sendButton');
@@ -61,7 +68,7 @@ function createHarness() {
       isOrchestrationRunningState: vi.fn(() => false),
       isMessageEditActive: vi.fn(() => false),
       isEngineReady: vi.fn(() => false),
-      hasStartedWorkspace: vi.fn(() => false),
+      hasStartedWorkspace: vi.fn((state) => Boolean(state?.hasStartedChatWorkspace)),
       setChatWorkspaceStarted: vi.fn((state, value) => {
         state.hasStartedChatWorkspace = value;
       }),
@@ -69,6 +76,13 @@ function createHarness() {
         state.isPreparingNewConversation = value;
       }),
       updateWelcomePanelVisibility: vi.fn(),
+      preparePendingConversationDraft: vi.fn((conversationType = 'chat') => {
+        appState.pendingConversationType = conversationType;
+        appState.pendingConversationDraftId = '';
+        appState.pendingConversationSystemPrompt = '';
+        appState.pendingAppendConversationSystemPrompt = true;
+      }),
+      syncConversationLanguageAndThinkingControls: vi.fn(),
       getPendingComposerAttachments: vi.fn(() => appState.pendingComposerAttachments),
       selectedModelSupportsImageInput: vi.fn(() => false),
       getSelectedModelAttachmentSupport: vi.fn(() => ({
@@ -201,6 +215,81 @@ describe('composer-events', () => {
       'Save or cancel the current message edit before sending a new message.',
     );
     expect(harness.deps.startModelGeneration).not.toHaveBeenCalled();
+  });
+
+  test('turns /picard into a prefilled agent draft without sending a message', async () => {
+    const harness = createHarness();
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    harness.messageInput.value = '/picard';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.preparePendingConversationDraft).toHaveBeenCalledWith('agent');
+    expect(harness.appState.pendingConversationType).toBe('agent');
+    expect(harness.appState.pendingAgentName).toBe('Captain Picard');
+    expect(harness.appState.pendingAgentDescription).toContain('Calm, diplomatic, principled');
+    expect(harness.deps.syncConversationLanguageAndThinkingControls).toHaveBeenCalledWith(null);
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Picard agent ready. Say hello below to begin.',
+    );
+    expect(harness.deps.createConversation).not.toHaveBeenCalled();
+    expect(harness.deps.startModelGeneration).not.toHaveBeenCalled();
+    expect(harness.messageInput.value).toBe('');
+  });
+
+  test('uses the text after /picard as the first message to a new Picard agent', async () => {
+    const harness = createHarness();
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    harness.deps.isEngineReady.mockReturnValue(true);
+    harness.deps.getLoadedModelId.mockReturnValue('model-1');
+    harness.messageInput.value = '/picard There are four lights.';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.preparePendingConversationDraft).toHaveBeenCalledWith('agent');
+    expect(harness.appState.pendingAgentName).toBe('Captain Picard');
+    expect(harness.deps.createConversation).toHaveBeenCalledTimes(1);
+    expect(harness.deps.addMessageToConversation).toHaveBeenCalledWith(
+      expect.any(Object),
+      'user',
+      'There are four lights.',
+      expect.any(Object),
+    );
+    expect(harness.deps.startModelGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  test('blocks /picard while pending attachments are still staged in the composer', async () => {
+    const harness = createHarness();
+    harness.messageInput.value = '/picard Engage.';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Remove pending attachments before using /picard.',
+    );
+    expect(harness.deps.preparePendingConversationDraft).not.toHaveBeenCalled();
+    expect(harness.deps.createConversation).not.toHaveBeenCalled();
   });
 
   test('blocks submit while attachments are still being prepared', async () => {

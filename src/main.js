@@ -4124,6 +4124,8 @@ bindComposerEvents({
   setChatWorkspaceStarted,
   setPreparingNewConversation,
   updateWelcomePanelVisibility,
+  preparePendingConversationDraft,
+  syncConversationLanguageAndThinkingControls,
   getPendingComposerAttachments,
   selectedModelSupportsImageInput,
   getSelectedModelAttachmentSupport,
