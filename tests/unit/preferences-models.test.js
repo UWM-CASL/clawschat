@@ -90,18 +90,13 @@ describe('preferences-models', () => {
       'Supported languages: English (EN), Spanish (ES), French (FR), Chinese (ZH), Hindi (HI), Japanese (JA), and more.'
     );
 
-    const qwenCard = cards.find((card) => card.textContent?.includes('Qwen3.5 2B Instruct'));
-    expect(qwenCard?.textContent).toContain('262,144 tokens');
-    expect(qwenCard?.textContent).not.toContain('Unavailable');
+    const llama3BCard = cards.find((card) => card.textContent?.includes('Llama 3.2 3B Instruct'));
+    expect(llama3BCard?.textContent).toContain('131,072 tokens');
     expect(
-      Array.from(qwenCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
+      Array.from(llama3BCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
         node.getAttribute('aria-label')
       )
-    ).toEqual([
-      'Shows a thinking section',
-      'Can use built-in tools',
-      'Accepts image input',
-    ]);
+    ).toEqual(['Can use built-in tools']);
     expect(cards.some((card) => card.textContent?.includes('Liquid LFM 2.5 350M'))).toBe(false);
     expect(cards.some((card) => card.textContent?.includes('Liquid LFM 2.5 1.2B Instruct'))).toBe(
       false
@@ -109,6 +104,8 @@ describe('preferences-models', () => {
     expect(cards.some((card) => card.textContent?.includes('Liquid LFM 2.5 1.2B Thinking'))).toBe(
       false
     );
+    expect(cards.some((card) => card.textContent?.includes('Llama 3.2 1B Instruct'))).toBe(false);
+    expect(cards.some((card) => card.textContent?.includes('Qwen3.5 2B Instruct'))).toBe(false);
 
     const gemmaButton = /** @type {HTMLButtonElement | null} */ (
       gemmaCard?.querySelector('.model-card-button')
@@ -151,25 +148,25 @@ describe('preferences-models', () => {
     expect(harness.deps.setStatus).not.toHaveBeenCalled();
   });
 
-  test('restores a removed model id as the first visible available model', () => {
+  test('restores a removed model id as the default visible model', () => {
     const harness = createHarness();
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
     );
 
-    harness.storage.setItem('model', 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX');
+    harness.storage.setItem('model', 'onnx-community/Qwen3.5-2B-ONNX');
     harness.storage.setItem('backend', 'webgpu');
 
     harness.controller.restoreInferencePreferences();
 
     expect(
-      harness.controller.getAvailableModelId('LiquidAI/LFM2.5-1.2B-Thinking-ONNX', 'webgpu')
-    ).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
-    expect(modelSelect.value).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
-    expect(harness.storage.getItem('model')).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
+      harness.controller.getAvailableModelId('onnx-community/Qwen3.5-2B-ONNX', 'webgpu')
+    ).toBe('onnx-community/gemma-4-E2B-it-ONNX');
+    expect(modelSelect.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
+    expect(harness.storage.getItem('model')).toBe('onnx-community/gemma-4-E2B-it-ONNX');
     expect(harness.storage.getItem('backend')).toBe('webgpu');
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      'onnx-community/Llama-3.2-1B-Instruct-ONNX',
+      'onnx-community/gemma-4-E2B-it-ONNX',
       true
     );
   });
@@ -188,7 +185,7 @@ describe('preferences-models', () => {
     const generationConfig = { maxOutputTokens: 512 };
 
     harness.controller.populateModelSelect();
-    modelSelect.value = 'onnx-community/Llama-3.2-1B-Instruct-ONNX';
+    modelSelect.value = 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
     backendSelect.value = 'cpu';
     cpuThreadsInput.value = '3';
 
@@ -196,26 +193,26 @@ describe('preferences-models', () => {
 
     expect(engineConfig).toEqual({
       engineType: 'transformers-js',
-      modelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX',
+      modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       backendPreference: 'cpu',
-      runtime: { runtimeModelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX', cpuThreads: 3 },
+      runtime: { runtimeModelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web', cpuThreads: 3 },
       generationConfig,
     });
     expect(harness.deps.getRuntimeConfigForModel).toHaveBeenCalledWith(
-      'onnx-community/Llama-3.2-1B-Instruct-ONNX'
+      'onnx-community/Llama-3.2-3B-Instruct-onnx-web'
     );
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      'onnx-community/Llama-3.2-1B-Instruct-ONNX',
+      'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       false
     );
 
     harness.controller.persistInferencePreferences(generationConfig);
 
-    expect(harness.storage.getItem('model')).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
+    expect(harness.storage.getItem('model')).toBe('onnx-community/Llama-3.2-3B-Instruct-onnx-web');
     expect(harness.storage.getItem('backend')).toBe('cpu');
     expect(harness.storage.getItem('cpu-threads')).toBe('3');
     expect(harness.deps.persistGenerationConfigForModel).toHaveBeenCalledWith(
-      'onnx-community/Llama-3.2-1B-Instruct-ONNX',
+      'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       generationConfig
     );
   });

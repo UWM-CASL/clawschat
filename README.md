@@ -226,30 +226,19 @@ Student-facing browser chat UI with local model inference.
 
 ## Supported models
 
-- `onnx-community/Llama-3.2-1B-Instruct-ONNX` (default)
-  - Uses `q4f16` on WebGPU and `uint8` on CPU in this app, with external data loading.
-  - Uses the same conservative app defaults as the 3B Llama entry: temperature `0.6`, top-k `50`, top-p `0.9`.
-  - Uses the same JSON tool-call format as the 3B Llama entry in this app.
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - Uses `q4f16` on WebGPU and `q4` on CPU in this app.
-  - Remains the canonical Llama 3.2 3B entry for this browser app because the full ONNX repo was not reliable here.
-- `onnx-community/Qwen3.5-2B-ONNX`
-  - Uses the Transformers.js worker path in this app.
-  - Uses `q4f16` on WebGPU and `q4` on CPU, with external ONNX data loading.
-  - Enables multimodal generation for image input in the current worker path.
-  - Reuses the existing lazy multimodal processor load path so preprocessing assets are not pulled during initial model load.
-  - Uses `<think>...</think>` reasoning tags and the app's XML tool-call format support.
-- `onnx-community/gemma-4-E2B-it-ONNX`
+- `onnx-community/gemma-4-E2B-it-ONNX` (default)
   - Uses the Transformers.js worker path in this app.
   - Uses `q4f16` on WebGPU and `q4` on CPU, with external ONNX data loading.
   - Enables multimodal generation for image and audio input in the current worker path.
   - Reuses the existing lazy multimodal processor load path so preprocessing assets are not pulled during initial model load.
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - Uses `q4f16` on WebGPU and `q4` on CPU in this app.
+  - Remains the canonical Llama 3.2 3B entry for this browser app because the full ONNX repo was not reliable here.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `Yoursmiling/Qwen3.5-2B-LiteRT` -> `onnx-community/Qwen3.5-2B-ONNX`
 
 For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` repo id as the canonical model. The full ONNX repo remains a legacy alias only because its browser load path was not reliable in this app: the `int8` package hit `Array buffer allocation failed`, and the `q4` package failed to preload required `.onnx_data` shards in-browser.
 

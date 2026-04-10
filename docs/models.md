@@ -255,32 +255,20 @@ Do not mark a capability on the card just because the upstream model card advert
 
 Current models in Settings:
 
-- `onnx-community/Llama-3.2-1B-Instruct-ONNX` (default)
-  - Uses the `transformers-js` engine.
-  - Uses runtime dtypes `{ webgpu: q4f16, cpu: uint8 }` and `useExternalDataFormat: true`.
-  - Uses the same JSON tool-call format as the 3B Llama entry.
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - Uses the `transformers-js` engine.
-  - Uses runtime dtypes `{ webgpu: q4f16, cpu: q4 }`.
-  - Keeps the browser-oriented `onnx-web` repo id as the canonical Llama 3.2 3B model in this app.
-- `onnx-community/Qwen3.5-2B-ONNX`
-  - Uses the `transformers-js` engine.
-  - Uses runtime dtypes `{ webgpu: q4f16, cpu: q4 }` and `useExternalDataFormat: true`.
-  - Enables `multimodalGeneration: true` for the current image-input worker path.
-  - Uses `thinkingControl` with runtime `enable_thinking`.
-  - Uses Qwen's `<think>` / `</think>` reasoning tags plus the XML tool-call format already supported elsewhere in the app.
-  - Keeps image input enabled in the app with `inputLimits.maxImageInputs = 1`.
-- `onnx-community/gemma-4-E2B-it-ONNX`
+- `onnx-community/gemma-4-E2B-it-ONNX` (default)
   - Uses the `transformers-js` engine.
   - Uses runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, `multimodalGeneration: true`, and `useExternalDataFormat: true`.
   - Uses `thinkingControl` with runtime `enable_thinking`.
   - Uses Gemma's channel-style thought markers via `thinkingTags { open: "<|channel>", close: "<channel|>", stripLeadingText: "thought" }`.
   - Uses the Gemma special-token tool-call format.
   - Keeps image and audio input enabled in the app with `inputLimits.maxImageInputs = 1` and `inputLimits.maxAudioInputs = 1`.
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
+  - Uses the `transformers-js` engine.
+  - Uses runtime dtypes `{ webgpu: q4f16, cpu: q4 }`.
+  - Keeps the browser-oriented `onnx-web` repo id as the canonical Llama 3.2 3B model in this app.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - `Yoursmiling/Qwen3.5-2B-LiteRT` -> `onnx-community/Qwen3.5-2B-ONNX`
 
 Notes:
 
@@ -304,9 +292,7 @@ Notes:
 
 Per-model limits and defaults:
 
+- `onnx-community/gemma-4-E2B-it-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, `inputLimits.maxAudioInputs: 1`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"cmd":"..."}` inside `parameters`, no thinking tags
 - `Llama 3.2 3B` keeps the browser-oriented `onnx-web` repo id as its canonical model in this app. The full ONNX repo remains a legacy alias because its browser load path was not reliable here: the `int8` package could fail with `Array buffer allocation failed`, and the `q4` package could fail to preload required `.onnx_data` shards.
-- `onnx-community/Llama-3.2-1B-Instruct-ONNX`: runtime dtypes `{ webgpu: q4f16, cpu: uint8 }`, `useExternalDataFormat: true`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}`, no thinking tags
-- All listed Llama entries enable `useExternalDataFormat: true` where required for `.onnx_data` loading.
-- `onnx-community/Qwen3.5-2B-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, max context `262144`, default context `8192`, default temperature `0.6`, default top-k `20`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, and `imageInput`, tool call format `xml-tool-call`, thinking tags `<think>` / `</think>`, thinking control `{ defaultEnabled: false, runtimeParameter: "enable_thinking" }`
-- `onnx-community/gemma-4-E2B-it-ONNX`: engine `transformers-js`, runtime dtypes `{ webgpu: q4f16, cpu: q4 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, `inputLimits.maxAudioInputs: 1`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
+- The remaining listed Llama entry enables `useExternalDataFormat: true` for `.onnx_data` loading.

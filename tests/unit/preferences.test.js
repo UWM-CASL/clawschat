@@ -418,13 +418,13 @@ describe('preferences controller', () => {
     const cards = Array.from(modelCardList.querySelectorAll('.model-card'));
     expect(cards.length).toBe(modelSelect.querySelectorAll('option').length);
 
-    const llama1BCard = cards.find((card) => card.textContent?.includes('Llama 3.2 1B Instruct'));
-    expect(llama1BCard?.textContent).toContain('131,072 tokens');
-    expect(llama1BCard?.textContent).not.toContain('Temp 0.6');
-    expect(llama1BCard?.textContent).not.toContain('Default context 8,192');
+    const llama3BCard = cards.find((card) => card.textContent?.includes('Llama 3.2 3B Instruct'));
+    expect(llama3BCard?.textContent).toContain('131,072 tokens');
+    expect(llama3BCard?.textContent).not.toContain('Temp 0.6');
+    expect(llama3BCard?.textContent).not.toContain('Default context 8,192');
     expect(
-      /** @type {HTMLAnchorElement | null} */ (llama1BCard?.querySelector('.model-card-link'))?.href
-    ).toBe('https://huggingface.co/onnx-community/Llama-3.2-1B-Instruct-ONNX');
+      /** @type {HTMLAnchorElement | null} */ (llama3BCard?.querySelector('.model-card-link'))?.href
+    ).toBe('https://huggingface.co/onnx-community/Llama-3.2-3B-Instruct-onnx-web');
 
     expect(cards.some((card) => card.textContent?.includes('Liquid LFM 2.5 350M'))).toBe(false);
     expect(cards.some((card) => card.textContent?.includes('Liquid LFM 2.5 1.2B Instruct'))).toBe(
@@ -433,6 +433,8 @@ describe('preferences controller', () => {
     expect(cards.some((card) => card.textContent?.includes('Liquid LFM 2.5 1.2B Thinking'))).toBe(
       false
     );
+    expect(cards.some((card) => card.textContent?.includes('Llama 3.2 1B Instruct'))).toBe(false);
+    expect(cards.some((card) => card.textContent?.includes('Qwen3.5 2B Instruct'))).toBe(false);
 
     const gemmaCard = cards.find((card) => card.textContent?.includes('Gemma 4 E2B'));
     expect(gemmaCard?.textContent).toContain('131,072 tokens');
@@ -506,12 +508,6 @@ describe('preferences controller', () => {
     };
 
     expect(getFeatureLabels('Llama 3.2 3B Instruct')).toEqual(['Can use built-in tools']);
-    expect(getFeatureLabels('Llama 3.2 1B Instruct')).toEqual(['Can use built-in tools']);
-    expect(getFeatureLabels('Qwen3.5 2B Instruct')).toEqual([
-      'Shows a thinking section',
-      'Can use built-in tools',
-      'Accepts image input',
-    ]);
     expect(getFeatureLabels('Gemma 4 E2B')).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
@@ -532,7 +528,7 @@ describe('preferences controller', () => {
     const firstCardTitle = modelCardList.querySelector(
       '.model-card .model-card-title'
     )?.textContent;
-    expect(firstCardTitle).toBe('Llama 3.2 1B Instruct');
-    expect(modelSelect.options[0]?.value).toBe('onnx-community/Llama-3.2-1B-Instruct-ONNX');
+    expect(firstCardTitle).toBe('Gemma 4 E2B');
+    expect(modelSelect.options[0]?.value).toBe('onnx-community/gemma-4-E2B-it-ONNX');
   });
 });
