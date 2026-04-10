@@ -3231,7 +3231,7 @@ function updateRegenerateButtons() {
     if (responseActions) {
       responseActions.classList.toggle('d-none', hideActions);
       responseActions
-        .querySelectorAll('.regenerate-response-btn, .fix-response-btn')
+        .querySelectorAll('.regenerate-response-btn')
         .forEach((button) => {
           if (button instanceof HTMLButtonElement) {
             button.classList.toggle('d-none', isAgentThread);
@@ -4170,7 +4170,6 @@ bindTranscriptEvents({
   messageInput,
   switchModelVariant,
   regenerateFromMessage: (messageId) => appController.regenerateFromMessage(messageId),
-  fixResponseFromMessage: (messageId) => appController.fixResponseFromMessage(messageId),
   switchUserVariant,
   beginUserMessageEdit,
   saveUserMessageEdit,

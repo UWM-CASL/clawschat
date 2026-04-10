@@ -216,7 +216,7 @@ Student-facing browser chat UI with local model inference.
 - The keyboard shortcuts dialog and `help.html` keep the global and focused transcript shortcut tables aligned, including the `Shift+Enter` composer newline behavior and the setting that can disable single-key transcript shortcuts.
 - Composer keyboard behavior uses `Enter` to send and `Shift+Enter` to insert a new line.
 - Each model response includes a `Regenerate` button. Regeneration creates a new response variation at that turn, keeps prior variations, and lets users navigate alternatives with left/right controls and an `x/y` indicator.
-- Each model response includes a `Fix` button (wrench icon). `Fix` now runs a multi-step orchestration from `src/config/orchestrations/fix-response.json` (critique -> revise -> validate) before streaming a corrected variant at that turn.
+- Each focused model response still supports `Fix` from the transcript shortcut (`F`). `Fix` runs a multi-step orchestration from `src/config/orchestrations/fix-response.json` (critique -> revise -> validate) before streaming a corrected variant at that turn.
 - Each user message now supports branch-aware editing controls:
   - `Edit` opens inline editing for that user message.
   - `Save` (floppy icon) commits the edit and removes all later turns on that branch from that point forward.

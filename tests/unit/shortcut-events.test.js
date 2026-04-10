@@ -143,6 +143,26 @@ describe('shortcut-events', () => {
     expect(harness.deps.handleMessageCopyAction).toHaveBeenCalledWith('model-1', 'response');
   });
 
+  test('routes focused model-message fix shortcuts to the fix handler', () => {
+    const harness = createHarness();
+    const { handleFocusedMessageShortcut } = createShortcutHandlers(harness.deps);
+    const messageRow = harness.document.querySelector('.message-row');
+    messageRow.focus();
+
+    const event = new harness.dom.window.KeyboardEvent('keydown', {
+      key: 'f',
+      bubbles: true,
+    });
+    Object.defineProperty(event, 'target', {
+      value: messageRow,
+    });
+
+    const handled = handleFocusedMessageShortcut(event);
+
+    expect(handled).toBe(true);
+    expect(harness.deps.fixResponseFromMessage).toHaveBeenCalledWith('model-1');
+  });
+
   test('blocks mutation shortcuts inside agent conversations while leaving copy available', () => {
     const harness = createHarness();
     harness.activeConversation.conversationType = 'agent';

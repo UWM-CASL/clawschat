@@ -283,9 +283,6 @@ describe('transcript-view', () => {
     expect(
       harness.container.querySelector('.regenerate-response-btn')?.classList.contains('d-none')
     ).toBe(true);
-    expect(harness.container.querySelector('.fix-response-btn')?.classList.contains('d-none')).toBe(
-      true
-    );
     expect(
       harness.container.querySelector('.edit-user-message-btn')?.classList.contains('d-none')
     ).toBe(true);
@@ -295,6 +292,16 @@ describe('transcript-view', () => {
     expect(
       harness.container.querySelector('.copy-message-btn')?.classList.contains('d-none')
     ).toBe(false);
+  });
+
+  test('does not render a visible fix button for model responses', () => {
+    const harness = createViewHarness();
+    const view = createDefaultTranscriptView(harness);
+
+    view.renderTranscript({ scrollToBottom: false });
+
+    expect(harness.container.querySelector('.regenerate-response-btn')).not.toBeNull();
+    expect(harness.container.querySelector('.fix-response-btn')).toBeNull();
   });
 
   test('shows a dedicated MathML copy action for math responses', () => {

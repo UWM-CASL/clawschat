@@ -10,7 +10,6 @@ export function bindTranscriptEvents({
   messageInput,
   switchModelVariant,
   regenerateFromMessage,
-  fixResponseFromMessage,
   switchUserVariant,
   beginUserMessageEdit,
   saveUserMessageEdit,
@@ -40,11 +39,6 @@ export function bindTranscriptEvents({
       const regenerateButton = target.closest('.regenerate-response-btn');
       if (regenerateButton instanceof HTMLButtonElement) {
         regenerateFromMessage(regenerateButton.dataset.messageId || '');
-        return;
-      }
-      const fixButton = target.closest('.fix-response-btn');
-      if (fixButton instanceof HTMLButtonElement) {
-        await fixResponseFromMessage(fixButton.dataset.messageId || '');
         return;
       }
       const userVariantPrevButton = target.closest('.user-variant-prev');

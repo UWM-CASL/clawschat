@@ -1148,18 +1148,6 @@ export function createTranscriptView(dependencies) {
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-outline-primary fix-response-btn${canMutateModelTurn ? '' : ' d-none'}"
-            data-message-id="${message.id}"
-            aria-label="Fix response"
-            aria-keyshortcuts="F"
-            data-bs-toggle="tooltip"
-            data-bs-title="Fix response (F)"
-          >
-            <i class="bi bi-wrench-adjustable-circle" aria-hidden="true"></i>
-            <span class="visually-hidden">Fix response</span>
-          </button>
-          <button
-            type="button"
             class="btn btn-sm btn-outline-primary copy-message-btn"
             data-message-id="${message.id}"
             aria-label="Copy response"
@@ -1475,12 +1463,8 @@ export function createTranscriptView(dependencies) {
     if (responseActions) {
       responseActions.classList.toggle('d-none', !isTurnComplete);
       const regenerateButton = responseActions.querySelector('.regenerate-response-btn');
-      const fixButton = responseActions.querySelector('.fix-response-btn');
       if (regenerateButton instanceof view.HTMLButtonElement) {
         regenerateButton.classList.toggle('d-none', !canMutateModelTurn);
-      }
-      if (fixButton instanceof view.HTMLButtonElement) {
-        fixButton.classList.toggle('d-none', !canMutateModelTurn);
       }
     }
     const variantState = getModelVariantState(activeConversation, message);

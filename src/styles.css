@@ -1564,15 +1564,17 @@
   color: var(--action-btn-text);
   border-color: transparent;
   border-width: 0;
-  background-color: color-mix(in srgb, var(--action-btn-text) 10%, transparent);
+  background-color: transparent;
   font-weight: 600;
 }
 
 .response-actions .btn:hover,
-.response-actions .btn:focus-visible {
-  color: var(--action-btn-hover-text);
-  background-color: var(--action-btn-hover-bg);
-  border-color: var(--action-btn-hover-bg);
+.response-actions .btn:focus-visible,
+.message-actions .btn:hover,
+.message-actions .btn:focus-visible {
+  color: color-mix(in srgb, var(--action-btn-text) 82%, var(--ink-strong) 18%);
+  background-color: transparent;
+  border-color: transparent;
 }
 
 .tool-call-toggle {
@@ -1628,14 +1630,8 @@
   color: var(--action-btn-text);
   border-color: transparent;
   border-width: 0;
+  background-color: transparent;
   font-weight: 600;
-}
-
-.message-actions .btn:hover,
-.message-actions .btn:focus-visible {
-  color: var(--action-btn-hover-text);
-  background-color: var(--action-btn-hover-bg);
-  border-color: var(--action-btn-hover-bg);
 }
 
 .message-actions .btn .bi {
