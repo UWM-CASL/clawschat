@@ -113,7 +113,7 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'run_shell_command',
     displayName: 'Shell Command Runner',
     description:
-      'Passes a shell command to an emulated Linux shell starting in /workspace. Pass one complete shell line as {"shell":"..."}. Call with an empty arguments object to get syntax and supported commands. Files are in /workspace.',
+      'Passes a shell command to an emulated Linux shell starting in /workspace. Pass one complete shell line as {"shell":"..."}. Call with an empty arguments object to get syntax and supported commands, then use help <command> inside the shell when you need command-specific usage. Files are in /workspace.',
     enabled: true,
     parameters: {
       type: 'object',
@@ -786,12 +786,22 @@ function buildJsonToolInstructionLines(
       lines.push(`    - ${buildPromptToolExample(toolCallingConfig, name, {})}`);
       lines.push(
         `    - ${buildPromptToolExample(toolCallingConfig, name, {
+          shell: 'help grep',
+        })}`
+      );
+      lines.push(
+        `    - ${buildPromptToolExample(toolCallingConfig, name, {
           shell: 'ls -l /workspace',
         })}`
       );
       lines.push(
         `    - ${buildPromptToolExample(toolCallingConfig, name, {
           shell: 'python /workspace/script.py',
+        })}`
+      );
+      lines.push(
+        `    - ${buildPromptToolExample(toolCallingConfig, name, {
+          shell: 'printf "alpha\\nbeta\\n" | tee /workspace/notes.txt',
         })}`
       );
       lines.push('  - Prefer write_python_file for larger scripts.');
@@ -974,6 +984,10 @@ function getToolInstructionNotes(name) {
       bulleted: true,
     });
     notes.push({
+      text: 'Use help <command> when you need command-specific usage.',
+      bulleted: true,
+    });
+    notes.push({
       text: 'The shell includes python.',
       bulleted: true,
     });
@@ -1143,18 +1157,34 @@ export function buildToolCallingSystemPrompt(
     .join('\n');
 }
 
+function normalizeToolCallArgumentsValue(argumentsValue) {
+  if (argumentsValue && typeof argumentsValue === 'object' && !Array.isArray(argumentsValue)) {
+    return argumentsValue;
+  }
+  if (typeof argumentsValue === 'string') {
+    const trimmed = argumentsValue.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // Ignore malformed stringified payloads and fall back to an empty object.
+      }
+    }
+  }
+  return {};
+}
+
 function normalizeDetectedToolCall(name, argumentsValue, rawText, format) {
   const normalizedName = typeof name === 'string' ? name.trim() : '';
   if (!normalizedName) {
     return null;
   }
-  const normalizedArguments =
-    argumentsValue && typeof argumentsValue === 'object' && !Array.isArray(argumentsValue)
-      ? argumentsValue
-      : {};
   return {
     name: normalizedName,
-    arguments: normalizedArguments,
+    arguments: normalizeToolCallArgumentsValue(argumentsValue),
     rawText: String(rawText || ''),
     format,
   };
@@ -2591,12 +2621,9 @@ export async function executeToolCall(toolCall, runtimeContext = {}) {
       toolName = MCP_SERVER_COMMAND_CALL_TOOL;
     }
   }
-  const argumentsValue =
-    toolCall.arguments &&
-    typeof toolCall.arguments === 'object' &&
-    !Array.isArray(toolCall.arguments)
-      ? toolCall.arguments
-      : {};
+  const rawArgumentsValue =
+    toolCall.arguments !== undefined ? toolCall.arguments : toolCall.parameters;
+  const argumentsValue = normalizeToolCallArgumentsValue(rawArgumentsValue);
   const toolExecutor = TOOL_EXECUTORS[toolName];
   if (!toolExecutor) {
     aliasResolution = findEnabledMcpCommandAlias(runtimeContext.mcpServers, toolName);

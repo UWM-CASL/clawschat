@@ -173,11 +173,17 @@ export function createTerminalView({
       if (stderr) {
         terminal.write(`\x1b[31m${stderr}\x1b[39m`);
       }
+
+      const exitCode = Number.isFinite(entry.exitCode) ? Number(entry.exitCode) : 0;
+      if (exitCode !== 0) {
+        terminal.write(`\x1b[31m# exit ${exitCode}\n\x1b[39m`);
+      }
     });
 
     if (pendingEntry?.command) {
       terminal.write(formatPrompt(pendingEntry.currentWorkingDirectory || currentWorkingDirectory));
       terminal.writeln(normalizeTerminalText(pendingEntry.command));
+      terminal.write('\x1b[33m# running...\n\x1b[39m');
     }
 
     terminal.write(prompt);

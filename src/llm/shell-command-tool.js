@@ -22,6 +22,7 @@ const PIPELINE_SAFE_COMMAND_NAMES = new Set([
   'nl',
   'grep',
   'sed',
+  'tee',
 ]);
 const FILE_EXTENSION_DESCRIPTIONS = Object.freeze({
   txt: 'text',
@@ -145,6 +146,11 @@ const SHELL_COMMANDS = Object.freeze([
     description: 'Number the lines of a text file.',
   },
   {
+    name: 'tee',
+    usage: 'tee [-a] <file>...',
+    description: 'Write pipeline input to one or more text files and also echo it to stdout.',
+  },
+  {
     name: 'rmdir',
     usage: 'rmdir <directory>...',
     description: 'Remove empty directories under /workspace.',
@@ -234,6 +240,11 @@ const SHELL_COMMANDS = Object.freeze([
     usage: 'which <command>...',
     description: 'Report whether a command exists in this shell subset.',
   },
+  {
+    name: 'help',
+    usage: 'help [<command>...]',
+    description: 'Show shell-subset usage details for all commands or named commands.',
+  },
 ]);
 
 function getTextEncoder() {
@@ -258,10 +269,27 @@ function createShellResult(
   };
 }
 
+function getShellCommandDefinition(commandName) {
+  return SHELL_COMMANDS.find((command) => command.name === commandName) || null;
+}
+
+function formatShellHelpEntry(commandDefinition) {
+  const lines = [
+    commandDefinition.name,
+    `Usage: ${commandDefinition.usage}`,
+    `Description: ${commandDefinition.description}`,
+  ];
+  if (PIPELINE_SAFE_COMMAND_NAMES.has(commandDefinition.name)) {
+    lines.push('Pipeline input: supported');
+  }
+  return lines.join('\n');
+}
+
 function formatShellCommandUsageBody(currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
   return [
     'Call again with {"shell":"..."}',
     `Current working directory: ${currentWorkingDirectory}`,
+    'Use help <command> for usage details.',
     `Supported commands: ${SHELL_COMMANDS.map((command) => command.name).join(', ')}`,
   ].join('\n');
 }
@@ -429,6 +457,14 @@ function dirname(path) {
     return '/';
   }
   return trimmed.slice(0, lastSlashIndex);
+}
+
+function getParentWorkspacePath(path) {
+  const normalizedPath = normalizeWorkspacePath(path);
+  if (normalizedPath === WORKSPACE_ROOT_PATH) {
+    return null;
+  }
+  return normalizeWorkspacePath(dirname(normalizedPath));
 }
 
 function getMktempTemplatePath(template, currentWorkingDirectory) {
@@ -1514,6 +1550,39 @@ async function runWhich(commandText, args, currentWorkingDirectory) {
   return createShellResult(commandText, {
     exitCode: matches.length === args.length ? 0 : 1,
     stdout: matches.join('\n'),
+    currentWorkingDirectory,
+  });
+}
+
+async function runHelp(commandText, args, currentWorkingDirectory) {
+  if (!args.length) {
+    return createShellResult(commandText, {
+      stdout: SHELL_COMMANDS.map(
+        (command) => `${command.name.padEnd(8, ' ')} ${command.description}`
+      ).join('\n'),
+      currentWorkingDirectory,
+    });
+  }
+
+  const sections = [];
+  const unknownCommands = [];
+  for (const commandName of args) {
+    const commandDefinition = getShellCommandDefinition(commandName);
+    if (!commandDefinition) {
+      unknownCommands.push(commandName);
+      continue;
+    }
+    sections.push(formatShellHelpEntry(commandDefinition));
+  }
+
+  return createShellResult(commandText, {
+    exitCode: unknownCommands.length ? 1 : 0,
+    stdout: sections.join('\n\n'),
+    stderr: unknownCommands.length
+      ? unknownCommands
+          .map((commandName) => `help: unknown command '${commandName}'.`)
+          .join('\n')
+      : '',
     currentWorkingDirectory,
   });
 }
@@ -4134,6 +4203,114 @@ async function runGrep(
   });
 }
 
+async function runTee(
+  commandText,
+  args,
+  workspaceFileSystem,
+  currentWorkingDirectory,
+  stdinText
+) {
+  let appendMode = false;
+  const outputPaths = [];
+
+  for (const argument of args) {
+    if (argument === '-a') {
+      appendMode = true;
+      continue;
+    }
+    if (argument === '--') {
+      continue;
+    }
+    if (argument.startsWith('-')) {
+      return createShellError(
+        commandText,
+        'tee',
+        `unsupported option ${argument}.`,
+        2,
+        currentWorkingDirectory
+      );
+    }
+    outputPaths.push(argument);
+  }
+
+  if (!outputPaths.length) {
+    return createShellError(
+      commandText,
+      'tee',
+      'expected at least one destination file path.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  if (!hasPipelineStdin(stdinText)) {
+    return createShellError(
+      commandText,
+      'tee',
+      'this command requires stdin from a pipeline.',
+      2,
+      currentWorkingDirectory
+    );
+  }
+
+  const normalizedText = String(stdinText ?? '');
+  for (const rawPath of outputPaths) {
+    let normalizedPath;
+    try {
+      normalizedPath = resolveWorkspacePath(workspaceFileSystem, rawPath, currentWorkingDirectory);
+    } catch (error) {
+      return createShellError(
+        commandText,
+        'tee',
+        error instanceof Error ? error.message : String(error),
+        1,
+        currentWorkingDirectory
+      );
+    }
+
+    const existingEntry = await safeStat(workspaceFileSystem, normalizedPath);
+    if (existingEntry && existingEntry.kind !== 'file') {
+      return createShellError(
+        commandText,
+        'tee',
+        `'${rawPath}' is not a file.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+
+    const parentPath = getParentWorkspacePath(normalizedPath);
+    if (!parentPath) {
+      return createShellError(
+        commandText,
+        'tee',
+        `'${rawPath}' is not a file.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+    const parentEntry = await safeStat(workspaceFileSystem, parentPath);
+    if (!parentEntry || parentEntry.kind !== 'directory') {
+      return createShellError(
+        commandText,
+        'tee',
+        `cannot write '${rawPath}': No such directory.`,
+        1,
+        currentWorkingDirectory
+      );
+    }
+
+    const existingText =
+      appendMode && existingEntry ? await workspaceFileSystem.readTextFile(normalizedPath) : '';
+    await workspaceFileSystem.writeFile(normalizedPath, `${existingText}${normalizedText}`);
+  }
+
+  return createShellResult(commandText, {
+    stdout: normalizedText,
+    currentWorkingDirectory,
+  });
+}
+
 const SHELL_COMMAND_EXECUTORS = Object.freeze({
   pwd: ({ commandText, args, currentWorkingDirectory }) =>
     runPwd(commandText, args, currentWorkingDirectory),
@@ -4157,6 +4334,8 @@ const SHELL_COMMAND_EXECUTORS = Object.freeze({
     runUnset(commandText, args, runtimeContext, currentWorkingDirectory),
   which: ({ commandText, args, currentWorkingDirectory }) =>
     runWhich(commandText, args, currentWorkingDirectory),
+  help: ({ commandText, args, currentWorkingDirectory }) =>
+    runHelp(commandText, args, currentWorkingDirectory),
   ls: ({ commandText, args, workspaceFileSystem, currentWorkingDirectory }) =>
     runLs(commandText, args, workspaceFileSystem, currentWorkingDirectory),
   cat: ({ commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText }) =>
@@ -4183,6 +4362,8 @@ const SHELL_COMMAND_EXECUTORS = Object.freeze({
     runTr(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText),
   nl: ({ commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText }) =>
     runNl(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText),
+  tee: ({ commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText }) =>
+    runTee(commandText, args, workspaceFileSystem, currentWorkingDirectory, stdinText),
   rmdir: ({ commandText, args, workspaceFileSystem, currentWorkingDirectory }) =>
     runRmdir(commandText, args, workspaceFileSystem, currentWorkingDirectory),
   mkdir: ({ commandText, args, workspaceFileSystem, currentWorkingDirectory }) =>
@@ -4665,6 +4846,7 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'which ls',
       'basename /workspace/file.txt',
       'dirname /workspace/file.txt',
+      'help grep',
       'printf "Hello %s\\n" world',
       'mktemp',
       'mktemp -d /workspace/tmpdir.XXXXXX',
@@ -4676,6 +4858,7 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       'column -t -s , /workspace/<file>',
       'tr abc xyz /workspace/<file>',
       'nl /workspace/<file>',
+      'printf "alpha\\nbeta\\n" | tee /workspace/notes.txt',
       'cd <directory>',
       'cat /workspace/<file>',
       'NAME=value',
@@ -4703,9 +4886,9 @@ function buildShellCommandUsageResult(currentWorkingDirectory = WORKSPACE_ROOT_P
       `Command text must be plain shell input, ${MAX_SHELL_COMMAND_LENGTH} characters or fewer, and free of control characters.`,
       'Relative paths resolve from the current working directory.',
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.',
-      'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed.',
+      'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed, tee.',
       'Unsupported syntax: ;, &&, redirection, substitution, globbing.',
-      'paste, join, column, file, diff, curl, and python are partial GNU/Linux-like subsets.',
+      'paste, join, column, file, diff, curl, python, and tee are partial GNU/Linux-like subsets.',
       'Unsupported commands or syntax return stderr text and a non-zero exit code.',
     ],
     placeholders: [

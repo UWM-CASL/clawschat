@@ -1418,6 +1418,26 @@ describe('tool-calling prompt builder', () => {
     ]);
   });
 
+  test('sniffs plain json tool calls when the arguments object is stringified', () => {
+    expect(
+      sniffToolCalls(
+        '{"name":"run_shell_command","parameters":"{\\"shell\\":\\"pwd\\"}"}',
+        {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        }
+      )
+    ).toEqual([
+      {
+        name: 'run_shell_command',
+        arguments: { shell: 'pwd' },
+        rawText: '{"name":"run_shell_command","parameters":"{\\"shell\\":\\"pwd\\"}"}',
+        format: 'json',
+      },
+    ]);
+  });
+
   test('sniffs a leading plain json tool call even with trailing prose', () => {
     expect(
       sniffToolCalls(
@@ -2095,6 +2115,14 @@ describe('tool-calling prompt builder', () => {
           name: 'python',
           usage: 'python <script.py> [<argument>...] | python -c "<code>" [<argument>...]',
         }),
+        expect.objectContaining({
+          name: 'tee',
+          usage: 'tee [-a] <file>...',
+        }),
+        expect.objectContaining({
+          name: 'help',
+          usage: 'help [<command>...]',
+        }),
       ])
     );
     expect(result.result.limitations).toContain(
@@ -2110,13 +2138,13 @@ describe('tool-calling prompt builder', () => {
       'Minimal variable support exists for $VAR, ${VAR}, NAME=value, set, and unset.'
     );
     expect(result.result.limitations).toContain(
-      'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed.'
+      'Pipeline-safe commands: printf, echo, cat, head, tail, wc, sort, uniq, cut, tr, nl, grep, sed, tee.'
     );
     expect(result.result.limitations).toContain(
       'Unsupported syntax: ;, &&, redirection, substitution, globbing.'
     );
     expect(result.result.limitations).toContain(
-      'paste, join, column, file, diff, curl, and python are partial GNU/Linux-like subsets.'
+      'paste, join, column, file, diff, curl, python, and tee are partial GNU/Linux-like subsets.'
     );
   });
 
@@ -2216,6 +2244,22 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.stdout).toBe('/workspace');
   });
 
+  test('accepts stringified parameters objects for run_shell_command', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        parameters: '{"shell":"pwd"}',
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.toolName).toBe('run_shell_command');
+    expect(result.arguments).toEqual({ shell: 'pwd' });
+    expect(result.result.stdout).toBe('/workspace');
+  });
+
   test('rejects cmd as a run_shell_command argument name', async () => {
     await expect(
       executeToolCall({
@@ -2242,7 +2286,7 @@ describe('tool-calling prompt builder', () => {
   test('puts the preferred shell usage first in empty-argument shell discovery responses', () => {
     expect(buildShellToolResponseEnvelope()).toEqual({
       status: 'successful',
-      body: 'Call again with {"shell":"..."}\nCurrent working directory: /workspace\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
+      body: 'Call again with {"shell":"..."}\nCurrent working directory: /workspace\nUse help <command> for usage details.\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, tee, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which, help',
       message: 'Choose one supported command and call run_shell_command again if needed.',
     });
   });
@@ -2377,6 +2421,27 @@ describe('tool-calling prompt builder', () => {
         message: `Output was truncated to ${MAX_SHELL_TOOL_OUTPUT_LENGTH} of ${oversizedOutput.length} characters. Retry with a command which returns targeted results, or continue if this is already enough.`,
       })
     );
+  });
+
+  test('supports help for command-specific shell usage', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          shell: 'help grep',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.result).toMatchObject({
+      exitCode: 0,
+      stdout:
+        'grep\nUsage: grep [-i] [-n] [-v] [-c] [-l] [-F] [-o] <pattern> <file>...\nDescription: Search text files under /workspace.\nPipeline input: supported',
+      stderr: '',
+    });
   });
 
   test('preserves escaped quotes and spaces in echoed shell text', async () => {
@@ -3410,6 +3475,57 @@ describe('tool-calling prompt builder', () => {
       stdout: '1',
       stderr: '',
     });
+  });
+
+  test('supports tee for writing pipeline output into workspace files', async () => {
+    const workspaceFileSystem = createMockWorkspaceFileSystem();
+
+    const initialWrite = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          shell: 'printf "alpha\\n" | tee notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    const appendWrite = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          shell: 'printf "beta\\n" | tee -a notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem,
+      }
+    );
+
+    expect(initialWrite.result.stdout).toBe('alpha\n');
+    expect(appendWrite.result.stdout).toBe('beta\n');
+    await expect(workspaceFileSystem.readTextFile('/workspace/notes.txt')).resolves.toBe(
+      'alpha\nbeta\n'
+    );
+  });
+
+  test('requires pipeline stdin for tee', async () => {
+    const result = await executeToolCall(
+      {
+        name: 'run_shell_command',
+        arguments: {
+          shell: 'tee notes.txt',
+        },
+      },
+      {
+        workspaceFileSystem: createMockWorkspaceFileSystem(),
+      }
+    );
+
+    expect(result.result.exitCode).toBe(2);
+    expect(result.result.stderr).toContain('tee: this command requires stdin from a pipeline.');
   });
 
   test('rejects non-pipeline-safe commands inside pipelines', async () => {

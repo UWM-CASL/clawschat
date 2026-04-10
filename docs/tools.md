@@ -47,6 +47,8 @@ That empty object is not a universal synonym for "this tool has no inputs." It o
 - the tool truly accepts no inputs
 - the tool description explicitly defines `{}` on the tool-input key as a discovery/help call
 
+For JSON-based formats, the runtime also tolerates a common model mistake where the `arguments` or `parameters` value is a stringified JSON object. When that string parses into an object, the app normalizes it before execution instead of dropping the tool call.
+
 ## Current scope
 
 Today, the app implements:
@@ -192,7 +194,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
 
 - Display name: `Shell Command Runner`
 - Purpose: runs a browser-local GNU/Linux-like shell subset against the app's `/workspace` filesystem abstraction
-- Discovery behavior: when called with the model's tool-input key set to `{}`, it returns a compact response envelope whose `body` is a short human-readable list of the supported command names
+- Discovery behavior: when called with the model's tool-input key set to `{}`, it returns a compact response envelope whose `body` starts with the preferred `{"shell":"..."}` shape, reports the current working directory, points the model to `help <command>`, and then lists the supported command names
 - Preferred argument: pass one complete shell line as `shell`
 - Python path: the shell subset supports `python /workspace/script.py` and short `python -c "..."`; prefer `write_python_file` plus `python /workspace/script.py` for larger scripts
 - Uploaded-file awareness: text-backed attachment prompt text can include the exact `/workspace/...` path for uploaded files so the model can reuse that path directly with this tool
@@ -231,6 +233,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `column` with `-t` and `-s`
   - `tr`
   - `nl`
+  - `tee` with `-a`
   - `rmdir`
   - `mkdir`
   - `mktemp`
@@ -250,6 +253,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `set`
   - `unset`
   - `which`
+  - `help`
 - Current limits:
   - commands are GNU/Linux-like, but only this documented subset is implemented
   - command text must be plain shell input, 2000 characters or fewer, and free of control characters
@@ -257,10 +261,12 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - relative paths resolve from the conversation's current working directory
   - new conversations start with the shell pointer at `/workspace`
   - minimal variable support exists for `$VAR`, `${VAR}`, `NAME=value`, `set`, and `unset`
+  - `help <command>` returns command-specific usage and description text inside the shell subset itself
   - `paste` merges text files line-by-line, with optional `-d` delimiters
   - `join` supports two-file joins with optional `-1`, `-2`, and `-t` field-selection flags
   - `column` focuses on table alignment, especially with `-t` and optional `-s` separators
   - `sed` supports a single sed-like script with addresses `N`, `N,M`, `/regex/`, and `$`, plus commands `p`, `d`, and `s///g`, with optional `-n` and `-i`
+  - `tee` writes text stdin from a pipeline into one or more files under `/workspace`, echoes that same text to `stdout`, and supports `-a` for append
   - `file` reports a small deterministic set of directory, signature, extension, and text-vs-binary classifications
   - built-in pseudo variables include `PWD` and `WORKSPACE`
   - `diff` is line-based and emits unified-style emulated output rather than full GNU diff compatibility
@@ -269,7 +275,7 @@ This tool is defined in [src/llm/tool-calling.js](/c:/Users/cddel/OneDrive/Devel
   - `python` delegates to a browser-local Pyodide worker and mirrors its output back into shell-style `stdout`, `stderr`, and `exitCode`
   - `python -c` is intentionally small and should be treated as a short-snippet path; larger code should be written with `write_python_file` and then executed by path
   - interactive `python` with no script or `-c` is not supported
-  - `|` is supported for `printf`, `echo`, `cat`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `nl`, `grep`, and `sed`
+  - `|` is supported for `printf`, `echo`, `cat`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `nl`, `grep`, `sed`, and `tee`
   - `;`, `&&`, redirection, substitution, and globbing are not implemented
   - unsupported commands/syntax return shell-style `stderr` text with a non-zero `exitCode`
   - oversized shell output is truncated only in the model-facing tool response; the terminal/session history keeps the natural shell output
@@ -481,7 +487,7 @@ Current behavior:
 - if the intercepted tool call occurs during model-visible thinking, the current thinking block ends before the tool card and any continuation thinking appears as a later separate block
 - the model card renders thinking, narration, tool request/result, and any resumed narration in the order they occurred within that turn
 - intermediate `tool` and continuation `model` nodes stay in conversation state for execution and export, but the transcript folds them into the originating model card instead of showing standalone rows
-- `run_shell_command` also mirrors its visible branch history into a read-only xterm terminal panel that opens on demand, shows prompt + command + output, and can be dismissed until the next shell command reopens it; the terminal uses the desktop split panel on larger viewports and a full-screen sheet on phone widths
+- `run_shell_command` also mirrors its visible branch history into a read-only xterm terminal panel that opens on demand, shows prompt + command + output, adds an inline running marker for pending commands, shows a non-zero exit-status line for failed commands, and can be dismissed until the next shell command reopens it; the terminal uses the desktop split panel on larger viewports and a full-screen sheet on phone widths
 - `write_python_file` mirrors successful writes into that same terminal history as synthetic file-write entries so Python creation and later `python ...` execution appear in a coherent order
 
 This keeps the visible transcript aligned with agent-style execution: tool use happens at the point where the model decided it needed the tool, not as a later detached transcript node.

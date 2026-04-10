@@ -191,19 +191,22 @@ Student-facing browser chat UI with local model inference.
   - `web_lookup`, shell `curl`, reverse-geocoding fetches, and MCP HTTP requests share the same browser fetch helper, which can retry through the validated proxy setting only after a likely CORS block.
   - The shell tool keeps a conversation-local current working directory, defaults it to `/workspace`, and resolves relative paths from that pointer.
   - `run_shell_command` now documents `shell` as its shell-text argument.
+  - The tool harness now also tolerates stringified JSON-object `arguments` or `parameters` payloads when a model emits them that way.
   - Shell-command input is sanitized before execution: oversized commands, control characters, fenced blocks, and nested tool-call payloads are rejected.
   - Shell-tool responses exposed to the model and transcript use a compact `{"status":"successful"|"failed","body":"...","message":"..."}` envelope, and the `body` is plain human-readable text rather than a schema dump.
-  - When `run_shell_command` is invoked, an embedded read-only xterm terminal opens with the active chat workspace, shows the shell prompt plus command/output, can be manually closed until the next shell command reopens it, and uses the right-side split panel on desktop widths or a full-screen sheet on phone widths.
+  - When `run_shell_command` is invoked, an embedded read-only xterm terminal opens with the active chat workspace, shows the shell prompt plus command/output, marks pending commands inline, shows non-zero exit statuses inline, can be manually closed until the next shell command reopens it, and uses the right-side split panel on desktop widths or a full-screen sheet on phone widths.
   - The conversation sidebar auto-collapses while that terminal is open, and switching to a conversation with no shell terminal history closes the terminal automatically.
   - `docs/tools.md` also defines the implementation standard future shell commands must meet before they are added to this subset.
+  - The shell subset includes `help` so the model can inspect command-specific usage without leaving the shell tool.
   - The shell subset includes `paste`, `join`, and `column` for common line-merging, key-join, and table-alignment tasks over workspace text files.
   - The shell subset includes a single-command `sed` MVP for common line printing, deletion, substitution, and in-place text edits under `/workspace`.
   - The shell subset includes a basic `file` command that classifies directories plus common text and binary file types under `/workspace`.
   - The shell subset includes a line-based `diff` command with unified-style emulated output for comparing two text files under `/workspace`.
   - The shell subset includes a browser-backed `curl` subset for `URL`, `-I`, `-X`, repeated `-H`, `-d`, and `/workspace`-bounded `-o`.
   - The shell subset includes a delegated `python` command for `python /workspace/script.py` and short `python -c "..."` execution through a browser-local Pyodide worker.
+  - The shell subset includes `tee` so pipeline output can be written safely into `/workspace` files without enabling shell redirection.
   - Larger Python source is expected to flow through `write_python_file`, which also mirrors a meaningful file-write entry into the read-only terminal before later `python` execution appears there.
-  - The shell subset now supports text-only `|` pipelines for a small stdin-aware command subset, while command chaining such as `;` and `&&` remains unsupported.
+  - The shell subset now supports text-only `|` pipelines for a small stdin-aware command subset, including `tee`, while command chaining such as `;` and `&&` remains unsupported.
 - When a model emits a complete tool call during streaming, generation is interrupted immediately, the tool executes before the turn continues, and the visible transcript folds that tool request/result plus any resumed narration back into the same model response card in the order they occurred instead of rendering separate transcript nodes.
 - The active conversation's sidebar kebab menu includes `Edit conversation system prompt`:
   - Set optional per-conversation instructions.

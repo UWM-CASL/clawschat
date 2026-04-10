@@ -159,8 +159,10 @@ describe('terminal-view', () => {
       ['write', '/workspace/coursework $ '],
       ['writeln', 'ls missing'],
       ['write', "\u001b[31mls: cannot access 'missing': No such file or directory.\n\u001b[39m"],
+      ['write', '\u001b[31m# exit 1\n\u001b[39m'],
       ['write', '/workspace/coursework $ '],
       ['writeln', 'cat notes.txt'],
+      ['write', '\u001b[33m# running...\n\u001b[39m'],
       ['write', '/workspace/coursework $ '],
     ]);
   });
