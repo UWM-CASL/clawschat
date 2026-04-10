@@ -188,7 +188,7 @@ Student-facing browser chat UI with local model inference.
   - Failed `web_lookup` responses use `status: "failed"` plus retry guidance in `message`.
   - `web_lookup`, shell `curl`, reverse-geocoding fetches, and MCP HTTP requests share the same browser fetch helper, which can retry through the validated proxy setting only after a likely CORS block.
   - The shell tool keeps a conversation-local current working directory, defaults it to `/workspace`, and resolves relative paths from that pointer.
-  - `run_shell_command` now documents `cmd` as its preferred shell-text argument and still accepts legacy `command` for compatibility.
+  - `run_shell_command` now documents `shell` as its shell-text argument.
   - Shell-command input is sanitized before execution: oversized commands, control characters, fenced blocks, and nested tool-call payloads are rejected.
   - Shell-tool responses exposed to the model and transcript use a compact `{"status":"successful"|"failed","body":"...","message":"..."}` envelope, and the `body` is plain human-readable text rather than a schema dump.
   - When `run_shell_command` is invoked, an embedded read-only xterm terminal opens on the right side of the chat workspace, shows the shell prompt plus command/output, and can be manually closed until the next shell command reopens it.

@@ -118,12 +118,9 @@ export function createWorkspaceSidePanelsController({
         }
         const result = parseShellToolResult(message);
         const recordedCommand =
-          typeof message?.toolArguments?.cmd === 'string' && message.toolArguments.cmd.trim()
-            ? message.toolArguments.cmd.trim()
-            : typeof message?.toolArguments?.command === 'string' &&
-                message.toolArguments.command.trim()
-              ? message.toolArguments.command.trim()
-              : '';
+          typeof message?.toolArguments?.shell === 'string' && message.toolArguments.shell.trim()
+            ? message.toolArguments.shell.trim()
+            : '';
         return {
           command:
             recordedCommand ||

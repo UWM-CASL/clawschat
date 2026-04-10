@@ -1180,8 +1180,8 @@ describe('transcript-view', () => {
     harness.conversation.messageNodes[1].toolCalls = [
       {
         name: 'run_shell_command',
-        arguments: { command: 'ls /workspace' },
-        rawText: '{"name":"run_shell_command","parameters":{"command":"ls /workspace"}}',
+        arguments: { shell: 'ls /workspace' },
+        rawText: '{"name":"run_shell_command","parameters":{"shell":"ls /workspace"}}',
       },
     ];
 
@@ -1242,8 +1242,8 @@ describe('transcript-view', () => {
     harness.conversation.messageNodes[1].toolCalls = [
       {
         name: 'run_shell_command',
-        arguments: { cmd: 'ls /workspace' },
-        rawText: '{"name":"run_shell_command","parameters":{"cmd":"ls /workspace"}}',
+        arguments: { shell: 'ls /workspace' },
+        rawText: '{"name":"run_shell_command","parameters":{"shell":"ls /workspace"}}',
       },
     ];
     harness.conversation.messageNodes[1].childIds = ['tool-1'];
@@ -1306,7 +1306,7 @@ describe('transcript-view', () => {
 
     expect(harness.container.querySelectorAll('.message-row.model-message')).toHaveLength(1);
     expect(harness.container.querySelector('.tool-call-request')?.textContent).toContain(
-      '"cmd": "ls /workspace"'
+      '"shell": "ls /workspace"'
     );
     expect(harness.container.querySelector('.tool-call-result')?.textContent).toContain(
       '"status": "success"'

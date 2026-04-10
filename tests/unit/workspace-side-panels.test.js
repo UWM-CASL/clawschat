@@ -103,7 +103,7 @@ describe('workspace-side-panels', () => {
             {
               role: 'tool',
               toolName: 'run_shell_command',
-              toolArguments: { cmd: 'pwd' },
+              toolArguments: { shell: 'pwd' },
               toolResultData: {
                 command: 'pwd',
                 currentWorkingDirectory: '/workspace',

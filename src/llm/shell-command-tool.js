@@ -260,7 +260,7 @@ function createShellResult(
 
 function formatShellCommandUsageBody(currentWorkingDirectory = WORKSPACE_ROOT_PATH) {
   return [
-    'Call again with {"cmd":"..."}',
+    'Call again with {"shell":"..."}',
     `Current working directory: ${currentWorkingDirectory}`,
     `Supported commands: ${SHELL_COMMANDS.map((command) => command.name).join(', ')}`,
   ].join('\n');
@@ -4755,17 +4755,13 @@ function getValidatedShellToolArguments(argumentsValue = {}) {
   if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) {
     throw new Error('run_shell_command arguments must be an object.');
   }
-  const shellArguments = /** @type {{cmd?: unknown; command?: unknown}} */ (argumentsValue);
-  const supportedKeys = new Set(['cmd', 'command']);
+  const shellArguments = /** @type {{shell?: unknown}} */ (argumentsValue);
+  const supportedKeys = new Set(['shell']);
   const unexpectedKeys = Object.keys(argumentsValue).filter((key) => !supportedKeys.has(key));
   if (unexpectedKeys.length) {
     throw new Error(`run_shell_command does not accept: ${unexpectedKeys.join(', ')}.`);
   }
-  if (shellArguments.cmd !== undefined && shellArguments.command !== undefined) {
-    throw new Error('run_shell_command accepts either cmd or command, not both.');
-  }
-  const commandValue =
-    shellArguments.cmd !== undefined ? shellArguments.cmd : shellArguments.command;
+  const commandValue = shellArguments.shell;
   if (commandValue === undefined) {
     return {};
   }

@@ -113,12 +113,12 @@ export const TOOL_DEFINITIONS = Object.freeze([
     name: 'run_shell_command',
     displayName: 'Shell Command Runner',
     description:
-      'Passes a shell command to an emulated Linux shell starting in /workspace. Call with an empty arguments object to get syntax and supported commands. Files are in /workspace.',
+      'Passes a shell command to an emulated Linux shell starting in /workspace. Pass one complete shell line as {"shell":"..."}. Call with an empty arguments object to get syntax and supported commands. Files are in /workspace.',
     enabled: true,
     parameters: {
       type: 'object',
       properties: {
-        cmd: {
+        shell: {
           type: 'string',
         },
       },
@@ -781,16 +781,17 @@ function buildJsonToolInstructionLines(
       lines.push(`    - ${buildPromptToolExample(toolCallingConfig, name, {})}`);
       break;
     case 'run_shell_command':
+      lines.push('  - Pass one complete shell line in the "shell" field.');
       lines.push('  - Call with empty arguments to get syntax and supported commands.');
       lines.push(`    - ${buildPromptToolExample(toolCallingConfig, name, {})}`);
       lines.push(
         `    - ${buildPromptToolExample(toolCallingConfig, name, {
-          cmd: 'ls -l /workspace',
+          shell: 'ls -l /workspace',
         })}`
       );
       lines.push(
         `    - ${buildPromptToolExample(toolCallingConfig, name, {
-          cmd: 'python /workspace/script.py',
+          shell: 'python /workspace/script.py',
         })}`
       );
       lines.push('  - Prefer write_python_file for larger scripts.');
@@ -964,6 +965,10 @@ function getToolInstructionNotes(name) {
     });
   }
   if (normalizedName === 'run_shell_command') {
+    notes.push({
+      text: 'Pass one complete shell line in the "shell" field.',
+      bulleted: true,
+    });
     notes.push({
       text: 'Call with an empty arguments object to get syntax and supported commands.',
       bulleted: true,
@@ -2521,7 +2526,7 @@ const TOOL_EXECUTORS = Object.freeze({
     serializeResult: (result) =>
       stringifyToolEnvelope(
         buildWritePythonFileToolBody(result),
-        `To execute the script, use {"name":"run_shell_command","parameters":{"cmd":"python ${result?.path || '/workspace/script.py'}"}}`,
+        `To execute the script, use {"name":"run_shell_command","parameters":{"shell":"python ${result?.path || '/workspace/script.py'}"}}`,
         'write_python_file'
       ),
     serializeError: (error) => buildFailedToolEnvelope(error, { toolName: 'write_python_file' }),

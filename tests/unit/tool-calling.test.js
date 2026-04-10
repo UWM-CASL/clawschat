@@ -513,13 +513,14 @@ describe('tool-calling prompt builder', () => {
       '- run_shell_command: Passes a shell command to an emulated Linux shell starting in /workspace.'
     );
     expect(prompt).toContain('Save and access files in /workspace');
+    expect(prompt).toContain('- Pass one complete shell line in the "shell" field.');
     expect(prompt).toContain('- Call with empty arguments to get syntax and supported commands.');
     expect(prompt).toContain('- Example: {"name":"run_shell_command","parameters":{}}');
     expect(prompt).toContain(
-      '- Example: {"name":"run_shell_command","parameters":{"cmd":"ls -l /workspace"}}'
+      '- Example: {"name":"run_shell_command","parameters":{"shell":"ls -l /workspace"}}'
     );
     expect(prompt).toContain(
-      '- Example: {"name":"run_shell_command","parameters":{"cmd":"python /workspace/script.py"}}'
+      '- Example: {"name":"run_shell_command","parameters":{"shell":"python /workspace/script.py"}}'
     );
     expect(prompt).toContain('- Prefer write_python_file for larger scripts.');
   });
@@ -623,7 +624,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          cmd: 'pwd',
+          shell: 'pwd',
         },
       },
       {
@@ -654,7 +655,7 @@ describe('tool-calling prompt builder', () => {
         {
           name: 'run_shell_command',
           arguments: {
-            cmd: 'pwd',
+            shell: 'pwd',
           },
         },
         {
@@ -1179,7 +1180,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          cmd: 'grep -o "<a href="[^"]*"" canvas_canvas.html',
+          shell: 'grep -o "<a href="[^"]*"" canvas_canvas.html',
         },
       },
       {
@@ -1623,7 +1624,7 @@ describe('tool-calling prompt builder', () => {
   test('does not sniff a malformed run_shell_command json tool call when inner shell quotes are not escaped', () => {
     expect(
       sniffToolCalls(
-        '{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        '{"name":"run_shell_command","parameters":{"shell":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
         {
           format: 'json',
           nameKey: 'name',
@@ -1633,10 +1634,10 @@ describe('tool-calling prompt builder', () => {
     ).toEqual([]);
   });
 
-  test('does not sniff a malformed run_shell_command json tool call when the shell field is cmd', () => {
+  test('does not sniff a malformed run_shell_command json tool call when the shell field is shell', () => {
     expect(
       sniffToolCalls(
-        '{"name":"run_shell_command","parameters":{"cmd":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        '{"name":"run_shell_command","parameters":{"shell":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
         {
           format: 'json',
           nameKey: 'name',
@@ -1649,7 +1650,7 @@ describe('tool-calling prompt builder', () => {
   test('does not sniff a malformed run_shell_command json tool call after leading prose', () => {
     expect(
       sniffToolCalls(
-        'I will use the shell tool now.\n{"name":"run_shell_command","parameters":{"command":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
+        'I will use the shell tool now.\n{"name":"run_shell_command","parameters":{"shell":"grep -o \'href="[^"]*\' Canvas - Canvas.html | wc -l"}}',
         {
           format: 'json',
           nameKey: 'name',
@@ -1662,7 +1663,7 @@ describe('tool-calling prompt builder', () => {
   test('sniffs a run_shell_command json tool call with escaped quotes and backslashes intact', () => {
     expect(
       sniffToolCalls(
-        '{"name":"run_shell_command","parameters":{"command":"curl -X POST -H \\"Content-Type: application/json\\" -d \\"{\\\\\\"topic\\\\\\":\\\\\\"planets\\\\\\"}\\" https://example.com/api"}}',
+        '{"name":"run_shell_command","parameters":{"shell":"curl -X POST -H \\"Content-Type: application/json\\" -d \\"{\\\\\\"topic\\\\\\":\\\\\\"planets\\\\\\"}\\" https://example.com/api"}}',
         {
           format: 'json',
           nameKey: 'name',
@@ -1673,11 +1674,11 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command:
+          shell:
             'curl -X POST -H "Content-Type: application/json" -d "{\\"topic\\":\\"planets\\"}" https://example.com/api',
         },
         rawText:
-          '{"name":"run_shell_command","parameters":{"command":"curl -X POST -H \\"Content-Type: application/json\\" -d \\"{\\\\\\"topic\\\\\\":\\\\\\"planets\\\\\\"}\\" https://example.com/api"}}',
+          '{"name":"run_shell_command","parameters":{"shell":"curl -X POST -H \\"Content-Type: application/json\\" -d \\"{\\\\\\"topic\\\\\\":\\\\\\"planets\\\\\\"}\\" https://example.com/api"}}',
         format: 'json',
       },
     ]);
@@ -1686,7 +1687,7 @@ describe('tool-calling prompt builder', () => {
   test('does not sniff an incomplete run_shell_command json tool call', () => {
     expect(
       sniffToolCalls(
-        '{"name":"run_shell_command","parameters":{"command":"printf \\"%s\\" \\"unterminated"',
+        '{"name":"run_shell_command","parameters":{"shell":"printf \\"%s\\" \\"unterminated"',
         {
           format: 'json',
           nameKey: 'name',
@@ -2145,7 +2146,7 @@ describe('tool-calling prompt builder', () => {
         body:
           '## Python file written\n- Path: /workspace/tools/script.py\n- Size: 15 bytes\n- Lines: 2\n\n### Preview\n```python\nprint("hello")\n\n```',
         message:
-          'To execute the script, use {"name":"run_shell_command","parameters":{"cmd":"python /workspace/tools/script.py"}}',
+          'To execute the script, use {"name":"run_shell_command","parameters":{"shell":"python /workspace/tools/script.py"}}',
       })
     );
     expect(await workspaceFileSystem.readTextFile('/workspace/tools/script.py')).toBe(
@@ -2190,7 +2191,7 @@ describe('tool-calling prompt builder', () => {
       executeToolCall({
         name: 'run_shell_command',
         arguments: {
-          command: '```sh ls```',
+          shell: '```sh ls```',
         },
       })
     ).rejects.toThrow(
@@ -2198,12 +2199,12 @@ describe('tool-calling prompt builder', () => {
     );
   });
 
-  test('accepts cmd as the preferred run_shell_command argument name', async () => {
+  test('accepts shell as the preferred run_shell_command argument name', async () => {
     const result = await executeToolCall(
       {
         name: 'run_shell_command',
         arguments: {
-          cmd: 'pwd',
+          shell: 'pwd',
         },
       },
       {
@@ -2215,10 +2216,33 @@ describe('tool-calling prompt builder', () => {
     expect(result.result.stdout).toBe('/workspace');
   });
 
-  test('puts the preferred cmd usage first in empty-argument shell discovery responses', () => {
+  test('rejects cmd as a run_shell_command argument name', async () => {
+    await expect(
+      executeToolCall({
+        name: 'run_shell_command',
+        arguments: {
+          cmd: 'pwd',
+        },
+      })
+    ).rejects.toThrow('run_shell_command does not accept: cmd.');
+  });
+
+  test('rejects command and arguments as run_shell_command argument names', async () => {
+    await expect(
+      executeToolCall({
+        name: 'run_shell_command',
+        arguments: {
+          command: 'echo',
+          arguments: 'hello world',
+        },
+      })
+    ).rejects.toThrow('run_shell_command does not accept: command, arguments.');
+  });
+
+  test('puts the preferred shell usage first in empty-argument shell discovery responses', () => {
     expect(buildShellToolResponseEnvelope()).toEqual({
       status: 'successful',
-      body: 'Call again with {"cmd":"..."}\nCurrent working directory: /workspace\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
+      body: 'Call again with {"shell":"..."}\nCurrent working directory: /workspace\nSupported commands: pwd, basename, dirname, printf, true, false, cd, ls, cat, head, tail, wc, sort, uniq, cut, paste, join, column, tr, nl, rmdir, mkdir, mktemp, touch, cp, mv, rm, find, grep, sed, file, diff, curl, python, echo, set, unset, which',
       message: 'Choose one supported command and call run_shell_command again if needed.',
     });
   });
@@ -2228,7 +2252,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          cmd: 'printf "hello"',
+          shell: 'printf "hello"',
         },
       },
       {
@@ -2264,16 +2288,17 @@ describe('tool-calling prompt builder', () => {
     });
   });
 
-  test('rejects run_shell_command calls that send both cmd and command', async () => {
+  test('rejects old shell key names when shell is also present', async () => {
     await expect(
       executeToolCall({
         name: 'run_shell_command',
         arguments: {
+          shell: 'pwd',
           cmd: 'pwd',
           command: 'ls',
         },
       })
-    ).rejects.toThrow('run_shell_command accepts either cmd or command, not both.');
+    ).rejects.toThrow('run_shell_command does not accept: cmd, command.');
   });
 
   test('rejects nested json tool calls in shell commands', async () => {
@@ -2281,7 +2306,7 @@ describe('tool-calling prompt builder', () => {
       executeToolCall({
         name: 'run_shell_command',
         arguments: {
-          command: '{"name":"get_current_date_time","parameters":{}}',
+          shell: '{"name":"get_current_date_time","parameters":{}}',
         },
       })
     ).rejects.toThrow('run_shell_command command must be plain shell text, not a JSON tool call.');
@@ -2292,7 +2317,7 @@ describe('tool-calling prompt builder', () => {
       executeToolCall({
         name: 'run_shell_command',
         arguments: {
-          command: `cat notes.txt${String.fromCharCode(7)}`,
+          shell: `cat notes.txt${String.fromCharCode(7)}`,
         },
       })
     ).rejects.toThrow('run_shell_command command cannot contain control characters.');
@@ -2303,7 +2328,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat notes.txt',
+          shell: 'cat notes.txt',
         },
       },
       {
@@ -2315,7 +2340,7 @@ describe('tool-calling prompt builder', () => {
 
     expect(result.toolName).toBe('run_shell_command');
     expect(result.arguments).toEqual({
-      command: 'cat notes.txt',
+      shell: 'cat notes.txt',
     });
     expect(result.result).toEqual({
       shellFlavor: 'GNU/Linux-like shell subset',
@@ -2333,7 +2358,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat notes.txt',
+          shell: 'cat notes.txt',
         },
       },
       {
@@ -2361,7 +2386,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo "a \\"quoted\\" value"',
+          shell: 'echo "a \\"quoted\\" value"',
         },
       },
       {
@@ -2373,7 +2398,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo a\\ b',
+          shell: 'echo a\\ b',
         },
       },
       {
@@ -2390,7 +2415,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'printf "%s" "C:\\\\temp\\\\file.txt"',
+          shell: 'printf "%s" "C:\\\\temp\\\\file.txt"',
         },
       },
       {
@@ -2408,7 +2433,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'true',
+          shell: 'true',
         },
       },
       {
@@ -2420,7 +2445,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'false',
+          shell: 'false',
         },
       },
       {
@@ -2453,7 +2478,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'basename /workspace/coursework/notes.txt',
+          shell: 'basename /workspace/coursework/notes.txt',
         },
       },
       {
@@ -2465,7 +2490,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'dirname /workspace/coursework/notes.txt',
+          shell: 'dirname /workspace/coursework/notes.txt',
         },
       },
       {
@@ -2496,7 +2521,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'printf "Hello %s\\n%d" world 7',
+          shell: 'printf "Hello %s\\n%d" world 7',
         },
       },
       {
@@ -2519,7 +2544,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'printf "%s-" a b c',
+          shell: 'printf "%s-" a b c',
         },
       },
       {
@@ -2535,7 +2560,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'which ls fakecmd echo',
+          shell: 'which ls fakecmd echo',
         },
       },
       {
@@ -2572,7 +2597,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'python /workspace/script.py',
+          shell: 'python /workspace/script.py',
         },
       },
       {
@@ -2607,7 +2632,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'python -c "print(2 + 2)"',
+          shell: 'python -c "print(2 + 2)"',
         },
       },
       {
@@ -2631,7 +2656,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'python',
+          shell: 'python',
         },
       },
       {
@@ -2662,7 +2687,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'rmdir empty',
+          shell: 'rmdir empty',
         },
       },
       {
@@ -2674,7 +2699,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'rmdir full',
+          shell: 'rmdir full',
         },
       },
       {
@@ -2701,7 +2726,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'mktemp',
+          shell: 'mktemp',
         },
       },
       {
@@ -2713,7 +2738,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'mktemp -d /workspace/tmpdir.XXXXXX',
+          shell: 'mktemp -d /workspace/tmpdir.XXXXXX',
         },
       },
       {
@@ -2745,7 +2770,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'mkdir -p coursework/drafts',
+          shell: 'mkdir -p coursework/drafts',
         },
       },
       {
@@ -2757,7 +2782,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'touch coursework/drafts/notes.txt',
+          shell: 'touch coursework/drafts/notes.txt',
         },
       },
       {
@@ -2769,7 +2794,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cp source.txt coursework/drafts/copy.txt',
+          shell: 'cp source.txt coursework/drafts/copy.txt',
         },
       },
       {
@@ -2781,7 +2806,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'mv coursework/drafts/copy.txt coursework/final.txt',
+          shell: 'mv coursework/drafts/copy.txt coursework/final.txt',
         },
       },
       {
@@ -2808,7 +2833,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'rm coursework/final.txt',
+          shell: 'rm coursework/final.txt',
         },
       },
       {
@@ -2833,7 +2858,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cp notes.txt ./notes.txt',
+          shell: 'cp notes.txt ./notes.txt',
         },
       },
       {
@@ -2857,7 +2882,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'mv notes.txt /workspace/notes.txt',
+          shell: 'mv notes.txt /workspace/notes.txt',
         },
       },
       {
@@ -2881,7 +2906,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'rm -rf /workspace',
+          shell: 'rm -rf /workspace',
         },
       },
       {
@@ -2906,7 +2931,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'sort words.txt',
+          shell: 'sort words.txt',
         },
       },
       {
@@ -2918,7 +2943,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'sort -nr numbers.txt',
+          shell: 'sort -nr numbers.txt',
         },
       },
       {
@@ -2939,7 +2964,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'uniq dupes.txt',
+          shell: 'uniq dupes.txt',
         },
       },
       {
@@ -2951,7 +2976,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'uniq -c dupes.txt',
+          shell: 'uniq -c dupes.txt',
         },
       },
       {
@@ -2972,7 +2997,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cut -d , -f 1,3 table.csv',
+          shell: 'cut -d , -f 1,3 table.csv',
         },
       },
       {
@@ -2993,7 +3018,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'paste left.txt right.txt',
+          shell: 'paste left.txt right.txt',
         },
       },
       {
@@ -3015,7 +3040,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'paste -d ",;" a.txt b.txt c.txt',
+          shell: 'paste -d ",;" a.txt b.txt c.txt',
         },
       },
       {
@@ -3036,7 +3061,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'join -t , left.csv right.csv',
+          shell: 'join -t , left.csv right.csv',
         },
       },
       {
@@ -3057,7 +3082,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'join -1 3 -2 1 left.txt right.txt',
+          shell: 'join -1 3 -2 1 left.txt right.txt',
         },
       },
       {
@@ -3077,7 +3102,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'column -t -s , table.csv',
+          shell: 'column -t -s , table.csv',
         },
       },
       {
@@ -3099,7 +3124,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'tr an oz text.txt',
+          shell: 'tr an oz text.txt',
         },
       },
       {
@@ -3111,7 +3136,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'tr -d an text.txt',
+          shell: 'tr -d an text.txt',
         },
       },
       {
@@ -3132,7 +3157,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'nl notes.txt',
+          shell: 'nl notes.txt',
         },
       },
       {
@@ -3148,7 +3173,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat -n notes.txt',
+          shell: 'cat -n notes.txt',
         },
       },
       {
@@ -3166,7 +3191,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat -bn notes.txt',
+          shell: 'cat -bn notes.txt',
         },
       },
       {
@@ -3184,7 +3209,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat -s notes.txt',
+          shell: 'cat -s notes.txt',
         },
       },
       {
@@ -3202,7 +3227,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat --number-nonblank --squeeze-blank notes.txt',
+          shell: 'cat --number-nonblank --squeeze-blank notes.txt',
         },
       },
       {
@@ -3224,7 +3249,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'head -n 2 notes.txt',
+          shell: 'head -n 2 notes.txt',
         },
       },
       {
@@ -3236,7 +3261,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'tail -n 1 notes.txt',
+          shell: 'tail -n 1 notes.txt',
         },
       },
       {
@@ -3248,7 +3273,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'wc -l notes.txt',
+          shell: 'wc -l notes.txt',
         },
       },
       {
@@ -3260,7 +3285,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'wc -w notes.txt',
+          shell: 'wc -w notes.txt',
         },
       },
       {
@@ -3272,7 +3297,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'wc -c notes.txt',
+          shell: 'wc -c notes.txt',
         },
       },
       {
@@ -3292,7 +3317,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'awk "{print $1}" notes.txt',
+          shell: 'awk "{print $1}" notes.txt',
         },
       },
       {
@@ -3320,7 +3345,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cd coursework',
+          shell: 'cd coursework',
         },
       },
       {
@@ -3343,7 +3368,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat notes.txt',
+          shell: 'cat notes.txt',
         },
       },
       {
@@ -3367,7 +3392,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat notes.txt | grep beta | wc -w',
+          shell: 'cat notes.txt | grep beta | wc -w',
         },
       },
       {
@@ -3392,7 +3417,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cd coursework | cat notes.txt',
+          shell: 'cd coursework | cat notes.txt',
         },
       },
       {
@@ -3411,7 +3436,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo hello; pwd',
+          shell: 'echo hello; pwd',
         },
       },
       {
@@ -3434,7 +3459,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'COURSE=biology',
+          shell: 'COURSE=biology',
         },
       },
       {
@@ -3447,7 +3472,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo $COURSE ${COURSE}',
+          shell: 'echo $COURSE ${COURSE}',
         },
       },
       {
@@ -3472,7 +3497,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'COURSE=biology',
+          shell: 'COURSE=biology',
         },
       },
       {
@@ -3485,7 +3510,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo $COURSE "$COURSE" \'$COURSE\' \\$COURSE',
+          shell: 'echo $COURSE "$COURSE" \'$COURSE\' \\$COURSE',
         },
       },
       {
@@ -3517,7 +3542,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command:
+          shell:
             'curl -H "Content-Type: application/json" -d "{\\"topic\\":\\"planets\\"}" https://example.com/api',
         },
       },
@@ -3543,7 +3568,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cd coursework',
+          shell: 'cd coursework',
         },
       },
       {
@@ -3556,7 +3581,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo $PWD',
+          shell: 'echo $PWD',
         },
       },
       {
@@ -3569,7 +3594,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'set COURSE science',
+          shell: 'set COURSE science',
         },
       },
       {
@@ -3582,7 +3607,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'unset COURSE',
+          shell: 'unset COURSE',
         },
       },
       {
@@ -3595,7 +3620,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'echo $COURSE',
+          shell: 'echo $COURSE',
         },
       },
       {
@@ -3621,7 +3646,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'rm -rf $MISSING_TARGET',
+          shell: 'rm -rf $MISSING_TARGET',
         },
       },
       {
@@ -3645,7 +3670,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'ls -l',
+          shell: 'ls -l',
         },
       },
       {
@@ -3660,7 +3685,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'ls -lh',
+          shell: 'ls -lh',
         },
       },
       {
@@ -3681,7 +3706,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'ls -d coursework',
+          shell: 'ls -d coursework',
         },
       },
       {
@@ -3703,7 +3728,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'ls -R',
+          shell: 'ls -R',
         },
       },
       {
@@ -3731,7 +3756,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'ls -1',
+          shell: 'ls -1',
         },
       },
       {
@@ -3753,7 +3778,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'find coursework -name "*.txt" -type f',
+          shell: 'find coursework -name "*.txt" -type f',
         },
       },
       {
@@ -3770,7 +3795,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'find coursework -type d',
+          shell: 'find coursework -type d',
         },
       },
       {
@@ -3795,7 +3820,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'find coursework -maxdepth 1',
+          shell: 'find coursework -maxdepth 1',
         },
       },
       {
@@ -3813,7 +3838,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'find coursework -mindepth 2 -type f',
+          shell: 'find coursework -mindepth 2 -type f',
         },
       },
       {
@@ -3836,7 +3861,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'grep -inF alpha notes.txt',
+          shell: 'grep -inF alpha notes.txt',
         },
       },
       {
@@ -3856,7 +3881,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'grep -vc alpha notes.txt',
+          shell: 'grep -vc alpha notes.txt',
         },
       },
       {
@@ -3878,7 +3903,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'grep -l alpha notes.txt todo.txt summary.txt',
+          shell: 'grep -l alpha notes.txt todo.txt summary.txt',
         },
       },
       {
@@ -3899,7 +3924,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'grep target a.txt b.txt',
+          shell: 'grep target a.txt b.txt',
         },
       },
       {
@@ -3923,7 +3948,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: `grep -o 'href="[^"]*"' canvas.html | wc -l`,
+          shell: `grep -o 'href="[^"]*"' canvas.html | wc -l`,
         },
       },
       {
@@ -3944,7 +3969,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'grep -ov alpha notes.txt',
+          shell: 'grep -ov alpha notes.txt',
         },
       },
       {
@@ -3967,7 +3992,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: "sed -n '2,3p' notes.txt",
+          shell: "sed -n '2,3p' notes.txt",
         },
       },
       {
@@ -3987,7 +4012,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: "sed '/beta/d' notes.txt",
+          shell: "sed '/beta/d' notes.txt",
         },
       },
       {
@@ -4007,7 +4032,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: "sed 's/beta/delta/g' notes.txt",
+          shell: "sed 's/beta/delta/g' notes.txt",
         },
       },
       {
@@ -4027,7 +4052,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: "sed -i '2s/beta/delta/' notes.txt",
+          shell: "sed -i '2s/beta/delta/' notes.txt",
         },
       },
       {
@@ -4039,7 +4064,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'cat notes.txt',
+          shell: 'cat notes.txt',
         },
       },
       {
@@ -4060,7 +4085,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: "sed 'q' notes.txt",
+          shell: "sed 'q' notes.txt",
         },
       },
       {
@@ -4083,7 +4108,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'file coursework notes.md table.csv',
+          shell: 'file coursework notes.md table.csv',
         },
       },
       {
@@ -4114,7 +4139,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'file document.pdf blob.bin',
+          shell: 'file document.pdf blob.bin',
         },
       },
       {
@@ -4135,7 +4160,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'file missing.txt',
+          shell: 'file missing.txt',
         },
       },
       {
@@ -4159,7 +4184,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'diff -u before.txt after.txt',
+          shell: 'diff -u before.txt after.txt',
         },
       },
       {
@@ -4189,7 +4214,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'diff a.txt b.txt',
+          shell: 'diff a.txt b.txt',
         },
       },
       {
@@ -4211,7 +4236,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'diff a.txt missing.txt',
+          shell: 'diff a.txt missing.txt',
         },
       },
       {
@@ -4245,7 +4270,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'curl https://example.com/data.txt',
+          shell: 'curl https://example.com/data.txt',
         },
       },
       {
@@ -4678,7 +4703,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'curl -I https://example.com/data.txt',
+          shell: 'curl -I https://example.com/data.txt',
         },
       },
       {
@@ -4712,7 +4737,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command:
+          shell:
             'curl -X PATCH -H "Content-Type: application/json" -H "X-Mode: test" -d \'{"title":"Europa"}\' https://example.com/items/1',
         },
       },
@@ -4741,7 +4766,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'curl -o downloads/report.pdf https://example.com/report.pdf',
+          shell: 'curl -o downloads/report.pdf https://example.com/report.pdf',
         },
       },
       {
@@ -4762,7 +4787,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'curl -H "Cookie: session=1" https://example.com/data.txt',
+          shell: 'curl -H "Cookie: session=1" https://example.com/data.txt',
         },
       },
       {
@@ -4781,7 +4806,7 @@ describe('tool-calling prompt builder', () => {
       {
         name: 'run_shell_command',
         arguments: {
-          command: 'curl -X GET -d hello https://example.com/data.txt',
+          shell: 'curl -X GET -d hello https://example.com/data.txt',
         },
       },
       {
@@ -4968,3 +4993,4 @@ describe('tool-calling prompt builder', () => {
     );
   });
 });
+
