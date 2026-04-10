@@ -117,6 +117,8 @@ export function bindSettingsEvents({
       if (
         event.key !== 'ArrowDown' &&
         event.key !== 'ArrowUp' &&
+        event.key !== 'ArrowLeft' &&
+        event.key !== 'ArrowRight' &&
         event.key !== 'Home' &&
         event.key !== 'End'
       ) {
@@ -134,8 +136,13 @@ export function bindSettingsEvents({
       }
       event.preventDefault();
       let nextIndex = currentIndex;
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-        const direction = event.key === 'ArrowDown' ? 1 : -1;
+      if (
+        event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowLeft' ||
+        event.key === 'ArrowRight'
+      ) {
+        const direction = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
         nextIndex = (currentIndex + direction + buttons.length) % buttons.length;
       } else if (event.key === 'Home') {
         nextIndex = 0;

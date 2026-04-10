@@ -26,6 +26,7 @@ import { createShortcutHandlers } from './app/shortcut-events.js';
 import { createTranscriptNavigationController } from './app/transcript-navigation.js';
 import { createTranscriptActions } from './app/transcript-actions.js';
 import { bindTranscriptEvents } from './app/transcript-events.js';
+import { createViewportLayoutController } from './app/viewport-layout.js';
 import { createWorkspaceSidePanelsController } from './app/workspace-side-panels.js';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createCorsAwareFetch, validateCorsProxyUrl } from './llm/browser-fetch.js';
@@ -279,6 +280,7 @@ const statusRegion = document.getElementById('statusRegion');
 const statusRegionHeading = document.getElementById('statusRegionHeading');
 const statusRegionMessage = document.getElementById('statusRegionMessage');
 const skipLinkElements = Array.from(document.querySelectorAll('.skip-link[data-skip-target]'));
+const appChrome = document.querySelector('.app-chrome');
 const startConversationButton = document.getElementById('startConversationButton');
 const debugLogPanel = document.getElementById('debugLogPanel');
 const modelLoadFeedback = document.getElementById('modelLoadFeedback');
@@ -344,6 +346,9 @@ const chatTitleInput = document.getElementById('chatTitleInput');
 const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
 const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
 const openKeyboardShortcutsButton = document.getElementById('openKeyboardShortcutsButton');
+const openKeyboardShortcutsMobileButton = document.getElementById(
+  'openKeyboardShortcutsMobileButton'
+);
 const keyboardShortcutsModal = document.getElementById('keyboardShortcutsModal');
 const conversationPanelCollapseButton = document.getElementById('conversationPanelCollapseButton');
 const conversationPanelCollapseButtonText = document.getElementById(
@@ -388,6 +393,12 @@ const settingsTabPanels = settingsPage
   : [];
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+const viewportLayoutController = createViewportLayoutController({
+  windowRef: window,
+  documentRef: document,
+  appChrome,
+});
+viewportLayoutController.start();
 
 const engine = new LLMEngineClient();
 let pythonRuntime = null;
@@ -2488,8 +2499,10 @@ const {
 } = createWorkspaceSidePanelsController({
   appState,
   documentRef: document,
+  windowRef: window,
   terminalPanel,
   terminalHost,
+  closeButton: closeTerminalButton,
   getActiveConversation,
   getConversationPathMessages,
   findConversationById,
@@ -4201,6 +4214,7 @@ bindShellEvents({
   keyboardShortcutsModal,
   conversationSystemPromptModal,
   openKeyboardShortcutsButton,
+  openKeyboardShortcutsButtons: [openKeyboardShortcutsMobileButton],
   startConversationButton,
   messageInput,
   newConversationBtn,

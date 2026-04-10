@@ -27,7 +27,7 @@ Rendering-heavy DOM code is now split into small view modules under `src/ui/`.
 - `src/ui/terminal-view.js`
   - read-only xterm rendering for browser-local shell tool activity
   - rebuilds terminal output from the active conversation's visible shell-tool history
-  - keeps the live prompt/cursor visible and resizes to the split workspace panel
+  - keeps the live prompt/cursor visible and resizes to the active workspace presentation, either the desktop split panel or the phone sheet
 ## Boundary
 
 These modules render and update DOM only.
@@ -49,6 +49,16 @@ Those responsibilities remain in:
 - `src/app/transcript-navigation.js`
 - `src/app/workspace-side-panels.js`
 - `src/app/routing-shell.js`
+- `src/app/viewport-layout.js`
+
+## Responsive shell behavior
+
+The responsive shell rules live outside the `src/ui/` renderers so the view modules can stay state-driven and mostly layout-agnostic.
+
+- `src/app/viewport-layout.js` maintains shared `--app-viewport-height` and `--app-chrome-height` CSS variables, using `visualViewport.height` when available and falling back to the document viewport.
+- On phone widths (`<=767.98px`), the top bar becomes a two-row control strip, the conversations offcanvas expands to full width, and the footer moves into the main content flow instead of reserving a persistent shell row.
+- On phone widths, transcript jump controls render as a compact dock above the composer, the composer uses a three-column touch layout, and settings use a single-column scroll layout with a sticky header and horizontally scrollable tab strip.
+- `src/app/workspace-side-panels.js` keeps the shell terminal as the desktop split panel for larger viewports and switches it to a full-screen sheet/dialog presentation on phone widths while preserving the same terminal session history.
 
 ## Tool-call rendering contract
 

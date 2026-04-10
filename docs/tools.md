@@ -481,7 +481,7 @@ Current behavior:
 - if the intercepted tool call occurs during model-visible thinking, the current thinking block ends before the tool card and any continuation thinking appears as a later separate block
 - the model card renders thinking, narration, tool request/result, and any resumed narration in the order they occurred within that turn
 - intermediate `tool` and continuation `model` nodes stay in conversation state for execution and export, but the transcript folds them into the originating model card instead of showing standalone rows
-- `run_shell_command` also mirrors its visible branch history into a read-only xterm terminal panel that opens on demand, shows prompt + command + output, and can be dismissed until the next shell command reopens it
+- `run_shell_command` also mirrors its visible branch history into a read-only xterm terminal panel that opens on demand, shows prompt + command + output, and can be dismissed until the next shell command reopens it; the terminal uses the desktop split panel on larger viewports and a full-screen sheet on phone widths
 - `write_python_file` mirrors successful writes into that same terminal history as synthetic file-write entries so Python creation and later `python ...` execution appear in a coherent order
 
 This keeps the visible transcript aligned with agent-style execution: tool use happens at the point where the model decided it needed the tool, not as a later detached transcript node.

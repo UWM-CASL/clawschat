@@ -1,9 +1,13 @@
+import { isPhoneViewport } from './viewport-layout.js';
+
 /**
  * @param {{
  *   appState: any;
  *   documentRef?: Document;
+ *   windowRef?: Window;
  *   terminalPanel?: HTMLElement | null;
  *   terminalHost?: HTMLElement | null;
+ *   closeButton?: HTMLButtonElement | null;
  *   getActiveConversation: () => any;
  *   getConversationPathMessages: (conversation: any) => any[];
  *   findConversationById: (conversationId: string) => any;
@@ -26,8 +30,10 @@
 export function createWorkspaceSidePanelsController({
   appState,
   documentRef = document,
+  windowRef = window,
   terminalPanel,
   terminalHost,
+  closeButton = null,
   getActiveConversation,
   getConversationPathMessages,
   findConversationById,
@@ -42,6 +48,24 @@ export function createWorkspaceSidePanelsController({
 }) {
   let terminalView = null;
   let terminalViewLoadPromise = null;
+  const view = documentRef?.defaultView || globalThis;
+
+  function setTerminalPresentationMode(visible) {
+    const showSheet = visible && isPhoneViewport(windowRef);
+    documentRef.body.classList.toggle('terminal-open', visible);
+    documentRef.body.classList.toggle('terminal-sheet-open', showSheet);
+    if (terminalPanel instanceof view.HTMLElement) {
+      terminalPanel.classList.toggle('terminal-panel-sheet', showSheet);
+      if (showSheet) {
+        terminalPanel.setAttribute('role', 'dialog');
+        terminalPanel.setAttribute('aria-modal', 'true');
+      } else {
+        terminalPanel.removeAttribute('role');
+        terminalPanel.removeAttribute('aria-modal');
+      }
+    }
+    return showSheet;
+  }
 
   function parseShellToolResult(message) {
     if (message?.toolResultData && typeof message.toolResultData === 'object') {
@@ -251,12 +275,12 @@ export function createWorkspaceSidePanelsController({
       if (!session.hasVisibleContent) {
         closeTerminal(appState, { conversationId: activeConversation?.id || null });
       }
-      documentRef.body.classList.remove('terminal-open');
+      setTerminalPresentationMode(false);
       terminalView?.setVisible(false);
       return;
     }
 
-    documentRef.body.classList.add('terminal-open');
+    setTerminalPresentationMode(true);
     void ensureTerminalView()
       .then((loadedTerminalView) => {
         const latestConversation = getActiveConversation();
@@ -269,17 +293,22 @@ export function createWorkspaceSidePanelsController({
             (!hasDismissedTerminalForConversation(appState, latestConversation.id) &&
               latestSession.entries.length > 0));
         if (!shouldStillShowTerminal) {
+          setTerminalPresentationMode(false);
           loadedTerminalView.setVisible(false);
           return;
         }
+        const shouldUseSheet = setTerminalPresentationMode(true);
         loadedTerminalView.setVisible(true);
         loadedTerminalView.renderSession(latestSession);
+        if (shouldUseSheet && closeButton instanceof view.HTMLButtonElement) {
+          closeButton.focus({ preventScroll: true });
+        }
       })
       .catch((error) => {
         appendDebug(
           `Terminal view failed to load: ${error instanceof Error ? error.message : String(error)}`
         );
-        documentRef.body.classList.remove('terminal-open');
+        setTerminalPresentationMode(false);
       });
   }
 

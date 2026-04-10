@@ -6,16 +6,22 @@ function createHarness({
   activeConversation = { id: 'conversation-1', activeLeafMessageId: 'leaf-1' },
   conversationsById = new Map(),
   pathMessagesByConversationId = new Map(),
+  windowInnerWidth = 1280,
 } = {}) {
   const dom = new JSDOM(`
     <body>
       <div id="terminalPanel"></div>
       <div id="terminalHost"></div>
+      <button id="closeTerminalButton" type="button"></button>
     </body>
   `);
   const document = dom.window.document;
   globalThis.document = document;
   globalThis.window = dom.window;
+  Object.defineProperty(dom.window, 'innerWidth', {
+    configurable: true,
+    value: windowInnerWidth,
+  });
 
   const terminalView = {
     dispose: vi.fn(),
@@ -69,8 +75,10 @@ function createHarness({
     controller: createWorkspaceSidePanelsController({
       appState,
       documentRef: document,
+      windowRef: dom.window,
       terminalPanel: document.getElementById('terminalPanel'),
       terminalHost: document.getElementById('terminalHost'),
+      closeButton: document.getElementById('closeTerminalButton'),
       getActiveConversation: vi.fn(() => activeConversation),
       getConversationPathMessages,
       findConversationById,
@@ -152,5 +160,63 @@ describe('workspace-side-panels', () => {
     expect(harness.appState.terminalOpenConversationId).toBeNull();
     expect(harness.appState.terminalDismissedConversationIds.has(activeConversation.id)).toBe(true);
     expect(harness.appState.activeWorkspaceSidePanel).toBeNull();
+  });
+
+  test('uses the full-screen sheet presentation for phone-width terminal sessions', async () => {
+    const activeConversation = {
+      id: 'conversation-1',
+      activeLeafMessageId: 'message-2',
+      currentWorkingDirectory: '/workspace',
+    };
+    const harness = createHarness({
+      activeConversation,
+      conversationsById: new Map([[activeConversation.id, activeConversation]]),
+      pathMessagesByConversationId: new Map([
+        [
+          activeConversation.id,
+          [
+            {
+              id: 'message-2',
+              role: 'tool',
+              toolName: 'run_shell_command',
+              toolArguments: { shell: 'pwd' },
+              toolResultData: {
+                command: 'pwd',
+                currentWorkingDirectory: '/workspace',
+                exitCode: 0,
+                stdout: '/workspace',
+                stderr: '',
+              },
+            },
+          ],
+        ],
+      ]),
+      windowInnerWidth: 390,
+    });
+
+    harness.controller.renderWorkspaceSidePanels();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(harness.terminalView.setVisible).toHaveBeenCalledWith(true);
+    expect(harness.terminalView.renderSession).toHaveBeenCalled();
+    expect(harness.terminalView.renderSession.mock.calls[0][0]).toMatchObject({
+      currentWorkingDirectory: '/workspace',
+      hasVisibleContent: true,
+    });
+    expect(harness.appState.terminalOpenConversationId).toBe(activeConversation.id);
+    expect(harness.controller.getShellTerminalEntries(activeConversation)).toHaveLength(1);
+    expect(harness.controller.getTerminalSessionForConversation(activeConversation).entries).toHaveLength(
+      1
+    );
+    expect(harness.controller.getTerminalSessionForConversation(activeConversation).entries[0]).toMatchObject(
+      {
+        command: 'pwd',
+      }
+    );
+    expect(harness.controller.getTerminalSessionForConversation(activeConversation).hasVisibleContent).toBe(
+      true
+    );
+    expect(harness.controller.getTerminalSessionForConversation(activeConversation).pendingEntry).toBeNull();
+    expect(globalThis.document.body.classList.contains('terminal-sheet-open')).toBe(true);
   });
 });

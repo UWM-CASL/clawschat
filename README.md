@@ -35,7 +35,9 @@ Student-facing browser chat UI with local model inference.
 - Header actions include a `Keyboard shortcuts` button (`Ctrl+/`) so users can discover available keyboard actions.
 - Keyboard users get route-safe skip links that jump to the visible main content, application controls, conversations, transcript, composer, and settings regions without breaking hash-based routing.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
-- The footer shows the current release stamp (`2026.04.09-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
+- On phone widths (`<=767.98px`), the top bar switches to a two-row layout: `New conversation`, `New agent`, `Conversations`, and `Settings` stay visible on the first row, while `Help` and `Keyboard shortcuts` move into a mobile overflow menu.
+- On phone widths, the conversations panel stays offcanvas but expands to the full viewport width, transcript jump controls move into a compact dock above the composer, the composer switches to a 3-column touch layout, and Settings uses a single-column scroll flow with a horizontally scrollable tab strip plus a sticky header.
+- The footer shows the current release stamp (`2026.04.09-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license. On phone widths, that footer moves into the main scroll flow instead of reserving a fixed shell row.
 - `Settings -> Tools` includes:
   - `Enable tool calling` to append tool-call instructions only when the selected conversation model supports tool calling
   - per-tool toggles for each currently available built-in tool; disabled built-in tools are removed from the computed system prompt and ignored if a model still emits them
@@ -191,7 +193,7 @@ Student-facing browser chat UI with local model inference.
   - `run_shell_command` now documents `shell` as its shell-text argument.
   - Shell-command input is sanitized before execution: oversized commands, control characters, fenced blocks, and nested tool-call payloads are rejected.
   - Shell-tool responses exposed to the model and transcript use a compact `{"status":"successful"|"failed","body":"...","message":"..."}` envelope, and the `body` is plain human-readable text rather than a schema dump.
-  - When `run_shell_command` is invoked, an embedded read-only xterm terminal opens on the right side of the chat workspace, shows the shell prompt plus command/output, and can be manually closed until the next shell command reopens it.
+  - When `run_shell_command` is invoked, an embedded read-only xterm terminal opens with the active chat workspace, shows the shell prompt plus command/output, can be manually closed until the next shell command reopens it, and uses the right-side split panel on desktop widths or a full-screen sheet on phone widths.
   - The conversation sidebar auto-collapses while that terminal is open, and switching to a conversation with no shell terminal history closes the terminal automatically.
   - `docs/tools.md` also defines the implementation standard future shell commands must meet before they are added to this subset.
   - The shell subset includes `paste`, `join`, and `column` for common line-merging, key-join, and table-alignment tasks over workspace text files.
@@ -309,6 +311,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Bulk conversation archive export lives in `src/app/conversation-bulk-export.js`.
 - Transcript and conversation-list DOM rendering live in `src/ui/`.
 - Transcript navigation/skip-link behavior, model-load feedback, composer attachment/runtime state, and workspace side-panel controllers live in `src/app/`.
+- Responsive viewport-height synchronization for the shell and mobile offcanvas/layout behavior lives in `src/app/viewport-layout.js`.
 - `src/main.js` remains the app shell for routing, page-level visibility, persistence hookup, and wiring dependencies into those modules.
 - See `docs/conversation-domain.md`, `docs/app-state.md`, `docs/app-controller.md`, `docs/orchestrations.md`, and `docs/ui-views.md` for the current boundaries.
 - See `docs/tools.md` for current built-in and MCP tool-calling behavior plus the remaining `SKILL.md` planning.

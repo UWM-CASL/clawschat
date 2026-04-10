@@ -89,39 +89,39 @@
                 Conversations
               </button>
             </div>
-            <div class="chat-title-wrap d-flex align-items-center justify-content-center gap-2">
-              <h2 id="chatTitle" class="h4 mb-0">Choose a Model to Chat</h2>
-              <input
-                id="chatTitleInput"
-                class="form-control form-control-sm chat-title-input d-none"
-                type="text"
-                aria-label="Conversation title"
-                maxlength="64"
-              />
-              <button
-                type="button"
-                id="saveChatTitleBtn"
-                class="btn icon-button d-none"
-                aria-label="Save conversation title"
-                data-bs-toggle="tooltip"
-                data-bs-title="Save conversation title"
-              >
-                <i class="bi bi-floppy-fill" aria-hidden="true"></i>
-                <span class="visually-hidden">Save conversation title</span>
-              </button>
-              <button
-                type="button"
-                id="cancelChatTitleBtn"
-                class="btn icon-button d-none"
-                aria-label="Cancel editing conversation title"
-                data-bs-toggle="tooltip"
-                data-bs-title="Cancel editing conversation title"
-              >
-                <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
-                <span class="visually-hidden">Cancel editing conversation title</span>
-              </button>
-            </div>
-            <div class="top-bar-actions">
+            <div class="top-bar-title-row">
+              <div class="chat-title-wrap d-flex align-items-center justify-content-center gap-2">
+                <h2 id="chatTitle" class="h4 mb-0">Choose a Model to Chat</h2>
+                <input
+                  id="chatTitleInput"
+                  class="form-control form-control-sm chat-title-input d-none"
+                  type="text"
+                  aria-label="Conversation title"
+                  maxlength="64"
+                />
+                <button
+                  type="button"
+                  id="saveChatTitleBtn"
+                  class="btn icon-button d-none"
+                  aria-label="Save conversation title"
+                  data-bs-toggle="tooltip"
+                  data-bs-title="Save conversation title"
+                >
+                  <i class="bi bi-floppy-fill" aria-hidden="true"></i>
+                  <span class="visually-hidden">Save conversation title</span>
+                </button>
+                <button
+                  type="button"
+                  id="cancelChatTitleBtn"
+                  class="btn icon-button d-none"
+                  aria-label="Cancel editing conversation title"
+                  data-bs-toggle="tooltip"
+                  data-bs-title="Cancel editing conversation title"
+                >
+                  <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
+                  <span class="visually-hidden">Cancel editing conversation title</span>
+                </button>
+              </div>
               <div id="agentAutomationControls" class="agent-automation-controls d-none">
                 <span
                   id="agentFollowUpCountdown"
@@ -162,10 +162,12 @@
                   aria-atomic="true"
                 ></span>
               </div>
+            </div>
+            <div class="top-bar-actions">
               <button
                 id="openKeyboardShortcutsButton"
                 type="button"
-                class="btn icon-button"
+                class="btn icon-button top-bar-desktop-action"
                 aria-label="Open keyboard shortcuts"
                 aria-keyshortcuts="Control+/"
                 data-icon-tooltip="true"
@@ -176,7 +178,7 @@
               </button>
               <a
                 id="openHelpButton"
-                class="btn icon-button"
+                class="btn icon-button top-bar-desktop-action"
                 href="help.html"
                 aria-label="Open help"
                 aria-keyshortcuts="Alt+H"
@@ -198,6 +200,36 @@
                 <i class="bi bi-gear-fill" aria-hidden="true"></i>
                 <span class="visually-hidden">Open settings</span>
               </button>
+              <div class="dropdown top-bar-overflow d-md-none">
+                <button
+                  id="topBarOverflowButton"
+                  type="button"
+                  class="btn icon-button"
+                  data-bs-toggle="dropdown"
+                  data-bs-auto-close="true"
+                  aria-label="More actions"
+                >
+                  <i class="bi bi-three-dots" aria-hidden="true"></i>
+                  <span class="visually-hidden">More actions</span>
+                </button>
+                <ul
+                  class="dropdown-menu dropdown-menu-end top-bar-overflow-menu"
+                  aria-labelledby="topBarOverflowButton"
+                >
+                  <li>
+                    <button
+                      id="openKeyboardShortcutsMobileButton"
+                      type="button"
+                      class="dropdown-item"
+                    >
+                      Keyboard shortcuts
+                    </button>
+                  </li>
+                  <li>
+                    <a id="openHelpMobileLink" class="dropdown-item" href="help.html">Help</a>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </header>
@@ -408,6 +440,18 @@
                   <div id="chatTranscriptStart" class="transcript-boundary" tabindex="-1"></div>
                   <div class="transcript-step-nav" aria-label="Transcript navigation">
                     <button
+                      id="jumpToTopButton"
+                      type="button"
+                      class="btn btn-primary jump-to-top-btn"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="left"
+                      data-bs-title="Transcript top"
+                      aria-disabled="true"
+                    >
+                      <i class="bi bi-chevron-double-up" aria-hidden="true"></i>
+                      <span class="visually-hidden">Jump to transcript top</span>
+                    </button>
+                    <button
                       id="jumpToPreviousUserButton"
                       type="button"
                       class="btn btn-primary transcript-step-btn"
@@ -446,18 +490,6 @@
                       <span class="visually-hidden">Jump to latest response</span>
                     </button>
                   </div>
-                  <button
-                    id="jumpToTopButton"
-                    type="button"
-                    class="btn btn-primary jump-to-top-btn"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="left"
-                    data-bs-title="Transcript top"
-                    aria-disabled="true"
-                  >
-                    <i class="bi bi-chevron-double-up" aria-hidden="true"></i>
-                    <span class="visually-hidden">Jump to transcript top</span>
-                  </button>
                   <ol id="chatTranscript" class="chat-transcript"></ol>
                   <div id="transcriptModelLoadFeedbackHost" class="transcript-feedback-slot"></div>
                   <div id="chatTranscriptEnd" class="transcript-boundary" tabindex="-1"></div>
@@ -569,7 +601,7 @@
             tabindex="-1"
           >
             <div class="settings-page-inner">
-              <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+              <div class="settings-page-header d-flex justify-content-between align-items-start gap-3 mb-3">
                 <div>
                   <h2 id="settingsPageTitle" class="h4 mb-1">Settings</h2>
                   <p class="small text-body-secondary mb-0">Saving is automatic.</p>
@@ -1201,9 +1233,9 @@
               </div>
             </div>
           </section>
-          <footer class="app-footer d-none" aria-label="Application footer">
+          <footer class="app-footer app-footer-inline" aria-label="Application footer">
             <p class="app-version mb-0">
-              Version 2026.04.09-01 · Copyright 2026 Catarino David Delgado
+              Version 2026.04.09-01 | Copyright 2026 Catarino David Delgado
             </p>
             <div class="app-footer-links" aria-label="Project links">
               <a
@@ -1226,9 +1258,9 @@
           </footer>
         </main>
       </div>
-      <footer class="app-footer" aria-label="Application footer">
+      <footer class="app-footer app-footer-shell" aria-label="Application footer">
         <p class="app-version mb-0">
-          Version 2026.04.09-01 · Copyright 2026 Catarino David Delgado
+          Version 2026.04.09-01 | Copyright 2026 Catarino David Delgado
         </p>
         <div class="app-footer-links" aria-label="Project links">
           <a

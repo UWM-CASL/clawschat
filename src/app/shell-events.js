@@ -5,6 +5,7 @@ export function bindShellEvents({
   keyboardShortcutsModal,
   conversationSystemPromptModal,
   openKeyboardShortcutsButton,
+  openKeyboardShortcutsButtons = [],
   startConversationButton,
   messageInput,
   newConversationBtn,
@@ -54,11 +55,18 @@ export function bindShellEvents({
   onConversationSystemPromptModalShown = () => {},
   onConversationSystemPromptModalHidden = () => {},
 }) {
-  if (openKeyboardShortcutsButton instanceof HTMLButtonElement) {
-    openKeyboardShortcutsButton.addEventListener('click', (event) => {
+  const keyboardShortcutsTriggers = [
+    openKeyboardShortcutsButton,
+    ...openKeyboardShortcutsButtons,
+  ].filter((element, index, elements) => {
+    return element instanceof HTMLButtonElement && elements.indexOf(element) === index;
+  });
+
+  keyboardShortcutsTriggers.forEach((button) => {
+    button.addEventListener('click', (event) => {
       openKeyboardShortcuts(event.currentTarget);
     });
-  }
+  });
 
   documentRef.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && keyboardShortcutsModal?.classList.contains('show')) {
@@ -259,8 +267,8 @@ export function bindShellEvents({
         appState.lastKeyboardShortcutsTrigger = null;
         return;
       }
-      if (openKeyboardShortcutsButton instanceof HTMLButtonElement) {
-        openKeyboardShortcutsButton.focus();
+      if (keyboardShortcutsTriggers[0] instanceof HTMLButtonElement) {
+        keyboardShortcutsTriggers[0].focus();
       }
     });
   }

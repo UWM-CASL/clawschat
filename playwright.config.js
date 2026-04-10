@@ -14,6 +14,21 @@ module.exports = defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
   },
+  projects: [
+    {
+      name: 'desktop-chromium',
+      testIgnore: /.*mobile.*\.spec\.js/,
+    },
+    {
+      name: 'mobile-chromium',
+      testMatch: /.*mobile.*\.spec\.js/,
+      use: {
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+  ],
   webServer: {
     command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
     url: 'http://127.0.0.1:4173',
