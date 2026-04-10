@@ -35,7 +35,7 @@ Student-facing browser chat UI with local model inference.
 - Header actions include a `Keyboard shortcuts` button (`Ctrl+/`) so users can discover available keyboard actions.
 - Keyboard users get route-safe skip links that jump to the visible main content, application controls, conversations, transcript, composer, and settings regions without breaking hash-based routing.
 - The app shell uses a full-width `ClawsChat` banner above the main control bar, and the title/control strip stays visually minimized until the chat workspace is started while keyboard/help/settings remain available.
-- The footer shows the current release stamp (`2026.03.25-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
+- The footer shows the current release stamp (`2026.04.09-01`), copyright for Catarino David Delgado, and links to the GitHub repository and MIT license.
 - `Settings -> Tools` includes:
   - `Enable tool calling` to append tool-call instructions only when the selected conversation model supports tool calling
   - per-tool toggles for each currently available built-in tool; disabled built-in tools are removed from the computed system prompt and ignored if a model still emits them
