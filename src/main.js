@@ -193,7 +193,7 @@ const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
-const STREAM_UPDATE_INTERVAL_MS = 16;
+const STREAM_UPDATE_INTERVAL_MS = 32;
 const AGENT_FOLLOW_UP_INTERVAL_MS = 15 * 60 * 1000;
 const AGENT_FOLLOW_UP_BUSY_RETRY_MS = 30 * 1000;
 const AGENT_SUMMARY_TRIGGER_RATIO = 0.9;
@@ -452,15 +452,15 @@ function queueMarkdownRendererRefresh() {
     return;
   }
   hasQueuedMarkdownRendererRefresh = true;
-  const refreshWhenIdle = () => {
-    if (isGeneratingResponse(appState)) {
-      window.setTimeout(refreshWhenIdle, STREAM_UPDATE_INTERVAL_MS);
-      return;
-    }
-    hasQueuedMarkdownRendererRefresh = false;
-    renderTranscript();
-  };
-  window.setTimeout(refreshWhenIdle, 0);
+  flushQueuedMarkdownRendererRefresh();
+}
+
+function flushQueuedMarkdownRendererRefresh() {
+  if (!hasQueuedMarkdownRendererRefresh || isGeneratingResponse(appState)) {
+    return;
+  }
+  hasQueuedMarkdownRendererRefresh = false;
+  renderTranscript();
 }
 
 async function ensureMarkdownRendererLoaded() {
@@ -3737,6 +3737,7 @@ function toggleAgentPauseState() {
 
 function handleCompletedModelMessage(conversation, message) {
   agentAutomationController?.handleCompletedModelMessage(conversation, message);
+  flushQueuedMarkdownRendererRefresh();
 }
 
 const appController = createAppController({
@@ -3800,6 +3801,7 @@ const appController = createAppController({
   applyPendingGenerationSettingsIfReady,
   markActiveIncompleteModelMessageComplete,
   onModelMessageComplete: handleCompletedModelMessage,
+  onGenerationSettled: flushQueuedMarkdownRendererRefresh,
   streamUpdateIntervalMs: STREAM_UPDATE_INTERVAL_MS,
 });
 

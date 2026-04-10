@@ -124,6 +124,7 @@ function buildFailedToolResultText(toolCall, error) {
  *   applyPendingGenerationSettingsIfReady: () => void;
  *   markActiveIncompleteModelMessageComplete: () => void;
  *   onModelMessageComplete?: (conversation: any, message: any) => void;
+ *   onGenerationSettled?: () => void;
  *   scheduleTask?: (callback: () => void) => void;
  *   streamUpdateIntervalMs?: number;
  * }} dependencies
@@ -140,6 +141,12 @@ export function createAppController(dependencies) {
       : 120;
   let activeRenameAbortController = null;
   let activeRenameConversationId = '';
+
+  function notifyGenerationSettled() {
+    if (typeof dependencies.onGenerationSettled === 'function') {
+      dependencies.onGenerationSettled();
+    }
+  }
 
   function getLoadedBackendLabel() {
     if (typeof dependencies.engine?.loadedBackend === 'string' && dependencies.engine.loadedBackend) {
@@ -202,6 +209,7 @@ export function createAppController(dependencies) {
       dependencies.appendDebug('Disposed current model worker after fatal generation error.');
     }
     dependencies.queueConversationStateSave();
+    notifyGenerationSettled();
   }
 
   function cancelBackgroundRenameIfNeeded() {
@@ -639,15 +647,19 @@ export function createAppController(dependencies) {
     }
     let streamedText = '';
     let isInterceptingToolCall = false;
-    let pendingStreamUpdateTimerId = null;
+    let pendingStreamUpdateFrameId = null;
     let lastStreamUpdateAt = 0;
 
     function clearPendingStreamUpdate() {
-      if (pendingStreamUpdateTimerId === null) {
+      if (pendingStreamUpdateFrameId === null) {
         return;
       }
-      globalThis.clearTimeout(pendingStreamUpdateTimerId);
-      pendingStreamUpdateTimerId = null;
+      if (typeof globalThis.cancelAnimationFrame === 'function') {
+        globalThis.cancelAnimationFrame(pendingStreamUpdateFrameId);
+      } else {
+        globalThis.clearTimeout(pendingStreamUpdateFrameId);
+      }
+      pendingStreamUpdateFrameId = null;
     }
 
     function getStreamUpdateTimestamp() {
@@ -733,6 +745,7 @@ export function createAppController(dependencies) {
                 logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
                 dependencies.appendDebug(`Tool call interception failed: ${message}`);
                 dependencies.queueConversationStateSave();
+                notifyGenerationSettled();
               }
             );
           });
@@ -753,21 +766,27 @@ export function createAppController(dependencies) {
         applyStreamUpdate();
         return;
       }
-      const now = getStreamUpdateTimestamp();
-      const elapsed = lastStreamUpdateAt > 0 ? now - lastStreamUpdateAt : streamUpdateIntervalMs;
-      if (elapsed >= streamUpdateIntervalMs) {
-        applyStreamUpdate();
+      if (pendingStreamUpdateFrameId !== null) {
         return;
       }
-      if (pendingStreamUpdateTimerId !== null) {
-        return;
-      }
-      pendingStreamUpdateTimerId = globalThis.setTimeout(
-        () => {
-          applyStreamUpdate();
-        },
-        Math.max(0, streamUpdateIntervalMs - elapsed)
-      );
+      const requestFrame =
+        typeof globalThis.requestAnimationFrame === 'function'
+          ? globalThis.requestAnimationFrame.bind(globalThis)
+          : (callback) => globalThis.setTimeout(() => callback(getStreamUpdateTimestamp()), 16);
+      const queueNextFrame = () => {
+        pendingStreamUpdateFrameId = requestFrame(() => {
+          pendingStreamUpdateFrameId = null;
+          const now = getStreamUpdateTimestamp();
+          const elapsed =
+            lastStreamUpdateAt > 0 ? now - lastStreamUpdateAt : streamUpdateIntervalMs;
+          if (elapsed >= streamUpdateIntervalMs) {
+            applyStreamUpdate();
+            return;
+          }
+          queueNextFrame();
+        });
+      };
+      queueNextFrame();
     }
 
     setGenerating(dependencies.state, true);
@@ -888,6 +907,7 @@ export function createAppController(dependencies) {
           if (typeof dependencies.onModelMessageComplete === 'function') {
             dependencies.onModelMessageComplete(activeConversation, modelMessage);
           }
+          notifyGenerationSettled();
         },
         onError: (message) => {
           if (isInterceptingToolCall) {
@@ -944,6 +964,7 @@ export function createAppController(dependencies) {
       dependencies.updateActionButtons();
       dependencies.applyPendingGenerationSettingsIfReady();
       dependencies.queueConversationStateSave();
+      notifyGenerationSettled();
     }
   }
 
