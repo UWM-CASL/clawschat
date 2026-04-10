@@ -292,6 +292,80 @@ export function isHeartbeatMessage(message) {
   );
 }
 
+const HEARTBEAT_NO_FOLLOW_UP_CLAUSE_PATTERNS = [
+  /^\[no_follow_up\]$/i,
+  /^no(?:\s+(?:real|new|useful|concrete))?\s+follow[- ]?up(?:\s+(?:needed|required|necessary))?(?:\s+(?:right now|for now|at this time|at the moment))?$/i,
+  /^no\s+(?:new\s+)?update(?:\s+(?:right now|for now|at this time|at the moment))?$/i,
+  /^nothing(?:\s+(?:new|else|further))?(?:\s+(?:stands out|to add|to report))?(?:\s+(?:right now|for now|at this time|at the moment))?$/i,
+  /^i\s+(?:do not|don't)\s+have\s+(?:anything|much|any(?:thing)?\s+new)\s+to\s+(?:add|report)(?:\s+(?:right now|for now|at this time|at the moment))?$/i,
+  /^i(?:'m| am)\s+here\s+if\s+you\s+need(?:\s+anything(?:\s+else)?|\s+more\s+help|\s+me)$/i,
+  /^let\s+me\s+know\s+if\s+you(?:'d| would)?\s+like\s+me\s+to\s+(?:help|revisit|continue)\b.*$/i,
+  /^let\s+me\s+know\s+if\s+you\s+need\b.*$/i,
+  /^(?:feel free to |please )?reach out if you need\b.*$/i,
+  /^i(?:'ll| will)\s+(?:stay quiet|wait|hold off|check back later)\b.*$/i,
+];
+
+export function isHeartbeatNoFollowUpText(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!normalized) {
+    return true;
+  }
+  if (normalized.length > 280) {
+    return false;
+  }
+  const clauses = (normalized.match(/[^.!?]+[.!?]?/g) || [])
+    .map((clause) => clause.trim().replace(/[.!?]+$/g, '').trim())
+    .filter(Boolean);
+  if (!clauses.length || clauses.length > 3) {
+    return false;
+  }
+  return clauses.every((clause) =>
+    HEARTBEAT_NO_FOLLOW_UP_CLAUSE_PATTERNS.some((pattern) => pattern.test(clause))
+  );
+}
+
+export function filterConversationMessagesForInference(
+  messages = [],
+  {
+    isHeartbeatMessage: isHeartbeat = isHeartbeatMessage,
+    preserveTrailingHeartbeat = false,
+  } = {}
+) {
+  const normalizedMessages = Array.isArray(messages)
+    ? messages.filter(
+        (message) =>
+          message &&
+          (message.role === 'user' ||
+            message.role === 'model' ||
+            message.role === 'tool' ||
+            message.role === 'summary')
+      )
+    : [];
+  return normalizedMessages.filter((message, index, source) => {
+    const previousMessage = index > 0 ? source[index - 1] : null;
+    const nextMessage = index + 1 < source.length ? source[index + 1] : null;
+    if (isHeartbeat(message)) {
+      if (!nextMessage) {
+        return preserveTrailingHeartbeat;
+      }
+      return (
+        nextMessage?.role === 'model' &&
+        !isHeartbeatNoFollowUpText(nextMessage.response || nextMessage.text || '')
+      );
+    }
+    if (
+      message.role === 'model' &&
+      isHeartbeat(previousMessage) &&
+      isHeartbeatNoFollowUpText(message.response || message.text || '')
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function formatArtifactInventoryLines(artifactRefs) {
   const normalizedRefs = Array.isArray(artifactRefs) ? artifactRefs : [];
   const lines = [];
@@ -928,13 +1002,14 @@ export function findPreferredLeafForVariant(conversation, variantMessage) {
 export function buildConversationMessages(messages, systemPrompt = '') {
   const structuredMessages = [];
   const normalizedSystemPrompt = normalizeSystemPrompt(systemPrompt);
+  const inferenceMessages = filterConversationMessagesForInference(messages);
   if (normalizedSystemPrompt) {
     structuredMessages.push({
       role: 'system',
       content: normalizedSystemPrompt,
     });
   }
-  messages.forEach((message) => {
+  inferenceMessages.forEach((message) => {
     if (
       !message ||
       (message.role !== 'user' &&

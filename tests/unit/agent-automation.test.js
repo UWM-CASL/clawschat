@@ -150,6 +150,32 @@ describe('agent-automation', () => {
     expect(transcript).toContain('[Heartbeat]\nHeartbeat text');
   });
 
+  test('omits empty and non-answer heartbeat exchanges from orchestration transcripts', () => {
+    const transcript = buildConversationTranscriptForOrchestration(
+      [
+        { role: 'user', text: 'Start here.' },
+        { role: 'user', text: 'Heartbeat with no answer', speaker: 'Heartbeat' },
+        { role: 'user', text: 'Actual user reply.' },
+        { role: 'user', text: 'Heartbeat with non-answer', speaker: 'Heartbeat' },
+        {
+          role: 'model',
+          text: "Nothing else stands out right now. Let me know if you'd like me to revisit this later.",
+        },
+        { role: 'user', text: 'Continue with the real work.' },
+      ],
+      {
+        isHeartbeatMessage: (message) => message?.speaker === 'Heartbeat',
+      }
+    );
+
+    expect(transcript).toContain('[User]\nStart here.');
+    expect(transcript).toContain('[User]\nActual user reply.');
+    expect(transcript).toContain('[User]\nContinue with the real work.');
+    expect(transcript).not.toContain('[Heartbeat]\nHeartbeat with no answer');
+    expect(transcript).not.toContain('[Heartbeat]\nHeartbeat with non-answer');
+    expect(transcript).not.toContain("Nothing else stands out right now.");
+  });
+
   test('estimates prompt tokens for structured text and media content', () => {
     expect(
       estimatePromptTokenCount([
@@ -246,6 +272,45 @@ describe('agent-automation', () => {
       expect.objectContaining({
         signal: expect.any(Object),
       })
+    );
+  });
+
+  test('treats non-answer heartbeat replies as silent follow-ups', async () => {
+    const harness = createHarness();
+    const conversation = createConversation({
+      id: 'conversation-agent-noop',
+      name: 'Research Partner',
+      conversationType: 'agent',
+      agent: {
+        name: 'Research Partner',
+        description: 'Helpful and proactive.',
+        paused: false,
+        lastActivityAt: 1000,
+        lastFollowUpAt: null,
+        nextFollowUpAt: 2000,
+      },
+    });
+    const firstUser = addMessageToConversation(conversation, 'user', 'Check in later.');
+    completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstUser.id }),
+      'I will keep an eye on it.'
+    );
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.dependencies.runOrchestration.mockResolvedValue({
+      finalOutput:
+        "Nothing else stands out right now. Let me know if you'd like me to revisit this later.",
+    });
+
+    await harness.controller.runFollowUpOrchestration(conversation.id);
+
+    const pathMessages = getConversationPathMessages(conversation);
+    expect(pathMessages.map((message) => message.role)).toEqual(['user', 'model', 'user']);
+    expect(pathMessages[2].speaker).toBe('Heartbeat');
+    expect(pathMessages[2].text).toContain('Heartbeat:');
+    expect(conversation.lastSpokenLeafMessageId).toBe(pathMessages[2].id);
+    expect(harness.dependencies.setStatus).not.toHaveBeenCalledWith(
+      'Research Partner sent a heartbeat follow-up.'
     );
   });
 

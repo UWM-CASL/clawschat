@@ -645,12 +645,16 @@ describe('conversation-model', () => {
       conversation,
       'Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.'
     );
+    const heartbeatModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: heartbeat.id }),
+      'A short walk can improve alertness.'
+    );
     const secondUser = addMessageToConversation(conversation, 'user', 'Tell me something useful.', {
-      parentId: heartbeat.id,
+      parentId: heartbeatModel.id,
     });
     const secondModel = completeModelMessage(
       addMessageToConversation(conversation, 'model', '', { parentId: secondUser.id }),
-      'A short walk can improve alertness.'
+      'Start with a short walk before the next task.'
     );
 
     conversation.activeLeafMessageId = secondModel.id;
@@ -669,8 +673,9 @@ describe('conversation-model', () => {
         content:
           'Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.',
       },
-      { role: 'user', content: 'Tell me something useful.' },
       { role: 'assistant', content: 'A short walk can improve alertness.' },
+      { role: 'user', content: 'Tell me something useful.' },
+      { role: 'assistant', content: 'Start with a short walk before the next task.' },
     ]);
 
     const payload = buildConversationDownloadPayload(conversation);
@@ -690,6 +695,95 @@ describe('conversation-model', () => {
     expect(markdown).toContain(
       '> Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.'
     );
+  });
+
+  test('omits heartbeats without a model follow-up from future prompts', () => {
+    const conversation = createConversation({
+      id: 'conversation-empty-heartbeat',
+      conversationType: 'agent',
+      agent: {
+        name: 'Harold',
+        description: 'Helpful and proactive.',
+      },
+    });
+    const firstUser = addMessageToConversation(conversation, 'user', 'Keep an eye on this.');
+    completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstUser.id }),
+      'I will watch for anything important.'
+    );
+    const heartbeat = addHeartbeatMessage(
+      conversation,
+      'Heartbeat: Review the conversation now. If you have something concrete, useful, or newly insightful to do, do it now. Otherwise stay quiet.'
+    );
+    const secondUser = addMessageToConversation(conversation, 'user', 'Anything new yet?', {
+      parentId: heartbeat.id,
+    });
+    const secondModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: secondUser.id }),
+      'Yes. Start with the unresolved dependency list.'
+    );
+
+    conversation.activeLeafMessageId = secondModel.id;
+    conversation.lastSpokenLeafMessageId = secondModel.id;
+
+    expect(buildPromptForConversationLeaf(conversation)).toEqual([
+      {
+        role: 'system',
+        content: expect.stringContaining('**Agent identity:**'),
+      },
+      { role: 'user', content: 'Keep an eye on this.' },
+      { role: 'assistant', content: 'I will watch for anything important.' },
+      { role: 'user', content: 'Anything new yet?' },
+      { role: 'assistant', content: 'Yes. Start with the unresolved dependency list.' },
+    ]);
+  });
+
+  test('omits heartbeat non-answer exchanges from future prompts', () => {
+    const conversation = createConversation({
+      id: 'conversation-heartbeat-non-answer',
+      conversationType: 'agent',
+      agent: {
+        name: 'Harold',
+        description: 'Helpful and proactive.',
+      },
+    });
+    const firstUser = addMessageToConversation(conversation, 'user', 'Keep an eye on this.');
+    completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: firstUser.id }),
+      'I will watch for anything important.'
+    );
+    const heartbeat = addHeartbeatMessage(
+      conversation,
+      'Heartbeat: The user has not replied since the last heartbeat. Do not press the same question again.'
+    );
+    const heartbeatModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: heartbeat.id }),
+      "Nothing else stands out right now. Let me know if you'd like me to revisit this later."
+    );
+    const secondUser = addMessageToConversation(conversation, 'user', 'Tell me something useful.', {
+      parentId: heartbeatModel.id,
+    });
+    const secondModel = completeModelMessage(
+      addMessageToConversation(conversation, 'model', '', { parentId: secondUser.id }),
+      'The cleanest next step is to verify the failing assumption directly.'
+    );
+
+    conversation.activeLeafMessageId = secondModel.id;
+    conversation.lastSpokenLeafMessageId = secondModel.id;
+
+    expect(buildPromptForConversationLeaf(conversation)).toEqual([
+      {
+        role: 'system',
+        content: expect.stringContaining('**Agent identity:**'),
+      },
+      { role: 'user', content: 'Keep an eye on this.' },
+      { role: 'assistant', content: 'I will watch for anything important.' },
+      { role: 'user', content: 'Tell me something useful.' },
+      {
+        role: 'assistant',
+        content: 'The cleanest next step is to verify the failing assumption directly.',
+      },
+    ]);
   });
 
   test('preserves conversations without a stored model id', () => {

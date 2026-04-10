@@ -16,7 +16,7 @@ These modules form the pure conversation domain layer for:
 - preserving normalized attachment conversions and future memory-ingestion hints alongside the original attachment metadata
 - resolving the visible branch and variant navigation state
 - pruning descendants after user edits
-- building structured prompts for inference, including fixed agent identity steering, personality context, and latest-summary carry-forward memory
+- building structured prompts for inference, including fixed agent identity steering, personality context, latest-summary carry-forward memory, and filtering empty/no-op agent heartbeat exchanges back out of later prompt history
 - building conversation export payloads and Markdown output
 - preserving model-emitted tool calls and `tool` role execution results
 

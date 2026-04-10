@@ -1,4 +1,8 @@
-import { HEARTBEAT_SPEAKER } from '../state/conversation-model.js';
+import {
+  HEARTBEAT_SPEAKER,
+  filterConversationMessagesForInference,
+  isHeartbeatNoFollowUpText,
+} from '../state/conversation-model.js';
 
 export function buildAgentHeartbeatText({ userRepliedSinceLastHeartbeat }) {
   if (userRepliedSinceLastHeartbeat) {
@@ -21,16 +25,10 @@ export function buildConversationTranscriptForOrchestration(
   messages = [],
   { isHeartbeatMessage = () => false, maxMessages = null } = {}
 ) {
-  const normalizedMessages = Array.isArray(messages)
-    ? messages.filter(
-        (message) =>
-          message &&
-          (message.role === 'user' ||
-            message.role === 'model' ||
-            message.role === 'tool' ||
-            message.role === 'summary')
-      )
-    : [];
+  const normalizedMessages = filterConversationMessagesForInference(messages, {
+    isHeartbeatMessage,
+    preserveTrailingHeartbeat: true,
+  });
   const visibleMessages =
     Number.isInteger(maxMessages) && maxMessages > 0
       ? normalizedMessages.slice(-maxMessages)
@@ -445,8 +443,7 @@ export function createAgentAutomationController({
       );
       const normalizedOutput = String(finalOutput || '').trim();
       if (
-        !normalizedOutput ||
-        normalizedOutput === '[NO_FOLLOW_UP]' ||
+        isHeartbeatNoFollowUpText(normalizedOutput) ||
         getActiveConversation()?.id !== conversation.id ||
         conversation.agent?.paused === true
       ) {
