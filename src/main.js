@@ -336,7 +336,6 @@ const preChatEditConversationSystemPromptBtn = document.getElementById(
 const chatTitle = document.getElementById('chatTitle');
 const agentAutomationControls = document.getElementById('agentAutomationControls');
 const pauseAgentBtn = document.getElementById('pauseAgentBtn');
-const pauseAgentBtnLabel = document.getElementById('pauseAgentBtnLabel');
 const agentFollowUpCountdown = document.getElementById('agentFollowUpCountdown');
 const agentFollowUpCountdownText = document.getElementById('agentFollowUpCountdownText');
 const agentFollowUpAutomationHelp = document.getElementById('agentFollowUpAutomationHelp');
@@ -3134,9 +3133,6 @@ function updatePauseAgentButton() {
   const icon = pauseAgentBtn.querySelector('[data-agent-toggle-icon="true"]');
   if (icon instanceof HTMLElement) {
     icon.className = `bi ${isPaused ? 'bi-play-fill' : 'bi-pause-fill'}`;
-  }
-  if (pauseAgentBtnLabel instanceof HTMLElement) {
-    pauseAgentBtnLabel.textContent = isPaused ? 'Resume Agent' : 'Pause Agent';
   }
   updateAgentFollowUpCountdownUi();
   const tooltipInstance = Tooltip.getInstance(pauseAgentBtn);

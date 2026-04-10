@@ -166,6 +166,23 @@ export function createAgentAutomationController({
   let activeAgentFollowUpAbortController = null;
   let activeAgentFollowUpConversationId = '';
 
+  function getLatestScheduleAnchor(conversation, fallback = null) {
+    const timestamps = [];
+    const lastActivityAt = Number(conversation?.agent?.lastActivityAt);
+    const lastFollowUpAt = Number(conversation?.agent?.lastFollowUpAt);
+    const fallbackTimestamp = Number(fallback);
+    if (Number.isFinite(lastActivityAt) && lastActivityAt > 0) {
+      timestamps.push(Math.trunc(lastActivityAt));
+    }
+    if (Number.isFinite(lastFollowUpAt) && lastFollowUpAt > 0) {
+      timestamps.push(Math.trunc(lastFollowUpAt));
+    }
+    if (Number.isFinite(fallbackTimestamp) && fallbackTimestamp > 0) {
+      timestamps.push(Math.trunc(fallbackTimestamp));
+    }
+    return timestamps.length ? Math.max(...timestamps) : null;
+  }
+
   function clearAgentFollowUpTimer() {
     if (agentFollowUpTimerId !== null) {
       clearTimeoutRef?.(agentFollowUpTimerId);
@@ -276,9 +293,8 @@ export function createAgentAutomationController({
     if (!isAgentConversation(conversation) || !conversation.agent) {
       return null;
     }
-    conversation.agent.nextFollowUpAt =
-      Math.max(Math.trunc(from), conversation.agent.lastActivityAt || Math.trunc(from)) +
-      followUpIntervalMs;
+    const nextAnchor = getLatestScheduleAnchor(conversation, from) ?? Math.trunc(now());
+    conversation.agent.nextFollowUpAt = nextAnchor + followUpIntervalMs;
     if (persist) {
       queueConversationStateSave();
     }
@@ -293,6 +309,9 @@ export function createAgentAutomationController({
     scheduleNextFollowUp(conversation, { from: conversation.agent.lastActivityAt });
     if (persist) {
       queueConversationStateSave();
+    }
+    if (getActiveConversation()?.id === conversation.id) {
+      refreshState();
     }
   }
 
@@ -345,11 +364,9 @@ export function createAgentAutomationController({
       return;
     }
     if (forceReschedule || !Number.isFinite(activeConversation.agent.nextFollowUpAt)) {
+      const latestScheduleAnchor = getLatestScheduleAnchor(activeConversation);
       scheduleNextFollowUp(activeConversation, {
-        from:
-          activeConversation.agent.lastFollowUpAt ||
-          activeConversation.agent.lastActivityAt ||
-          now(),
+        from: latestScheduleAnchor ?? now(),
       });
       queueConversationStateSave();
     }
@@ -442,11 +459,14 @@ export function createAgentAutomationController({
         }
       );
       const normalizedOutput = String(finalOutput || '').trim();
-      if (
-        isHeartbeatNoFollowUpText(normalizedOutput) ||
-        getActiveConversation()?.id !== conversation.id ||
-        conversation.agent?.paused === true
-      ) {
+      const hasNoFollowUp = isHeartbeatNoFollowUpText(normalizedOutput);
+      if (getActiveConversation()?.id !== conversation.id || conversation.agent?.paused === true) {
+        queueConversationStateSave();
+        return;
+      }
+      if (hasNoFollowUp) {
+        appendDebug(`Agent follow-up completed without an outward reply for ${conversation.name}.`);
+        setStatus(`${getAgentDisplayName(conversation)} reviewed the heartbeat and stayed quiet.`);
         queueConversationStateSave();
         return;
       }

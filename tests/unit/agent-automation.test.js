@@ -218,6 +218,36 @@ describe('agent-automation', () => {
     expect(harness.dependencies.onScheduleChanged).toHaveBeenCalled();
   });
 
+  test('resets the next follow-up from the latest activity timestamp', () => {
+    const harness = createHarness();
+    const conversation = createConversation({
+      id: 'conversation-agent-reset',
+      name: 'Agent Thread',
+      conversationType: 'agent',
+      agent: {
+        name: 'Agent Thread',
+        description: 'Helpful.',
+        paused: false,
+        lastActivityAt: 1000,
+        lastFollowUpAt: 2000,
+        nextFollowUpAt: null,
+      },
+    });
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+
+    harness.controller.refreshState();
+    harness.nowRef.value = 5000;
+
+    harness.controller.recordActivity(conversation, { timestamp: 5000 });
+
+    expect(conversation.agent.lastActivityAt).toBe(5000);
+    expect(conversation.agent.nextFollowUpAt).toBe(905000);
+    expect(harness.scheduledTimeouts).toHaveLength(2);
+    expect(harness.scheduledTimeouts[0].cleared).toBe(true);
+    expect(harness.scheduledTimeouts[1].delay).toBe(900000);
+  });
+
   test('runs the agent follow-up orchestration and appends a heartbeat plus response', async () => {
     const harness = createHarness();
     const conversation = createConversation({
@@ -309,8 +339,8 @@ describe('agent-automation', () => {
     expect(pathMessages[2].speaker).toBe('Heartbeat');
     expect(pathMessages[2].text).toContain('Heartbeat:');
     expect(conversation.lastSpokenLeafMessageId).toBe(pathMessages[2].id);
-    expect(harness.dependencies.setStatus).not.toHaveBeenCalledWith(
-      'Research Partner sent a heartbeat follow-up.'
+    expect(harness.dependencies.setStatus).toHaveBeenCalledWith(
+      'Research Partner reviewed the heartbeat and stayed quiet.'
     );
   });
 

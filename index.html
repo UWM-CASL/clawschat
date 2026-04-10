@@ -123,22 +123,6 @@
             </div>
             <div class="top-bar-actions">
               <div id="agentAutomationControls" class="agent-automation-controls d-none">
-                <button
-                  id="pauseAgentBtn"
-                  type="button"
-                  class="btn btn-primary top-bar-agent-toggle"
-                  aria-label="Pause agent"
-                  aria-pressed="false"
-                  data-bs-toggle="tooltip"
-                  data-bs-title="Pause agent"
-                >
-                  <i
-                    class="bi bi-pause-fill"
-                    aria-hidden="true"
-                    data-agent-toggle-icon="true"
-                  ></i>
-                  <span id="pauseAgentBtnLabel" class="pause-agent-btn-label">Pause Agent</span>
-                </button>
                 <span
                   id="agentFollowUpCountdown"
                   class="status-pill agent-follow-up-status"
@@ -155,6 +139,21 @@
                   has been quiet. Each heartbeat is written into the transcript. The countdown
                   shows when the next heartbeat runs.
                 </span>
+                <button
+                  id="pauseAgentBtn"
+                  type="button"
+                  class="btn btn-primary top-bar-agent-toggle square-icon-button"
+                  aria-label="Pause agent"
+                  aria-pressed="false"
+                  data-bs-toggle="tooltip"
+                  data-bs-title="Pause agent"
+                >
+                  <i
+                    class="bi bi-pause-fill"
+                    aria-hidden="true"
+                    data-agent-toggle-icon="true"
+                  ></i>
+                </button>
                 <span
                   id="agentFollowUpCountdownLive"
                   class="visually-hidden"
