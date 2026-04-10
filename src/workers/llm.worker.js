@@ -988,7 +988,8 @@ async function invokeTextGeneration(
   preparedTextInputs,
   requestGenerationConfig,
   generationOptions,
-  generationState
+  generationState,
+  runtime = {}
 ) {
   let streamedText = '';
   const promptText = decodePreparedTextPrompt(tokenizerInstance, preparedTextInputs);
@@ -1022,7 +1023,7 @@ async function invokeTextGeneration(
   if (TextStreamer) {
     const streamer = new TextStreamer(tokenizerInstance, {
       skip_prompt: true,
-      skip_special_tokens: true,
+      skip_special_tokens: shouldSkipSpecialTokensInMultimodalOutput(runtime),
       callback_function: (text) => {
         streamedText += text;
         queueBufferedToken(generationState, text);
@@ -1509,7 +1510,8 @@ async function generate(payload) {
           preparedTextInputs,
           requestGenerationConfig,
           generationOptions,
-          generationState
+          generationState,
+          runtime
         );
         streamedText = textGenerationResult.streamedText;
       } catch (error) {
@@ -1539,7 +1541,8 @@ async function generate(payload) {
           alignedPreparedTextInputs,
           requestGenerationConfig,
           generationOptions,
-          generationState
+          generationState,
+          runtime
         );
         streamedText = retryResult.streamedText;
       }

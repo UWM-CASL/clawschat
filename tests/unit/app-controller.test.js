@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { createAppController } from '../../src/state/app-controller.js';
+import { parseThinkingText } from '../../src/llm/thinking-parser.js';
 import {
   addMessageToConversation,
   buildPromptForConversationLeaf,
@@ -423,6 +424,44 @@ describe('app-controller', () => {
       kind: 'raw-model-output',
       details: '  Exact output  ',
     });
+  });
+
+  test('uses raw streamed text to preserve Gemma-style thinking blocks on completion', () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({
+      id: 'conversation-gemma-thinking',
+      modelId: 'test-model',
+    });
+    const userMessage = addMessageToConversation(conversation, 'user', 'Say hello.');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.getThinkingTagsForModel = () => ({
+      open: '<|channel>',
+      close: '<channel|>',
+      stripLeadingText: 'thought',
+    });
+    harness.dependencies.parseThinkingText = parseThinkingText;
+
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onToken('<|channel>thought\n');
+      handlers.onToken('considering options<channel|>Final answer');
+      handlers.onComplete('Final answer');
+    });
+
+    harness.controller.startModelGeneration(
+      conversation,
+      buildPromptForConversationLeaf(conversation),
+      {
+        parentMessageId: userMessage.id,
+      }
+    );
+
+    const modelMessage = conversation.messageNodes.find((message) => message.role === 'model');
+    expect(modelMessage?.thoughts).toBe('considering options');
+    expect(modelMessage?.response).toBe('Final answer');
+    expect(modelMessage?.hasThinking).toBe(true);
+    expect(modelMessage?.isThinkingComplete).toBe(true);
   });
 
   test('executes detected tool calls and continues generation', async () => {

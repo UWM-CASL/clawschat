@@ -342,4 +342,89 @@ describe('llm.worker init regression', () => {
       },
     });
   });
+
+  test('preserves special tokens in the text streamer when runtime thinking is enabled', async () => {
+    const generator = /** @type {any} */ (vi.fn(async (_prompt, options = {}) => {
+      options.streamer?.callback_function?.('<|channel>thought\\n');
+      options.streamer?.callback_function?.('considering options<channel|>Final answer');
+      return [{ generated_text: 'Final answer' }];
+    }));
+    generator.tokenizer = {
+      apply_chat_template: vi.fn(() => ({
+        input_ids: [[101, 102, 103]],
+        attention_mask: [[1, 1, 1]],
+      })),
+      batch_decode: vi.fn((value) => {
+        if (Array.isArray(value) && Array.isArray(value[0])) {
+          return ['<s>Prompt text'];
+        }
+        return ['Final answer'];
+      }),
+    };
+    generator.model = {
+      generate: vi.fn(),
+    };
+    pipelineFactory.mockResolvedValue(generator);
+
+    await import('../../src/workers/llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload: {
+            modelId: 'onnx-community/gemma-4-E2B-it-ONNX',
+            backendPreference: 'cpu',
+            runtime: {
+              dtypes: {
+                cpu: 'q4',
+              },
+            },
+          },
+        },
+      })
+    );
+
+    workerSelf.postMessage.mockClear();
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'generate',
+          payload: {
+            requestId: 'request-thinking',
+            prompt: [{ role: 'user', content: 'Hello there' }],
+            runtime: {
+              enableThinking: true,
+            },
+            generationConfig: {
+              maxOutputTokens: 64,
+              maxContextTokens: 8192,
+              temperature: 0.6,
+              topK: 50,
+              topP: 0.9,
+              repetitionPenalty: 1.0,
+            },
+          },
+        },
+      })
+    );
+
+    expect(generator).toHaveBeenCalledWith(
+      '<s>Prompt text',
+      expect.objectContaining({
+        streamer: expect.objectContaining({
+          skip_special_tokens: false,
+        }),
+      })
+    );
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'complete',
+      payload: {
+        requestId: 'request-thinking',
+        text: '<|channel>thought\\nconsidering options<channel|>Final answer',
+      },
+    });
+  });
 });

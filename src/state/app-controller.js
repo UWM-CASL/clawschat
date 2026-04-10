@@ -816,7 +816,6 @@ export function createAppController(dependencies) {
             typeof streamedText === 'string' && streamedText.length > 0
               ? streamedText
               : String(finalText || '');
-          const completedText = String(finalText || completedRawText);
           streamedText = completedRawText;
           if (!modelMessage.rawStreamText && completedRawText) {
             appendRawStreamChunk(modelMessage, completedRawText, visibleModelTurnMessage);
@@ -824,7 +823,7 @@ export function createAppController(dependencies) {
           if (applyStreamUpdate()) {
             return;
           }
-          const parsed = dependencies.parseThinkingText(completedText, thinkingTags);
+          const parsed = dependencies.parseThinkingText(completedRawText, thinkingTags);
           modelMessage.thoughts = parsed.thoughts;
           modelMessage.response = parsed.response.trimStart();
           modelMessage.hasThinking = parsed.hasThinking || Boolean(parsed.thoughts.trim());
