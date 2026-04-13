@@ -16,6 +16,7 @@ import {
 import { buildBulkConversationExportZip } from './app/conversation-bulk-export.js';
 import { createConversationEditors } from './app/conversation-editors.js';
 import { createModelLoadFeedbackController } from './app/model-load-feedback.js';
+import { createSemanticMemoryController } from './app/semantic-memory.js';
 import './styles.css';
 import { bindConversationListEvents } from './app/conversation-list-events.js';
 import { createPreferencesController } from './app/preferences.js';
@@ -118,6 +119,11 @@ import {
   buildConversationStateSnapshot,
 } from './state/conversation-serialization.js';
 import { loadSkillPackages, removeSkillPackage, saveSkillPackage } from './state/skill-store.js';
+import {
+  clearSemanticMemories,
+  loadSemanticMemories,
+  replaceSemanticMemories,
+} from './state/semantic-memory-store.js';
 import {
   ORCHESTRATION_KINDS,
   beginAttachmentOperation,
@@ -411,6 +417,7 @@ let hasLoggedMarkdownRendererError = false;
 let agentFollowUpCountdownIntervalId = null;
 let lastAgentFollowUpAnnouncementKey = '';
 let agentAutomationController = null;
+let semanticMemoryController = null;
 const workspaceFileSystem = createWorkspaceFileSystem();
 const conversationWorkspaceFileSystems = new Map();
 
@@ -1976,6 +1983,18 @@ async function restoreConversationStateFromStorage() {
   applyAppRouteFromHash();
 }
 
+async function restoreSemanticMemoryFromStorage() {
+  try {
+    await semanticMemoryController?.restore();
+  } catch (error) {
+    appendDebug({
+      kind: 'semantic-memory',
+      message: 'Semantic memory restore failed.',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 function getActiveConversation() {
   return selectActiveConversation(appState);
 }
@@ -2031,6 +2050,27 @@ async function deleteConversationStorage(conversationId) {
   } finally {
     conversationWorkspaceFileSystems.delete(normalizedConversationId);
   }
+  await semanticMemoryController?.forgetConversation(normalizedConversationId);
+}
+
+function findOriginatingUserMessage(conversation, message) {
+  if (!conversation || !message?.id) {
+    return null;
+  }
+  let cursor =
+    typeof message.parentId === 'string' && message.parentId
+      ? getMessageNodeById(conversation, message.parentId)
+      : null;
+  while (cursor) {
+    if (cursor.role === 'user') {
+      return cursor;
+    }
+    cursor =
+      typeof cursor.parentId === 'string' && cursor.parentId
+        ? getMessageNodeById(conversation, cursor.parentId)
+        : null;
+  }
+  return null;
 }
 
 function isModelTurnComplete(conversation, rootModelMessage) {
@@ -2651,12 +2691,20 @@ function buildPromptForActiveConversation(
   conversation,
   leafMessageId = conversation?.activeLeafMessageId
 ) {
+  const semanticMemoryPromptSection = semanticMemoryController?.buildPromptSection(
+    conversation,
+    leafMessageId
+  );
   const systemPromptSuffix = getConversationSystemPromptSuffix(
     getConversationModelId(conversation),
     conversation
   );
   return buildPromptForConversationLeaf(conversation, leafMessageId, {
-    systemPromptSuffix: [systemPromptSuffix, 'Below is your conversation with the user.']
+    systemPromptSuffix: [
+      systemPromptSuffix,
+      semanticMemoryPromptSection,
+      'Below is your conversation with the user.',
+    ]
       .filter((part) => typeof part === 'string' && part.trim())
       .join('\n\n'),
   });
@@ -2733,6 +2781,7 @@ async function deleteAllConversationStorage() {
   clearUserMessageEditSession();
   clearPendingComposerAttachments();
   setChatTitleEditing(appState, false);
+  await semanticMemoryController?.clear();
   renderConversationList();
   renderTranscript();
   updateChatTitle();
@@ -3702,6 +3751,14 @@ const runOrchestration = createOrchestrationRunner({
   onDebug: appendDebug,
 });
 
+semanticMemoryController = createSemanticMemoryController({
+  loadSemanticMemories,
+  replaceSemanticMemories,
+  clearSemanticMemories,
+  getConversationPathMessages,
+  onDebug: appendDebug,
+});
+
 function isAgentConversationLoaded() {
   return appState.workspaceView === 'chat' && isAgentConversation(getActiveConversation());
 }
@@ -3732,6 +3789,8 @@ agentAutomationController = createAgentAutomationController({
   updateActionButtons,
   setStatus,
   appendDebug,
+  onSummaryCreated: (conversation, summaryMessage) =>
+    semanticMemoryController?.rememberSummary(conversation, summaryMessage),
   onScheduleChanged: updateAgentFollowUpCountdownUi,
   followUpOrchestrationKind: ORCHESTRATION_KINDS.AGENT_FOLLOW_UP,
   summaryOrchestrationKind: ORCHESTRATION_KINDS.SUMMARY,
@@ -3763,6 +3822,10 @@ function toggleAgentPauseState() {
 
 function handleCompletedModelMessage(conversation, message) {
   agentAutomationController?.handleCompletedModelMessage(conversation, message);
+  const originatingUserMessage = findOriginatingUserMessage(conversation, message);
+  if (originatingUserMessage) {
+    void semanticMemoryController?.rememberUserMessage(conversation, originatingUserMessage);
+  }
   flushQueuedMarkdownRendererRefresh();
 }
 
@@ -3977,6 +4040,7 @@ skipLinkElements.forEach((link) => {
 updateSkipLinkVisibility();
 applyAppRouteFromHash();
 void restoreSkillPackagesFromStorage();
+void restoreSemanticMemoryFromStorage();
 void restoreConversationStateFromStorage();
 
 bindSettingsEvents({

@@ -112,6 +112,7 @@ export function estimatePromptTokenCount(prompt) {
  * @param {() => void} options.updateActionButtons
  * @param {(message: string) => void} options.setStatus
  * @param {(message: string) => void} [options.appendDebug]
+ * @param {(conversation: any, summaryMessage: any) => any} [options.onSummaryCreated]
  * @param {() => void} [options.onScheduleChanged]
  * @param {string} [options.followUpOrchestrationKind]
  * @param {string} [options.summaryOrchestrationKind]
@@ -150,6 +151,7 @@ export function createAgentAutomationController({
   updateActionButtons,
   setStatus,
   appendDebug = (_message) => {},
+  onSummaryCreated = (_conversation, _summaryMessage) => {},
   onScheduleChanged = () => {},
   followUpOrchestrationKind = 'agent-follow-up',
   summaryOrchestrationKind = 'summary',
@@ -580,7 +582,19 @@ export function createAgentAutomationController({
       if (!summaryText) {
         return true;
       }
-      insertSummaryNodeBeforeMessage(conversation, userMessage, summaryText, artifactRefs);
+      const summaryMessage = insertSummaryNodeBeforeMessage(
+        conversation,
+        userMessage,
+        summaryText,
+        artifactRefs
+      );
+      if (summaryMessage) {
+        void Promise.resolve(onSummaryCreated(conversation, summaryMessage)).catch((error) => {
+          appendDebug(
+            `Semantic memory summary ingest failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        });
+      }
       queueConversationStateSave();
       renderTranscript({ scrollToBottom: false });
       return true;

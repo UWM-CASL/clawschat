@@ -12,6 +12,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - Handles each scheduled agent heartbeat and decides whether to post one short proactive follow-up.
 - `src/config/orchestrations/summarize-conversation.json`
   - Compresses older agent-context turns into a durable memory summary and explicitly relists uploaded files.
+  - The resulting visible summary node now also feeds the browser-local semantic memory layer so later turns can retrieve compact preference/fact/task cues without replaying the full compacted transcript.
 - `src/config/orchestrations/pdf-to-markdown.json`
   - Prepares extracted document text for future PDF-to-Markdown conversion using chunking, per-chunk conversion, and a final merge pass.
   - The current shipped PDF attachment import is still deterministic parser-first extraction; this orchestration is the intended next-stage semantic conversion path.
@@ -55,7 +56,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
 - `Fix` executes all preparation steps first, then streams the final step output into the transcript as a new response variant.
 - `Fix` creates a new model variant at the same turn (like regenerate), so prior variants stay navigable.
 - Agent follow-up orchestration runs only while the matching agent conversation is the loaded chat and not paused, writes each heartbeat into the transcript before the model reviews it, and the active-chat header surfaces that schedule with a visible next-heartbeat countdown beside the pause/resume control. The countdown resets to a fixed 15-minute delay after each exchange.
-- Agent summary-compaction orchestration inserts a visible `summary` node into the conversation tree, then later prompt assembly drops older turns before that node while exports still preserve the full transcript.
+- Agent summary-compaction orchestration inserts a visible `summary` node into the conversation tree, later prompt assembly drops older turns before that node while exports still preserve the full transcript, and the summary text is also ingested into local semantic memory records.
 
 ## Utility step contract
 

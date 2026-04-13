@@ -20,6 +20,7 @@ Student-facing browser chat UI with local model inference.
 - Typing `/picard` in the composer switches the workspace into a prefilled Picard-inspired agent draft, and typing `/picard <message>` starts that agent and sends `<message>` as the first hello.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
 - Agent conversations show a person icon in the conversation list, expose an icon-only pause/resume header control with a visible next-heartbeat countdown while active, reset that heartbeat timer to 15 minutes after each exchange, write each heartbeat into the transcript as a visible `Heartbeat` turn, announce when a heartbeat ran but intentionally stayed quiet, keep empty/no-op heartbeat exchanges out of later inference context, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
+- The app now keeps a browser-local semantic memory layer derived from prior user statements and agent summary nodes; prompt assembly retrieves a compact set of relevant memories for the current user turn instead of depending on the model to remember every durable fact or preference from raw transcript alone.
 - Uploaded attachments are prepared locally before send; while a file is still being read, converted, hashed, or stored into `/workspace`, send and attachment controls stay disabled so the turn cannot race ahead without the file.
 - From that pre-chat state, users can keep the currently loaded model or choose a different model card before sending the first message.
 - If a different model is selected for the next chat, the currently loaded model worker is unloaded before the replacement model is loaded.
@@ -62,7 +63,7 @@ Student-facing browser chat UI with local model inference.
   - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`
   - `Transcript view` with `Standard` and `Compact`
   - `Export` to download a zip archive containing a full conversation-state snapshot plus per-conversation JSON, Markdown, and stored artifacts
-  - `Delete Conversations` to remove all saved conversations and their stored artifacts from this browser
+  - `Delete Conversations` to remove all saved conversations, their stored artifacts, and related local semantic memories from this browser
 - After model load completes, the full conversation header controls appear and response streaming begins.
 - If saved conversations exist, no conversation is auto-opened after load; users choose one from the conversation list.
 - The pre-chat panel is shown when no active conversation exists or when `New Conversation` is preparing a fresh chat; the bottom message composer keeps the same size before and after model load.
@@ -115,6 +116,7 @@ Student-facing browser chat UI with local model inference.
 - Long transcripts use a spacer-backed sliding render window so older exchanges can scroll back into view without keeping the entire conversation mounted in the DOM.
 - Agent conversations can insert visible summary nodes into the transcript when older context is compacted; those nodes keep relisted uploaded files alongside the memory summary while prompt assembly drops older pre-summary turns.
 - Conversations are persisted locally in browser IndexedDB and restored on reload.
+- Semantic memory records are also persisted locally in IndexedDB as separate browser-only records keyed by normalized idea, semantic anchors, semantic paths, and provenance back to the originating conversation/message.
 - Legacy conversation snapshots are migrated automatically into the current normalized IndexedDB layout on load.
 - Saved conversation state includes stable IDs and forward-compatible metadata for future export/import:
   - message `content.parts` and `content.llmRepresentation` (verbatim LLM-facing text)
@@ -309,6 +311,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Centralized runtime state and selectors live in `src/state/app-state.js`.
 - App control flow for generation, stop, rename, and fix actions lives in `src/state/app-controller.js`.
 - Agent heartbeat scheduling, follow-up orchestration, and agent-thread summary compaction live in `src/app/agent-automation.js`.
+- Browser-local semantic memory extraction, retrieval, and conversation-linked cleanup live in `src/memory/semantic-memory.js`, `src/app/semantic-memory.js`, and `src/state/semantic-memory-store.js`.
 - Orchestration prompt templating, nested placeholder rendering, utility-step execution, and chunk-pipeline support live in `src/llm/orchestration-runner.js`.
 - Settings persistence and cross-domain wiring live in `src/app/preferences.js`, with tool/MCP settings extracted to `src/app/preferences-tooling.js` and model/backend picker logic extracted to `src/app/preferences-models.js`.
 - Settings page event wiring lives in `src/app/settings-events.js`, with tool/network handlers extracted to `src/app/settings-events-tooling.js` and conversation/model handlers extracted to `src/app/settings-events-models.js`.
@@ -317,7 +320,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Transcript navigation/skip-link behavior, model-load feedback, composer attachment/runtime state, and workspace side-panel controllers live in `src/app/`.
 - Responsive viewport-height synchronization for the shell and mobile offcanvas/layout behavior lives in `src/app/viewport-layout.js`.
 - `src/main.js` remains the app shell for routing, page-level visibility, persistence hookup, and wiring dependencies into those modules.
-- See `docs/conversation-domain.md`, `docs/app-state.md`, `docs/app-controller.md`, `docs/orchestrations.md`, and `docs/ui-views.md` for the current boundaries.
+- See `docs/conversation-domain.md`, `docs/app-state.md`, `docs/app-controller.md`, `docs/orchestrations.md`, `docs/semantic-memory.md`, and `docs/ui-views.md` for the current boundaries.
 - See `docs/tools.md` for current built-in and MCP tool-calling behavior plus the remaining `SKILL.md` planning.
 - See `docs/web-search-hypothesis.md` for the current low-bandwidth, mobile-assisted search design hypothesis.
 - See `docs/models.md` for the model catalog schema and the contributor checklist for adding, disabling, replacing, or retiring models.
