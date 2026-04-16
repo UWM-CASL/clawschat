@@ -115,6 +115,25 @@ function buildConfiguredModelHeadingId(providerId, modelId) {
   return `cloudConfiguredModelHeading-${providerId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-${modelId.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
 }
 
+function buildConfiguredModelFeatureToggleId(providerId, modelId, featureKey) {
+  return `cloudConfiguredModelFeature-${providerId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-${modelId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-${featureKey.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+}
+
+function cloudModelSupportsDetectedToolCalling(model) {
+  return model?.detectedFeatures?.toolCalling === true;
+}
+
+function cloudModelToolCallingEnabled(model) {
+  return model?.features?.toolCalling === true;
+}
+
+function buildCloudModelToolCallingHelpText(model) {
+  if (cloudModelSupportsDetectedToolCalling(model)) {
+    return 'Provider metadata suggests this model supports tool or function calling. Leave this on to include built-in tool instructions in the computed system prompt for this model.';
+  }
+  return 'Provider metadata did not confirm tool or function calling. Turn this on only when you know the model can follow prompt-directed JSON tool calls.';
+}
+
 export function createCloudProviderSettingsController({
   appState,
   documentRef = document,
@@ -237,6 +256,38 @@ export function createCloudProviderSettingsController({
       intro.textContent =
         'These defaults stay local to this browser. Context size is enforced approximately for remote models.';
       body.appendChild(intro);
+
+      const toolCallingToggleWrapper = documentRef.createElement('div');
+      toolCallingToggleWrapper.className = 'settings-control-group';
+      const toolCallingToggleRow = documentRef.createElement('div');
+      toolCallingToggleRow.className = 'form-check form-switch';
+      const toolCallingToggle = documentRef.createElement('input');
+      const toolCallingToggleId = buildConfiguredModelFeatureToggleId(
+        provider.id,
+        model.id,
+        'toolCalling'
+      );
+      toolCallingToggle.className = 'form-check-input';
+      toolCallingToggle.type = 'checkbox';
+      toolCallingToggle.role = 'switch';
+      toolCallingToggle.id = toolCallingToggleId;
+      toolCallingToggle.checked = cloudModelToolCallingEnabled(model);
+      toolCallingToggle.dataset.cloudModelFeature = 'toolCalling';
+      toolCallingToggle.dataset.cloudProviderId = provider.id;
+      toolCallingToggle.dataset.cloudRemoteModelId = model.id;
+      toolCallingToggle.dataset.cloudRemoteModelDisplayName = model.displayName;
+      toolCallingToggleRow.appendChild(toolCallingToggle);
+      const toolCallingLabel = documentRef.createElement('label');
+      toolCallingLabel.className = 'form-check-label';
+      toolCallingLabel.htmlFor = toolCallingToggleId;
+      toolCallingLabel.textContent = 'Enable built-in tools';
+      toolCallingToggleRow.appendChild(toolCallingLabel);
+      toolCallingToggleWrapper.appendChild(toolCallingToggleRow);
+      const toolCallingHelp = documentRef.createElement('p');
+      toolCallingHelp.className = 'form-text mb-0';
+      toolCallingHelp.textContent = buildCloudModelToolCallingHelpText(model);
+      toolCallingToggleWrapper.appendChild(toolCallingHelp);
+      body.appendChild(toolCallingToggleWrapper);
 
       const fields = [
         {
@@ -599,6 +650,7 @@ export function createCloudProviderSettingsController({
     if (!availableModel) {
       throw new Error('The selected remote model could not be found.');
     }
+    const existingSelectedModel = existingProvider.selectedModels.find((model) => model.id === remoteModelId);
 
     const nextSelectedModels = selected
       ? [
@@ -607,9 +659,10 @@ export function createCloudProviderSettingsController({
             id: availableModel.id,
             displayName: availableModel.displayName,
             generation:
-              existingProvider.selectedModels.find((model) => model.id === remoteModelId)?.generation ||
-              REMOTE_MODEL_GENERATION_LIMITS,
+              existingSelectedModel?.generation || REMOTE_MODEL_GENERATION_LIMITS,
             supportsTopK: existingProvider.supportsTopK === true,
+            detectedFeatures: availableModel.detectedFeatures,
+            features: existingSelectedModel?.features || availableModel.detectedFeatures,
           },
         ]
       : existingProvider.selectedModels.filter((model) => model.id !== remoteModelId);
@@ -617,6 +670,43 @@ export function createCloudProviderSettingsController({
     const nextProvider = await updateCloudProvider({
       ...existingProvider,
       selectedModels: nextSelectedModels,
+    });
+    applyCloudProviders(
+      normalizeCloudProviderConfigs(appState.cloudProviders).map((provider) =>
+        provider.id === nextProvider.id ? nextProvider : provider
+      )
+    );
+    return nextProvider;
+  }
+
+  async function updateCloudModelFeaturePreference(providerId, remoteModelId, featureKey, enabled) {
+    if (featureKey !== 'toolCalling') {
+      throw new Error('That cloud model feature cannot be changed here.');
+    }
+    if (typeof updateCloudProvider !== 'function') {
+      throw new Error('Cloud model settings are unavailable.');
+    }
+    const existingProvider = getCloudProviderById(appState.cloudProviders, providerId);
+    if (!existingProvider) {
+      throw new Error('The selected cloud provider could not be found.');
+    }
+    const existingModel = existingProvider.selectedModels.find((model) => model.id === remoteModelId);
+    if (!existingModel) {
+      throw new Error('The selected remote model could not be found.');
+    }
+    const nextProvider = await updateCloudProvider({
+      ...existingProvider,
+      selectedModels: existingProvider.selectedModels.map((model) =>
+        model.id === remoteModelId
+          ? {
+              ...model,
+              features: {
+                ...(model.features || {}),
+                [featureKey]: enabled === true,
+              },
+            }
+          : model
+      ),
     });
     applyCloudProviders(
       normalizeCloudProviderConfigs(appState.cloudProviders).map((provider) =>
@@ -662,6 +752,7 @@ export function createCloudProviderSettingsController({
     restoreCloudProvidersFromStorage,
     setCloudProviderFeedback,
     setCloudProviderModelSelected,
+    updateCloudModelFeaturePreference,
     updateCloudModelGenerationPreference,
   };
 }

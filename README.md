@@ -57,6 +57,7 @@ Student-facing browser chat UI with local model inference.
   - adding browser-reachable OpenAI-compatible endpoints by testing `GET /models` before save
   - storing API keys in dedicated browser-local IndexedDB storage with WebCrypto encryption when the browser supports it, plus an explicit warning that browser-only secret storage is imperfect and saved keys cannot be shown again
   - per-provider accordions with refresh/remove actions, available-model toggles, and nested configured-model accordions for browser-local defaults such as context size, output tokens, temperature, Top P, and Top K where supported
+  - selected remote models preserve any tool/function support detected from provider metadata, and each selected model also exposes an explicit `Enable built-in tools` toggle so users can opt into prompt-based tool calling when they know the model supports it
   - strict OpenAI-hosted endpoints use the stricter OpenAI request profile (`max_completion_tokens`, no `top_k`), while broader compatible endpoints keep the looser `max_tokens` path
   - selected cloud models are appended to the same New Conversation / New Agent picker used by bundled local models
 - `Settings -> Skills` includes:
@@ -189,6 +190,7 @@ Student-facing browser chat UI with local model inference.
 - When prompt-driven feature guidance is enabled, the effective system prompt appends that guidance before any tool-calling instructions.
 - The effective system prompt also appends conversation-level language steering when a response language is selected and model-specific thinking-mode switch instructions when the selected model exposes them.
 - When tool calling is enabled and the active conversation model supports it, a model-specific tool-calling instruction block is appended after the effective conversation system prompt and any enabled feature guidance.
+- Browser-saved cloud models that have `Enable built-in tools` turned on use a generic JSON prompt profile (`{"name":"tool_name","parameters":{...}}`), and the detector also accepts `arguments` when a remote model emits that key instead.
 - When one or more enabled uploaded skill packages exist, that tool-calling block also includes `read_skill` plus an `Available Agent Skills` section listing each skill name and description.
 - When one or more configured MCP servers are enabled and have enabled commands, that tool-calling block includes `list_mcp_server_commands` and `call_mcp_server_command` in the model-specific tool inventory, with the enabled MCP server inventory rendered in that same model-specific list style.
 - Those MCP helper tools run through the same tool harness as built-in tools and are not user-toggled in `Settings -> Tools`; their availability is derived from enabled MCP servers and enabled commands.

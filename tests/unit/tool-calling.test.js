@@ -1438,6 +1438,23 @@ describe('tool-calling prompt builder', () => {
     ]);
   });
 
+  test('sniffs plain json tool calls when the model emits arguments instead of parameters', () => {
+    expect(
+      sniffToolCalls('{"name":"run_shell_command","arguments":{"shell":"pwd"}}', {
+        format: 'json',
+        nameKey: 'name',
+        argumentsKey: 'parameters',
+      })
+    ).toEqual([
+      {
+        name: 'run_shell_command',
+        arguments: { shell: 'pwd' },
+        rawText: '{"name":"run_shell_command","arguments":{"shell":"pwd"}}',
+        format: 'json',
+      },
+    ]);
+  });
+
   test('sniffs a leading plain json tool call even with trailing prose', () => {
     expect(
       sniffToolCalls(

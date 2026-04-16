@@ -6,8 +6,10 @@ import {
 } from '../../src/cloud/cloud-provider-config.js';
 import {
   inferOpenAiCompatibleMaxOutputTokensField,
+  inferOpenAiCompatibleModelFeatures,
   inspectOpenAiCompatibleEndpoint,
   normalizeOpenAiCompatibleEndpoint,
+  normalizeOpenAiCompatibleModelList,
 } from '../../src/cloud/openai-compatible.js';
 import {
   normalizeOpenAiCompatiblePromptMessages,
@@ -45,7 +47,12 @@ describe('cloud provider helpers', () => {
     });
 
     expect(fetchRef).toHaveBeenCalledTimes(1);
-    expect(fetchRef.mock.calls[0][0]).toBe('https://api.openai.com/v1/models');
+    expect(fetchRef).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models',
+      expect.objectContaining({
+        method: 'GET',
+      })
+    );
     expect(result).toMatchObject({
       type: 'openai-compatible',
       endpoint: 'https://api.openai.com/v1',
@@ -54,6 +61,36 @@ describe('cloud provider helpers', () => {
       supportsTopK: false,
     });
     expect(result.availableModels.map((model) => model.id)).toEqual(['gpt-4.1-mini', 'gpt-4o-mini']);
+  });
+
+  test('detects tool support from provider model metadata when it is advertised', () => {
+    expect(
+      inferOpenAiCompatibleModelFeatures({
+        id: 'meta-llama/3.1-8b-instruct',
+        supported_parameters: ['tools', 'tool_choice'],
+      })
+    ).toEqual({
+      toolCalling: true,
+    });
+
+    expect(
+      normalizeOpenAiCompatibleModelList([
+        {
+          id: 'gpt-4.1-mini',
+          capabilities: {
+            tools: true,
+          },
+        },
+      ])
+    ).toEqual([
+      {
+        id: 'gpt-4.1-mini',
+        displayName: 'gpt-4.1-mini',
+        detectedFeatures: {
+          toolCalling: true,
+        },
+      },
+    ]);
   });
 
   test('uses the strict OpenAI request profile only for OpenAI-hosted endpoints', () => {
@@ -77,8 +114,21 @@ describe('cloud provider helpers', () => {
         endpointHost: 'openrouter.ai',
         displayName: 'OpenRouter',
         supportsTopK: true,
-        availableModels: [{ id: 'meta-llama/3.1-8b-instruct', displayName: 'Llama 3.1 8B' }],
-        selectedModels: [{ id: 'meta-llama/3.1-8b-instruct', displayName: 'Llama 3.1 8B' }],
+        availableModels: [
+          {
+            id: 'meta-llama/3.1-8b-instruct',
+            displayName: 'Llama 3.1 8B',
+            detectedFeatures: {
+              toolCalling: true,
+            },
+          },
+        ],
+        selectedModels: [
+          {
+            id: 'meta-llama/3.1-8b-instruct',
+            displayName: 'Llama 3.1 8B',
+          },
+        ],
       },
     ]);
 
@@ -87,6 +137,14 @@ describe('cloud provider helpers', () => {
         id: buildCloudModelId('provider-1', 'meta-llama/3.1-8b-instruct'),
         displayName: 'Llama 3.1 8B',
         engine: { type: 'openai-compatible' },
+        features: expect.objectContaining({
+          toolCalling: true,
+        }),
+        toolCalling: {
+          format: 'json',
+          nameKey: 'name',
+          argumentsKey: 'parameters',
+        },
         runtime: expect.objectContaining({
           providerId: 'provider-1',
           apiBaseUrl: 'https://openrouter.ai/api/v1',
@@ -95,6 +153,37 @@ describe('cloud provider helpers', () => {
         }),
       }),
     ]);
+  });
+
+  test('preserves detected tool support and lets selected cloud models inherit it by default', () => {
+    const providers = normalizeCloudProviderConfigs([
+      {
+        id: 'provider-1',
+        type: 'openai-compatible',
+        endpoint: 'https://openrouter.ai/api/v1',
+        endpointHost: 'openrouter.ai',
+        displayName: 'OpenRouter',
+        availableModels: [
+          {
+            id: 'meta-llama/3.1-8b-instruct',
+            displayName: 'Llama 3.1 8B',
+            detectedFeatures: {
+              toolCalling: true,
+            },
+          },
+        ],
+        selectedModels: [{ id: 'meta-llama/3.1-8b-instruct' }],
+      },
+    ]);
+
+    expect(providers[0]?.selectedModels[0]).toMatchObject({
+      detectedFeatures: {
+        toolCalling: true,
+      },
+      features: {
+        toolCalling: true,
+      },
+    });
   });
 
   test('normalizes prompts for remote chat completion requests and trims old history approximately', () => {

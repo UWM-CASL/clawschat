@@ -1241,9 +1241,18 @@ function detectJsonToolCall(rawText, toolCallingConfig) {
     }
     try {
       const parsed = JSON.parse(objectText);
+      const rawArgumentsValue = parsed?.[toolCallingConfig.argumentsKey];
+      const fallbackArgumentsValue =
+        rawArgumentsValue !== undefined
+          ? rawArgumentsValue
+          : toolCallingConfig.argumentsKey === 'parameters'
+            ? parsed?.arguments
+            : toolCallingConfig.argumentsKey === 'arguments'
+              ? parsed?.parameters
+              : undefined;
       const detected = normalizeDetectedToolCall(
         parsed?.[toolCallingConfig.nameKey],
-        parsed?.[toolCallingConfig.argumentsKey],
+        fallbackArgumentsValue,
         objectText,
         toolCallingConfig.format
       );

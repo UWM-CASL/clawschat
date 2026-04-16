@@ -290,7 +290,9 @@ Current models in Settings:
 - Browser-saved cloud models:
   - come from `Settings -> Cloud Providers` after the app successfully reads that provider's `/models` endpoint
   - are added to the same picker used by local models for `New Conversation` and `New Agent`
-  - default to a conservative remote-friendly feature set in this app: streaming on, tool calling off, thinking off, and no multimodal input until a provider/runtime path is explicitly verified
+  - always keep the conservative remote-friendly runtime assumptions in this app: streaming on, thinking off, and no multimodal input until a provider/runtime path is explicitly verified
+  - now preserve any tool/function support that can be inferred from the provider's `/models` metadata, and each selected remote model also exposes a user-controlled `Enable built-in tools` toggle in `Settings -> Cloud Providers`
+  - use the app's generic JSON prompt-tool profile (`{"name":"tool_name","parameters":{...}}`) when that built-in-tools toggle is enabled for the selected remote model
 
 Notes:
 

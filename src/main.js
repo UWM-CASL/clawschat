@@ -3733,6 +3733,7 @@ const {
   restoreCloudProvidersFromStorage,
   setCloudProviderFeedback,
   setCloudProviderModelSelected,
+  updateCloudModelFeaturePreference,
   updateCloudModelGenerationPreference,
 } = cloudProviderSettingsController;
 
@@ -4209,6 +4210,7 @@ bindSettingsEvents({
   refreshCloudProviderPreference,
   removeCloudProviderPreference,
   setCloudProviderModelSelected,
+  updateCloudModelFeaturePreference,
   updateCloudModelGenerationPreference,
   resetCloudModelGenerationPreference,
   saveCorsProxyPreference,

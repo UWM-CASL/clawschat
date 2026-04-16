@@ -24,6 +24,7 @@ export function bindCloudProviderSettingsEvents({
   refreshCloudProviderPreference,
   removeCloudProviderPreference,
   setCloudProviderModelSelected,
+  updateCloudModelFeaturePreference,
   updateCloudModelGenerationPreference,
   resetCloudModelGenerationPreference,
   setStatus,
@@ -120,6 +121,43 @@ export function bindCloudProviderSettingsEvents({
                 target.checked
                   ? `${remoteModelDisplayName} added to the model picker.`
                   : `${remoteModelDisplayName} removed from the model picker.`
+              );
+            },
+            (error) => {
+              target.checked = !target.checked;
+              setStatus(error instanceof Error ? error.message : String(error));
+            }
+          )
+          .finally(() => {
+            target.disabled = false;
+          });
+        return;
+      }
+
+      if (
+        target instanceof HTMLInputElement &&
+        typeof target.dataset.cloudModelFeature === 'string'
+      ) {
+        const providerId =
+          typeof target.dataset.cloudProviderId === 'string' ? target.dataset.cloudProviderId : '';
+        const remoteModelId =
+          typeof target.dataset.cloudRemoteModelId === 'string'
+            ? target.dataset.cloudRemoteModelId
+            : '';
+        const remoteModelDisplayName =
+          typeof target.dataset.cloudRemoteModelDisplayName === 'string' &&
+          target.dataset.cloudRemoteModelDisplayName.trim()
+            ? target.dataset.cloudRemoteModelDisplayName.trim()
+            : remoteModelId;
+        const featureKey = target.dataset.cloudModelFeature;
+        target.disabled = true;
+        void updateCloudModelFeaturePreference(providerId, remoteModelId, featureKey, target.checked)
+          .then(
+            () => {
+              setStatus(
+                target.checked
+                  ? `Built-in tools enabled for ${remoteModelDisplayName}.`
+                  : `Built-in tools disabled for ${remoteModelDisplayName}.`
               );
             },
             (error) => {

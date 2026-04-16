@@ -2,6 +2,62 @@ export const OPENAI_COMPATIBLE_PROVIDER_TYPE = 'openai-compatible';
 export const OPENAI_COMPATIBLE_PROVIDER_LABEL = 'OpenAI-compatible';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const TOOL_CALLING_CAPABILITY_TOKENS = new Set([
+  'tool',
+  'tools',
+  'tool_call',
+  'tool_calls',
+  'tool_calling',
+  'tool_choice',
+  'parallel_tool_calls',
+  'function',
+  'functions',
+  'function_call',
+  'function_calls',
+  'function_calling',
+]);
+
+function normalizeCapabilityToken(value) {
+  return typeof value === 'string'
+    ? value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+    : '';
+}
+
+function hasEnabledCapabilityFlag(candidate, capabilityTokens) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return false;
+  }
+  return Object.entries(candidate).some(([rawKey, rawValue]) => {
+    const normalizedKey = normalizeCapabilityToken(rawKey);
+    if (!capabilityTokens.has(normalizedKey)) {
+      return false;
+    }
+    return rawValue !== false && rawValue !== null && rawValue !== undefined;
+  });
+}
+
+function listIncludesCapability(candidate, capabilityTokens) {
+  if (!Array.isArray(candidate)) {
+    return false;
+  }
+  return candidate.some((value) => capabilityTokens.has(normalizeCapabilityToken(value)));
+}
+
+export function inferOpenAiCompatibleModelFeatures(entry) {
+  const detectedToolCalling =
+    listIncludesCapability(entry?.supported_parameters, TOOL_CALLING_CAPABILITY_TOKENS) ||
+    listIncludesCapability(entry?.supported_features, TOOL_CALLING_CAPABILITY_TOKENS) ||
+    listIncludesCapability(entry?.capabilities, TOOL_CALLING_CAPABILITY_TOKENS) ||
+    listIncludesCapability(entry?.features, TOOL_CALLING_CAPABILITY_TOKENS) ||
+    hasEnabledCapabilityFlag(entry?.capabilities, TOOL_CALLING_CAPABILITY_TOKENS) ||
+    hasEnabledCapabilityFlag(entry?.features, TOOL_CALLING_CAPABILITY_TOKENS);
+  return {
+    toolCalling: detectedToolCalling,
+  };
+}
 
 function usesStrictOpenAiRequestProfile(endpoint) {
   try {
@@ -108,6 +164,7 @@ function normalizeModelListEntry(entry) {
   return {
     id,
     displayName: id,
+    detectedFeatures: inferOpenAiCompatibleModelFeatures(entry),
   };
 }
 

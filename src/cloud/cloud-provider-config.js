@@ -13,6 +13,17 @@ export const REMOTE_MODEL_GENERATION_LIMITS = Object.freeze({
   defaultTopP: 1.0,
   defaultRepetitionPenalty: 1.0,
 });
+const DEFAULT_REMOTE_MODEL_DETECTED_FEATURES = Object.freeze({
+  toolCalling: false,
+});
+const DEFAULT_REMOTE_MODEL_FEATURES = Object.freeze({
+  toolCalling: false,
+});
+const OPENAI_COMPATIBLE_PROMPT_TOOL_CALLING_PROFILE = Object.freeze({
+  format: 'json',
+  nameKey: 'name',
+  argumentsKey: 'parameters',
+});
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -30,6 +41,15 @@ export function buildCloudModelId(providerId, remoteModelId) {
     : '';
 }
 
+function normalizeCloudModelFeatures(rawFeatures, defaults = null) {
+  const defaultToolCalling = defaults?.toolCalling === true;
+  return {
+    toolCalling:
+      rawFeatures?.toolCalling === true ||
+      (rawFeatures?.toolCalling !== false && defaultToolCalling),
+  };
+}
+
 function normalizeAvailableModelEntry(entry) {
   const id = normalizeString(entry?.id);
   if (!id) {
@@ -38,6 +58,10 @@ function normalizeAvailableModelEntry(entry) {
   return {
     id,
     displayName: normalizeString(entry?.displayName) || id,
+    detectedFeatures: normalizeCloudModelFeatures(
+      entry?.detectedFeatures,
+      DEFAULT_REMOTE_MODEL_DETECTED_FEATURES
+    ),
   };
 }
 
@@ -62,12 +86,21 @@ function normalizeSelectedModelEntry(entry, availableModels, provider) {
   const matchingAvailableModel = availableModels.find((model) => model.id === id);
   const displayName =
     normalizeString(entry?.displayName) || matchingAvailableModel?.displayName || id;
+  const detectedFeatures = normalizeCloudModelFeatures(
+    matchingAvailableModel?.detectedFeatures,
+    entry?.detectedFeatures || DEFAULT_REMOTE_MODEL_DETECTED_FEATURES
+  );
   return {
     id,
     displayName,
     generation: normalizeGenerationLimits(entry?.generation || REMOTE_MODEL_GENERATION_LIMITS),
     supportsTopK:
       entry?.supportsTopK === true || (entry?.supportsTopK !== false && provider.supportsTopK === true),
+    detectedFeatures,
+    features: normalizeCloudModelFeatures(
+      entry?.features,
+      detectedFeatures || DEFAULT_REMOTE_MODEL_FEATURES
+    ),
   };
 }
 
@@ -138,31 +171,37 @@ export function getCloudProviderById(providers, providerId) {
 
 export function buildRuntimeModelCatalog(providers) {
   return normalizeCloudProviderConfigs(providers).flatMap((provider) =>
-    provider.selectedModels.map((model) => ({
-      id: buildCloudModelId(provider.id, model.id),
-      label: model.id,
-      displayName: model.displayName,
-      repositoryUrl: provider.endpoint,
-      engine: {
-        type: 'openai-compatible',
-      },
-      generation: model.generation,
-      features: {
-        streaming: true,
-        thinking: false,
-        toolCalling: false,
-        imageInput: false,
-        audioInput: false,
-        videoInput: false,
-      },
-      runtime: {
-        providerId: provider.id,
-        providerType: provider.type,
-        providerDisplayName: provider.displayName,
-        apiBaseUrl: provider.endpoint,
-        remoteModelId: model.id,
-        supportsTopK: model.supportsTopK === true,
-      },
-    }))
+    provider.selectedModels.map((model) => {
+      const toolCallingEnabled = model?.features?.toolCalling === true;
+      return {
+        id: buildCloudModelId(provider.id, model.id),
+        label: model.id,
+        displayName: model.displayName,
+        repositoryUrl: provider.endpoint,
+        engine: {
+          type: 'openai-compatible',
+        },
+        generation: model.generation,
+        features: {
+          streaming: true,
+          thinking: false,
+          toolCalling: toolCallingEnabled,
+          imageInput: false,
+          audioInput: false,
+          videoInput: false,
+        },
+        ...(toolCallingEnabled
+          ? { toolCalling: OPENAI_COMPATIBLE_PROMPT_TOOL_CALLING_PROFILE }
+          : {}),
+        runtime: {
+          providerId: provider.id,
+          providerType: provider.type,
+          providerDisplayName: provider.displayName,
+          apiBaseUrl: provider.endpoint,
+          remoteModelId: model.id,
+          supportsTopK: model.supportsTopK === true,
+        },
+      };
+    })
   );
 }
