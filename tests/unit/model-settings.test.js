@@ -59,6 +59,19 @@ describe('model-settings availability', () => {
     });
   });
 
+  test('keeps Llama 3.2 3B unavailable in webgpu mode when WebGPU is missing because fallback is manual', () => {
+    expect(
+      getModelAvailability(LLAMA_3B_MODEL_ID, {
+        backendPreference: 'webgpu',
+        webGpuAvailable: false,
+      })
+    ).toEqual({
+      available: false,
+      reason:
+        'This model is configured for WebGPU-first loading in this mode. Enable CPU mode explicitly to use its separate CPU fallback quantization.',
+    });
+  });
+
   test('maps legacy wasm preference into cpu mode for Gemma 4', () => {
     expect(
       getModelAvailability(GEMMA_4_MODEL_ID, {
@@ -125,7 +138,7 @@ describe('model-settings availability', () => {
     ).toBe('q4f16');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime, 'webgpu')
-    ).toBe('q1');
+    ).toBe('q1f16');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime, 'cpu')
     ).toBe('q4');
@@ -178,13 +191,16 @@ describe('model-settings availability', () => {
       type: 'transformers-js',
     });
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime).toMatchObject({
+      revision: '8ddaf6b6764ff2916a807e3c2ec0b5a441192473',
       dtypes: {
         webgpu: 'q4f16',
         cpu: 'q4',
       },
+      allowBackendFallback: false,
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime).toMatchObject({
+      revision: 'ee1a73e8f4cb9aab6c7165231bf7e8e6331051cc',
       dtypes: {
         webgpu: 'q4f16',
         cpu: 'q4f16',
@@ -193,8 +209,9 @@ describe('model-settings availability', () => {
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime).toMatchObject({
+      revision: 'a5694a132e4050cef2dc335528016ce7e56504c9',
       dtypes: {
-        webgpu: 'q1',
+        webgpu: 'q1f16',
         cpu: 'q4',
       },
       allowBackendFallback: false,
@@ -240,7 +257,7 @@ describe('model-settings availability', () => {
       repositoryUrl: 'https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX',
     });
     expect(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)).toMatchObject({
-      displayName: 'Bonsai 8B Q1 (Experimental)',
+      displayName: 'Bonsai 8B Q1f16 (Experimental)',
       repositoryUrl: 'https://huggingface.co/onnx-community/Bonsai-8B-ONNX',
     });
   });

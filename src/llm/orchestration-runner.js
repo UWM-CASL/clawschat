@@ -341,7 +341,7 @@ function assignStepOutputs(promptVariables, index, stepOutput, outputKey = '') {
 
 /**
  * @param {{
- *   generateText: (prompt: string, options?: { signal?: AbortSignal }) => Promise<string>;
+ *   generateText: (prompt: string, options?: { signal?: AbortSignal, generationConfig?: Record<string, any> }) => Promise<string>;
  *   formatStepOutput?: (step: any, rawOutput: string) => string;
  *   onDebug?: (message: string) => void;
  * }} dependencies
@@ -357,6 +357,35 @@ export function createOrchestrationRunner(dependencies) {
 
   if (typeof generateText !== 'function') {
     throw new Error('Orchestration runner requires a generateText function.');
+  }
+
+  function resolveStepGenerationConfig(orchestration, step, options = {}) {
+    const orchestrationConfig =
+      orchestration?.generationConfig &&
+      typeof orchestration.generationConfig === 'object' &&
+      !Array.isArray(orchestration.generationConfig)
+        ? orchestration.generationConfig
+        : null;
+    const stepConfig =
+      step?.generationConfig &&
+      typeof step.generationConfig === 'object' &&
+      !Array.isArray(step.generationConfig)
+        ? step.generationConfig
+        : null;
+    const overrideConfig =
+      options?.generationConfig &&
+      typeof options.generationConfig === 'object' &&
+      !Array.isArray(options.generationConfig)
+        ? options.generationConfig
+        : null;
+    if (!orchestrationConfig && !stepConfig && !overrideConfig) {
+      return undefined;
+    }
+    return {
+      ...(orchestrationConfig || {}),
+      ...(stepConfig || {}),
+      ...(overrideConfig || {}),
+    };
   }
 
   return async function runOrchestration(orchestration, variables = {}, options = {}) {
@@ -393,8 +422,10 @@ export function createOrchestrationRunner(dependencies) {
         onDebug(
           `Orchestration step ${index + 1}/${steps.length}: ${orchestrationId} [${stepName}]`
         );
+        const stepGenerationConfig = resolveStepGenerationConfig(orchestration, step, options);
         const rawStepOutput = await generateText(stepPrompt, {
           signal: options?.signal,
+          ...(stepGenerationConfig ? { generationConfig: stepGenerationConfig } : {}),
         });
         const stepOutput = formatStepOutput(step, rawStepOutput);
         assignStepOutputs(promptVariables, index, stepOutput, outputKey);
@@ -464,8 +495,10 @@ export function createOrchestrationRunner(dependencies) {
             itemCount: items.length,
           };
           const itemPrompt = buildOrchestrationPrompt(step, itemVariables);
+          const stepGenerationConfig = resolveStepGenerationConfig(orchestration, step, options);
           const rawStepOutput = await generateText(itemPrompt, {
             signal: options?.signal,
+            ...(stepGenerationConfig ? { generationConfig: stepGenerationConfig } : {}),
           });
           const stepOutput = formatStepOutput(step, rawStepOutput);
           outputs.push(stepOutput);

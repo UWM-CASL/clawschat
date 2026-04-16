@@ -84,6 +84,7 @@ import {
   browserSupportsWebGpu,
   normalizeGenerationLimits,
   normalizeModelId,
+  resolveRuntimeDtypeForBackend,
   replaceRuntimeModelCatalog,
 } from './config/model-settings.js';
 import { buildRuntimeModelCatalog } from './cloud/cloud-provider-config.js';
@@ -285,6 +286,7 @@ const modelSelect = document.getElementById('modelSelect');
 const modelCardList = document.getElementById('modelCardList');
 const backendSelect = document.getElementById('backendSelect');
 const cpuThreadsInput = document.getElementById('cpuThreadsInput');
+const clearModelDownloadsButton = document.getElementById('clearModelDownloadsButton');
 const maxOutputTokensInput = document.getElementById('maxOutputTokensInput');
 const maxContextTokensInput = document.getElementById('maxContextTokensInput');
 const temperatureInput = document.getElementById('temperatureInput');
@@ -2367,6 +2369,14 @@ function requestSingleGeneration(prompt, options = {}) {
       globalThis.AbortSignal && options.signal instanceof globalThis.AbortSignal
         ? options.signal
         : null;
+    const activeConversation = getActiveConversation();
+    const selectedModelId = getConversationModelId(activeConversation);
+    const requestGenerationConfig = sanitizeGenerationConfigForModel(selectedModelId, {
+      ...appState.activeGenerationConfig,
+      ...(options.generationConfig && typeof options.generationConfig === 'object'
+        ? options.generationConfig
+        : {}),
+    });
     let streamedText = '';
     let isSettled = false;
 
@@ -2410,7 +2420,7 @@ function requestSingleGeneration(prompt, options = {}) {
     signal?.addEventListener('abort', handleAbort, { once: true });
     try {
       engine.generate(prompt, {
-        generationConfig: appState.activeGenerationConfig,
+        generationConfig: requestGenerationConfig,
         onToken: (chunk) => {
           streamedText += String(chunk || '');
         },
@@ -3443,6 +3453,90 @@ function getRuntimeConfigForModel(modelId) {
   );
 }
 
+async function clearSelectedModelDownloads() {
+  const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  const selectedModel = MODEL_OPTIONS_BY_ID.get(selectedModelId);
+  if (!selectedModel) {
+    setStatus('Selected model is unavailable.');
+    return;
+  }
+  if (selectedModel.engine?.type !== 'transformers-js') {
+    setStatus('Selected model does not use the Transformers.js browser cache.');
+    return;
+  }
+
+  const runtime =
+    selectedModel.runtime && typeof selectedModel.runtime === 'object' ? selectedModel.runtime : {};
+  const revision =
+    typeof runtime.revision === 'string' && runtime.revision.trim() ? runtime.revision.trim() : '';
+  const webgpuDtype = resolveRuntimeDtypeForBackend(runtime, 'webgpu');
+  const cpuDtype = resolveRuntimeDtypeForBackend(runtime, 'cpu');
+  /** @type {Array<{device: 'webgpu' | 'wasm', dtype?: string, includeTokenizer?: boolean, includeProcessor?: boolean}>} */
+  const clearPlans = [];
+
+  if (webgpuDtype) {
+    clearPlans.push({
+      device: 'webgpu',
+      dtype: webgpuDtype,
+      includeTokenizer: true,
+      includeProcessor: runtime.multimodalGeneration === true,
+    });
+  }
+  if (cpuDtype && (!webgpuDtype || cpuDtype !== webgpuDtype)) {
+    clearPlans.push({
+      device: 'wasm',
+      dtype: cpuDtype,
+      includeTokenizer: !webgpuDtype,
+      includeProcessor: !webgpuDtype && runtime.multimodalGeneration === true,
+    });
+  }
+  if (!clearPlans.length) {
+    clearPlans.push({
+      device: 'wasm',
+      includeTokenizer: true,
+      includeProcessor: runtime.multimodalGeneration === true,
+    });
+  }
+
+  setStatus('Clearing downloaded model files...');
+  appendDebug(`Clearing cached Transformers.js files for ${selectedModelId}.`);
+
+  try {
+    const { ModelRegistry } = await import('@huggingface/transformers');
+    let filesDeleted = 0;
+    let filesCached = 0;
+
+    for (const plan of clearPlans) {
+      const result = await ModelRegistry.clear_cache(selectedModelId, {
+        ...(revision ? { revision } : {}),
+        ...(plan.dtype ? { dtype: plan.dtype } : {}),
+        device: plan.device,
+        include_tokenizer: plan.includeTokenizer !== false,
+        include_processor: plan.includeProcessor !== false,
+      });
+      filesDeleted += Number(result?.filesDeleted) || 0;
+      filesCached += Number(result?.filesCached) || 0;
+    }
+
+    if (filesCached > 0) {
+      setStatus(
+        `Cleared ${filesDeleted} cached file${filesDeleted === 1 ? '' : 's'} for ${selectedModel.displayName || selectedModelId}.`
+      );
+      appendDebug(
+        `Cleared ${filesDeleted} of ${filesCached} cached Transformers.js file${filesCached === 1 ? '' : 's'} for ${selectedModelId}.`
+      );
+      return;
+    }
+
+    setStatus(`No cached files were found for ${selectedModel.displayName || selectedModelId}.`);
+    appendDebug(`No cached Transformers.js files were found for ${selectedModelId}.`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+    setStatus(`Failed to clear downloaded model files: ${message}`);
+    appendDebug(`Clear downloaded model files failed: ${message}`);
+  }
+}
+
 const {
   updateChatTitleEditorVisibility,
   updateConversationSystemPromptPreview,
@@ -4183,6 +4277,7 @@ bindSettingsEvents({
   modelSelect,
   backendSelect,
   cpuThreadsInput,
+  clearModelDownloadsButton,
   maxOutputTokensInput,
   maxContextTokensInput,
   temperatureInput,
@@ -4246,6 +4341,7 @@ bindSettingsEvents({
   assignConversationModelId,
   queueConversationStateSave,
   reinitializeEngineFromSettings: () => appController.reinitializeEngineFromSettings(),
+  clearSelectedModelDownloads,
   onGenerationSettingInputChanged,
   getModelGenerationLimits,
   normalizeModelId,

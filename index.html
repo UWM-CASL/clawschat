@@ -763,6 +763,19 @@
                       </p>
                     </div>
                     <div class="settings-control-group">
+                      <button
+                        id="clearModelDownloadsButton"
+                        type="button"
+                        class="btn btn-outline-secondary"
+                      >
+                        Clear Downloaded Model Files
+                      </button>
+                      <p id="clearModelDownloadsHelp" class="form-text mb-0">
+                        Clears cached Transformers.js files for the selected local ONNX model.
+                        Loaded in-memory sessions keep working until that model is reloaded.
+                      </p>
+                    </div>
+                    <div class="settings-control-group">
                       <label class="form-label" for="themeSelect">Theme</label>
                       <select id="themeSelect" class="form-select">
                         <option value="light" selected>Light</option>

@@ -81,13 +81,15 @@ Student-facing browser chat UI with local model inference.
   - `WebGPU`
   - `CPU`
 - Selected cloud-provider models run through a browser fetch-backed OpenAI-compatible worker path instead of the local WebGPU/CPU runtimes; the backend selector is ignored for those models.
-- `WebGPU` mode prefers WebGPU and falls back to CPU/WASM for ONNX models that do not require WebGPU.
-- CPU mode runs CPU-capable ONNX models through the browser WASM path. The ONNX worker keeps `useWasmCache` enabled, enables WASM proxying across ONNX backends, and now lets `Settings -> System -> Transformers.js CPU threads` control `onnx.wasm.numThreads` (`0` keeps ORT auto).
+- `WebGPU` mode prefers WebGPU and falls back to CPU/WASM for ONNX models that do not require WebGPU and do not opt out with `runtime.allowBackendFallback: false`.
+- CPU mode runs CPU-capable ONNX models through the browser WASM path. The ONNX worker keeps `useWasmCache` enabled, uses app-bundled ONNX Runtime WASM assets instead of the default CDN path, enables WASM proxying across ONNX backends, and lets `Settings -> System -> Transformers.js CPU threads` control `onnx.wasm.numThreads` (`0` keeps ORT auto).
 - If a generation request stops producing worker activity for 90 seconds, the engine client terminates that worker and surfaces a recoverable timeout instead of leaving the UI stuck indefinitely.
 - If WebGPU loses the active graphics device before any response tokens are shown, the engine client disposes the lost worker, reloads the same model on CPU once, and retries that generation automatically.
 - If that automatic CPU retry is not possible or still fails, the app unloads the current worker, marks the model as not ready, and tells the user to retry, switch to CPU mode, or reload the page if the browser/driver keeps dropping the device.
+- On the Transformers.js text path, the worker now loads `AutoTokenizer` + `AutoModelForCausalLM` directly, skips the extra pipeline retokenization pass, and reuses `past_key_values` for append-only follow-up turns when the next prompt is a strict token-prefix extension of the previous completed turn.
 - The bundled ONNX Gemma 4 E2B entry runs through the Transformers.js worker path on both WebGPU and CPU.
-- The bundled ONNX Bonsai 8B experimental entry runs through the Transformers.js worker path with `q1` on WebGPU and `q4` on manual CPU mode; automatic backend fallback is disabled so a failed WebGPU init does not silently download both quantizations.
+- The bundled ONNX Llama 3.2 3B entry keeps `q4f16` on WebGPU and `q4` on manual CPU mode; automatic backend fallback is disabled so a failed WebGPU init does not silently download both quantizations.
+- The bundled ONNX Bonsai 8B experimental entry runs through the Transformers.js worker path with `q1f16` on WebGPU and `q4` on manual CPU mode; automatic backend fallback is disabled so a failed WebGPU init does not silently download both quantizations.
 - The bundled LiteRT runtime in this app does not currently expose a matching CPU-thread setting, so the System-tab thread control applies only to the Transformers.js/ONNX path.
 - Token controls in Settings:
   - `Maximum output tokens` and `Context size (short-term memory)` are model-aware integer fields.
@@ -117,6 +119,7 @@ Student-facing browser chat UI with local model inference.
 - Cloud provider metadata is stored in browser IndexedDB, and provider API keys are stored separately in encrypted browser-local IndexedDB records when WebCrypto key storage is available.
 - Model files are downloaded on first load and cached in-browser for reuse.
   - Transformers.js-backed models use the Transformers.js browser cache.
+  - `Settings -> System -> Clear Downloaded Model Files` clears the selected local Transformers.js model from that browser cache without guessing at cache internals.
   - LiteRT-backed models fetch a pinned LiteRT artifact (`.task` or `.litertlm`) at runtime and rely on the browser HTTP cache.
 - `Settings -> Debug` shows a paginated debug log (20 entries per page, newest first) with CSV export, including proxy validation, MCP transport diagnostics, and one complete raw model-output blob per visible model turn, preserved before transcript parsing or tool-call folding.
 - Conversation list and transcript are state-driven (no placeholder messages).
@@ -162,6 +165,7 @@ Student-facing browser chat UI with local model inference.
   - This is intended for parser-first, LLM-guided conversions such as future PDF-to-Markdown attachment preparation.
 - New conversations start untitled and are automatically renamed after the first model response based on conversation content.
 - Automatic conversation renaming now runs through a one-step orchestration loaded from `src/config/orchestrations/rename-chat.json`.
+- Rename and fix orchestrations can now declare orchestration-level or step-level `generationConfig` caps so small follow-up tasks do not inherit the full chat token budget.
 - Agent conversations can also run a background heartbeat orchestration while loaded and unpaused; each heartbeat tells the model when the user has not replied since the last heartbeat so it can avoid repeating the same prompt, and those conversations use a separate summarization orchestration to compact older prompt context when the active branch approaches its context limit.
 - Conversation title editing is disabled until that automatic model-generated title is available and is available from the active conversation's sidebar kebab menu.
 - The conversation list reveals a kebab actions menu on hover/focus for each conversation instead of a direct delete icon.
@@ -312,7 +316,7 @@ For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` r
 - Audio input is upload-only. The app does not expose live recording.
 - Video input is not currently exposed because the supported browser runtime paths are not reliable enough yet.
 - The app still does not ship with a CSP. This is a documented hardening gap for a future pass.
-- Most model artifacts are still fetched from upstream repositories at runtime and are not revision-pinned yet. The LiteRT Gemma 4 asset is pinned to a specific Hugging Face revision, but the app does not yet apply a uniform integrity-verification policy across all models.
+- The bundled Transformers.js models in `src/config/models.json` are pinned to explicit Hugging Face revisions, so browser caches stay stable across redeploys until the catalog is intentionally updated. LiteRT artifacts also stay revision-pinned.
 
 See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 

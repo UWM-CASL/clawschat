@@ -17,6 +17,7 @@ export function bindModelSettingsEvents({
   modelSelect,
   backendSelect,
   cpuThreadsInput,
+  clearModelDownloadsButton,
   maxOutputTokensInput,
   maxContextTokensInput,
   temperatureInput,
@@ -42,6 +43,7 @@ export function bindModelSettingsEvents({
   assignConversationModelId,
   queueConversationStateSave,
   reinitializeEngineFromSettings,
+  clearSelectedModelDownloads,
   onGenerationSettingInputChanged,
   getModelGenerationLimits,
   normalizeModelId,
@@ -145,6 +147,20 @@ export function bindModelSettingsEvents({
     cpuThreadsInput.addEventListener('change', () => {
       applyCpuThreadsPreference(cpuThreadsInput.value, { persist: true });
       void reinitializeEngineFromSettings();
+    });
+  }
+
+  if (
+    clearModelDownloadsButton instanceof HTMLButtonElement &&
+    typeof clearSelectedModelDownloads === 'function'
+  ) {
+    clearModelDownloadsButton.addEventListener('click', async () => {
+      clearModelDownloadsButton.disabled = true;
+      try {
+        await clearSelectedModelDownloads();
+      } finally {
+        clearModelDownloadsButton.disabled = false;
+      }
     });
   }
 

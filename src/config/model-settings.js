@@ -126,6 +126,10 @@ function normalizeRuntimeDtypes(rawDtypes) {
 function normalizeRuntime(rawRuntime) {
   const dtype = normalizeRuntimeDtype(rawRuntime?.dtype);
   const dtypes = normalizeRuntimeDtypes(rawRuntime?.dtypes);
+  const revision =
+    typeof rawRuntime?.revision === 'string' && rawRuntime.revision.trim()
+      ? rawRuntime.revision.trim()
+      : '';
   const modelAssetPath =
     typeof rawRuntime?.modelAssetPath === 'string' && rawRuntime.modelAssetPath.trim()
       ? rawRuntime.modelAssetPath.trim()
@@ -168,6 +172,7 @@ function normalizeRuntime(rawRuntime) {
   return {
     ...(dtype ? { dtype } : {}),
     ...(dtypes ? { dtypes } : {}),
+    ...(revision ? { revision } : {}),
     ...(modelAssetPath ? { modelAssetPath } : {}),
     ...(promptFormat ? { promptFormat } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),

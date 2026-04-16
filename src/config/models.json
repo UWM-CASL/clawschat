@@ -22,6 +22,7 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX",
       "runtime": {
+        "revision": "ee1a73e8f4cb9aab6c7165231bf7e8e6331051cc",
         "dtypes": {
           "webgpu": "q4f16",
           "cpu": "q4f16"
@@ -87,11 +88,13 @@
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Llama-3.2-3B-Instruct-onnx-web",
       "runtime": {
+        "revision": "8ddaf6b6764ff2916a807e3c2ec0b5a441192473",
         "dtypes": {
           "webgpu": "q4f16",
           "cpu": "q4"
         },
-        "useExternalDataFormat": true
+        "useExternalDataFormat": true,
+        "allowBackendFallback": false
       },
       "toolCalling": {
         "format": "json",
@@ -122,14 +125,15 @@
     {
       "id": "onnx-community/Bonsai-8B-ONNX",
       "label": "onnx-community/Bonsai-8B-ONNX",
-      "displayName": "Bonsai 8B Q1 (Experimental)",
+      "displayName": "Bonsai 8B Q1f16 (Experimental)",
       "engine": {
         "type": "transformers-js"
       },
       "repositoryUrl": "https://huggingface.co/onnx-community/Bonsai-8B-ONNX",
       "runtime": {
+        "revision": "a5694a132e4050cef2dc335528016ce7e56504c9",
         "dtypes": {
-          "webgpu": "q1",
+          "webgpu": "q1f16",
           "cpu": "q4"
         },
         "allowBackendFallback": false

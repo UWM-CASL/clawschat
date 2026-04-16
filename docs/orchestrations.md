@@ -25,10 +25,12 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
 - Prompt steps can define:
   - `stepName`
   - `prompt`
+  - `generationConfig` (optional per-step sampling/token overrides merged over any orchestration-level defaults)
   - `parameters`
   - `outputKey` (optional variable name for later step prompts)
   - `responseFormat`
   - `outputProcessing` (optional post-processing options)
+- An orchestration root may also define `generationConfig` for shared caps across all prompt/forEach steps.
 - Utility steps are deterministic local operations that prepare or combine orchestration data without calling the model.
   - `transform`
     - Runs a named local transform and writes its result to `outputKey`.

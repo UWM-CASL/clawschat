@@ -1,6 +1,13 @@
 {
   "id": "rename-chat",
   "description": "Generate a concise conversation title from the first user/model exchange.",
+  "generationConfig": {
+    "maxOutputTokens": 16,
+    "maxContextTokens": 2048,
+    "temperature": 0.2,
+    "topK": 20,
+    "topP": 0.8
+  },
   "steps": [
     {
       "stepName": "Rename the chat",

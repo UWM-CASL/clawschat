@@ -25,12 +25,17 @@ Inference is selected through the engine client boundary and executes through a 
   - `env.useWasmCache = true`
   - `onnx.wasm.proxy = true`
   - `onnx.wasm.numThreads = 0` by default, or the user-selected value from `Settings -> System -> Transformers.js CPU threads`
+  - `onnx.wasm.wasmPaths` now points at app-bundled ONNX Runtime WASM files instead of the default CDN path (`jsep` for WebGPU, threaded WASM for CPU, asyncify on Safari CPU fallback)
+  - `Settings -> System -> Clear Downloaded Model Files` uses Transformers.js cache metadata to remove the selected local ONNX model's cached files from the browser cache
 - Models with `requiresWebGpu: true` only attempt WebGPU and are unavailable in CPU mode.
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` runs through the `transformers-js` worker with `q4f16` on WebGPU and `q4` on CPU.
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` runs through the `transformers-js` worker with `q4f16` on WebGPU and `q4` on manual CPU mode (`allowBackendFallback: false` to avoid pulling both quantizations after a failed WebGPU init).
 - `onnx-community/gemma-4-E2B-it-ONNX` now runs through the `transformers-js` worker with `q4f16` on WebGPU and CPU.
+- `onnx-community/Bonsai-8B-ONNX` now runs through the `transformers-js` worker with `q1f16` on WebGPU and `q4` on manual CPU mode.
 - Models with `multimodalGeneration: true` can still initialize through the text-generation path when the current prompt contains no image/audio/video inputs; the worker reinitializes into the processor/model path only when media is actually present.
 - For multimodal models, the worker loads the `AutoProcessor` lazily on first generation and then reuses it for later requests, so multimodal preprocessing assets are not fetched during initial model load.
+- For text-only Transformers.js turns, the worker now loads `AutoTokenizer` and `AutoModelForCausalLM` directly, feeds tokenized prompt tensors into `model.generate()`, and reuses `past_key_values` when a follow-up turn extends the previous prompt prefix.
 - ONNX models may provide mode-specific runtime hints such as `runtime.dtypes.webgpu` and `runtime.dtypes.cpu`.
+- ONNX model entries may also pin `runtime.revision` so Hub downloads stay on an exact model snapshot.
 - LiteRT-backed models may use engine-specific runtime hints such as `runtime.modelAssetPath` and `runtime.promptFormat` instead of Transformers.js-specific dtype settings.
 - Browser-saved cloud models use runtime hints such as `runtime.providerId`, `runtime.apiBaseUrl`, `runtime.remoteModelId`, and optional `runtime.supportsTopK` to drive the OpenAI-compatible worker.
 - The OpenAI-compatible worker keeps two request profiles: strict OpenAI-hosted endpoints suppress `top_k` and send `max_completion_tokens` on `/chat/completions`, while broader compatible endpoints keep the looser `max_tokens` request field.

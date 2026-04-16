@@ -217,4 +217,38 @@ describe('orchestration-runner', () => {
       finalOutput: ['A', 'B'],
     });
   });
+
+  test('passes orchestration and step generation overrides to text generation', async () => {
+    const generateText = vi.fn().mockResolvedValueOnce('Short title');
+    const runner = createOrchestrationRunner({
+      generateText,
+    });
+
+    await runner({
+      id: 'rename-chat',
+      generationConfig: {
+        maxOutputTokens: 16,
+        temperature: 0.2,
+      },
+      steps: [
+        {
+          prompt: 'Title {{userPrompt}}',
+          generationConfig: {
+            topK: 20,
+          },
+        },
+      ],
+    }, {
+      userPrompt: 'Why is the sky blue?',
+    });
+
+    expect(generateText).toHaveBeenCalledWith('Title Why is the sky blue?', {
+      signal: undefined,
+      generationConfig: {
+        maxOutputTokens: 16,
+        temperature: 0.2,
+        topK: 20,
+      },
+    });
+  });
 });

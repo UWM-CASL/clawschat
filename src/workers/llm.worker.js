@@ -2,6 +2,12 @@ import {
   buildDefaultGenerationConfig,
   sanitizeGenerationConfig,
 } from '../config/generation-config.js';
+import ortWasmAsyncifyBinaryPath from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url';
+import ortWasmAsyncifyModulePath from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
+import ortWasmJsepBinaryPath from 'onnxruntime-web/ort-wasm-simd-threaded.jsep.wasm?url';
+import ortWasmJsepModulePath from 'onnxruntime-web/ort-wasm-simd-threaded.jsep.mjs?url';
+import ortWasmBinaryPath from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
+import ortWasmModulePath from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
 
 const WORKER_GENERATION_LIMITS = {
   defaultMaxOutputTokens: 1024,
@@ -32,9 +38,11 @@ let loadedBackendDevice = null;
 let loadedModelId = null;
 let loadedExecutionMode = 'text';
 let loadedBackendPreference = null;
+let loadedRuntimeConfigKey = '';
 let cachedModule = null;
 let generationConfig = buildDefaultGenerationConfig(WORKER_GENERATION_LIMITS);
 let activeGenerationState = null;
+let textGenerationPrefixCache = null;
 
 function logWorkerDebug(event, details = undefined) {
   if (!ENABLE_WORKER_DEBUG_CONSOLE_LOGS) {
@@ -232,6 +240,39 @@ async function loadTransformers() {
   return cachedModule;
 }
 
+function isSafariUserAgent() {
+  const userAgent =
+    typeof globalThis.navigator?.userAgent === 'string'
+      ? globalThis.navigator.userAgent.trim()
+      : '';
+  if (!userAgent) {
+    return false;
+  }
+  return (
+    /\bSafari\//.test(userAgent) &&
+    !/\bChrome\/|\bChromium\/|\bEdg\/|\bOPR\/|\bCriOS\/|\bFxiOS\//.test(userAgent)
+  );
+}
+
+function resolveLocalOnnxWasmPaths(backend = 'wasm') {
+  if (backend === 'webgpu') {
+    return {
+      mjs: ortWasmJsepModulePath,
+      wasm: ortWasmJsepBinaryPath,
+    };
+  }
+  if (isSafariUserAgent()) {
+    return {
+      mjs: ortWasmAsyncifyModulePath,
+      wasm: ortWasmAsyncifyBinaryPath,
+    };
+  }
+  return {
+    mjs: ortWasmModulePath,
+    wasm: ortWasmBinaryPath,
+  };
+}
+
 function configureOnnxWasmBackend(env, backend = 'wasm', runtime = {}) {
   if (!env?.backends?.onnx?.wasm) {
     return null;
@@ -239,15 +280,18 @@ function configureOnnxWasmBackend(env, backend = 'wasm', runtime = {}) {
   const requestedCpuThreads = normalizeOnnxWasmThreadCount(runtime?.cpuThreads);
   env.backends.onnx.wasm.numThreads = requestedCpuThreads;
   env.backends.onnx.wasm.proxy = ONNX_WASM_PROXY_ENABLED;
+  env.backends.onnx.wasm.wasmPaths = resolveLocalOnnxWasmPaths(backend);
   const result = {
     backend,
     proxy: ONNX_WASM_PROXY_ENABLED,
     numThreads: requestedCpuThreads,
+    wasmPaths: env.backends.onnx.wasm.wasmPaths,
   };
   logWorkerDebug('onnx-wasm-config', {
     backend,
     proxy: env.backends.onnx.wasm.proxy,
     numThreads: env.backends.onnx.wasm.numThreads,
+    wasmPaths: env.backends.onnx.wasm.wasmPaths,
   });
   return result;
 }
@@ -267,7 +311,7 @@ function normalizeOnnxWasmThreadCount(value) {
   return normalizedValue;
 }
 
-async function ensureMultimodalProcessor(modelId, progressCallback = null) {
+async function ensureMultimodalProcessor(modelId, runtime = {}, progressCallback = null) {
   if (processor) {
     return processor;
   }
@@ -277,6 +321,7 @@ async function ensureMultimodalProcessor(modelId, progressCallback = null) {
   }
   processor = await AutoProcessor.from_pretrained(modelId, {
     progress_callback: progressCallback || undefined,
+    ...(runtime.revision ? { revision: runtime.revision } : {}),
   });
   tokenizer = processor?.tokenizer || model?.tokenizer || tokenizer || null;
   return processor;
@@ -414,6 +459,10 @@ function normalizeRuntimeDtypes(rawDtypes) {
 function normalizeRuntimeConfig(rawRuntime) {
   const dtype = normalizeRuntimeDtype(rawRuntime?.dtype);
   const dtypes = normalizeRuntimeDtypes(rawRuntime?.dtypes);
+  const revision =
+    typeof rawRuntime?.revision === 'string' && rawRuntime.revision.trim()
+      ? rawRuntime.revision.trim()
+      : '';
   const enableThinking =
     rawRuntime?.enableThinking === true
       ? true
@@ -447,6 +496,7 @@ function normalizeRuntimeConfig(rawRuntime) {
   return {
     ...(dtype ? { dtype } : {}),
     ...(dtypes ? { dtypes } : {}),
+    ...(revision ? { revision } : {}),
     ...(enableThinking === true || enableThinking === false ? { enableThinking } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
@@ -465,6 +515,10 @@ function normalizeRuntimeConfig(rawRuntime) {
 function resolveRuntimeDtype(runtime = {}, backend = 'webgpu') {
   const backendKey = backend === 'webgpu' ? 'webgpu' : 'cpu';
   return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
+}
+
+function buildRuntimeConfigKey(runtime = {}) {
+  return JSON.stringify(runtime || {});
 }
 
 function getProgressMessage(progress = {}) {
@@ -519,6 +573,117 @@ function buildMultimodalDecodeOptions(runtime = {}) {
   return {
     skip_special_tokens: shouldSkipSpecialTokensInMultimodalOutput(runtime),
   };
+}
+
+async function disposePastKeyValues(pastKeyValues) {
+  if (!pastKeyValues || typeof pastKeyValues.dispose !== 'function') {
+    return;
+  }
+  try {
+    await pastKeyValues.dispose();
+  } catch {
+    // Ignore cache disposal failures to avoid masking inference results.
+  }
+}
+
+async function setTextGenerationPrefixCache(nextCache) {
+  const previousCache = textGenerationPrefixCache;
+  textGenerationPrefixCache = nextCache || null;
+  if (previousCache && previousCache !== textGenerationPrefixCache) {
+    await disposePastKeyValues(previousCache.pastKeyValues);
+  }
+}
+
+async function clearTextGenerationPrefixCache() {
+  await setTextGenerationPrefixCache(null);
+}
+
+function extractTokenSequence(inputIds) {
+  if (!inputIds) {
+    return [];
+  }
+  if (Array.isArray(inputIds?.dims) && inputIds.data) {
+    const sequenceLength = getPromptTokenCount(inputIds);
+    if (!sequenceLength) {
+      return [];
+    }
+    return Array.from(inputIds.data.slice(0, sequenceLength));
+  }
+  if (!Array.isArray(inputIds) || !inputIds.length) {
+    return [];
+  }
+  const sequence = Array.isArray(inputIds[0]) ? inputIds[0] : inputIds;
+  return Array.from(sequence);
+}
+
+function isTokenSequencePrefix(prefixTokens, candidateTokens) {
+  if (!Array.isArray(prefixTokens) || !Array.isArray(candidateTokens)) {
+    return false;
+  }
+  if (!prefixTokens.length || prefixTokens.length > candidateTokens.length) {
+    return false;
+  }
+  for (let index = 0; index < prefixTokens.length; index += 1) {
+    if (prefixTokens[index] !== candidateTokens[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolveTextGenerationModelInputs(preparedTextInputs) {
+  const modelInputs =
+    preparedTextInputs?.modelInputs && typeof preparedTextInputs.modelInputs === 'object'
+      ? preparedTextInputs.modelInputs
+      : null;
+  const cachedPrefixTokens = textGenerationPrefixCache?.sequenceTokens;
+  if (
+    !modelInputs ||
+    !Array.isArray(cachedPrefixTokens) ||
+    !cachedPrefixTokens.length ||
+    !textGenerationPrefixCache?.pastKeyValues
+  ) {
+    return {
+      modelInputs,
+      usedPrefixCache: false,
+      cachedPromptTokens: 0,
+    };
+  }
+
+  const inputIds = extractTokenSequence(modelInputs.input_ids);
+  if (
+    inputIds.length <= cachedPrefixTokens.length ||
+    !isTokenSequencePrefix(cachedPrefixTokens, inputIds)
+  ) {
+    return {
+      modelInputs,
+      usedPrefixCache: false,
+      cachedPromptTokens: 0,
+    };
+  }
+
+  return {
+    modelInputs: {
+      ...modelInputs,
+      past_key_values: textGenerationPrefixCache.pastKeyValues,
+    },
+    usedPrefixCache: true,
+    cachedPromptTokens: cachedPrefixTokens.length,
+  };
+}
+
+async function updateTextGenerationPrefixCache(generationOutput) {
+  const sequences = generationOutput?.sequences;
+  const pastKeyValues = generationOutput?.past_key_values;
+  const sequenceTokens = extractTokenSequence(sequences);
+  if (!sequenceTokens.length || !pastKeyValues) {
+    await clearTextGenerationPrefixCache();
+    return;
+  }
+  await setTextGenerationPrefixCache({
+    sequenceTokens,
+    pastKeyValues,
+  });
 }
 
 function normalizePromptContentPart(rawPart) {
@@ -984,28 +1149,8 @@ function prepareTextGenerationInputs(tokenizerInstance, prompt, requestGeneratio
 
 export { prepareTextGenerationInputs };
 
-function decodePreparedTextPrompt(tokenizerInstance, preparedTextInputs) {
-  const inputIds = preparedTextInputs?.modelInputs?.input_ids;
-  if (!inputIds) {
-    throw new Error('Prepared text-generation inputs are missing input_ids.');
-  }
-  if (tokenizerInstance && typeof tokenizerInstance.batch_decode === 'function') {
-    const decoded = tokenizerInstance.batch_decode(inputIds, {
-      skip_special_tokens: false,
-      clean_up_tokenization_spaces: false,
-    });
-    const promptText = Array.isArray(decoded) ? String(decoded[0] || '') : '';
-    if (promptText) {
-      return promptText;
-    }
-  }
-  throw new Error('Text-generation prompt could not be decoded for pipeline execution.');
-}
-
-export { decodePreparedTextPrompt };
-
 async function invokeTextGeneration(
-  textGenerator,
+  textGenerationModel,
   tokenizerInstance,
   preparedTextInputs,
   requestGenerationConfig,
@@ -1014,8 +1159,9 @@ async function invokeTextGeneration(
   runtime = {}
 ) {
   let streamedText = '';
-  const promptText = decodePreparedTextPrompt(tokenizerInstance, preparedTextInputs);
-  const pipelineGenerationOptions = {
+  const resolvedInputs = resolveTextGenerationModelInputs(preparedTextInputs);
+  const modelGenerationOptions = {
+    ...resolvedInputs.modelInputs,
     ...generationOptions,
     ...(resolveGenerationMaxLength(preparedTextInputs.promptTokens, requestGenerationConfig) > 0
       ? {
@@ -1025,13 +1171,7 @@ async function invokeTextGeneration(
           ),
         }
       : {}),
-    return_full_text: false,
-    add_special_tokens: false,
-    tokenizer_encode_kwargs: {
-      add_special_tokens: false,
-      truncation: true,
-      max_length: requestGenerationConfig.maxContextTokens,
-    },
+    return_dict_in_generate: true,
   };
   logWorkerDebug('generate-invoke', {
     requestId: generationState.requestId,
@@ -1039,9 +1179,11 @@ async function invokeTextGeneration(
     backendInUse,
     loadedBackendDevice,
     promptTokens: preparedTextInputs.promptTokens,
-    maxNewTokens: generationConfig.maxOutputTokens,
-    maxLength: pipelineGenerationOptions.max_length || '(runtime default)',
+    maxNewTokens: requestGenerationConfig.maxOutputTokens,
+    maxLength: modelGenerationOptions.max_length || '(runtime default)',
+    prefixCacheTokens: resolvedInputs.cachedPromptTokens,
   });
+  let generationOutput = null;
   if (TextStreamer) {
     const streamer = new TextStreamer(tokenizerInstance, {
       skip_prompt: true,
@@ -1052,25 +1194,33 @@ async function invokeTextGeneration(
       },
     });
 
-    await textGenerator(promptText, {
-      ...pipelineGenerationOptions,
+    generationOutput = await textGenerationModel.generate({
+      ...modelGenerationOptions,
       streamer,
     });
   } else {
-    const output = await textGenerator(promptText, {
-      ...pipelineGenerationOptions,
+    generationOutput = await textGenerationModel.generate({
+      ...modelGenerationOptions,
     });
-    const generated = output?.[0]?.generated_text;
-    if (Array.isArray(generated)) {
-      streamedText = generated[generated.length - 1]?.content || '';
-    } else {
-      streamedText = typeof generated === 'string' ? generated : '';
-    }
-    queueBufferedToken(generationState, streamedText);
   }
+
+  if (!streamedText) {
+    const generatedSequence = generationOutput?.sequences?.slice?.(null, [
+      preparedTextInputs.promptTokens,
+      null,
+    ]);
+    const decoded = generatedSequence
+      ? tokenizerInstance.batch_decode(generatedSequence, buildMultimodalDecodeOptions(runtime))
+      : [];
+    streamedText = Array.isArray(decoded) ? String(decoded[0] || '') : '';
+    if (streamedText) {
+      queueBufferedToken(generationState, streamedText);
+    }
+  }
+  await updateTextGenerationPrefixCache(generationOutput);
   return {
     streamedText,
-    pipelineGenerationOptions,
+    modelGenerationOptions,
   };
 }
 
@@ -1186,9 +1336,10 @@ async function initialize(payload) {
 
   const {
     env,
-    pipeline,
     TextStreamer: StreamerClass,
     InterruptableStoppingCriteria: InterruptableStoppingCriteria,
+    AutoTokenizer,
+    AutoModelForCausalLM,
     AutoModelForImageTextToText,
   } = await loadTransformers();
   TextStreamer = StreamerClass;
@@ -1201,6 +1352,7 @@ async function initialize(payload) {
     useBrowserCache: env.useBrowserCache,
     useWasmCache: env.useWasmCache,
   });
+  await clearTextGenerationPrefixCache();
 
   for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex += 1) {
     const backend = attempts[attemptIndex];
@@ -1226,9 +1378,10 @@ async function initialize(payload) {
       }
       postStatus(`Loading ${modelId} with ${backendStatusLabel}...`);
       postProgress({ percent: 5, message: `Preparing ${backendStatusLabel} backend...` });
-      const pipelineOptions = {
+      const modelLoadOptions = {
         ...(backend !== 'default' ? { device: backend } : {}),
         ...(runtimeDtype ? { dtype: runtimeDtype } : {}),
+        ...(runtime.revision ? { revision: runtime.revision } : {}),
         ...(runtime.useExternalDataFormat
           ? {
               use_external_data_format: runtime.useExternalDataFormat,
@@ -1271,35 +1424,36 @@ async function initialize(payload) {
         tokenizer = null;
         postProgress({ percent: 10, message: `Loading ${modelId} multimodal model...` });
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
-          ...(backend !== 'default' ? { device: backend } : {}),
-          ...(runtimeDtype ? { dtype: runtimeDtype } : {}),
-          ...(runtime.useExternalDataFormat
-            ? {
-                use_external_data_format: runtime.useExternalDataFormat,
-              }
-            : {}),
-          progress_callback: pipelineOptions.progress_callback,
+          ...modelLoadOptions,
+          progress_callback: modelLoadOptions.progress_callback,
         });
         tokenizer = model?.tokenizer || null;
         loadedExecutionMode = 'multimodal';
       } else {
         processor = null;
-        model = await pipeline('text-generation', modelId, {
-          ...pipelineOptions,
+        postProgress({ percent: 10, message: `Loading ${modelId} tokenizer...` });
+        tokenizer = await AutoTokenizer.from_pretrained(modelId, {
+          progress_callback: modelLoadOptions.progress_callback,
+          ...(runtime.revision ? { revision: runtime.revision } : {}),
         });
-        tokenizer = model.tokenizer;
+        postProgress({ percent: 15, message: `Loading ${modelId} text model...` });
+        model = await AutoModelForCausalLM.from_pretrained(modelId, {
+          ...modelLoadOptions,
+        });
         loadedExecutionMode = 'text';
       }
       backendInUse = resolvedBackendLabel;
       loadedBackendDevice = backend;
       loadedBackendPreference = backendPreference;
       loadedModelId = modelId;
+      loadedRuntimeConfigKey = buildRuntimeConfigKey(runtime);
       logWorkerDebug('init-success', {
         modelId,
         backendInUse,
         loadedBackendDevice,
         loadedBackendPreference,
         loadedExecutionMode,
+        loadedRuntimeConfigKey,
       });
       postProgress({
         percent: 100,
@@ -1439,8 +1593,10 @@ async function generate(payload) {
     };
 
     if (runtime.multimodalGeneration) {
+      await clearTextGenerationPrefixCache();
       const multimodalProcessor = await ensureMultimodalProcessor(
         loadedModelId || payload.modelId,
+        runtime,
         (progress) => {
           const rawPercent = Number(progress?.percent) || 0;
           postProgress({
@@ -1510,9 +1666,9 @@ async function generate(payload) {
         queueBufferedToken(generationState, streamedText);
       }
     } else {
-      const textGenerator = model;
-      if (typeof textGenerator !== 'function') {
-        throw new Error('Text-generation pipeline is not initialized correctly.');
+      const textGenerationModel = model;
+      if (!textGenerationModel || typeof textGenerationModel.generate !== 'function') {
+        throw new Error('Text-generation model is not initialized correctly.');
       }
       const preparedTextInputs = prepareTextGenerationInputs(
         tokenizer,
@@ -1538,7 +1694,7 @@ async function generate(payload) {
       }
       try {
         const textGenerationResult = await invokeTextGeneration(
-          textGenerator,
+          textGenerationModel,
           tokenizer,
           preparedTextInputs,
           requestGenerationConfig,
@@ -1569,7 +1725,7 @@ async function generate(payload) {
           alignedPromptTokens: alignedPreparedTextInputs.promptTokens,
         });
         const retryResult = await invokeTextGeneration(
-          textGenerator,
+          textGenerationModel,
           tokenizer,
           alignedPreparedTextInputs,
           requestGenerationConfig,
@@ -1653,13 +1809,15 @@ if (typeof self !== 'undefined') {
     if (type === 'init') {
       const requestedBackendPreference = normalizeBackendPreference(payload?.backendPreference);
       const requestedRuntime = normalizeRuntimeConfig(payload?.runtime);
+      const requestedRuntimeConfigKey = buildRuntimeConfigKey(requestedRuntime);
       const needsReinit =
         !model ||
         (!requestedRuntime.multimodalGeneration && !tokenizer) ||
         payload.modelId !== loadedModelId ||
         (requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'multimodal') ||
         (!requestedRuntime.multimodalGeneration && loadedExecutionMode !== 'text') ||
-        requestedBackendPreference !== loadedBackendPreference;
+        requestedBackendPreference !== loadedBackendPreference ||
+        requestedRuntimeConfigKey !== loadedRuntimeConfigKey;
 
       if (!needsReinit) {
         self.postMessage({
