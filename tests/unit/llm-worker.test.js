@@ -282,6 +282,10 @@ describe('llm.worker backend selection', () => {
     expect(getBackendAttemptOrder('auto', {})).toEqual(['webgpu', 'wasm']);
   });
 
+  test('can disable automatic cpu fallback for webgpu-first models with separate packages', () => {
+    expect(getBackendAttemptOrder('webgpu', { allowBackendFallback: false })).toEqual(['webgpu']);
+  });
+
   test('cpu preference maps directly to the browser wasm backend', () => {
     expect(getBackendAttemptOrder('cpu', {})).toEqual(['wasm']);
   });

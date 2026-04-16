@@ -131,7 +131,8 @@
         "dtypes": {
           "webgpu": "q1",
           "cpu": "q4"
-        }
+        },
+        "allowBackendFallback": false
       },
       "thinkingTags": {
         "open": "<think>",

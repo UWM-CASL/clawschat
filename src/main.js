@@ -3980,7 +3980,8 @@ engine.onProgress = (progress) => {
   const status = typeof progress?.status === 'string' ? progress.status : '';
   const loadedBytes = Number.isFinite(progress?.loadedBytes) ? progress.loadedBytes : 0;
   const totalBytes = Number.isFinite(progress?.totalBytes) ? progress.totalBytes : 0;
-  setLoadProgress({ percent, message, file, status, loadedBytes, totalBytes });
+  const resetFiles = progress?.resetFiles === true;
+  setLoadProgress({ percent, message, file, status, loadedBytes, totalBytes, resetFiles });
 };
 
 const themePreference = getStoredThemePreference();

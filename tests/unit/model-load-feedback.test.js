@@ -204,4 +204,38 @@ describe('model-load-feedback', () => {
       'modelLoadFeedback'
     );
   });
+
+  test('can reset tracked files before a backend retry starts', () => {
+    const harness = createHarness();
+
+    harness.controller.showProgressRegion(true);
+    harness.controller.setLoadProgress({
+      percent: 50,
+      message: 'Downloading q1...',
+      file: 'onnx/model_q1.onnx_data',
+      status: 'progress',
+      loadedBytes: 512,
+      totalBytes: 1024,
+    });
+    harness.controller.setLoadProgress({
+      percent: 0,
+      message: 'Retrying with CPU...',
+      resetFiles: true,
+    });
+    harness.controller.setLoadProgress({
+      percent: 25,
+      message: 'Downloading q4...',
+      file: 'onnx/model_q4.onnx_data',
+      status: 'progress',
+      loadedBytes: 256,
+      totalBytes: 1024,
+    });
+
+    expect(harness.document.getElementById('modelLoadProgressSummary')?.textContent).toBe(
+      '256 B of 1.0 KB downloaded across 1 file'
+    );
+    expect(harness.document.getElementById('modelLoadCurrentFileLabel')?.textContent).toBe(
+      'model_q4.onnx_data'
+    );
+  });
 });

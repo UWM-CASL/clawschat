@@ -310,7 +310,11 @@ export function createModelLoadFeedbackController({
     status = '',
     loadedBytes = 0,
     totalBytes = 0,
+    resetFiles = false,
   }) {
+    if (resetFiles) {
+      resetLoadProgressFiles();
+    }
     const numericPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
     const isCompletedMessage =
       /^model ready\.$/i.test(String(message || '').trim()) ||

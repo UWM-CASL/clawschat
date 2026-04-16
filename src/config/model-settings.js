@@ -138,6 +138,7 @@ function normalizeRuntime(rawRuntime) {
   const enableThinking = rawRuntime?.enableThinking === true;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
+  const allowBackendFallback = rawRuntime?.allowBackendFallback !== false;
   const useExternalDataFormat =
     rawRuntime?.useExternalDataFormat === true ||
     (Number.isInteger(rawRuntime?.useExternalDataFormat) && rawRuntime.useExternalDataFormat > 0)
@@ -151,6 +152,7 @@ function normalizeRuntime(rawRuntime) {
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
+    ...(allowBackendFallback === false ? { allowBackendFallback: false } : {}),
     ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
   };
 }
@@ -540,6 +542,18 @@ export function getModelAvailability(
         reason: 'This model requires WebGPU. Switch to WebGPU mode.',
       };
     }
+  }
+
+  if (
+    model.runtime?.allowBackendFallback === false &&
+    !webGpuAvailable &&
+    WEBGPU_COMPATIBLE_BACKEND_PREFERENCES.has(normalizedBackendPreference)
+  ) {
+    return {
+      available: false,
+      reason:
+        'This model is configured for WebGPU-first loading in this mode. Enable CPU mode explicitly to use its separate CPU fallback quantization.',
+    };
   }
 
   return { available: true, reason: '' };

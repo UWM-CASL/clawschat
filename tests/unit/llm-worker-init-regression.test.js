@@ -198,7 +198,7 @@ describe('llm.worker init regression', () => {
     });
   });
 
-  test('falls back to cpu before Bonsai 8B model loading when WebGPU has no usable adapter', async () => {
+  test('does not auto-fallback to cpu for Bonsai 8B when WebGPU has no usable adapter', async () => {
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
       value: {
@@ -223,27 +223,19 @@ describe('llm.worker init regression', () => {
                 webgpu: 'q1',
                 cpu: 'q4',
               },
+              allowBackendFallback: false,
             },
           },
         },
       })
     );
 
-    expect(pipelineFactory).toHaveBeenCalledTimes(1);
-    expect(pipelineFactory).toHaveBeenCalledWith(
-      'text-generation',
-      'onnx-community/Bonsai-8B-ONNX',
-      expect.objectContaining({
-        device: 'wasm',
-        dtype: 'q4',
-      })
-    );
+    expect(pipelineFactory).not.toHaveBeenCalled();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
-      type: 'init-success',
+      type: 'init-error',
       payload: {
-        backend: 'cpu',
-        backendDevice: 'wasm',
-        modelId: 'onnx-community/Bonsai-8B-ONNX',
+        message:
+          'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)',
       },
     });
   });

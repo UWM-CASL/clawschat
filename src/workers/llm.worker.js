@@ -97,6 +97,7 @@ function postProgress({
   status = '',
   loadedBytes = 0,
   totalBytes = 0,
+  resetFiles = false,
 }) {
   const boundedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
   self.postMessage({
@@ -108,6 +109,7 @@ function postProgress({
       status: typeof status === 'string' ? status : '',
       loadedBytes: normalizeProgressBytes(loadedBytes),
       totalBytes: normalizeProgressBytes(totalBytes),
+      resetFiles: resetFiles === true,
     },
   });
 }
@@ -283,6 +285,7 @@ async function ensureMultimodalProcessor(modelId, progressCallback = null) {
 function getBackendAttemptOrder(preference, runtimeConfig = {}) {
   const normalizedPreference = normalizeBackendPreference(preference);
   const runtime = normalizeRuntimeConfig(runtimeConfig);
+  const allowBackendFallback = runtime.allowBackendFallback !== false;
   if (runtime.requiresWebGpu) {
     if (normalizedPreference === 'cpu') {
       return [];
@@ -291,6 +294,9 @@ function getBackendAttemptOrder(preference, runtimeConfig = {}) {
   }
   if (normalizedPreference === 'cpu') {
     return ['wasm'];
+  }
+  if (!allowBackendFallback) {
+    return ['webgpu'];
   }
   return ['webgpu', 'wasm'];
 }
@@ -420,6 +426,7 @@ function normalizeRuntimeConfig(rawRuntime) {
         : null;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
+  const allowBackendFallback = rawRuntime?.allowBackendFallback !== false;
   const imageInput = rawRuntime?.imageInput === true;
   const audioInput = rawRuntime?.audioInput === true;
   const videoInput = rawRuntime?.videoInput === true;
@@ -447,6 +454,7 @@ function normalizeRuntimeConfig(rawRuntime) {
     ...(enableThinking === true || enableThinking === false ? { enableThinking } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
+    ...(allowBackendFallback === false ? { allowBackendFallback: false } : {}),
     ...(imageInput ? { imageInput: true } : {}),
     ...(audioInput ? { audioInput: true } : {}),
     ...(videoInput ? { videoInput: true } : {}),
@@ -461,6 +469,24 @@ function normalizeRuntimeConfig(rawRuntime) {
 function resolveRuntimeDtype(runtime = {}, backend = 'webgpu') {
   const backendKey = backend === 'webgpu' ? 'webgpu' : 'cpu';
   return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
+}
+
+function getProgressMessage(progress = {}) {
+  const rawStatus = typeof progress?.status === 'string' ? progress.status.trim() : '';
+  const rawFile = typeof progress?.file === 'string' ? progress.file.trim() : '';
+  if (rawFile) {
+    if (rawStatus === 'done') {
+      return `Downloaded ${rawFile}`;
+    }
+    if (rawStatus === 'initiate' || rawStatus === 'download' || rawStatus === 'progress') {
+      return `Downloading ${rawFile}`;
+    }
+    return rawFile;
+  }
+  if (rawStatus === 'progress_total') {
+    return 'Loading model files...';
+  }
+  return rawStatus || 'Loading model files...';
 }
 
 function buildMultimodalChatTemplateOptions(runtime = {}) {
@@ -1137,11 +1163,18 @@ async function initialize(payload) {
       return;
     }
   } else if (!webGpuProbe.available) {
-    attempts = attempts.filter((backend) => backend !== 'webgpu');
-    const shouldTryDefaultCpuFallback =
-      !attempts.includes('default') && (!hasNavigatorGpuApi || Boolean(webGpuProbe.reason));
-    if (shouldTryDefaultCpuFallback) {
-      attempts.push('default');
+    if (runtime.allowBackendFallback === false) {
+      errors.push(
+        `WEBGPU: ${webGpuProbe.reason} (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)`
+      );
+      attempts = [];
+    } else {
+      attempts = attempts.filter((backend) => backend !== 'webgpu');
+      const shouldTryDefaultCpuFallback =
+        !attempts.includes('default') && (!hasNavigatorGpuApi || Boolean(webGpuProbe.reason));
+      if (shouldTryDefaultCpuFallback) {
+        attempts.push('default');
+      }
     }
   }
   logWorkerDebug('init-attempt-order', {
@@ -1180,7 +1213,8 @@ async function initialize(payload) {
     useWasmCache: env.useWasmCache,
   });
 
-  for (const backend of attempts) {
+  for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex += 1) {
+    const backend = attempts[attemptIndex];
     try {
       const resolvedBackendLabel = resolveBackendLabel(backendPreference, backend);
       const runtimeDtype = resolveRuntimeDtype(runtime, backend);
@@ -1194,6 +1228,13 @@ async function initialize(payload) {
         onnxWasmConfig,
       });
       const backendStatusLabel = resolvedBackendLabel.toUpperCase();
+      if (attemptIndex > 0) {
+        postProgress({
+          percent: 0,
+          message: `Retrying ${modelId} with ${backendStatusLabel}...`,
+          resetFiles: true,
+        });
+      }
       postStatus(`Loading ${modelId} with ${backendStatusLabel}...`);
       postProgress({ percent: 5, message: `Preparing ${backendStatusLabel} backend...` });
       const pipelineOptions = {
@@ -1226,10 +1267,9 @@ async function initialize(payload) {
             progress?.bytes_total ??
             progress?.bytesTotal ??
             0;
-          const label = rawStatus || rawFile || 'Loading model files...';
           postProgress({
             percent: normalizedProgress,
-            message: String(label),
+            message: getProgressMessage(progress),
             file: rawFile,
             status: rawStatus,
             loadedBytes: rawLoadedBytes,
@@ -1296,7 +1336,11 @@ async function initialize(payload) {
           `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like onnx-community/gemma-4-E2B-it-ONNX, or self-host pinned model files for static delivery.)`
         );
       } else {
-        errors.push(`${backend.toUpperCase()}: ${rawMessage}`);
+        const fallbackSuffix =
+          backend === 'webgpu' && runtime.allowBackendFallback === false
+            ? ' (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)'
+            : '';
+        errors.push(`${backend.toUpperCase()}: ${rawMessage}${fallbackSuffix}`);
       }
     }
   }

@@ -34,6 +34,31 @@ describe('model-settings availability', () => {
     });
   });
 
+  test('keeps Bonsai 8B unavailable in webgpu mode when WebGPU is missing because fallback is manual', () => {
+    expect(
+      getModelAvailability(BONSAI_8B_MODEL_ID, {
+        backendPreference: 'webgpu',
+        webGpuAvailable: false,
+      })
+    ).toEqual({
+      available: false,
+      reason:
+        'This model is configured for WebGPU-first loading in this mode. Enable CPU mode explicitly to use its separate CPU fallback quantization.',
+    });
+  });
+
+  test('keeps Bonsai 8B available in cpu mode without WebGPU when cpu is selected explicitly', () => {
+    expect(
+      getModelAvailability(BONSAI_8B_MODEL_ID, {
+        backendPreference: 'cpu',
+        webGpuAvailable: false,
+      })
+    ).toEqual({
+      available: true,
+      reason: '',
+    });
+  });
+
   test('maps legacy wasm preference into cpu mode for Gemma 4', () => {
     expect(
       getModelAvailability(GEMMA_4_MODEL_ID, {
@@ -172,6 +197,7 @@ describe('model-settings availability', () => {
         webgpu: 'q1',
         cpu: 'q4',
       },
+      allowBackendFallback: false,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.inputLimits).toMatchObject({
       maxImageInputs: 1,
