@@ -322,15 +322,15 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 
 ## Scripts
 
-- `npm run dev`
-- `npm run build`
-- `npm run preview`
-- `npm run lint`
-- `npm run format`
-- `npm run typecheck`
-- `npm run test`
-- `npm run test:e2e`
-- `npm run test:a11y`
+- `pnpm dev`
+- `pnpm build`
+- `pnpm preview`
+- `pnpm lint`
+- `pnpm format`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm test:e2e`
+- `pnpm test:a11y`
 
 ## Architecture notes
 
