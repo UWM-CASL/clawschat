@@ -26,15 +26,15 @@ describe('system prompt feature sections', () => {
     expect(prompt).toContain('**Assistant Behavior:**');
     expect(prompt).toContain('- When possible, do the work instead of explain how.');
     expect(prompt).toContain('- Use the appropriate tool to confirm facts before responding.');
-    expect(prompt).toContain('- Present mathematical notation in LaTeX');
+    expect(prompt).toContain('- When writing mathematical notation in LaTeX');
     expect(prompt.indexOf('- When possible, do the work instead of explain how.')).toBeLessThan(
       prompt.indexOf('- Use the appropriate tool to confirm facts before responding.')
     );
     expect(
       prompt.indexOf('- Use the appropriate tool to confirm facts before responding.')
-    ).toBeLessThan(prompt.indexOf('- Present mathematical notation in LaTeX'));
+    ).toBeLessThan(prompt.indexOf('- When writing mathematical notation in LaTeX'));
     expect(prompt).not.toContain('Math rendering is enabled.');
-    expect(prompt).toContain('Present mathematical notation in LaTeX');
+    expect(prompt).toContain('When writing mathematical notation in LaTeX');
     expect(prompt).toContain('use $...$ for inline math');
     expect(prompt).toContain('$$...$$ for display math');
   });
