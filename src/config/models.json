@@ -90,11 +90,10 @@
       "runtime": {
         "revision": "8ddaf6b6764ff2916a807e3c2ec0b5a441192473",
         "dtypes": {
-          "webgpu": "q4f16",
+          "webgpu": "q4",
           "cpu": "q4"
         },
-        "useExternalDataFormat": true,
-        "allowBackendFallback": false
+        "useExternalDataFormat": true
       },
       "toolCalling": {
         "format": "json",
@@ -125,7 +124,7 @@
     {
       "id": "onnx-community/Bonsai-8B-ONNX",
       "label": "onnx-community/Bonsai-8B-ONNX",
-      "displayName": "Bonsai 8B Q1f16 (Experimental)",
+      "displayName": "Bonsai 8B Q4 (Experimental)",
       "engine": {
         "type": "transformers-js"
       },
@@ -133,10 +132,9 @@
       "runtime": {
         "revision": "a5694a132e4050cef2dc335528016ce7e56504c9",
         "dtypes": {
-          "webgpu": "q1f16",
+          "webgpu": "q4",
           "cpu": "q4"
-        },
-        "allowBackendFallback": false
+        }
       },
       "thinkingTags": {
         "open": "<think>",

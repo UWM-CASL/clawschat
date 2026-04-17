@@ -295,7 +295,7 @@ describe('LLMEngineClient', () => {
         type: 'init-error',
         payload: {
           message:
-            'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)',
+            'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)',
         },
       },
     ];
@@ -315,7 +315,7 @@ describe('LLMEngineClient', () => {
         },
       })
     ).rejects.toThrow(
-      'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)'
+      'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)'
     );
 
     expect(MockWorker.instances).toHaveLength(1);

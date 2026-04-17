@@ -34,16 +34,15 @@ describe('model-settings availability', () => {
     });
   });
 
-  test('keeps Bonsai 8B unavailable in webgpu mode when WebGPU is missing because fallback is manual', () => {
+  test('keeps Bonsai 8B available in webgpu mode when WebGPU is missing because CPU fallback stays available', () => {
     expect(
       getModelAvailability(BONSAI_8B_MODEL_ID, {
         backendPreference: 'webgpu',
         webGpuAvailable: false,
       })
     ).toEqual({
-      available: false,
-      reason:
-        'This model is configured for WebGPU-first loading in this mode. Enable CPU mode explicitly to use its separate CPU fallback quantization.',
+      available: true,
+      reason: '',
     });
   });
 
@@ -59,16 +58,15 @@ describe('model-settings availability', () => {
     });
   });
 
-  test('keeps Llama 3.2 3B unavailable in webgpu mode when WebGPU is missing because fallback is manual', () => {
+  test('keeps Llama 3.2 3B available in webgpu mode when WebGPU is missing because CPU fallback stays available', () => {
     expect(
       getModelAvailability(LLAMA_3B_MODEL_ID, {
         backendPreference: 'webgpu',
         webGpuAvailable: false,
       })
     ).toEqual({
-      available: false,
-      reason:
-        'This model is configured for WebGPU-first loading in this mode. Enable CPU mode explicitly to use its separate CPU fallback quantization.',
+      available: true,
+      reason: '',
     });
   });
 
@@ -129,7 +127,7 @@ describe('model-settings availability', () => {
   test('resolves mode-specific runtime dtypes from config', () => {
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime, 'webgpu')
-    ).toBe('q4f16');
+    ).toBe('q4');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime, 'cpu')
     ).toBe('q4');
@@ -138,7 +136,7 @@ describe('model-settings availability', () => {
     ).toBe('q4f16');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime, 'webgpu')
-    ).toBe('q1f16');
+    ).toBe('q4');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime, 'cpu')
     ).toBe('q4');
@@ -193,10 +191,9 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime).toMatchObject({
       revision: '8ddaf6b6764ff2916a807e3c2ec0b5a441192473',
       dtypes: {
-        webgpu: 'q4f16',
+        webgpu: 'q4',
         cpu: 'q4',
       },
-      allowBackendFallback: false,
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime).toMatchObject({
@@ -211,10 +208,9 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime).toMatchObject({
       revision: 'a5694a132e4050cef2dc335528016ce7e56504c9',
       dtypes: {
-        webgpu: 'q1f16',
+        webgpu: 'q4',
         cpu: 'q4',
       },
-      allowBackendFallback: false,
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.inputLimits).toMatchObject({
       maxImageInputs: 1,
@@ -257,7 +253,7 @@ describe('model-settings availability', () => {
       repositoryUrl: 'https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX',
     });
     expect(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)).toMatchObject({
-      displayName: 'Bonsai 8B Q1f16 (Experimental)',
+      displayName: 'Bonsai 8B Q4 (Experimental)',
       repositoryUrl: 'https://huggingface.co/onnx-community/Bonsai-8B-ONNX',
     });
   });

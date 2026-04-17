@@ -254,7 +254,51 @@ describe('llm.worker init regression', () => {
       type: 'init-error',
       payload: {
         message:
-          'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)',
+          'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)',
+      },
+    });
+  });
+
+  test('surfaces a WebGPU memory allocation failure without inventing a fallback rationale', async () => {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        gpu: {
+          requestAdapter: vi.fn(async () => ({})),
+        },
+      },
+    });
+    textModelFactory.mockRejectedValueOnce(
+      new Error("Can't create a session. ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc")
+    );
+
+    await import('../../src/workers/llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload: {
+            modelId: 'onnx-community/Bonsai-8B-ONNX',
+            backendPreference: 'webgpu',
+            runtime: {
+              dtypes: {
+                webgpu: 'q1f16',
+                cpu: 'q4',
+              },
+              allowBackendFallback: false,
+            },
+          },
+        },
+      })
+    );
+
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'init-error',
+      payload: {
+        message:
+          "Failed to initialize model. WEBGPU: WebGPU could not allocate enough memory to create a session. Close other GPU-heavy tabs or apps and retry. (Can't create a session. ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc) (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)",
       },
     });
   });

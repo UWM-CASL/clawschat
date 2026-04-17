@@ -388,10 +388,26 @@ function extractErrorMessage(error) {
   return 'Unknown initialization error';
 }
 
+function isMemoryAllocationError(rawMessage) {
+  const normalizedMessage = String(rawMessage || '');
+  return (
+    /\bstd::bad_alloc\b/i.test(normalizedMessage) ||
+    /\bout of memory\b/i.test(normalizedMessage) ||
+    /ERROR_CODE:\s*6/i.test(normalizedMessage)
+  );
+}
+
+function getManualCpuFallbackSuffix() {
+  return ' (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)';
+}
+
 function formatWebGpuInitializationError(error) {
   const rawMessage = extractErrorMessage(error);
   if (/^\d+$/.test(rawMessage)) {
     return `WebGPU initialization failed (${rawMessage}). Confirm WebGPU is enabled and that this browser/device exposes a usable adapter.`;
+  }
+  if (isMemoryAllocationError(rawMessage)) {
+    return `WebGPU could not allocate enough memory to create a session. Close other GPU-heavy tabs or apps and retry. (${rawMessage})`;
   }
   return rawMessage;
 }
@@ -1310,9 +1326,7 @@ async function initialize(payload) {
     }
   } else if (!webGpuProbe.available) {
     const fallbackSuffix =
-      runtime.allowBackendFallback === false
-        ? ' (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)'
-        : '';
+      runtime.allowBackendFallback === false ? getManualCpuFallbackSuffix() : '';
     errors.push(`WEBGPU: ${webGpuProbe.reason}${fallbackSuffix}`);
     attempts = attempts.filter((backend) => backend !== 'webgpu');
   }
@@ -1481,7 +1495,7 @@ async function initialize(payload) {
       } else {
         const fallbackSuffix =
           backend === 'webgpu' && runtime.allowBackendFallback === false
-            ? ' (Automatic CPU fallback is disabled for this model to avoid downloading a second quantization. Switch to CPU mode manually if you want the larger CPU package.)'
+            ? getManualCpuFallbackSuffix()
             : '';
         errors.push(`${backend.toUpperCase()}: ${rawMessage}${fallbackSuffix}`);
       }

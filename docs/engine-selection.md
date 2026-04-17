@@ -16,7 +16,7 @@ Inference is selected through the engine client boundary and executes through a 
 
 - `webgpu`: prefer WebGPU execution and fall back to CPU/WASM for ONNX models that do not require WebGPU
   - automatic init fallback now happens only after the failed WebGPU worker is terminated, so CPU retry does not overlap the failed worker's model download activity
-  - models may opt out with `runtime.allowBackendFallback: false` when CPU uses a separate, much larger quantization package
+  - models may opt out with `runtime.allowBackendFallback: false` when CPU uses a separate quantization package that should remain an explicit manual choice
 - `cpu`: CPU execution through the ONNX browser WASM backend
 - Legacy stored preferences are normalized into those two modes:
   - `auto` -> `webgpu`
@@ -28,9 +28,9 @@ Inference is selected through the engine client boundary and executes through a 
   - `onnx.wasm.wasmPaths` now points at app-bundled ONNX Runtime WASM files instead of the default CDN path (`jsep` for WebGPU, threaded WASM for CPU, asyncify on Safari CPU fallback)
   - `Settings -> System -> Clear Downloaded Model Files` uses Transformers.js cache metadata to remove the selected local ONNX model's cached files from the browser cache
 - Models with `requiresWebGpu: true` only attempt WebGPU and are unavailable in CPU mode.
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` runs through the `transformers-js` worker with `q4f16` on WebGPU and `q4` on manual CPU mode (`allowBackendFallback: false` to avoid pulling both quantizations after a failed WebGPU init).
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` runs through the `transformers-js` worker with `q4` on WebGPU and CPU.
 - `onnx-community/gemma-4-E2B-it-ONNX` now runs through the `transformers-js` worker with `q4f16` on WebGPU and CPU.
-- `onnx-community/Bonsai-8B-ONNX` now runs through the `transformers-js` worker with `q1f16` on WebGPU and `q4` on manual CPU mode.
+- `onnx-community/Bonsai-8B-ONNX` now runs through the `transformers-js` worker with `q4` on WebGPU and CPU.
 - Models with `multimodalGeneration: true` can still initialize through the text-generation path when the current prompt contains no image/audio/video inputs; the worker reinitializes into the processor/model path only when media is actually present.
 - For multimodal models, the worker loads the `AutoProcessor` lazily on first generation and then reuses it for later requests, so multimodal preprocessing assets are not fetched during initial model load.
 - For text-only Transformers.js turns, the worker now loads `AutoTokenizer` and `AutoModelForCausalLM` directly, feeds tokenized prompt tensors into `model.generate()`, and reuses `past_key_values` when a follow-up turn extends the previous prompt prefix.
