@@ -15,7 +15,7 @@ async function startConversation(page) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(installMockWorker);
-  await page.goto('/');
+  await page.goto('./');
 });
 
 test('@a11y mobile onboarding has no wcag2a/2aa violations', async ({ page }) => {

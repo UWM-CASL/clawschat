@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const pipelineFactory = vi.fn();
+const tokenizerFactory = vi.fn();
+const textModelFactory = vi.fn();
 const multimodalFactory = vi.fn();
 
 vi.mock('@huggingface/transformers', () => ({
@@ -11,7 +12,6 @@ vi.mock('@huggingface/transformers', () => ({
       },
     },
   },
-  pipeline: pipelineFactory,
   TextStreamer: class TextStreamerMock {
     constructor(_tokenizer, options = {}) {
       this.callback_function = options.callback_function || null;
@@ -24,19 +24,55 @@ vi.mock('@huggingface/transformers', () => ({
 
     reset() {}
   },
+  AutoTokenizer: {
+    from_pretrained: tokenizerFactory,
+  },
+  AutoModelForCausalLM: {
+    from_pretrained: textModelFactory,
+  },
   AutoModelForImageTextToText: {
     from_pretrained: multimodalFactory,
   },
 }));
 
+function createTokenizer() {
+  return {
+    apply_chat_template: vi.fn(() => ({
+      input_ids: [[101, 102, 103]],
+      attention_mask: [[1, 1, 1]],
+    })),
+    batch_decode: vi.fn(() => ['Decoded output']),
+  };
+}
+
+function createTextModel(generateImplementation = null) {
+  return {
+    generate: vi.fn(
+      generateImplementation ||
+        (async (options = {}) => {
+          options.streamer?.callback_function?.('Model output');
+          return {
+            sequences: [[101, 102, 103, 201]],
+          };
+        })
+    ),
+  };
+}
+
 describe('llm.worker init regression', () => {
   beforeEach(() => {
     vi.resetModules();
-    pipelineFactory.mockReset();
-    pipelineFactory.mockResolvedValue({
-      tokenizer: { id: 'tokenizer' },
-    });
+    tokenizerFactory.mockReset();
+    tokenizerFactory.mockResolvedValue(createTokenizer());
+    textModelFactory.mockReset();
+    textModelFactory.mockResolvedValue(createTextModel());
     multimodalFactory.mockReset();
+    multimodalFactory.mockResolvedValue({
+      tokenizer: createTokenizer(),
+      generate: vi.fn(async () => ({
+        sequences: [[101, 102, 103, 201]],
+      })),
+    });
     globalThis.self = /** @type {any} */ ({
       postMessage: vi.fn(),
       onmessage: null,
@@ -47,7 +83,7 @@ describe('llm.worker init regression', () => {
     });
   });
 
-  test('reuses a loaded cpu alias without reinitializing the wasm pipeline', async () => {
+  test('reuses a loaded cpu alias without reinitializing the tokenizer or text model', async () => {
     await import('../../src/workers/llm.worker.js');
     const workerSelf = /** @type {any} */ (globalThis.self);
 
@@ -64,7 +100,8 @@ describe('llm.worker init regression', () => {
       },
     }));
 
-    expect(pipelineFactory).toHaveBeenCalledTimes(1);
+    expect(tokenizerFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory).toHaveBeenCalledTimes(1);
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'init-success',
       payload: {
@@ -83,7 +120,8 @@ describe('llm.worker init regression', () => {
       },
     }));
 
-    expect(pipelineFactory).toHaveBeenCalledTimes(1);
+    expect(tokenizerFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory).toHaveBeenCalledTimes(1);
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'init-success',
       payload: {
@@ -94,7 +132,7 @@ describe('llm.worker init regression', () => {
     });
   });
 
-  test('surfaces a WebGPU init error before model loading when no usable adapter exists', async () => {
+  test('surfaces a WebGPU init error before text model loading when no usable adapter exists', async () => {
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
       value: {
@@ -126,7 +164,8 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(pipelineFactory).not.toHaveBeenCalled();
+    expect(tokenizerFactory).not.toHaveBeenCalled();
+    expect(textModelFactory).not.toHaveBeenCalled();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'init-error',
       payload: {
@@ -199,7 +238,7 @@ describe('llm.worker init regression', () => {
             backendPreference: 'webgpu',
             runtime: {
               dtypes: {
-                webgpu: 'q1',
+                webgpu: 'q1f16',
                 cpu: 'q4',
               },
               allowBackendFallback: false,
@@ -209,7 +248,8 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(pipelineFactory).not.toHaveBeenCalled();
+    expect(tokenizerFactory).not.toHaveBeenCalled();
+    expect(textModelFactory).not.toHaveBeenCalled();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'init-error',
       payload: {
@@ -220,15 +260,6 @@ describe('llm.worker init regression', () => {
   });
 
   test('does not attempt any cpu worker init after a failed webgpu probe', async () => {
-    pipelineFactory.mockImplementation(async (_task, _modelId, options = {}) => {
-      if (options.device === 'wasm') {
-        throw new Error('WASM backend init failed.');
-      }
-      return {
-        tokenizer: { id: 'tokenizer' },
-      };
-    });
-
     await import('../../src/workers/llm.worker.js');
     const workerSelf = /** @type {any} */ (globalThis.self);
 
@@ -251,7 +282,8 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(pipelineFactory).not.toHaveBeenCalled();
+    expect(tokenizerFactory).not.toHaveBeenCalled();
+    expect(textModelFactory).not.toHaveBeenCalled();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'init-error',
       payload: {
@@ -260,30 +292,16 @@ describe('llm.worker init regression', () => {
     });
   });
 
-  test('uses the text-generation pipeline wrapper for cpu generation after prompt preparation', async () => {
-    const rawGenerate = vi.fn(async () => {
-      throw new Error('raw model.generate should not be called');
+  test('invokes the text-generation model directly for cpu generation after prompt preparation', async () => {
+    const tokenizer = createTokenizer();
+    const textModel = createTextModel(async (options = {}) => {
+      options.streamer?.callback_function?.('Model output');
+      return {
+        sequences: [[101, 102, 103, 201]],
+      };
     });
-    const generator = /** @type {any} */ (vi.fn(async (_prompt, options = {}) => {
-      options.streamer?.callback_function?.('Pipeline output');
-      return [{ generated_text: 'Pipeline output' }];
-    }));
-    generator.tokenizer = {
-      apply_chat_template: vi.fn(() => ({
-        input_ids: [[101, 102, 103]],
-        attention_mask: [[1, 1, 1]],
-      })),
-      batch_decode: vi.fn((value) => {
-        if (Array.isArray(value) && Array.isArray(value[0])) {
-          return ['<s>Prompt text'];
-        }
-        return ['Pipeline output'];
-      }),
-    };
-    generator.model = {
-      generate: rawGenerate,
-    };
-    pipelineFactory.mockResolvedValue(generator);
+    tokenizerFactory.mockResolvedValue(tokenizer);
+    textModelFactory.mockResolvedValue(textModel);
 
     await import('../../src/workers/llm.worker.js');
     const workerSelf = /** @type {any} */ (globalThis.self);
@@ -328,52 +346,48 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(generator).toHaveBeenCalledWith(
-      '<s>Prompt text',
+    expect(tokenizer.apply_chat_template).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'Hello there' }],
       expect.objectContaining({
+        add_generation_prompt: true,
+        tokenize: true,
+        truncation: false,
+        return_dict: true,
+      })
+    );
+    expect(textModel.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_ids: [[101, 102, 103]],
+        attention_mask: [[1, 1, 1]],
         max_new_tokens: 64,
         max_length: 67,
-        return_full_text: false,
-        add_special_tokens: false,
-        tokenizer_encode_kwargs: expect.objectContaining({
-          add_special_tokens: false,
-          truncation: true,
-          max_length: 8192,
+        return_dict_in_generate: true,
+        streamer: expect.objectContaining({
+          skip_prompt: true,
+          skip_special_tokens: true,
         }),
       })
     );
-    expect(rawGenerate).not.toHaveBeenCalled();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'complete',
       payload: {
         requestId: 'request-1',
-        text: 'Pipeline output',
+        text: 'Model output',
       },
     });
   });
 
   test('preserves special tokens in the text streamer when runtime thinking is enabled', async () => {
-    const generator = /** @type {any} */ (vi.fn(async (_prompt, options = {}) => {
+    const tokenizer = createTokenizer();
+    const textModel = createTextModel(async (options = {}) => {
       options.streamer?.callback_function?.('<|channel>thought\\n');
       options.streamer?.callback_function?.('considering options<channel|>Final answer');
-      return [{ generated_text: 'Final answer' }];
-    }));
-    generator.tokenizer = {
-      apply_chat_template: vi.fn(() => ({
-        input_ids: [[101, 102, 103]],
-        attention_mask: [[1, 1, 1]],
-      })),
-      batch_decode: vi.fn((value) => {
-        if (Array.isArray(value) && Array.isArray(value[0])) {
-          return ['<s>Prompt text'];
-        }
-        return ['Final answer'];
-      }),
-    };
-    generator.model = {
-      generate: vi.fn(),
-    };
-    pipelineFactory.mockResolvedValue(generator);
+      return {
+        sequences: [[101, 102, 103, 201]],
+      };
+    });
+    tokenizerFactory.mockResolvedValue(tokenizer);
+    textModelFactory.mockResolvedValue(textModel);
 
     await import('../../src/workers/llm.worker.js');
     const workerSelf = /** @type {any} */ (globalThis.self);
@@ -420,9 +434,9 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(generator).toHaveBeenCalledWith(
-      '<s>Prompt text',
+    expect(textModel.generate).toHaveBeenCalledWith(
       expect.objectContaining({
+        enable_thinking: true,
         streamer: expect.objectContaining({
           skip_special_tokens: false,
         }),

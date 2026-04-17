@@ -1,3 +1,59 @@
+/**
+ * @param {{
+ *   appState: any;
+ *   chatForm?: HTMLFormElement | null;
+ *   messageInput?: HTMLTextAreaElement | null;
+ *   sendButton?: HTMLButtonElement | null;
+ *   addImagesButton?: HTMLButtonElement | null;
+ *   attachReferenceMenuItem?: HTMLElement | null;
+ *   attachWorkWithMenuItem?: HTMLElement | null;
+ *   imageAttachmentInput?: HTMLInputElement | null;
+ *   composerAttachmentTray?: HTMLElement | null;
+ *   isGeneratingResponse: (state: any) => boolean;
+ *   isOrchestrationRunningState: (state: any) => boolean;
+ *   isMessageEditActive: (state: any) => boolean;
+ *   isEngineReady: (state: any) => boolean;
+ *   hasStartedWorkspace: (state: any) => boolean;
+ *   setChatWorkspaceStarted: (state: any, value: boolean) => any;
+ *   setPreparingNewConversation: (state: any, value: boolean) => any;
+ *   updateWelcomePanelVisibility: (options?: any) => void;
+ *   preparePendingConversationDraft?: (conversationType?: string) => void;
+ *   syncConversationLanguageAndThinkingControls?: (conversation?: any) => void;
+ *   getPendingComposerAttachments: () => any[];
+ *   selectedModelSupportsImageInput?: () => boolean;
+ *   getSelectedModelAttachmentSupport?: () => any;
+ *   createComposerAttachmentFromFile: (file: File, options?: any) => Promise<any>;
+ *   beginComposerAttachmentOperation?: () => void;
+ *   endComposerAttachmentOperation?: () => void;
+ *   isProcessingComposerAttachments?: () => boolean;
+ *   renderComposerAttachments: () => void;
+ *   updateActionButtons?: () => void;
+ *   setStatus: (message: string) => void;
+ *   clearPendingComposerAttachments: () => void;
+ *   createConversation: () => any;
+ *   clearUserMessageEditSession: () => void;
+ *   setChatTitleEditing: (state: any, value: boolean) => any;
+ *   renderConversationList: () => void;
+ *   renderTranscript: () => void;
+ *   updateChatTitle: () => void;
+ *   queueConversationStateSave: () => void;
+ *   getActiveConversation: () => any;
+ *   syncConversationModelSelection: (conversation: any, options?: any) => any;
+ *   getLoadedModelId: () => string;
+ *   persistInferencePreferences: (config: any) => void;
+ *   initializeEngine: () => Promise<any>;
+ *   setModelLoadFeedbackContext?: (context?: string) => void;
+ *   syncRouteToState?: (options?: any) => void;
+ *   buildUserMessageAttachmentPayload: (attachments: any[]) => any;
+ *   beforeStartGeneration?: (_conversation: any, _userMessage: any) => boolean | Promise<boolean>;
+ *   onUserMessageAdded?: (_conversation: any, _userMessage: any) => void;
+ *   addMessageToConversation: (conversation: any, role: string, text: string, options?: any) => any;
+ *   addMessageElement: (message: any) => void;
+ *   buildPromptForActiveConversation: (conversation: any) => any;
+ *   startModelGeneration: (conversation: any, prompt: any, options?: any) => any;
+ *   stopGeneration: () => Promise<any>;
+ * }} options
+ */
 export function bindComposerEvents({
   appState,
   chatForm,

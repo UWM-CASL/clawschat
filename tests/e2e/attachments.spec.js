@@ -3,7 +3,7 @@ const { installMockWorker } = require('./helpers/mock-engine');
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(installMockWorker);
-  await page.goto('/');
+  await page.goto('./');
   await page.getByRole('button', { name: 'Start a conversation' }).click();
   await expect(page.locator('#messageInput')).toBeVisible();
 });

@@ -1,0 +1,14 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    with:
+      pages_base_path: /${{ github.event.repository.name }}/

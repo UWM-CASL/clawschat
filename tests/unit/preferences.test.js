@@ -437,7 +437,7 @@ describe('preferences controller', () => {
     expect(cards.some((card) => card.textContent?.includes('Qwen3.5 2B Instruct'))).toBe(false);
 
     const bonsaiCard = cards.find((card) =>
-      card.textContent?.includes('Bonsai 8B Q1 (Experimental)')
+      card.textContent?.includes('Bonsai 8B Q1f16 (Experimental)')
     );
     expect(bonsaiCard?.textContent).toContain('65,536 tokens');
     expect(bonsaiCard?.textContent).toContain('about 49,200 words');
@@ -529,7 +529,7 @@ describe('preferences controller', () => {
       'Accepts image input',
       'Accepts audio input',
     ]);
-    expect(getFeatureLabels('Bonsai 8B Q1 (Experimental)')).toEqual([
+    expect(getFeatureLabels('Bonsai 8B Q1f16 (Experimental)')).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',
     ]);

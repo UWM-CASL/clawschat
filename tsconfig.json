@@ -13,9 +13,7 @@
   },
   "include": [
     "src/**/*.ts",
-    "src/llm/**/*.js",
-    "src/state/**/*.js",
-    "src/workers/**/*.js",
+    "src/**/*.js",
     "tests/**/*.js",
     "vite.config.js"
   ],

@@ -27,6 +27,7 @@ function createHarness() {
         <option value="cpu">CPU</option>
       </select>
       <input id="cpuThreadsInput" type="number" value="0" />
+      <button id="clearModelDownloadsButton" type="button"></button>
       <input id="maxOutputTokensInput" />
       <input id="maxContextTokensInput" />
       <input id="temperatureInput" />
@@ -70,6 +71,7 @@ function createHarness() {
     modelSelect: document.getElementById('modelSelect'),
     backendSelect: document.getElementById('backendSelect'),
     cpuThreadsInput: document.getElementById('cpuThreadsInput'),
+    clearModelDownloadsButton: document.getElementById('clearModelDownloadsButton'),
     maxOutputTokensInput: document.getElementById('maxOutputTokensInput'),
     maxContextTokensInput: document.getElementById('maxContextTokensInput'),
     temperatureInput: document.getElementById('temperatureInput'),
@@ -95,6 +97,7 @@ function createHarness() {
     assignConversationModelId: vi.fn(() => ({ changed: true })),
     queueConversationStateSave: vi.fn(),
     reinitializeEngineFromSettings: vi.fn(async () => {}),
+    clearSelectedModelDownloads: vi.fn(async () => {}),
     onGenerationSettingInputChanged: vi.fn(),
     getModelGenerationLimits: vi.fn(() => ({
       defaultMaxContextTokens: 1024,
@@ -123,6 +126,7 @@ function createHarness() {
       modelSelect: document.getElementById('modelSelect'),
       backendSelect: document.getElementById('backendSelect'),
       cpuThreadsInput: document.getElementById('cpuThreadsInput'),
+      clearModelDownloadsButton: document.getElementById('clearModelDownloadsButton'),
       maxContextTokensInput: document.getElementById('maxContextTokensInput'),
       temperatureInput: document.getElementById('temperatureInput'),
       topKInput: document.getElementById('topKInput'),

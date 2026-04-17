@@ -9,7 +9,7 @@ async function expectNoCriticalA11yViolations(page) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(installMockWorker);
-  await page.goto('/');
+  await page.goto('./');
 });
 
 async function ensureComposerVisible(page) {
@@ -71,7 +71,7 @@ test('@a11y chat screen has transcript semantics and no wcag2a/2aa violations', 
 });
 
 test('@a11y help page has skip links, headings, and no wcag2a/2aa violations', async ({ page }) => {
-  await page.goto('/help.html');
+  await page.goto('./help.html');
 
   await expect(page.getByRole('main', { name: 'ClawsChat Help' })).toBeVisible();
   await page.getByRole('link', { name: 'Skip to keyboard shortcuts' }).focus();

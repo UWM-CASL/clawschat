@@ -1,5 +1,17 @@
 const { defineConfig } = require('@playwright/test');
 
+function normalizeBasePath(value = '/') {
+  const trimmed = String(value || '/').trim();
+  if (!trimmed || trimmed === '/') {
+    return '/';
+  }
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}/`;
+}
+
+const basePath = normalizeBasePath(process.env.PLAYWRIGHT_BASE_PATH || '/');
+const previewPort = Number(process.env.PLAYWRIGHT_PORT || '4173');
+const baseURL = `http://127.0.0.1:${previewPort}${basePath === '/' ? '/' : basePath}`;
+
 module.exports = defineConfig({
   testDir: './tests/e2e',
   timeout: 45000,
@@ -11,7 +23,7 @@ module.exports = defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -30,8 +42,12 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm exec vite build && pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort',
-    url: 'http://127.0.0.1:4173',
+    command: `pnpm exec vite build && pnpm exec vite preview --host 127.0.0.1 --port ${previewPort} --strictPort`,
+    env: {
+      ...process.env,
+      VITE_BASE_PATH: basePath,
+    },
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

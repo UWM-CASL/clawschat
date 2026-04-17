@@ -108,7 +108,7 @@ describe('preferences-models', () => {
     expect(cards.some((card) => card.textContent?.includes('Qwen3.5 2B Instruct'))).toBe(false);
 
     const bonsaiCard = cards.find((card) =>
-      card.textContent?.includes('Bonsai 8B Q1 (Experimental)')
+      card.textContent?.includes('Bonsai 8B Q1f16 (Experimental)')
     );
     expect(bonsaiCard?.textContent).toContain('65,536 tokens');
     expect(

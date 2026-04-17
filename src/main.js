@@ -227,9 +227,11 @@ const MATH_BLOCK_LINE_PATTERN = /(^|\n)\[\s*\n([\s\S]*?)\n\](?=\n|$)/g;
 const MATH_DISPLAY_DELIMITER_PATTERN = /\\\[([\s\S]*?)\\\]/g;
 const MATH_INLINE_DELIMITER_PATTERN = /\\\(([\s\S]*?)\\\)/g;
 
-window.MathJax = window.MathJax || {};
-window.MathJax.tex = {
-  ...(window.MathJax.tex || {}),
+const mathJaxWindow = /** @type {Window & typeof globalThis & { MathJax?: any }} */ (window);
+
+mathJaxWindow.MathJax = mathJaxWindow.MathJax || {};
+mathJaxWindow.MathJax.tex = {
+  ...(mathJaxWindow.MathJax.tex || {}),
   inlineMath: [
     ['$', '$'],
     ['\\(', '\\)'],
@@ -240,108 +242,108 @@ window.MathJax.tex = {
   ],
   processEscapes: true,
 };
-window.MathJax.options = {
-  ...(window.MathJax.options || {}),
+mathJaxWindow.MathJax.options = {
+  ...(mathJaxWindow.MathJax.options || {}),
   skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
 };
-window.MathJax.startup = {
-  ...(window.MathJax.startup || {}),
+mathJaxWindow.MathJax.startup = {
+  ...(mathJaxWindow.MathJax.startup || {}),
   typeset: false,
 };
 
-const themeSelect = document.getElementById('themeSelect');
-const showThinkingToggle = document.getElementById('showThinkingToggle');
-const enableToolCallingToggle = document.getElementById('enableToolCallingToggle');
-const toolSettingsList = document.getElementById('toolSettingsList');
-const skillPackageForm = document.getElementById('skillPackageForm');
-const skillPackageInput = document.getElementById('skillPackageInput');
-const addSkillPackageButton = document.getElementById('addSkillPackageButton');
-const skillPackageAddFeedback = document.getElementById('skillPackageAddFeedback');
-const skillsList = document.getElementById('skillsList');
-const cloudProviderForm = document.getElementById('cloudProviderForm');
-const cloudProviderEndpointInput = document.getElementById('cloudProviderEndpointInput');
-const cloudProviderApiKeyInput = document.getElementById('cloudProviderApiKeyInput');
-const addCloudProviderButton = document.getElementById('addCloudProviderButton');
-const cloudProviderAddFeedback = document.getElementById('cloudProviderAddFeedback');
-const cloudProvidersList = document.getElementById('cloudProvidersList');
-const corsProxyForm = document.getElementById('corsProxyForm');
-const corsProxyInput = document.getElementById('corsProxyInput');
-const saveCorsProxyButton = document.getElementById('saveCorsProxyButton');
-const clearCorsProxyButton = document.getElementById('clearCorsProxyButton');
-const corsProxyFeedback = document.getElementById('corsProxyFeedback');
-const mcpServerEndpointForm = document.getElementById('mcpServerEndpointForm');
-const mcpServerEndpointInput = document.getElementById('mcpServerEndpointInput');
-const addMcpServerButton = document.getElementById('addMcpServerButton');
-const mcpServerAddFeedback = document.getElementById('mcpServerAddFeedback');
-const mcpServersList = document.getElementById('mcpServersList');
-const renderMathMlToggle = document.getElementById('renderMathMlToggle');
-const defaultSystemPromptInput = document.getElementById('defaultSystemPromptInput');
-const exportConversationsButton = document.getElementById('exportConversationsButton');
-const deleteConversationsButton = document.getElementById('deleteConversationsButton');
-const conversationLanguageSelect = document.getElementById('conversationLanguageSelect');
-const conversationLanguageHelp = document.getElementById('conversationLanguageHelp');
-const enableModelThinkingToggle = document.getElementById('enableModelThinkingToggle');
-const enableModelThinkingHelp = document.getElementById('enableModelThinkingHelp');
-const modelSelect = document.getElementById('modelSelect');
-const modelCardList = document.getElementById('modelCardList');
-const backendSelect = document.getElementById('backendSelect');
-const cpuThreadsInput = document.getElementById('cpuThreadsInput');
-const clearModelDownloadsButton = document.getElementById('clearModelDownloadsButton');
-const maxOutputTokensInput = document.getElementById('maxOutputTokensInput');
-const maxContextTokensInput = document.getElementById('maxContextTokensInput');
-const temperatureInput = document.getElementById('temperatureInput');
-const resetContextTokensButton = document.getElementById('resetContextTokensButton');
-const resetTemperatureButton = document.getElementById('resetTemperatureButton');
-const resetTopKButton = document.getElementById('resetTopKButton');
-const resetTopPButton = document.getElementById('resetTopPButton');
-const topKInput = document.getElementById('topKInput');
-const topPInput = document.getElementById('topPInput');
-const maxOutputTokensHelp = document.getElementById('maxOutputTokensHelp');
-const maxContextTokensHelp = document.getElementById('maxContextTokensHelp');
-const temperatureHelp = document.getElementById('temperatureHelp');
-const topKHelp = document.getElementById('topKHelp');
-const topPHelp = document.getElementById('topPHelp');
-const statusRegion = document.getElementById('statusRegion');
-const statusRegionHeading = document.getElementById('statusRegionHeading');
-const statusRegionMessage = document.getElementById('statusRegionMessage');
-const skipLinkElements = Array.from(document.querySelectorAll('.skip-link[data-skip-target]'));
-const appChrome = document.querySelector('.app-chrome');
-const startConversationButton = document.getElementById('startConversationButton');
-const debugLogPanel = document.getElementById('debugLogPanel');
-const modelLoadFeedback = document.getElementById('modelLoadFeedback');
-const transcriptModelLoadFeedbackHost = document.getElementById('transcriptModelLoadFeedbackHost');
-const modelLoadProgressWrap = document.getElementById('modelLoadProgressWrap');
-const modelLoadProgressLabel = document.getElementById('modelLoadProgressLabel');
-const modelLoadProgressValue = document.getElementById('modelLoadProgressValue');
-const modelLoadProgressBar = document.getElementById('modelLoadProgressBar');
-const modelLoadProgressSummary = document.getElementById('modelLoadProgressSummary');
-const modelLoadCurrentFileLabel = document.getElementById('modelLoadCurrentFileLabel');
-const modelLoadCurrentFileValue = document.getElementById('modelLoadCurrentFileValue');
-const modelLoadCurrentFileBar = document.getElementById('modelLoadCurrentFileBar');
-const modelLoadError = document.getElementById('modelLoadError');
-const modelLoadErrorSummary = document.getElementById('modelLoadErrorSummary');
-const modelLoadErrorDetails = document.getElementById('modelLoadErrorDetails');
-const sendButton = document.getElementById('sendButton');
-const conversationList = document.getElementById('conversationList');
-const newConversationBtn = document.getElementById('newConversationBtn');
-const newAgentBtn = document.getElementById('newAgentBtn');
-const chatForm = document.querySelector('.composer');
-const imageAttachmentInput = document.getElementById('imageAttachmentInput');
-const composerAttachmentTray = document.getElementById('composerAttachmentTray');
-const addImagesButton = document.getElementById('addImagesButton');
-const attachReferenceMenuItem = document.getElementById('attachReferenceMenuItem');
-const attachWorkWithMenuItem = document.getElementById('attachWorkWithMenuItem');
-const messageInput = document.getElementById('messageInput');
-const chatTranscript = document.getElementById('chatTranscript');
-const chatTranscriptWrap = document.getElementById('chatTranscriptWrap');
-const chatTranscriptStart = document.getElementById('chatTranscriptStart');
-const chatTranscriptEnd = document.getElementById('chatTranscriptEnd');
-const taskListTray = document.getElementById('taskListTray');
-const jumpToTopButton = document.getElementById('jumpToTopButton');
-const jumpToPreviousUserButton = document.getElementById('jumpToPreviousUserButton');
-const jumpToNextModelButton = document.getElementById('jumpToNextModelButton');
-const jumpToLatestButton = document.getElementById('jumpToLatestButton');
-const chatMain = document.querySelector('.chat-main');
+const themeSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('themeSelect'));
+const showThinkingToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('showThinkingToggle'));
+const enableToolCallingToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('enableToolCallingToggle'));
+const toolSettingsList = /** @type {HTMLElement | null} */ (document.getElementById('toolSettingsList'));
+const skillPackageForm = /** @type {HTMLFormElement | null} */ (document.getElementById('skillPackageForm'));
+const skillPackageInput = /** @type {HTMLInputElement | null} */ (document.getElementById('skillPackageInput'));
+const addSkillPackageButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('addSkillPackageButton'));
+const skillPackageAddFeedback = /** @type {HTMLElement | null} */ (document.getElementById('skillPackageAddFeedback'));
+const skillsList = /** @type {HTMLElement | null} */ (document.getElementById('skillsList'));
+const cloudProviderForm = /** @type {HTMLFormElement | null} */ (document.getElementById('cloudProviderForm'));
+const cloudProviderEndpointInput = /** @type {HTMLInputElement | null} */ (document.getElementById('cloudProviderEndpointInput'));
+const cloudProviderApiKeyInput = /** @type {HTMLInputElement | null} */ (document.getElementById('cloudProviderApiKeyInput'));
+const addCloudProviderButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('addCloudProviderButton'));
+const cloudProviderAddFeedback = /** @type {HTMLElement | null} */ (document.getElementById('cloudProviderAddFeedback'));
+const cloudProvidersList = /** @type {HTMLElement | null} */ (document.getElementById('cloudProvidersList'));
+const corsProxyForm = /** @type {HTMLFormElement | null} */ (document.getElementById('corsProxyForm'));
+const corsProxyInput = /** @type {HTMLInputElement | null} */ (document.getElementById('corsProxyInput'));
+const saveCorsProxyButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('saveCorsProxyButton'));
+const clearCorsProxyButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('clearCorsProxyButton'));
+const corsProxyFeedback = /** @type {HTMLElement | null} */ (document.getElementById('corsProxyFeedback'));
+const mcpServerEndpointForm = /** @type {HTMLFormElement | null} */ (document.getElementById('mcpServerEndpointForm'));
+const mcpServerEndpointInput = /** @type {HTMLInputElement | null} */ (document.getElementById('mcpServerEndpointInput'));
+const addMcpServerButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('addMcpServerButton'));
+const mcpServerAddFeedback = /** @type {HTMLElement | null} */ (document.getElementById('mcpServerAddFeedback'));
+const mcpServersList = /** @type {HTMLElement | null} */ (document.getElementById('mcpServersList'));
+const renderMathMlToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('renderMathMlToggle'));
+const defaultSystemPromptInput = /** @type {HTMLTextAreaElement | null} */ (document.getElementById('defaultSystemPromptInput'));
+const exportConversationsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('exportConversationsButton'));
+const deleteConversationsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('deleteConversationsButton'));
+const conversationLanguageSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('conversationLanguageSelect'));
+const conversationLanguageHelp = /** @type {HTMLElement | null} */ (document.getElementById('conversationLanguageHelp'));
+const enableModelThinkingToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('enableModelThinkingToggle'));
+const enableModelThinkingHelp = /** @type {HTMLElement | null} */ (document.getElementById('enableModelThinkingHelp'));
+const modelSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('modelSelect'));
+const modelCardList = /** @type {HTMLElement | null} */ (document.getElementById('modelCardList'));
+const backendSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('backendSelect'));
+const cpuThreadsInput = /** @type {HTMLInputElement | null} */ (document.getElementById('cpuThreadsInput'));
+const clearModelDownloadsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('clearModelDownloadsButton'));
+const maxOutputTokensInput = /** @type {HTMLInputElement | null} */ (document.getElementById('maxOutputTokensInput'));
+const maxContextTokensInput = /** @type {HTMLInputElement | null} */ (document.getElementById('maxContextTokensInput'));
+const temperatureInput = /** @type {HTMLInputElement | null} */ (document.getElementById('temperatureInput'));
+const resetContextTokensButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('resetContextTokensButton'));
+const resetTemperatureButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('resetTemperatureButton'));
+const resetTopKButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('resetTopKButton'));
+const resetTopPButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('resetTopPButton'));
+const topKInput = /** @type {HTMLInputElement | null} */ (document.getElementById('topKInput'));
+const topPInput = /** @type {HTMLInputElement | null} */ (document.getElementById('topPInput'));
+const maxOutputTokensHelp = /** @type {HTMLElement | null} */ (document.getElementById('maxOutputTokensHelp'));
+const maxContextTokensHelp = /** @type {HTMLElement | null} */ (document.getElementById('maxContextTokensHelp'));
+const temperatureHelp = /** @type {HTMLElement | null} */ (document.getElementById('temperatureHelp'));
+const topKHelp = /** @type {HTMLElement | null} */ (document.getElementById('topKHelp'));
+const topPHelp = /** @type {HTMLElement | null} */ (document.getElementById('topPHelp'));
+const statusRegion = /** @type {HTMLElement | null} */ (document.getElementById('statusRegion'));
+const statusRegionHeading = /** @type {HTMLElement | null} */ (document.getElementById('statusRegionHeading'));
+const statusRegionMessage = /** @type {HTMLElement | null} */ (document.getElementById('statusRegionMessage'));
+const skipLinkElements = /** @type {HTMLElement[]} */ (Array.from(document.querySelectorAll('.skip-link[data-skip-target]')));
+const appChrome = /** @type {HTMLElement | null} */ (document.querySelector('.app-chrome'));
+const startConversationButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('startConversationButton'));
+const debugLogPanel = /** @type {HTMLElement | null} */ (document.getElementById('debugLogPanel'));
+const modelLoadFeedback = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadFeedback'));
+const transcriptModelLoadFeedbackHost = /** @type {HTMLElement | null} */ (document.getElementById('transcriptModelLoadFeedbackHost'));
+const modelLoadProgressWrap = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadProgressWrap'));
+const modelLoadProgressLabel = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadProgressLabel'));
+const modelLoadProgressValue = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadProgressValue'));
+const modelLoadProgressBar = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadProgressBar'));
+const modelLoadProgressSummary = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadProgressSummary'));
+const modelLoadCurrentFileLabel = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadCurrentFileLabel'));
+const modelLoadCurrentFileValue = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadCurrentFileValue'));
+const modelLoadCurrentFileBar = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadCurrentFileBar'));
+const modelLoadError = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadError'));
+const modelLoadErrorSummary = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadErrorSummary'));
+const modelLoadErrorDetails = /** @type {HTMLElement | null} */ (document.getElementById('modelLoadErrorDetails'));
+const sendButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('sendButton'));
+const conversationList = /** @type {HTMLElement | null} */ (document.getElementById('conversationList'));
+const newConversationBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('newConversationBtn'));
+const newAgentBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('newAgentBtn'));
+const chatForm = /** @type {HTMLFormElement | null} */ (document.querySelector('.composer'));
+const imageAttachmentInput = /** @type {HTMLInputElement | null} */ (document.getElementById('imageAttachmentInput'));
+const composerAttachmentTray = /** @type {HTMLElement | null} */ (document.getElementById('composerAttachmentTray'));
+const addImagesButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('addImagesButton'));
+const attachReferenceMenuItem = /** @type {HTMLElement | null} */ (document.getElementById('attachReferenceMenuItem'));
+const attachWorkWithMenuItem = /** @type {HTMLElement | null} */ (document.getElementById('attachWorkWithMenuItem'));
+const messageInput = /** @type {HTMLTextAreaElement | null} */ (document.getElementById('messageInput'));
+const chatTranscript = /** @type {HTMLElement | null} */ (document.getElementById('chatTranscript'));
+const chatTranscriptWrap = /** @type {HTMLElement | null} */ (document.getElementById('chatTranscriptWrap'));
+const chatTranscriptStart = /** @type {HTMLElement | null} */ (document.getElementById('chatTranscriptStart'));
+const chatTranscriptEnd = /** @type {HTMLElement | null} */ (document.getElementById('chatTranscriptEnd'));
+const taskListTray = /** @type {HTMLElement | null} */ (document.getElementById('taskListTray'));
+const jumpToTopButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('jumpToTopButton'));
+const jumpToPreviousUserButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('jumpToPreviousUserButton'));
+const jumpToNextModelButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('jumpToNextModelButton'));
+const jumpToLatestButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('jumpToLatestButton'));
+const chatMain = /** @type {HTMLElement | null} */ (document.querySelector('.chat-main'));
 let isTaskListTrayExpanded = false;
 const homePanel = document.getElementById('homePanel');
 const preChatPanel = document.getElementById('preChatPanel');
@@ -367,15 +369,15 @@ const agentFollowUpCountdown = document.getElementById('agentFollowUpCountdown')
 const agentFollowUpCountdownText = document.getElementById('agentFollowUpCountdownText');
 const agentFollowUpAutomationHelp = document.getElementById('agentFollowUpAutomationHelp');
 const agentFollowUpCountdownLive = document.getElementById('agentFollowUpCountdownLive');
-const chatTitleInput = document.getElementById('chatTitleInput');
-const saveChatTitleBtn = document.getElementById('saveChatTitleBtn');
-const cancelChatTitleBtn = document.getElementById('cancelChatTitleBtn');
-const openKeyboardShortcutsButton = document.getElementById('openKeyboardShortcutsButton');
-const openKeyboardShortcutsMobileButton = document.getElementById(
-  'openKeyboardShortcutsMobileButton'
+const chatTitleInput = /** @type {HTMLInputElement | null} */ (document.getElementById('chatTitleInput'));
+const saveChatTitleBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('saveChatTitleBtn'));
+const cancelChatTitleBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('cancelChatTitleBtn'));
+const openKeyboardShortcutsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('openKeyboardShortcutsButton'));
+const openKeyboardShortcutsMobileButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('openKeyboardShortcutsMobileButton')
 );
-const keyboardShortcutsModal = document.getElementById('keyboardShortcutsModal');
-const conversationPanelCollapseButton = document.getElementById('conversationPanelCollapseButton');
+const keyboardShortcutsModal = /** @type {HTMLElement | null} */ (document.getElementById('keyboardShortcutsModal'));
+const conversationPanelCollapseButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('conversationPanelCollapseButton'));
 const conversationPanelCollapseButtonText = document.getElementById(
   'conversationPanelCollapseButtonText'
 );
@@ -401,20 +403,20 @@ const agentPromptFields = document.getElementById('agentPromptFields');
 const agentPromptNameInput = document.getElementById('agentPromptNameInput');
 const agentPromptPersonalityInput = document.getElementById('agentPromptPersonalityInput');
 const saveConversationSystemPromptBtn = document.getElementById('saveConversationSystemPromptBtn');
-const openSettingsButton = document.getElementById('openSettingsButton');
-const closeSettingsButton = document.getElementById('closeSettingsButton');
-const enableSingleKeyShortcutsToggle = document.getElementById('enableSingleKeyShortcutsToggle');
-const transcriptViewSelect = document.getElementById('transcriptViewSelect');
+const openSettingsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('openSettingsButton'));
+const closeSettingsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('closeSettingsButton'));
+const enableSingleKeyShortcutsToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('enableSingleKeyShortcutsToggle'));
+const transcriptViewSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('transcriptViewSelect'));
 const settingsPage = document.getElementById('settingsPage');
 const terminalPanel = document.getElementById('terminalPanel');
 const terminalHost = document.getElementById('terminalHost');
-const closeTerminalButton = document.getElementById('closeTerminalButton');
-const settingsTabContainer = document.querySelector('.settings-tabs');
+const closeTerminalButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('closeTerminalButton'));
+const settingsTabContainer = /** @type {HTMLElement | null} */ (document.querySelector('.settings-tabs'));
 const settingsTabButtons = settingsTabContainer
-  ? settingsTabContainer.querySelectorAll('[data-settings-tab]')
+  ? Array.from(settingsTabContainer.querySelectorAll('[data-settings-tab]'))
   : [];
 const settingsTabPanels = settingsPage
-  ? settingsPage.querySelectorAll('[data-settings-tab-panel]')
+  ? Array.from(settingsPage.querySelectorAll('[data-settings-tab-panel]'))
   : [];
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -644,6 +646,9 @@ const {
   isEngineReady,
 });
 
+/**
+ * @param {Element | Document | null | undefined} [root=document]
+ */
 function initializeTooltips(root = document) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
     return;
@@ -723,6 +728,9 @@ function clearUserMessageEditSession() {
   clearUserMessageEditState(appState);
 }
 
+/**
+ * @param {Element | Document | null | undefined} root
+ */
 function disposeTooltips(root) {
   if (!root || !(root instanceof Element || root instanceof Document)) {
     return;
@@ -1066,7 +1074,7 @@ function ensureMathJaxLoaded() {
   if (!appState.renderMathMl) {
     return Promise.resolve();
   }
-  if (window.MathJax?.typesetPromise && window.MathJax?.startup?.promise) {
+  if (mathJaxWindow.MathJax?.typesetPromise && mathJaxWindow.MathJax?.startup?.promise) {
     return Promise.resolve();
   }
   if (!appState.mathJaxLoadPromise) {
@@ -1091,7 +1099,7 @@ async function typesetMathInElement(element) {
     return;
   }
   await ensureMathJaxLoaded();
-  const mathJax = window.MathJax;
+  const mathJax = mathJaxWindow.MathJax;
   if (!mathJax?.typesetPromise || !mathJax.startup?.promise) {
     return;
   }
@@ -2786,7 +2794,7 @@ function exportAllConversations() {
     getStoredGenerationConfigForModel,
     getModelGenerationLimits,
   });
-  const blob = new Blob([bytes], { type: 'application/zip' });
+  const blob = new Blob([Uint8Array.from(bytes)], { type: 'application/zip' });
   triggerDownload(blob, archiveFileName);
   setStatus('Conversations exported as a zip archive.');
 }
@@ -3507,13 +3515,16 @@ async function clearSelectedModelDownloads() {
     let filesCached = 0;
 
     for (const plan of clearPlans) {
-      const result = await ModelRegistry.clear_cache(selectedModelId, {
-        ...(revision ? { revision } : {}),
-        ...(plan.dtype ? { dtype: plan.dtype } : {}),
-        device: plan.device,
-        include_tokenizer: plan.includeTokenizer !== false,
-        include_processor: plan.includeProcessor !== false,
-      });
+      const result = await ModelRegistry.clear_cache(
+        selectedModelId,
+        /** @type {any} */ ({
+          ...(revision ? { revision } : {}),
+          ...(plan.dtype ? { dtype: plan.dtype } : {}),
+          device: plan.device,
+          include_tokenizer: plan.includeTokenizer !== false,
+          include_processor: plan.includeProcessor !== false,
+        })
+      );
       filesDeleted += Number(result?.filesDeleted) || 0;
       filesCached += Number(result?.filesCached) || 0;
     }
@@ -3683,7 +3694,6 @@ const preferencesController = createPreferencesController({
   saveSkillPackage,
   removeSkillPackage: deleteSkillPackage,
   mcpServerEndpointInput,
-  addMcpServerButton,
   mcpServerAddFeedback,
   mcpServersList,
   renderMathMlToggle,
@@ -4264,7 +4274,6 @@ bindSettingsEvents({
   mcpServerEndpointForm,
   mcpServerEndpointInput,
   addMcpServerButton,
-  mcpServerAddFeedback,
   mcpServersList,
   renderMathMlToggle,
   enableSingleKeyShortcutsToggle,
@@ -4438,7 +4447,6 @@ bindComposerEvents({
   persistInferencePreferences,
   initializeEngine: () => appController.initializeEngine(),
   setModelLoadFeedbackContext,
-  appendDebug,
   syncRouteToState: syncRouteToCurrentState,
   buildUserMessageAttachmentPayload,
   beforeStartGeneration: async (conversation, userMessage) => {

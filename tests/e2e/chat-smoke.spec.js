@@ -3,7 +3,7 @@ const { installMockWorker } = require('./helpers/mock-engine');
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(installMockWorker);
-  await page.goto('/');
+  await page.goto('./');
 });
 
 async function ensureComposerVisible(page) {

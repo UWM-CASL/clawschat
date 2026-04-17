@@ -113,8 +113,10 @@ export function createAppState({
     isConversationSystemPromptModalOpen: false,
     keyboardShortcutsModalInstance: null,
     conversationSystemPromptModalInstance: null,
-    workspaceView: WORKSPACE_VIEWS.HOME,
-    currentWorkspaceView: 'home',
+    workspaceView: /** @type {'home' | 'prechat' | 'chat' | 'settings'} */ (WORKSPACE_VIEWS.HOME),
+    currentWorkspaceView: /** @type {'home' | 'prechat' | 'chat' | 'settings'} */ (
+      WORKSPACE_VIEWS.HOME
+    ),
     ignoreNextHashChange: false,
     loadProgressFiles: new Map(),
     loadProgressSequence: 0,

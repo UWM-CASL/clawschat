@@ -27,8 +27,8 @@ describe('llm.worker ensureMultimodalProcessor', () => {
 
     const { ensureMultimodalProcessor } = await import('../../src/workers/llm.worker.js');
 
-    const first = await ensureMultimodalProcessor('test-model', progressCallback);
-    const second = await ensureMultimodalProcessor('test-model', progressCallback);
+    const first = await ensureMultimodalProcessor('test-model', {}, progressCallback);
+    const second = await ensureMultimodalProcessor('test-model', {}, progressCallback);
 
     expect(first).toEqual({ tokenizer });
     expect(second).toBe(first);

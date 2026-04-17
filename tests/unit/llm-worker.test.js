@@ -9,7 +9,6 @@ let buildMultimodalDecodeOptions;
 let getBackendAttemptOrder;
 let configureOnnxWasmBackend;
 let prepareTextGenerationInputs;
-let decodePreparedTextPrompt;
 let resolveGenerationMaxLength;
 let resolveBackendLabel;
 let ONNX_WASM_PROXY_ENABLED;
@@ -30,7 +29,6 @@ beforeAll(async () => {
     getBackendAttemptOrder,
     configureOnnxWasmBackend,
     prepareTextGenerationInputs,
-    decodePreparedTextPrompt,
     resolveGenerationMaxLength,
     resolveBackendLabel,
     ONNX_WASM_PROXY_ENABLED,
@@ -252,25 +250,6 @@ describe('llm.worker text prompt preparation', () => {
       })
     );
   });
-
-  test('decodes prepared text-generation inputs back into a prompt string for pipeline execution', () => {
-    const batchDecode = vi.fn(() => ['<s>Prompt text']);
-    const tokenizer = {
-      batch_decode: batchDecode,
-    };
-
-    expect(
-      decodePreparedTextPrompt(tokenizer, {
-        modelInputs: {
-          input_ids: [[11, 12, 13]],
-        },
-      })
-    ).toBe('<s>Prompt text');
-    expect(batchDecode).toHaveBeenCalledWith([[11, 12, 13]], {
-      skip_special_tokens: false,
-      clean_up_tokenization_spaces: false,
-    });
-  });
 });
 
 describe('llm.worker backend selection', () => {
@@ -331,6 +310,10 @@ describe('llm.worker wasm backend config', () => {
       backend: 'wasm',
       proxy: true,
       numThreads: 0,
+      wasmPaths: expect.objectContaining({
+        mjs: expect.any(String),
+        wasm: expect.any(String),
+      }),
     });
   });
 
@@ -350,6 +333,10 @@ describe('llm.worker wasm backend config', () => {
       backend: 'default',
       proxy: true,
       numThreads: 0,
+      wasmPaths: expect.objectContaining({
+        mjs: expect.any(String),
+        wasm: expect.any(String),
+      }),
     });
   });
 
@@ -369,6 +356,10 @@ describe('llm.worker wasm backend config', () => {
       backend: 'webgpu',
       proxy: true,
       numThreads: 0,
+      wasmPaths: expect.objectContaining({
+        mjs: expect.any(String),
+        wasm: expect.any(String),
+      }),
     });
   });
 
@@ -388,6 +379,10 @@ describe('llm.worker wasm backend config', () => {
       backend: 'wasm',
       proxy: true,
       numThreads: 3,
+      wasmPaths: expect.objectContaining({
+        mjs: expect.any(String),
+        wasm: expect.any(String),
+      }),
     });
   });
 

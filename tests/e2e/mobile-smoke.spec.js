@@ -5,7 +5,7 @@ const MOBILE_TERMINAL_CONVERSATION_ID = 'conversation-mobile-terminal';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(installMockWorker);
-  await page.goto('/');
+  await page.goto('./');
 });
 
 async function startConversation(page) {
@@ -284,7 +284,7 @@ test('mobile terminal history opens as a full-screen sheet and closes cleanly', 
   await seedTerminalConversation(page);
   const hydratedPage = await page.context().newPage();
   await hydratedPage.addInitScript(installMockWorker);
-  await hydratedPage.goto('/#/chat');
+  await hydratedPage.goto('./#/chat');
   await hydratedPage.getByRole('button', { name: 'Conversations' }).click();
   await hydratedPage.getByRole('button', { name: 'Terminal session' }).click();
 

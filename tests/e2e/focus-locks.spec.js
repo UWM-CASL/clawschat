@@ -160,7 +160,7 @@ async function ensureComposerVisible(page) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(installSlowRenameMockWorker);
-  await page.goto('/');
+  await page.goto('./');
 });
 
 test('new conversation stays clickable while background title generation is pending', async ({
