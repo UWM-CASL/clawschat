@@ -42,10 +42,12 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm exec vite build && pnpm exec vite preview --host 127.0.0.1 --port ${previewPort} --strictPort`,
+    command: `pnpm exec vite build && node tests/e2e/helpers/serve-dist.js`,
     env: {
       ...process.env,
       VITE_BASE_PATH: basePath,
+      PLAYWRIGHT_BASE_PATH: basePath,
+      PLAYWRIGHT_PORT: String(previewPort),
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,

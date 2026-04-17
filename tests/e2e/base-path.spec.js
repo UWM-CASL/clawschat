@@ -18,9 +18,9 @@ async function expectLocation(page, expectedPathname, expectedHash = '') {
   await expect
     .poll(() => {
       const url = new URL(page.url());
-      return `${url.pathname}${url.hash}`;
+      return `${normalizeBasePath(url.pathname)}${url.hash}`;
     })
-    .toBe(`${expectedPathname}${expectedHash}`);
+    .toBe(`${normalizeBasePath(expectedPathname)}${expectedHash}`);
 }
 
 test('app navigation stays inside the configured GitHub Pages base path', async ({ page }) => {
