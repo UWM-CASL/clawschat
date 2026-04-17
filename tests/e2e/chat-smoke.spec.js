@@ -187,3 +187,73 @@ test('stop generating cancels in-flight stream and resets UI', async ({ page }) 
   await expect(page.locator('#debugLogPanel')).toContainText('Generation canceled by user.');
   await expect(page.locator('#sendButton')).toHaveAttribute('aria-label', 'Send message');
 });
+
+test('custom orchestrations can be saved and run from slash commands', async ({ page }) => {
+  await page.getByRole('button', { name: 'Start a conversation' }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await ensureComposerVisible(page);
+
+  await page.locator('#messageInput').fill('Prime the model');
+  await page.locator('#sendButton').click();
+  await expect(page.locator('.message-row.model-message .response-content')).toContainText(
+    'Mock streamed response.'
+  );
+  await expect(page.locator('.conversation-item .conversation-select').first()).not.toHaveText(
+    'New Conversation'
+  );
+
+  await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('tab', { name: 'Orchestrations' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Orchestrations' })).toBeVisible();
+
+  await page.locator('#orchestrationNameInput').fill('Outline Energy');
+  await expect(page.locator('#orchestrationSlashCommandInput')).toHaveValue('outline-energy');
+  await page.locator('#orchestrationDefinitionInput').fill(`{
+  "id": "outline-energy",
+  "description": "Echo the slash command input.",
+  "steps": [
+    {
+      "prompt": "Command {{slashCommand}} input: {{commandInput}}",
+      "responseFormat": {
+        "type": "plain_text",
+        "instructions": "Return plain text only."
+      },
+      "outputProcessing": {
+        "stripThinking": true
+      }
+    }
+  ]
+}`);
+  await page.locator('#orchestrationSaveButton').click();
+  await expect(page.locator('#orchestrationImportFeedback')).toContainText(
+    'Use /outline-energy to run it.'
+  );
+
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/#\/chat\/[0-9a-f-]+$/);
+
+  await page.locator('#messageInput').fill('/outline-energy solar power');
+  await page.locator('#sendButton').click();
+
+  await expect(page.locator('.message-row.user-message').last()).toContainText(
+    '/outline-energy solar power'
+  );
+  await expect(page.locator('.message-row.model-message .response-content').last()).toContainText(
+    'Mock streamed response.'
+  );
+
+  const lastPromptText = await page.evaluate(() => {
+    const payloads = Array.isArray(/** @type {any} */ (window).__mockWorkerGeneratePayloads)
+      ? /** @type {any} */ (window).__mockWorkerGeneratePayloads
+      : [];
+    const lastPayload = payloads[payloads.length - 1];
+    if (Array.isArray(lastPayload)) {
+      return lastPayload
+        .map((entry) => (typeof entry?.content === 'string' ? entry.content : ''))
+        .join('\n');
+    }
+    return String(lastPayload || '');
+  });
+
+  expect(lastPromptText).toContain('Command /outline-energy input: solar power');
+});

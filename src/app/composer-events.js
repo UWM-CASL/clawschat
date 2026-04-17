@@ -28,6 +28,7 @@
  *   isProcessingComposerAttachments?: () => boolean;
  *   renderComposerAttachments: () => void;
  *   updateActionButtons?: () => void;
+ *   matchCustomOrchestrationSlashCommand?: (rawValue: string) => any;
  *   setStatus: (message: string) => void;
  *   clearPendingComposerAttachments: () => void;
  *   createConversation: () => any;
@@ -50,6 +51,7 @@
  *   addMessageToConversation: (conversation: any, role: string, text: string, options?: any) => any;
  *   addMessageElement: (message: any) => void;
  *   buildPromptForActiveConversation: (conversation: any) => any;
+ *   runCustomOrchestrationFromMessage?: (_userMessage: any, _invocation: any) => boolean | Promise<boolean>;
  *   startModelGeneration: (conversation: any, prompt: any, options?: any) => any;
  *   stopGeneration: () => Promise<any>;
  * }} options
@@ -83,6 +85,7 @@ export function bindComposerEvents({
   isProcessingComposerAttachments = () => false,
   renderComposerAttachments,
   updateActionButtons = () => {},
+  matchCustomOrchestrationSlashCommand = (_rawValue) => null,
   setStatus,
   clearPendingComposerAttachments,
   createConversation,
@@ -105,6 +108,7 @@ export function bindComposerEvents({
   addMessageToConversation,
   addMessageElement,
   buildPromptForActiveConversation,
+  runCustomOrchestrationFromMessage = (_userMessage, _invocation) => false,
   startModelGeneration,
   stopGeneration,
 }) {
@@ -536,6 +540,19 @@ export function bindComposerEvents({
       messageInput.value = value;
     }
 
+    const customOrchestrationSlashCommand =
+      typeof matchCustomOrchestrationSlashCommand === 'function'
+        ? matchCustomOrchestrationSlashCommand(value)
+        : null;
+    if (customOrchestrationSlashCommand && hasAttachments) {
+      setStatus(
+        `Remove pending attachments before using ${
+          customOrchestrationSlashCommand.slashCommand || '/command'
+        }.`
+      );
+      return;
+    }
+
     if (!hasStartedWorkspace(appState)) {
       setChatWorkspaceStarted(appState, true);
       updateWelcomePanelVisibility({ replaceRoute: false });
@@ -609,6 +626,12 @@ export function bindComposerEvents({
     messageInput.value = '';
     clearPendingComposerAttachments();
     queueConversationStateSave();
+    if (customOrchestrationSlashCommand) {
+      await Promise.resolve(
+        runCustomOrchestrationFromMessage(userMessage, customOrchestrationSlashCommand)
+      );
+      return;
+    }
     const beforeStartGenerationResult = beforeStartGeneration(activeConversation, userMessage);
     const shouldContinue =
       isPromiseLike(beforeStartGenerationResult)

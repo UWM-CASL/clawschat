@@ -1144,6 +1144,101 @@ describe('app-controller', () => {
     expect(harness.engine.generate).toHaveBeenCalledTimes(1);
   });
 
+  test('runs a custom orchestration slash command and writes direct final output to the transcript', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-custom', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', '/outline energy transfer');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.runOrchestration.mockResolvedValue({
+      finalPrompt: '',
+      finalOutput: 'Energy moves through the system in three steps.',
+    });
+
+    await harness.controller.runCustomOrchestrationFromMessage(userMessage, {
+      commandName: 'outline',
+      slashCommand: '/outline',
+      commandText: '/outline energy transfer',
+      userInput: 'energy transfer',
+      orchestration: {
+        id: 'outline-energy',
+        name: 'Outline',
+        slashCommandName: 'outline',
+        definition: {
+          id: 'outline-energy',
+          steps: [{ prompt: 'Outline {{userInput}}' }],
+        },
+      },
+    });
+
+    expect(harness.dependencies.runOrchestration).toHaveBeenCalledWith(
+      {
+        id: 'outline-energy',
+        steps: [{ prompt: 'Outline {{userInput}}' }],
+      },
+      expect.objectContaining({
+        userInput: 'energy transfer',
+        slashCommand: '/outline',
+        slashCommandName: 'outline',
+      }),
+      {
+        runFinalStep: false,
+      }
+    );
+    const modelMessage = conversation.messageNodes.find(
+      (message) => message.role === 'model' && message.parentId === userMessage.id
+    );
+    expect(modelMessage?.text).toBe('Energy moves through the system in three steps.');
+    expect(modelMessage?.isResponseComplete).toBe(true);
+    expect(harness.callLog).toContain('status:/outline complete.');
+  });
+
+  test('runs a custom orchestration slash command and streams the deferred final prompt', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-streamed-custom', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(
+      conversation,
+      'user',
+      '/rewrite make this cleaner'
+    );
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.runOrchestration.mockResolvedValue({
+      finalPrompt: 'Rewrite the draft clearly.',
+      finalOutput: '',
+    });
+    harness.engine.generate.mockImplementation((_prompt, handlers) => {
+      handlers.onComplete('Here is a cleaner rewrite.');
+    });
+
+    await harness.controller.runCustomOrchestrationFromMessage(userMessage, {
+      commandName: 'rewrite',
+      slashCommand: '/rewrite',
+      commandText: '/rewrite make this cleaner',
+      userInput: 'make this cleaner',
+      orchestration: {
+        id: 'rewrite-command',
+        name: 'Rewrite',
+        slashCommandName: 'rewrite',
+        definition: {
+          id: 'rewrite-command',
+          steps: [{ prompt: 'Rewrite {{userInput}}' }],
+        },
+      },
+    });
+
+    await Promise.resolve();
+
+    expect(harness.engine.generate).toHaveBeenCalledTimes(1);
+    expect(harness.engine.generate.mock.calls[0][0]).toBe('Rewrite the draft clearly.');
+    const modelMessage = conversation.messageNodes.find(
+      (message) => message.role === 'model' && message.parentId === userMessage.id
+    );
+    expect(modelMessage?.text).toBe('Here is a cleaner rewrite.');
+  });
+
   test('queues conversation persistence after completion instead of on every streamed token', () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });

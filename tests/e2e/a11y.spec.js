@@ -102,3 +102,17 @@ test('@a11y settings screen keyboard open/close and no wcag2a/2aa violations', a
   await expect(page).toHaveURL(/#\/$/);
   await expect(settingsButton).toBeFocused();
 });
+
+test('@a11y orchestration settings tab is reachable and violation free', async ({ page }) => {
+  const settingsButton = page.getByRole('button', { name: 'Open settings' });
+  await settingsButton.click();
+  await expect(page).toHaveURL(/#\/chat\/settings$/);
+
+  await page.getByRole('tab', { name: 'Orchestrations' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Orchestrations' })).toBeVisible();
+  await expect(page.locator('#orchestrationEditorForm')).toBeVisible();
+  await expect(page.locator('#orchestrationImportInput')).toBeVisible();
+  await expect(page.locator('#customOrchestrationsList')).toBeVisible();
+  await expect(page.locator('#builtInOrchestrationsList')).toBeVisible();
+  await expectNoCriticalA11yViolations(page);
+});

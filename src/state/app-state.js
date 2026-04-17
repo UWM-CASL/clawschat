@@ -40,6 +40,7 @@ export const ORCHESTRATION_KINDS = Object.freeze({
  *   defaultSystemPrompt?: string;
  *   enableToolCalling?: boolean;
  *   enabledToolNames?: string[];
+ *   customOrchestrations?: any[];
  *   skillPackages?: any[];
  *   mcpServers?: any[];
  *   cloudProviders?: any[];
@@ -53,6 +54,7 @@ export function createAppState({
   defaultSystemPrompt = '',
   enableToolCalling = true,
   enabledToolNames = [],
+  customOrchestrations = [],
   skillPackages = [],
   mcpServers = [],
   cloudProviders = [],
@@ -88,6 +90,7 @@ export function createAppState({
     showThinkingByDefault: false,
     enableToolCalling: Boolean(enableToolCalling),
     enabledToolNames: Array.isArray(enabledToolNames) ? [...enabledToolNames] : [],
+    customOrchestrations: Array.isArray(customOrchestrations) ? [...customOrchestrations] : [],
     skillPackages: Array.isArray(skillPackages) ? [...skillPackages] : [],
     mcpServers: Array.isArray(mcpServers) ? [...mcpServers] : [],
     cloudProviders: Array.isArray(cloudProviders) ? [...cloudProviders] : [],

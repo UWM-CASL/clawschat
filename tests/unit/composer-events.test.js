@@ -108,6 +108,7 @@ function createHarness() {
       ),
       renderComposerAttachments: vi.fn(),
       updateActionButtons: vi.fn(),
+      matchCustomOrchestrationSlashCommand: vi.fn(() => null),
       setStatus: vi.fn(),
       clearPendingComposerAttachments: vi.fn(() => {
         appState.pendingComposerAttachments = [];
@@ -130,6 +131,7 @@ function createHarness() {
       addMessageToConversation: vi.fn(() => ({ id: 'message-1' })),
       addMessageElement: vi.fn(),
       buildPromptForActiveConversation: vi.fn(() => 'prompt'),
+      runCustomOrchestrationFromMessage: vi.fn(async () => true),
       startModelGeneration: vi.fn(),
       stopGeneration: vi.fn(async () => {}),
     },
@@ -290,6 +292,86 @@ describe('composer-events', () => {
     );
     expect(harness.deps.preparePendingConversationDraft).not.toHaveBeenCalled();
     expect(harness.deps.createConversation).not.toHaveBeenCalled();
+  });
+
+  test('runs a saved custom orchestration slash command instead of normal generation', async () => {
+    const harness = createHarness();
+    harness.appState.pendingComposerAttachments = [];
+    harness.deps.getPendingComposerAttachments.mockImplementation(
+      () => harness.appState.pendingComposerAttachments
+    );
+    harness.deps.isEngineReady.mockReturnValue(true);
+    harness.deps.getLoadedModelId.mockReturnValue('model-1');
+    harness.deps.matchCustomOrchestrationSlashCommand.mockReturnValue({
+      commandName: 'summarize',
+      slashCommand: '/summarize',
+      commandText: '/summarize Draft the key points.',
+      userInput: 'Draft the key points.',
+      orchestration: {
+        id: 'custom-summary',
+        name: 'Summarize',
+        slashCommandName: 'summarize',
+        definition: {
+          id: 'custom-summary',
+          steps: [{ prompt: 'Summarize {{userInput}}' }],
+        },
+      },
+    });
+    harness.messageInput.value = '/summarize Draft the key points.';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true })
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.addMessageToConversation).toHaveBeenCalledWith(
+      expect.any(Object),
+      'user',
+      '/summarize Draft the key points.',
+      expect.any(Object)
+    );
+    expect(harness.deps.runCustomOrchestrationFromMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'message-1' }),
+      expect.objectContaining({
+        commandName: 'summarize',
+        slashCommand: '/summarize',
+      })
+    );
+    expect(harness.deps.startModelGeneration).not.toHaveBeenCalled();
+  });
+
+  test('blocks saved custom orchestration slash commands while attachments are pending', async () => {
+    const harness = createHarness();
+    harness.deps.matchCustomOrchestrationSlashCommand.mockReturnValue({
+      commandName: 'summarize',
+      slashCommand: '/summarize',
+      commandText: '/summarize Draft the key points.',
+      userInput: 'Draft the key points.',
+      orchestration: {
+        id: 'custom-summary',
+        name: 'Summarize',
+        slashCommandName: 'summarize',
+        definition: {
+          id: 'custom-summary',
+          steps: [{ prompt: 'Summarize {{userInput}}' }],
+        },
+      },
+    });
+    harness.messageInput.value = '/summarize Draft the key points.';
+    bindComposerEvents(harness.deps);
+
+    harness.deps.chatForm.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true })
+    );
+
+    await Promise.resolve();
+
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Remove pending attachments before using /summarize.'
+    );
+    expect(harness.deps.runCustomOrchestrationFromMessage).not.toHaveBeenCalled();
   });
 
   test('blocks submit while attachments are still being prepared', async () => {

@@ -35,6 +35,8 @@ The same centralized state also now carries uploaded skill-package metadata so t
 
 It now also carries browser-saved cloud-provider metadata so the settings accordions, shared model picker, and remote engine runtime all resolve the same selected OpenAI-compatible provider/model inventory.
 
+It also carries the normalized `customOrchestrations` collection loaded from browser-local IndexedDB so the composer slash-command matcher, orchestration settings UI, and import/export flows all resolve the same saved definitions.
+
 ## Current boundary
 
 - `src/state/app-state.js`
@@ -44,6 +46,8 @@ It now also carries browser-saved cloud-provider metadata so the settings accord
   - action sequencing and async lifecycle updates
 - `src/app/composer-runtime.js`
   - pending attachment rendering, payload shaping, and attachment filtering/status text
+- `src/state/orchestration-store.js`
+  - browser-local custom orchestration persistence
 - `src/app/agent-automation.js`
   - agent heartbeat scheduling
   - agent follow-up orchestration

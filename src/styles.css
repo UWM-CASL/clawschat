@@ -2451,6 +2451,21 @@
   vertical-align: top;
 }
 
+.orchestration-definition-preview {
+  max-width: 52rem;
+  max-height: 24rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--surface-elevated) 78%, var(--surface-subtle));
+  color: var(--ink-strong);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .settings-page .form-select,
 .settings-page .form-check-input {
   background-color: var(--control-bg);

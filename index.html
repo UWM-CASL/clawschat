@@ -693,6 +693,17 @@
                     <button
                       type="button"
                       class="nav-link"
+                      id="settingsTabOrchestrations"
+                      role="tab"
+                      data-settings-tab="orchestrations"
+                      aria-controls="settingsOrchestrationsPanel"
+                      aria-selected="false"
+                    >
+                      Orchestrations
+                    </button>
+                    <button
+                      type="button"
+                      class="nav-link"
                       id="settingsTabCloudProviders"
                       role="tab"
                       data-settings-tab="cloudProviders"
@@ -1228,6 +1239,179 @@
                         id="cloudProvidersList"
                         class="accordion settings-accordion"
                         aria-labelledby="cloudProvidersListLabel"
+                      ></div>
+                    </div>
+                  </section>
+
+                  <section
+                    id="settingsOrchestrationsPanel"
+                    class="settings-tab-panel d-none"
+                    role="tabpanel"
+                    data-settings-tab-panel="orchestrations"
+                    aria-labelledby="settingsTabOrchestrations"
+                  >
+                    <h3 class="h6 mb-0" id="settingsOrchestrationsHeading">Orchestrations</h3>
+                    <div class="settings-control-group">
+                      <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+                        <div>
+                          <p class="form-label mb-1" id="orchestrationEditorHeading">
+                            New custom orchestration
+                          </p>
+                          <p class="form-text mt-0 mb-0">
+                            Saved custom orchestrations stay local to this browser. After you save
+                            one, send <code>/command optional text</code> in the composer to run
+                            it. Useful template variables include <code>{{userInput}}</code>,
+                            <code>{{slashCommand}}</code>, and
+                            <code>{{conversationTranscript}}</code>.
+                          </p>
+                        </div>
+                        <button
+                          id="orchestrationResetButton"
+                          type="button"
+                          class="btn btn-outline-secondary btn-sm"
+                        >
+                          Reset draft
+                        </button>
+                      </div>
+                      <form id="orchestrationEditorForm" class="d-flex flex-column gap-3 mt-3">
+                        <input id="orchestrationEditorIdInput" type="hidden" />
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <label class="form-label" for="orchestrationNameInput">Name</label>
+                            <input
+                              id="orchestrationNameInput"
+                              class="form-control"
+                              type="text"
+                              autocomplete="off"
+                              maxlength="80"
+                            />
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label" for="orchestrationSlashCommandInput">
+                              Slash command
+                            </label>
+                            <div class="input-group">
+                              <span class="input-group-text">/</span>
+                              <input
+                                id="orchestrationSlashCommandInput"
+                                class="form-control"
+                                type="text"
+                                inputmode="text"
+                                autocomplete="off"
+                                spellcheck="false"
+                                aria-describedby="orchestrationSlashCommandHelp"
+                              />
+                            </div>
+                            <p id="orchestrationSlashCommandHelp" class="form-text mb-0">
+                              Use letters, numbers, or hyphens only. This command is reserved to
+                              your saved custom orchestration.
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="form-label" for="orchestrationDescriptionInput">
+                            Description
+                          </label>
+                          <textarea
+                            id="orchestrationDescriptionInput"
+                            class="form-control"
+                            rows="2"
+                            maxlength="240"
+                          ></textarea>
+                        </div>
+                        <div>
+                          <label class="form-label" for="orchestrationDefinitionInput">
+                            JSON definition
+                          </label>
+                          <textarea
+                            id="orchestrationDefinitionInput"
+                            class="form-control font-monospace"
+                            rows="18"
+                            spellcheck="false"
+                            aria-describedby="orchestrationDefinitionHelp"
+                          ></textarea>
+                          <p id="orchestrationDefinitionHelp" class="form-text mb-0">
+                            The definition uses the same JSON orchestration step contract as the
+                            built-in workflows. Slash-command runs currently require you to clear
+                            any pending composer attachments first.
+                          </p>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                          <button
+                            id="orchestrationSaveButton"
+                            type="submit"
+                            class="btn btn-primary"
+                          >
+                            Save orchestration
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                    <div class="settings-control-group">
+                      <form id="orchestrationImportForm" class="mcp-server-form">
+                        <label class="form-label" for="orchestrationImportInput">
+                          Import custom orchestrations
+                        </label>
+                        <div class="input-group">
+                          <input
+                            id="orchestrationImportInput"
+                            class="form-control"
+                            type="file"
+                            accept=".json,application/json"
+                            aria-describedby="orchestrationImportHelp orchestrationImportFeedback"
+                          />
+                          <button
+                            id="orchestrationImportButton"
+                            type="submit"
+                            class="btn btn-primary"
+                          >
+                            Import JSON
+                          </button>
+                          <button
+                            id="exportAllOrchestrationsButton"
+                            type="button"
+                            class="btn btn-outline-secondary"
+                          >
+                            Export all
+                          </button>
+                        </div>
+                        <p id="orchestrationImportHelp" class="form-text mb-0">
+                          Import either one exported orchestration JSON file or an exported
+                          collection. Existing slash commands must stay unique in this browser.
+                        </p>
+                        <div
+                          id="orchestrationImportFeedback"
+                          class="d-none mt-3"
+                          aria-live="polite"
+                        ></div>
+                      </form>
+                    </div>
+                    <div class="settings-control-group">
+                      <p class="form-label mb-1" id="customOrchestrationsListLabel">
+                        Saved custom orchestrations
+                      </p>
+                      <p class="form-text mt-0">
+                        Load a saved orchestration into the editor, export it as JSON, or remove it
+                        from this browser.
+                      </p>
+                      <div
+                        id="customOrchestrationsList"
+                        class="accordion settings-accordion"
+                        aria-labelledby="customOrchestrationsListLabel"
+                      ></div>
+                    </div>
+                    <div class="settings-control-group">
+                      <p class="form-label mb-1" id="builtInOrchestrationsListLabel">
+                        Built-in orchestrations
+                      </p>
+                      <p class="form-text mt-0">
+                        These app-managed orchestration definitions are shown for transparency, but
+                        they are read-only here and cannot be changed by the user.
+                      </p>
+                      <div
+                        id="builtInOrchestrationsList"
+                        class="accordion settings-accordion"
+                        aria-labelledby="builtInOrchestrationsListLabel"
                       ></div>
                     </div>
                   </section>

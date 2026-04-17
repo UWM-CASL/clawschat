@@ -58,9 +58,11 @@ import {
   normalizeSkillLookupName,
   parseSkillArchiveBytes,
 } from './skills/skill-packages.js';
+import { matchCustomOrchestrationSlashCommand } from './orchestrations/custom-orchestrations.js';
 import renameChatOrchestration from './config/orchestrations/rename-chat.json';
 import fixResponseOrchestration from './config/orchestrations/fix-response.json';
 import agentFollowUpOrchestration from './config/orchestrations/agent-follow-up.json';
+import pdfToMarkdownOrchestration from './config/orchestrations/pdf-to-markdown.json';
 import summarizeConversationOrchestration from './config/orchestrations/summarize-conversation.json';
 import {
   buildDefaultGenerationConfig,
@@ -123,6 +125,11 @@ import {
   applyStoredConversationState,
   buildConversationStateSnapshot,
 } from './state/conversation-serialization.js';
+import {
+  loadCustomOrchestrations,
+  removeCustomOrchestration,
+  saveCustomOrchestration,
+} from './state/orchestration-store.js';
 import { loadSkillPackages, removeSkillPackage, saveSkillPackage } from './state/skill-store.js';
 import {
   clearSemanticMemories,
@@ -211,6 +218,43 @@ const SUPPORTED_BACKEND_PREFERENCES = new Set(['webgpu', 'cpu']);
 const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
+const BUILT_IN_ORCHESTRATIONS = [
+  {
+    id: 'rename-chat',
+    name: 'Rename Chat',
+    description: 'Generates a concise conversation title after the first exchange.',
+    usageLabel: 'Used for automatic conversation renaming.',
+    definition: renameChatOrchestration,
+  },
+  {
+    id: 'fix-response',
+    name: 'Fix Response',
+    description: 'Critiques, revises, and validates a response before streaming a corrected variant.',
+    usageLabel: 'Used by the transcript Fix action.',
+    definition: fixResponseOrchestration,
+  },
+  {
+    id: 'agent-follow-up',
+    name: 'Agent Follow-up',
+    description: 'Decides whether an active agent should post a short proactive follow-up.',
+    usageLabel: 'Used by scheduled agent follow-up automation.',
+    definition: agentFollowUpOrchestration,
+  },
+  {
+    id: 'summarize-conversation',
+    name: 'Summarize Conversation',
+    description: 'Compacts older agent context into a durable summary node and memory seed.',
+    usageLabel: 'Used by agent-context summarization.',
+    definition: summarizeConversationOrchestration,
+  },
+  {
+    id: 'pdf-to-markdown',
+    name: 'PDF to Markdown',
+    description: 'Chunks extracted PDF text and merges conservative Markdown output.',
+    usageLabel: 'Reserved for built-in document preparation flows.',
+    definition: pdfToMarkdownOrchestration,
+  },
+];
 const CONVERSATION_SAVE_DEBOUNCE_MS = 300;
 const STREAM_UPDATE_INTERVAL_MS = 32;
 const AGENT_FOLLOW_UP_INTERVAL_MS = 15 * 60 * 1000;
@@ -255,6 +299,54 @@ const themeSelect = /** @type {HTMLSelectElement | null} */ (document.getElement
 const showThinkingToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('showThinkingToggle'));
 const enableToolCallingToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('enableToolCallingToggle'));
 const toolSettingsList = /** @type {HTMLElement | null} */ (document.getElementById('toolSettingsList'));
+const orchestrationEditorHeading = /** @type {HTMLElement | null} */ (
+  document.getElementById('orchestrationEditorHeading')
+);
+const orchestrationEditorForm = /** @type {HTMLFormElement | null} */ (
+  document.getElementById('orchestrationEditorForm')
+);
+const orchestrationEditorIdInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('orchestrationEditorIdInput')
+);
+const orchestrationNameInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('orchestrationNameInput')
+);
+const orchestrationSlashCommandInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('orchestrationSlashCommandInput')
+);
+const orchestrationDescriptionInput = /** @type {HTMLTextAreaElement | null} */ (
+  document.getElementById('orchestrationDescriptionInput')
+);
+const orchestrationDefinitionInput = /** @type {HTMLTextAreaElement | null} */ (
+  document.getElementById('orchestrationDefinitionInput')
+);
+const orchestrationSaveButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('orchestrationSaveButton')
+);
+const orchestrationResetButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('orchestrationResetButton')
+);
+const orchestrationImportForm = /** @type {HTMLFormElement | null} */ (
+  document.getElementById('orchestrationImportForm')
+);
+const orchestrationImportInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('orchestrationImportInput')
+);
+const orchestrationImportButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('orchestrationImportButton')
+);
+const exportAllOrchestrationsButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('exportAllOrchestrationsButton')
+);
+const orchestrationImportFeedback = /** @type {HTMLElement | null} */ (
+  document.getElementById('orchestrationImportFeedback')
+);
+const customOrchestrationsList = /** @type {HTMLElement | null} */ (
+  document.getElementById('customOrchestrationsList')
+);
+const builtInOrchestrationsList = /** @type {HTMLElement | null} */ (
+  document.getElementById('builtInOrchestrationsList')
+);
 const skillPackageForm = /** @type {HTMLFormElement | null} */ (document.getElementById('skillPackageForm'));
 const skillPackageInput = /** @type {HTMLInputElement | null} */ (document.getElementById('skillPackageInput'));
 const addSkillPackageButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('addSkillPackageButton'));
@@ -3685,6 +3777,22 @@ const preferencesController = createPreferencesController({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  orchestrationEditorHeading,
+  orchestrationEditorIdInput,
+  orchestrationNameInput,
+  orchestrationSlashCommandInput,
+  orchestrationDescriptionInput,
+  orchestrationDefinitionInput,
+  orchestrationSaveButton,
+  orchestrationResetButton,
+  orchestrationImportInput,
+  orchestrationImportFeedback,
+  customOrchestrationsList,
+  builtInOrchestrationsList,
+  builtInOrchestrations: BUILT_IN_ORCHESTRATIONS,
+  saveCustomOrchestration,
+  removeCustomOrchestration,
+  downloadFile: triggerDownload,
   skillPackageInput,
   skillPackageAddFeedback,
   skillsList,
@@ -3731,6 +3839,7 @@ const {
   applyCorsProxyPreference,
   applyMathRenderingPreference,
   applyEnabledToolNamesPreference,
+  applyCustomOrchestrationsPreference,
   applySkillPackageEnabledPreference,
   applySkillPackagesPreference,
   applyShowThinkingPreference,
@@ -3744,6 +3853,7 @@ const {
   applyConversationPanelCollapsedPreference,
   applyCpuThreadsPreference,
   applySingleKeyShortcutPreference,
+  clearCustomOrchestrationFeedback,
   clearSkillPackageFeedback,
   clearCorsProxyFeedback,
   clearCorsProxyPreference,
@@ -3762,24 +3872,36 @@ const {
   getStoredConversationPanelCollapsedPreference,
   migrateStoredEnabledToolNamesPreference,
   getWebGpuAvailability,
+  exportAllCustomOrchestrations,
+  exportCustomOrchestration,
+  importCustomOrchestrationFile,
   importSkillPackageFile,
   importMcpServerEndpoint,
+  loadCustomOrchestrationIntoEditor,
   normalizeBackendPreference,
   persistInferencePreferences,
   populateModelSelect,
   probeWebGpuAvailability,
   readEngineConfigFromUI,
+  removeCustomOrchestrationPreference,
   removeSkillPackagePreference,
+  resetCustomOrchestrationEditor,
   saveCorsProxyPreference,
+  saveCustomOrchestrationDraft,
   refreshMcpServerPreference,
   removeMcpServerPreference,
   restoreInferencePreferences,
   setSelectedModelId,
+  setCustomOrchestrationFeedback,
   setCorsProxyFeedback,
   setSkillPackageFeedback,
   setMcpServerFeedback,
   syncModelSelectionForCurrentEnvironment,
 } = preferencesController;
+
+function matchSavedOrchestrationSlashCommand(rawValue) {
+  return matchCustomOrchestrationSlashCommand(rawValue, appState.customOrchestrations);
+}
 
 function syncCloudProviderModelCatalog() {
   replaceRuntimeModelCatalog(buildRuntimeModelCatalog(appState.cloudProviders));
@@ -3882,6 +4004,18 @@ async function restoreSkillPackagesFromStorage() {
   }
 }
 
+async function restoreCustomOrchestrationsFromStorage() {
+  try {
+    applyCustomOrchestrationsPreference(await loadCustomOrchestrations());
+  } catch (error) {
+    appendDebug({
+      kind: 'custom-orchestrations',
+      message: 'Failed to restore custom orchestrations.',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function initializeStoredBrowserState() {
   try {
     await restoreCloudProvidersFromStorage();
@@ -3904,6 +4038,7 @@ async function initializeStoredBrowserState() {
 
   updateWelcomePanelVisibility({ syncRoute: false });
   applyAppRouteFromHash();
+  await restoreCustomOrchestrationsFromStorage();
   await restoreSkillPackagesFromStorage();
   await restoreSemanticMemoryFromStorage();
   await restoreConversationStateFromStorage();
@@ -4258,6 +4393,16 @@ bindSettingsEvents({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  orchestrationEditorForm,
+  orchestrationNameInput,
+  orchestrationSlashCommandInput,
+  orchestrationSaveButton,
+  orchestrationResetButton,
+  orchestrationImportForm,
+  orchestrationImportInput,
+  orchestrationImportButton,
+  exportAllOrchestrationsButton,
+  customOrchestrationsList,
   skillPackageForm,
   skillPackageInput,
   addSkillPackageButton,
@@ -4304,6 +4449,15 @@ bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  clearCustomOrchestrationFeedback,
+  exportAllCustomOrchestrations,
+  exportCustomOrchestration,
+  importCustomOrchestrationFile,
+  loadCustomOrchestrationIntoEditor,
+  removeCustomOrchestrationPreference,
+  resetCustomOrchestrationEditor,
+  saveCustomOrchestrationDraft,
+  setCustomOrchestrationFeedback,
   applySkillPackageEnabledPreference,
   clearSkillPackageFeedback,
   importSkillPackageFile,
@@ -4432,6 +4586,7 @@ bindComposerEvents({
   isProcessingComposerAttachments: () => isProcessingAttachments(appState),
   renderComposerAttachments,
   updateActionButtons,
+  matchCustomOrchestrationSlashCommand: matchSavedOrchestrationSlashCommand,
   setStatus,
   clearPendingComposerAttachments,
   createConversation,
@@ -4461,6 +4616,8 @@ bindComposerEvents({
   addMessageToConversation,
   addMessageElement,
   buildPromptForActiveConversation,
+  runCustomOrchestrationFromMessage: (userMessage, invocation) =>
+    appController.runCustomOrchestrationFromMessage(userMessage, invocation),
   startModelGeneration: (conversation, prompt, options) =>
     appController.startModelGeneration(conversation, prompt, options),
   stopGeneration: () => appController.stopGeneration(),

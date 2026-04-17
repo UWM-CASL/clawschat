@@ -97,6 +97,61 @@ function buildFailedToolResultText(toolCall, error) {
   return JSON.stringify(result);
 }
 
+function stringifyOrchestrationValue(value) {
+  if (value == null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value.map((item) => item.trim()).filter(Boolean).join('\n\n');
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function stringifyPromptContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (!part || typeof part !== 'object') {
+          return '';
+        }
+        if (part.type === 'text' && typeof part.text === 'string') {
+          return part.text;
+        }
+        return stringifyOrchestrationValue(part);
+      })
+      .filter(Boolean)
+      .join('\n\n');
+  }
+  return stringifyOrchestrationValue(content);
+}
+
+function buildPromptTranscript(messages) {
+  if (!Array.isArray(messages) || !messages.length) {
+    return '';
+  }
+  return messages
+    .map((message) => {
+      const role = typeof message?.role === 'string' ? message.role.toUpperCase() : 'MESSAGE';
+      const content = stringifyPromptContent(message?.content);
+      return `${role}:\n${content}`.trim();
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /**
  * @param {{
  *   state: any;
@@ -1225,12 +1280,153 @@ export function createAppController(dependencies) {
     });
   }
 
+  async function runCustomOrchestrationFromMessage(userMessage, invocation = {}) {
+    if (
+      !userMessage ||
+      userMessage.role !== 'user' ||
+      isEngineBusy(dependencies.state) ||
+      isBlockingOrchestrationState(dependencies.state) ||
+      isMessageEditActive(dependencies.state)
+    ) {
+      return false;
+    }
+    if (!isEngineReady(dependencies.state)) {
+      dependencies.setStatus('Send a message first to load the model before running orchestration commands.');
+      dependencies.appendDebug('Custom orchestration blocked: model not ready.');
+      return false;
+    }
+
+    const activeConversation = dependencies.getActiveConversation();
+    if (!activeConversation) {
+      return false;
+    }
+
+    const orchestrationDefinition =
+      invocation?.orchestration &&
+      typeof invocation.orchestration === 'object' &&
+      invocation.orchestration.definition &&
+      typeof invocation.orchestration.definition === 'object' &&
+      !Array.isArray(invocation.orchestration.definition)
+        ? invocation.orchestration.definition
+        : null;
+    if (!orchestrationDefinition) {
+      dependencies.setStatus('That orchestration is unavailable.');
+      return false;
+    }
+
+    const commandName =
+      typeof invocation?.commandName === 'string' && invocation.commandName.trim()
+        ? invocation.commandName.trim()
+        : 'command';
+    const slashCommand =
+      typeof invocation?.slashCommand === 'string' && invocation.slashCommand.trim()
+        ? invocation.slashCommand.trim()
+        : `/${commandName}`;
+    const pendingBackgroundRenameCancellation = cancelBackgroundRenameIfNeeded();
+    if (pendingBackgroundRenameCancellation) {
+      await pendingBackgroundRenameCancellation;
+    }
+
+    const conversationMessages = dependencies.buildPromptForConversationLeaf(
+      activeConversation,
+      userMessage.id
+    );
+    const orchestrationInputs = {
+      userInput:
+        typeof invocation?.userInput === 'string' ? invocation.userInput.trim() : '',
+      commandInput:
+        typeof invocation?.userInput === 'string' ? invocation.userInput.trim() : '',
+      userCommandText:
+        typeof invocation?.commandText === 'string' ? invocation.commandText.trim() : '',
+      commandText:
+        typeof invocation?.commandText === 'string' ? invocation.commandText.trim() : '',
+      slashCommand,
+      slashCommandName: commandName,
+      conversationName: activeConversation.name || '',
+      conversationType: activeConversation.conversationType || 'chat',
+      selectedModelId: dependencies.getSelectedModelId(),
+      conversationMessages,
+      conversationTranscript: buildPromptTranscript(conversationMessages),
+    };
+
+    const pendingModelMessage = dependencies.addMessageToConversation(activeConversation, 'model', '', {
+      parentId: userMessage.id,
+    });
+    pendingModelMessage.thoughts = '';
+    pendingModelMessage.response = '';
+    pendingModelMessage.text = '';
+    pendingModelMessage.hasThinking = false;
+    pendingModelMessage.isThinkingComplete = false;
+    pendingModelMessage.isResponseComplete = false;
+    dependencies.renderTranscript({ scrollToBottom: false });
+    dependencies.queueConversationStateSave();
+
+    let deferredFinalPrompt = '';
+    let directFinalOutput = '';
+    setOrchestrationRunning(dependencies.state, true, {
+      kind: ORCHESTRATION_KINDS.GENERIC,
+      blocksUi: true,
+    });
+    dependencies.updateActionButtons();
+    dependencies.setStatus(`Running ${slashCommand}...`);
+    try {
+      const result = await dependencies.runOrchestration(
+        orchestrationDefinition,
+        orchestrationInputs,
+        {
+          runFinalStep: false,
+        }
+      );
+      deferredFinalPrompt =
+        typeof result?.finalPrompt === 'string' ? result.finalPrompt.trim() : '';
+      directFinalOutput = stringifyOrchestrationValue(result?.finalOutput);
+    } catch (error) {
+      const message = toErrorMessage(error);
+      pendingModelMessage.text = `Orchestration error: ${message}`;
+      pendingModelMessage.response = pendingModelMessage.text;
+      pendingModelMessage.isResponseComplete = true;
+      activeConversation.lastSpokenLeafMessageId = pendingModelMessage.id;
+      dependencies.renderTranscript({ scrollToBottom: false });
+      dependencies.scrollTranscriptToBottom();
+      dependencies.queueConversationStateSave();
+      dependencies.setStatus(`${slashCommand} failed.`);
+      dependencies.appendDebug(`Custom orchestration failed (${commandName}): ${message}`);
+      return false;
+    } finally {
+      setOrchestrationRunning(dependencies.state, false);
+      dependencies.updateActionButtons();
+    }
+
+    if (deferredFinalPrompt) {
+      dependencies.setStatus(`Generating ${slashCommand} result...`);
+      void startModelGeneration(activeConversation, deferredFinalPrompt, {
+        parentMessageId: userMessage.id,
+        existingModelMessageId: pendingModelMessage.id,
+        clearExistingMessageBeforeStream: true,
+        updateLastSpokenOnComplete: true,
+      });
+      return true;
+    }
+
+    pendingModelMessage.response = directFinalOutput || '[No output]';
+    pendingModelMessage.text = pendingModelMessage.response;
+    pendingModelMessage.isResponseComplete = true;
+    activeConversation.lastSpokenLeafMessageId = pendingModelMessage.id;
+    dependencies.renderTranscript({ scrollToBottom: false });
+    dependencies.scrollTranscriptToBottom();
+    dependencies.queueConversationStateSave();
+    dependencies.setStatus(`${slashCommand} complete.`);
+    dependencies.appendDebug(`Custom orchestration completed (${commandName}).`);
+    return true;
+  }
+
   return {
     fixResponseFromMessage,
     initializeEngine,
     loadModelForSelectedConversation,
     regenerateFromMessage,
     reinitializeEngineFromSettings,
+    runCustomOrchestrationFromMessage,
     runRenameChatOrchestration,
     startModelGeneration,
     stopGeneration,

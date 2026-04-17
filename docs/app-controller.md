@@ -21,6 +21,7 @@ It currently owns the control flow for:
 - streamed tool-call interception and continuation after tool execution
 - regenerate and fix actions
 - automatic rename orchestration
+- custom slash-command orchestration execution from composer input
 - coordination points where UI actions trigger orchestration-backed preparation or follow-up flows
 
 ## Boundary
@@ -40,6 +41,7 @@ Today the controller directly uses orchestration flows for:
 
 - rename-chat
 - fix-response
+- saved custom slash-command orchestrations
 
 The orchestration runtime itself is broader than those two current call sites.
 It now supports:
@@ -55,6 +57,12 @@ The controller should remain responsible for:
 - deciding when an orchestration runs
 - keeping UI state, status text, and persistence in sync around that run
 - passing prepared inputs into the orchestration runner
+
+For saved custom slash-command orchestrations, that includes:
+
+- validating that the model is ready and the app is not already busy
+- building invocation variables from the current conversation and the typed `/<command> ...` message
+- deciding whether to stream a deferred orchestration `finalPrompt` through the normal generation path or write the orchestration `finalOutput` directly into the pending model turn
 
 The controller should not become the place where chunking rules, prompt assembly internals, or document-conversion step sequencing are reimplemented.
 

@@ -111,6 +111,10 @@ function getOrchestrationSteps(orchestration) {
   return steps;
 }
 
+export function validateOrchestrationDefinition(orchestration) {
+  return getOrchestrationSteps(orchestration);
+}
+
 export function buildOrchestrationPrompt(step, variables = {}) {
   if (!step || typeof step.prompt !== 'string' || !step.prompt.trim()) {
     throw new Error('Invalid orchestration definition.');

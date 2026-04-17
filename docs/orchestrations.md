@@ -16,10 +16,19 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
 - `src/config/orchestrations/pdf-to-markdown.json`
   - Prepares extracted document text for future PDF-to-Markdown conversion using chunking, per-chunk conversion, and a final merge pass.
   - The current shipped PDF attachment import is still deterministic parser-first extraction; this orchestration is the intended next-stage semantic conversion path.
+- `src/orchestrations/custom-orchestrations.js`
+  - Normalizes user-authored orchestration records, slash-command names, import/export envelopes, and validation against the shared orchestration runner contract.
+- `src/state/orchestration-store.js`
+  - Persists saved custom orchestrations in browser-local IndexedDB for the current browser profile only.
+- `src/app/preferences-orchestrations.js`
+  - Renders the `Settings -> Orchestrations` editor, saved custom list, import/export actions, and read-only built-in orchestration list.
 
 ## Runtime behavior
 
 - Orchestration step execution lives in `src/llm/orchestration-runner.js`.
+- `Settings -> Orchestrations` separates app-managed definitions from user-authored definitions.
+  - Built-in app orchestrations are shown for transparency but are intentionally read-only in the UI.
+  - Custom orchestrations can be created, edited, exported, imported, and removed in-browser.
 - Orchestrations are step arrays (`steps`) where each step defines a `type`.
   - `prompt` is the default if `type` is omitted.
 - Prompt steps can define:
@@ -45,7 +54,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
   - Nested paths such as `{{chunk.text}}` are supported.
   - Array values render as paragraph-separated text when possible, otherwise JSON.
 - The app renders prompt templates and sends prompt/forEach prompt steps through `LLMEngineClient` in order.
-- `src/state/app-controller.js` calls the orchestration runner for rename/fix flows, while `src/main.js` coordinates agent follow-up and summary-compaction runs around the active conversation lifecycle.
+- `src/state/app-controller.js` calls the orchestration runner for rename/fix flows plus custom slash-command orchestration runs, while `src/main.js` coordinates agent follow-up and summary-compaction runs around the active conversation lifecycle.
 - Each completed step output is available to later steps via:
   - `{{previousStepOutput}}` and `{{lastStepOutput}}`
   - `{{step1Output}}`, `{{step2Output}}`, etc.
@@ -59,6 +68,18 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
 - `Fix` creates a new model variant at the same turn (like regenerate), so prior variants stay navigable.
 - Agent follow-up orchestration runs only while the matching agent conversation is the loaded chat and not paused, writes each heartbeat into the transcript before the model reviews it, and the active-chat header surfaces that schedule with a visible next-heartbeat countdown beside the pause/resume control. The countdown resets to a fixed 15-minute delay after each exchange.
 - Agent summary-compaction orchestration inserts a visible `summary` node into the conversation tree, later prompt assembly drops older turns before that node while exports still preserve the full transcript, and the summary text is also ingested into local semantic memory records.
+- Custom slash-command orchestrations run from the composer when the first token matches a saved `/<command>` name.
+  - Pending composer attachments must be cleared before those slash commands can run.
+  - The invoking user message is still added to the conversation transcript, so the slash command itself stays visible and exportable.
+  - The orchestration receives conversation-aware variables including `userInput`, `commandInput`, `userCommandText`, `commandText`, `slashCommand`, `slashCommandName`, `conversationName`, `conversationType`, `selectedModelId`, `conversationMessages`, and `conversationTranscript`.
+  - If the orchestration resolves to a deferred `finalPrompt`, the controller streams that prompt through the normal model-generation path; otherwise it writes the orchestration `finalOutput` directly into the pending model message.
+
+## Import and export format
+
+- Single-orchestration export files use the format id `browser-llm-runner.custom-orchestration`.
+- Multi-orchestration export files use the format id `browser-llm-runner.custom-orchestration-collection`.
+- Imported slash-command names are normalized to lowercase hyphenated commands and must stay unique within the current browser profile.
+- Reserved app slash commands such as `/picard` cannot be imported or saved as custom orchestrations.
 
 ## Utility step contract
 

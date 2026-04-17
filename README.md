@@ -18,6 +18,7 @@ Student-facing browser chat UI with local model inference.
 - Clicking `New Conversation` returns the workspace to the pre-chat model picker without adding a sidebar item yet.
 - Clicking `New Agent` returns the workspace to a matching pre-chat flow with agent name and personality fields above the same model picker; the composer then prompts the user to say hello to that agent.
 - Typing `/picard` in the composer switches the workspace into a prefilled Picard-inspired agent draft, and typing `/picard <message>` starts that agent and sends `<message>` as the first hello.
+- Saved custom orchestrations can also be invoked from the composer with `/<command> ...`; those slash-command runs stay local, use the current conversation context, and require pending attachments to be cleared before send.
 - After leaving the launch screen, the `New Conversation` button remains visible in the top bar; it is disabled while a fresh conversation is being prepared.
 - Agent conversations show a person icon in the conversation list, expose an icon-only pause/resume header control with a visible next-heartbeat countdown while active, reset that heartbeat timer to 15 minutes after each exchange, write each heartbeat into the transcript as a visible `Heartbeat` turn, announce when a heartbeat ran but intentionally stayed quiet, keep empty/no-op heartbeat exchanges out of later inference context, and stop scheduled follow-ups as soon as that agent thread is no longer the loaded chat.
 - The app now keeps a browser-local semantic memory layer derived from prior user statements and agent summary nodes; prompt assembly retrieves a compact set of relevant memories for the current user turn instead of depending on the model to remember every durable fact or preference from raw transcript alone.
@@ -65,6 +66,11 @@ Student-facing browser chat UI with local model inference.
   - per-package accordions with a markdown-rendered `SKILL.md` preview, enable toggle, and remove action
   - imports require exactly one `SKILL.md` file in the zip; other files may be present but are not exposed to the model
   - imported skills start disabled and only appear in the system prompt after the user enables them
+- `Settings -> Orchestrations` includes:
+  - a browser-local editor for creating and updating custom orchestration JSON plus the slash command that invokes it
+  - import of one exported orchestration JSON file or an exported collection, and export of one orchestration or all saved custom orchestrations
+  - a saved custom-orchestration accordion with edit, export, and remove actions
+  - a separate built-in orchestration accordion that shows app-managed definitions for transparency but keeps them read-only
 - `Settings -> Conversation` includes:
   - `Render MathML from LaTeX` to control transcript math rendering and the matching math-formatting prompt hint
   - `Enable single-key transcript shortcuts` to disable focused transcript shortcuts like `E`, `B`, `R`, `F`, and `C`
@@ -344,8 +350,9 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Agent heartbeat scheduling, follow-up orchestration, and agent-thread summary compaction live in `src/app/agent-automation.js`.
 - Browser-local semantic memory extraction, retrieval, and conversation-linked cleanup live in `src/memory/semantic-memory.js`, `src/app/semantic-memory.js`, and `src/state/semantic-memory-store.js`.
 - Orchestration prompt templating, nested placeholder rendering, utility-step execution, and chunk-pipeline support live in `src/llm/orchestration-runner.js`.
-- Settings persistence and cross-domain wiring live in `src/app/preferences.js`, with tool/MCP settings extracted to `src/app/preferences-tooling.js` and model/backend picker logic extracted to `src/app/preferences-models.js`.
-- Settings page event wiring lives in `src/app/settings-events.js`, with tool/network handlers extracted to `src/app/settings-events-tooling.js` and conversation/model handlers extracted to `src/app/settings-events-models.js`.
+- Browser-local custom orchestration normalization/import-export helpers live in `src/orchestrations/custom-orchestrations.js`, and saved orchestration storage lives in `src/state/orchestration-store.js`.
+- Settings persistence and cross-domain wiring live in `src/app/preferences.js`, with tool/MCP settings extracted to `src/app/preferences-tooling.js`, orchestration editor/state logic extracted to `src/app/preferences-orchestrations.js`, and model/backend picker logic extracted to `src/app/preferences-models.js`.
+- Settings page event wiring lives in `src/app/settings-events.js`, with tool/network handlers extracted to `src/app/settings-events-tooling.js`, orchestration handlers extracted to `src/app/settings-events-orchestrations.js`, and conversation/model handlers extracted to `src/app/settings-events-models.js`.
 - Bulk conversation archive export lives in `src/app/conversation-bulk-export.js`.
 - Transcript and conversation-list DOM rendering live in `src/ui/`.
 - Transcript navigation/skip-link behavior, model-load feedback, composer attachment/runtime state, and workspace side-panel controllers live in `src/app/`.
@@ -363,11 +370,17 @@ Orchestrations are JSON-defined, inspectable workflows used for LLM-guided follo
 - Existing shipped uses:
   - chat renaming
   - response fixing
+  - agent follow-up heartbeats
+  - agent-context summarization
+  - user-authored slash-command workflows saved in browser storage
 - Current runtime capabilities:
   - linear prompt steps
   - deterministic utility steps that do not call the model
   - chunk-oriented processing via `transform` -> `forEach` -> `join`
   - nested prompt placeholders such as `{{chunk.text}}`
+- User-facing orchestration controls:
+  - `Settings -> Orchestrations` lets users create, save, import, export, and remove custom orchestrations in this browser
+  - app-managed orchestrations are listed separately in the same settings tab and remain read-only
 - Intended design:
   - deterministic code handles extraction and data shaping
   - the orchestration handles semantic conversion or validation

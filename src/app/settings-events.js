@@ -1,6 +1,7 @@
 import { isSettingsView } from '../state/app-state.js';
 import { bindCloudProviderSettingsEvents } from './settings-events-cloud.js';
 import { bindModelSettingsEvents } from './settings-events-models.js';
+import { bindOrchestrationSettingsEvents } from './settings-events-orchestrations.js';
 import { bindToolingSettingsEvents } from './settings-events-tooling.js';
 
 export function bindSettingsEvents({
@@ -16,6 +17,16 @@ export function bindSettingsEvents({
   showThinkingToggle,
   enableToolCallingToggle,
   toolSettingsList,
+  orchestrationEditorForm = null,
+  orchestrationNameInput = null,
+  orchestrationSlashCommandInput = null,
+  orchestrationSaveButton = null,
+  orchestrationResetButton = null,
+  orchestrationImportForm = null,
+  orchestrationImportInput = null,
+  orchestrationImportButton = null,
+  exportAllOrchestrationsButton = null,
+  customOrchestrationsList = null,
   skillPackageForm = null,
   skillPackageInput = null,
   addSkillPackageButton = null,
@@ -62,6 +73,15 @@ export function bindSettingsEvents({
   applyShowThinkingPreference,
   applyToolCallingPreference,
   applyToolEnabledPreference,
+  clearCustomOrchestrationFeedback = null,
+  exportAllCustomOrchestrations = null,
+  exportCustomOrchestration = null,
+  importCustomOrchestrationFile = null,
+  loadCustomOrchestrationIntoEditor = null,
+  removeCustomOrchestrationPreference = null,
+  resetCustomOrchestrationEditor = null,
+  saveCustomOrchestrationDraft = null,
+  setCustomOrchestrationFeedback = null,
   applySkillPackageEnabledPreference = null,
   clearSkillPackageFeedback = null,
   importSkillPackageFile = null,
@@ -251,6 +271,29 @@ export function bindSettingsEvents({
     removeMcpServerPreference,
     setSkillPackageFeedback,
     setMcpServerFeedback,
+    setStatus,
+  });
+
+  bindOrchestrationSettingsEvents({
+    orchestrationEditorForm,
+    orchestrationNameInput,
+    orchestrationSlashCommandInput,
+    orchestrationSaveButton,
+    orchestrationResetButton,
+    orchestrationImportForm,
+    orchestrationImportInput,
+    orchestrationImportButton,
+    exportAllOrchestrationsButton,
+    customOrchestrationsList,
+    clearCustomOrchestrationFeedback,
+    exportAllCustomOrchestrations,
+    exportCustomOrchestration,
+    importCustomOrchestrationFile,
+    loadCustomOrchestrationIntoEditor,
+    removeCustomOrchestrationPreference,
+    resetCustomOrchestrationEditor,
+    saveCustomOrchestrationDraft,
+    setCustomOrchestrationFeedback,
     setStatus,
   });
 

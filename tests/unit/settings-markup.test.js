@@ -18,6 +18,7 @@ describe('settings markup', () => {
       'tools',
       'mcpServers',
       'skills',
+      'orchestrations',
       'cloudProviders',
       'proxy',
       'debug',
@@ -50,5 +51,25 @@ describe('settings markup', () => {
     expect(dom.window.document.getElementById('cloudProviderStorageHelp')?.textContent).toContain(
       'cannot be shown again'
     );
+  });
+
+  test('includes the Orchestrations settings editor and read-only built-in list', () => {
+    const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    expect(document.getElementById('settingsTabOrchestrations')).not.toBeNull();
+    expect(document.getElementById('settingsOrchestrationsPanel')).not.toBeNull();
+    expect(document.getElementById('orchestrationEditorForm')).not.toBeNull();
+    expect(document.getElementById('orchestrationSlashCommandInput')).not.toBeNull();
+    expect(document.getElementById('orchestrationDefinitionInput')).not.toBeNull();
+    expect(document.getElementById('orchestrationImportButton')?.textContent).toContain('Import');
+    expect(document.getElementById('exportAllOrchestrationsButton')?.textContent).toContain(
+      'Export all'
+    );
+    expect(document.getElementById('builtInOrchestrationsListLabel')?.textContent).toContain(
+      'Built-in orchestrations'
+    );
+    expect(document.body.textContent).toContain('read-only here and cannot be changed by the user');
   });
 });
