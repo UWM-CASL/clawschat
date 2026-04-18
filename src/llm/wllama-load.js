@@ -6,7 +6,7 @@ function toMessage(error) {
 }
 
 export function shouldRetryWllamaModelLoad(error) {
-  return /\binvalid magic number\b/i.test(toMessage(error));
+  return /\binvalid magic number\b/i.test(toMessage(error)) || /\bnot a gguf\b/i.test(toMessage(error));
 }
 
 export function expandWllamaModelUrls(modelUrl) {

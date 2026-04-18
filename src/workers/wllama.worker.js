@@ -92,6 +92,47 @@ function buildWllamaProgressCallback() {
   };
 }
 
+async function readBlobHeader(blob, byteCount = 8) {
+  if (!(blob instanceof Blob)) {
+    return new Uint8Array(0);
+  }
+  return new Uint8Array(await blob.slice(0, byteCount).arrayBuffer());
+}
+
+function formatHeaderHex(bytes) {
+  return Array.from(bytes || [])
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function formatHeaderAscii(bytes) {
+  return Array.from(bytes || [])
+    .map((value) => (value >= 32 && value < 127 ? String.fromCharCode(value) : '.'))
+    .join('');
+}
+
+function hasGgufHeader(bytes) {
+  return (
+    bytes instanceof Uint8Array &&
+    bytes.length >= 4 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x47 &&
+    bytes[2] === 0x55 &&
+    bytes[3] === 0x46
+  );
+}
+
+async function inspectFirstModelBlob(blobs) {
+  const firstBlob = Array.isArray(blobs) ? blobs[0] : null;
+  const headerBytes = await readBlobHeader(firstBlob, 8);
+  return {
+    headerBytes,
+    headerHex: formatHeaderHex(headerBytes),
+    headerAscii: formatHeaderAscii(headerBytes),
+    isGguf: hasGgufHeader(headerBytes),
+  };
+}
+
 async function createWllamaInstance(runtime = {}) {
   const { LoggerWithoutDebug, Wllama } = await loadWllamaLibrary();
   return new Wllama(
@@ -114,13 +155,28 @@ async function clearCachedWllamaModel(instance, modelUrl) {
   }
 }
 
-async function loadConfiguredWllamaModel(instance, modelUrl, runtime, nextGenerationConfig, extraConfig = {}) {
-  await instance.loadModelFromUrl(
-    modelUrl,
-    buildWllamaLoadConfig(runtime, nextGenerationConfig, {
-      progressCallback: buildWllamaProgressCallback(),
-      ...extraConfig,
-    })
+async function resolveWllamaModelBlobs(instance, modelUrl, extraConfig = {}) {
+  const useCache = extraConfig.useCache !== false;
+  const model = useCache
+    ? await instance.modelManager.getModelOrDownload(modelUrl, {
+        progressCallback: buildWllamaProgressCallback(),
+      })
+    : await instance.modelManager.downloadModel(modelUrl, {
+        progressCallback: buildWllamaProgressCallback(),
+      });
+  const blobs = await model.open();
+  const headerInfo = await inspectFirstModelBlob(blobs);
+  return {
+    model,
+    blobs,
+    headerInfo,
+  };
+}
+
+async function loadConfiguredWllamaModel(instance, blobs, runtime, nextGenerationConfig, extraConfig = {}) {
+  await instance.loadModel(
+    blobs,
+    buildWllamaLoadConfig(runtime, nextGenerationConfig, extraConfig)
   );
 }
 
@@ -313,9 +369,22 @@ async function initialize(payload) {
   postStatus(`Loading ${modelId} with CPU...`);
 
   let nextWllama = await createWllamaInstance(runtime);
+  let headerInfo = null;
 
   try {
-    await loadConfiguredWllamaModel(nextWllama, runtime.modelUrl, runtime, nextGenerationConfig);
+    const resolvedModel = await resolveWllamaModelBlobs(nextWllama, runtime.modelUrl);
+    headerInfo = resolvedModel.headerInfo;
+    if (!resolvedModel.headerInfo.isGguf) {
+      throw new Error(
+        `Downloaded model file is not a GGUF. Header=${resolvedModel.headerInfo.headerHex || 'empty'} ascii=${resolvedModel.headerInfo.headerAscii || ''}`
+      );
+    }
+    await loadConfiguredWllamaModel(
+      nextWllama,
+      resolvedModel.blobs,
+      runtime,
+      nextGenerationConfig
+    );
   } catch (error) {
     if (shouldRetryWllamaModelLoad(error) && runtime.allowOffline !== true) {
       postProgress({
@@ -336,14 +405,31 @@ async function initialize(payload) {
       }
       nextWllama = await createWllamaInstance(runtime);
       try {
-        await loadConfiguredWllamaModel(nextWllama, runtime.modelUrl, runtime, nextGenerationConfig, {
+        const resolvedModel = await resolveWllamaModelBlobs(nextWllama, runtime.modelUrl, {
           useCache: false,
         });
+        headerInfo = resolvedModel.headerInfo;
+        if (!resolvedModel.headerInfo.isGguf) {
+          throw new Error(
+            `Freshly downloaded model file is not a GGUF. Header=${resolvedModel.headerInfo.headerHex || 'empty'} ascii=${resolvedModel.headerInfo.headerAscii || ''}`
+          );
+        }
+        await loadConfiguredWllamaModel(
+          nextWllama,
+          resolvedModel.blobs,
+          runtime,
+          nextGenerationConfig
+        );
       } catch (retryError) {
         try {
           await nextWllama.exit();
         } catch {
           // Ignore cleanup failures after a retry load error.
+        }
+        if (shouldRetryWllamaModelLoad(retryError) && headerInfo?.isGguf) {
+          throw new Error(
+            `${toErrorMessage(retryError)} (source blob header was valid GGUF: ${headerInfo.headerHex})`
+          );
         }
         throw retryError;
       }
@@ -352,6 +438,9 @@ async function initialize(payload) {
         await nextWllama.exit();
       } catch {
         // Ignore cleanup failures after a load error.
+      }
+      if (shouldRetryWllamaModelLoad(error) && headerInfo?.isGguf) {
+        throw new Error(`${toErrorMessage(error)} (source blob header was valid GGUF: ${headerInfo.headerHex})`);
       }
       throw error;
     }
