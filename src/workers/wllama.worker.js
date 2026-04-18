@@ -4,6 +4,7 @@ import {
   buildDefaultGenerationConfig,
   sanitizeGenerationConfig,
 } from '../config/generation-config.js';
+import { shouldRetryWllamaModelLoad } from '../llm/wllama-load.js';
 import { normalizeWllamaPromptMessages } from '../llm/wllama-prompt.js';
 
 const WORKER_GENERATION_LIMITS = {
@@ -54,6 +55,72 @@ async function loadWllamaLibrary() {
     wllamaLibraryPromise = import('@wllama/wllama');
   }
   return wllamaLibraryPromise;
+}
+
+function buildWllamaConstructorConfig(runtime = {}) {
+  return {
+    ...(runtime.parallelDownloads ? { parallelDownloads: runtime.parallelDownloads } : {}),
+    ...(runtime.allowOffline ? { allowOffline: true } : {}),
+  };
+}
+
+function buildWllamaLoadConfig(runtime = {}, nextGenerationConfig = {}, extraConfig = {}) {
+  return {
+    n_ctx: nextGenerationConfig.maxContextTokens,
+    n_threads: resolveThreadCount(runtime),
+    ...extraConfig,
+  };
+}
+
+function buildWllamaProgressCallback() {
+  return ({ loaded, total }) => {
+    const normalizedLoaded = Number.isFinite(loaded) && loaded >= 0 ? loaded : 0;
+    const normalizedTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+    const percent = normalizedTotal > 0 ? Math.round((normalizedLoaded / normalizedTotal) * 100) : 0;
+    postProgress({
+      percent,
+      message:
+        normalizedLoaded > 0 && normalizedTotal > 0
+          ? 'Downloading GGUF model...'
+          : 'Loading GGUF model...',
+      loadedBytes: normalizedLoaded,
+      totalBytes: normalizedTotal,
+    });
+  };
+}
+
+async function createWllamaInstance(runtime = {}) {
+  const { LoggerWithoutDebug, Wllama } = await loadWllamaLibrary();
+  return new Wllama(
+    {
+      'single-thread/wllama.wasm': singleThreadWasmPath,
+    },
+    {
+      logger: LoggerWithoutDebug,
+      ...buildWllamaConstructorConfig(runtime),
+    }
+  );
+}
+
+async function clearCachedWllamaModel(instance, modelUrl) {
+  if (!instance?.modelManager || !modelUrl) {
+    return;
+  }
+  const cachedModels = await instance.modelManager.getModels({ includeInvalid: true });
+  const cachedModel = cachedModels.find((entry) => entry.url === modelUrl);
+  if (cachedModel) {
+    await cachedModel.remove();
+  }
+}
+
+async function loadConfiguredWllamaModel(instance, modelUrl, runtime, nextGenerationConfig, extraConfig = {}) {
+  await instance.loadModelFromUrl(
+    modelUrl,
+    buildWllamaLoadConfig(runtime, nextGenerationConfig, {
+      progressCallback: buildWllamaProgressCallback(),
+      ...extraConfig,
+    })
+  );
 }
 
 function toErrorMessage(value) {
@@ -244,46 +311,49 @@ async function initialize(payload) {
   });
   postStatus(`Loading ${modelId} with CPU...`);
 
-  const { LoggerWithoutDebug, Wllama } = await loadWllamaLibrary();
-
-  const nextWllama = new Wllama(
-    {
-      'single-thread/wllama.wasm': singleThreadWasmPath,
-    },
-    {
-      logger: LoggerWithoutDebug,
-      ...(runtime.parallelDownloads ? { parallelDownloads: runtime.parallelDownloads } : {}),
-      ...(runtime.allowOffline ? { allowOffline: true } : {}),
-    }
-  );
+  let nextWllama = await createWllamaInstance(runtime);
 
   try {
-    await nextWllama.loadModelFromUrl(runtime.modelUrl, {
-      n_ctx: nextGenerationConfig.maxContextTokens,
-      n_threads: resolveThreadCount(runtime),
-      progressCallback: ({ loaded, total }) => {
-        const normalizedLoaded = Number.isFinite(loaded) && loaded >= 0 ? loaded : 0;
-        const normalizedTotal = Number.isFinite(total) && total >= 0 ? total : 0;
-        const percent =
-          normalizedTotal > 0 ? Math.round((normalizedLoaded / normalizedTotal) * 100) : 0;
-        postProgress({
-          percent,
-          message:
-            normalizedLoaded > 0 && normalizedTotal > 0
-              ? 'Downloading GGUF model...'
-              : 'Loading GGUF model...',
-          loadedBytes: normalizedLoaded,
-          totalBytes: normalizedTotal,
-        });
-      },
-    });
+    await loadConfiguredWllamaModel(nextWllama, runtime.modelUrl, runtime, nextGenerationConfig);
   } catch (error) {
-    try {
-      await nextWllama.exit();
-    } catch {
-      // Ignore cleanup failures after a load error.
+    if (shouldRetryWllamaModelLoad(error) && runtime.allowOffline !== true) {
+      postProgress({
+        percent: 0,
+        message: 'Cached GGUF model looked invalid. Retrying with a fresh download...',
+        resetFiles: true,
+      });
+      postStatus('Retrying GGUF download after clearing cached files...');
+      try {
+        await clearCachedWllamaModel(nextWllama, runtime.modelUrl);
+      } catch {
+        // Ignore cache-clear failures and still try a forced refresh.
+      }
+      try {
+        await nextWllama.exit();
+      } catch {
+        // Ignore cleanup failures before retrying with a fresh worker/runtime.
+      }
+      nextWllama = await createWllamaInstance(runtime);
+      try {
+        await loadConfiguredWllamaModel(nextWllama, runtime.modelUrl, runtime, nextGenerationConfig, {
+          useCache: false,
+        });
+      } catch (retryError) {
+        try {
+          await nextWllama.exit();
+        } catch {
+          // Ignore cleanup failures after a retry load error.
+        }
+        throw retryError;
+      }
+    } else {
+      try {
+        await nextWllama.exit();
+      } catch {
+        // Ignore cleanup failures after a load error.
+      }
+      throw error;
     }
-    throw error;
   }
 
   wllama = nextWllama;
