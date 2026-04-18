@@ -6,6 +6,7 @@ import { createModelPreferencesController } from '../../src/app/preferences-mode
 const GEMMA_4_MODEL_ID = 'huggingworld/gemma-4-E2B-it-ONNX';
 const LLAMA_3B_MODEL_ID = 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
 const BONSAI_8B_MODEL_ID = 'onnx-community/Bonsai-8B-ONNX';
+const QWEN_35_2B_WLLAMA_MODEL_ID = 'unsloth/Qwen3.5-2B-GGUF';
 
 function getModelCard(modelCardList, modelId) {
   const button = Array.from(modelCardList.querySelectorAll('.model-card-button')).find(
@@ -17,6 +18,7 @@ function getModelCard(modelCardList, modelId) {
 function createHarness({
   navigatorRef = /** @type {any} */ ({ gpu: {} }),
   appStateOverrides = {},
+  getRuntimeConfigForModel = null,
 } = {}) {
   const dom = new JSDOM(
     `
@@ -45,8 +47,16 @@ function createHarness({
   appState.webGpuAdapterAvailable = true;
   Object.assign(appState, appStateOverrides);
 
+  const runtimeConfigResolver =
+    typeof getRuntimeConfigForModel === 'function'
+      ? getRuntimeConfigForModel
+      : (modelId) => ({ runtimeModelId: modelId });
+  const getRuntimeConfigForModelMock = /** @type {(modelId: string) => any} */ (
+    vi.fn(runtimeConfigResolver)
+  );
+
   const deps = {
-    getRuntimeConfigForModel: vi.fn((modelId) => ({ runtimeModelId: modelId })),
+    getRuntimeConfigForModel: getRuntimeConfigForModelMock,
     syncGenerationSettingsFromModel: vi.fn(),
     persistGenerationConfigForModel: vi.fn(),
     setStatus: vi.fn(),
@@ -123,6 +133,14 @@ describe('preferences-models', () => {
         node.getAttribute('aria-label')
       )
     ).toEqual(['Shows a thinking section', 'Can use built-in tools']);
+
+    const qwenCard = getModelCard(modelCardList, QWEN_35_2B_WLLAMA_MODEL_ID);
+    expect(qwenCard?.textContent).toContain('Runs in CPU mode only in this app.');
+    expect(
+      Array.from(qwenCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
+        node.getAttribute('aria-label')
+      )
+    ).toEqual(['Shows a thinking section']);
 
     const gemmaButton = /** @type {HTMLButtonElement | null} */ (
       gemmaCard?.querySelector('.model-card-button')
@@ -230,6 +248,47 @@ describe('preferences-models', () => {
       LLAMA_3B_MODEL_ID,
       generationConfig
     );
+  });
+
+  test('switches the backend to cpu automatically when a cpu-only wllama model is selected', () => {
+    const harness = createHarness({
+      getRuntimeConfigForModel: (modelId) => {
+        if (modelId === QWEN_35_2B_WLLAMA_MODEL_ID) {
+          return {
+            modelUrl:
+              'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/1c466474d208da1a7c4b8cb87ebcdac78f160e34/Qwen3.5-2B-UD-Q4_K_XL.gguf',
+          };
+        }
+        return { runtimeModelId: modelId };
+      },
+    });
+    const modelSelect = /** @type {HTMLSelectElement} */ (
+      harness.document.getElementById('modelSelect')
+    );
+    const backendSelect = /** @type {HTMLSelectElement} */ (
+      harness.document.getElementById('backendSelect')
+    );
+    const generationConfig = { maxOutputTokens: 512 };
+
+    harness.controller.populateModelSelect();
+    backendSelect.value = 'webgpu';
+    harness.controller.setSelectedModelId(QWEN_35_2B_WLLAMA_MODEL_ID, { dispatch: false });
+
+    expect(modelSelect.value).toBe(QWEN_35_2B_WLLAMA_MODEL_ID);
+    expect(backendSelect.value).toBe('cpu');
+
+    const engineConfig = harness.controller.readEngineConfigFromUI(generationConfig);
+    expect(engineConfig).toEqual({
+      engineType: 'wllama',
+      modelId: QWEN_35_2B_WLLAMA_MODEL_ID,
+      backendPreference: 'cpu',
+      runtime: {
+        modelUrl:
+          'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/1c466474d208da1a7c4b8cb87ebcdac78f160e34/Qwen3.5-2B-UD-Q4_K_XL.gguf',
+        cpuThreads: 0,
+      },
+      generationConfig,
+    });
   });
 
   test('restores the persisted cpu thread preference into the system control', () => {

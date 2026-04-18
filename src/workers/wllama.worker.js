@@ -1,0 +1,392 @@
+import { LoggerWithoutDebug, Wllama } from '@wllama/wllama';
+import singleThreadWasmPath from '@wllama/wllama/esm/single-thread/wllama.wasm?url';
+
+import {
+  buildDefaultGenerationConfig,
+  sanitizeGenerationConfig,
+} from '../config/generation-config.js';
+import { normalizeWllamaPromptMessages } from '../llm/wllama-prompt.js';
+
+const WORKER_GENERATION_LIMITS = {
+  defaultMaxOutputTokens: 1024,
+  maxOutputTokens: Number.MAX_SAFE_INTEGER,
+  defaultMaxContextTokens: 8192,
+  maxContextTokens: Number.MAX_SAFE_INTEGER,
+  minTemperature: 0.1,
+  maxTemperature: 2.0,
+  defaultTemperature: 0.7,
+  defaultTopK: 20,
+  defaultTopP: 0.8,
+  defaultRepetitionPenalty: 1.0,
+};
+
+let wllama = null;
+let loadedModelId = '';
+let loadedRuntimeConfigKey = '';
+let generationConfig = buildDefaultGenerationConfig(WORKER_GENERATION_LIMITS);
+let activeGeneration = null;
+
+function toErrorMessage(value) {
+  if (value instanceof Error) {
+    return value.message;
+  }
+  return String(value || 'Unknown inference error.');
+}
+
+function normalizeGenerationConfig(rawConfig) {
+  return sanitizeGenerationConfig(rawConfig, WORKER_GENERATION_LIMITS);
+}
+
+function post(type, payload = {}) {
+  self.postMessage({ type, payload });
+}
+
+function postStatus(message) {
+  post('status', { message });
+}
+
+function postProgress({
+  percent = 0,
+  message = 'Loading model files...',
+  loadedBytes = 0,
+  totalBytes = 0,
+  resetFiles = false,
+}) {
+  post('progress', {
+    percent: Math.max(0, Math.min(100, Number(percent) || 0)),
+    message,
+    file: '',
+    status: '',
+    loadedBytes: Number.isFinite(loadedBytes) && loadedBytes >= 0 ? loadedBytes : 0,
+    totalBytes: Number.isFinite(totalBytes) && totalBytes >= 0 ? totalBytes : 0,
+    resetFiles: resetFiles === true,
+  });
+}
+
+function normalizePositiveInteger(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  const normalized = Math.trunc(parsed);
+  return normalized > 0 ? normalized : fallback;
+}
+
+function normalizeRuntimeConfig(rawRuntime) {
+  const modelUrl =
+    typeof rawRuntime?.modelUrl === 'string' && rawRuntime.modelUrl.trim()
+      ? rawRuntime.modelUrl.trim()
+      : '';
+  const allowOffline = rawRuntime?.allowOffline === true;
+  const parallelDownloads = normalizePositiveInteger(rawRuntime?.parallelDownloads, 0);
+  const cpuThreads = normalizePositiveInteger(rawRuntime?.cpuThreads, 0);
+  return {
+    ...(modelUrl ? { modelUrl } : {}),
+    ...(allowOffline ? { allowOffline: true } : {}),
+    ...(parallelDownloads ? { parallelDownloads } : {}),
+    ...(cpuThreads ? { cpuThreads } : {}),
+  };
+}
+
+function buildRuntimeConfigKey(modelId, runtime = {}, nextGenerationConfig = {}) {
+  return JSON.stringify({
+    modelId: modelId || '',
+    runtime,
+    maxContextTokens: nextGenerationConfig?.maxContextTokens || 0,
+  });
+}
+
+function buildSamplingConfig(nextGenerationConfig) {
+  return {
+    temp: nextGenerationConfig.temperature,
+    top_k: nextGenerationConfig.topK,
+    top_p: nextGenerationConfig.topP,
+    penalty_repeat: nextGenerationConfig.repetitionPenalty,
+  };
+}
+
+function resolveThreadCount(runtime = {}) {
+  return normalizePositiveInteger(runtime.cpuThreads, 1);
+}
+
+function isAbortError(error) {
+  return (
+    error?.name === 'AbortError' ||
+    error?.name === 'WllamaAbortError' ||
+    /\babort/i.test(toErrorMessage(error))
+  );
+}
+
+async function disposeLoadedModel() {
+  const loadedInstance = wllama;
+  wllama = null;
+  loadedModelId = '';
+  loadedRuntimeConfigKey = '';
+  activeGeneration = null;
+  if (!loadedInstance) {
+    return;
+  }
+  try {
+    await loadedInstance.exit();
+  } catch {
+    // Ignore cleanup failures so the next initialization can proceed.
+  }
+}
+
+function getPromptTokenBudget(nextGenerationConfig) {
+  const maxContextTokens = normalizePositiveInteger(nextGenerationConfig?.maxContextTokens, 0);
+  const maxOutputTokens = normalizePositiveInteger(nextGenerationConfig?.maxOutputTokens, 0);
+  if (maxContextTokens <= 0) {
+    return 0;
+  }
+  return Math.max(1, maxContextTokens - maxOutputTokens);
+}
+
+async function trimPromptToBudget(promptText, nextGenerationConfig) {
+  const normalizedPromptText = typeof promptText === 'string' ? promptText : '';
+  if (!wllama || !normalizedPromptText.trim()) {
+    return {
+      promptText: normalizedPromptText,
+      truncated: false,
+      originalPromptTokens: 0,
+      promptTokens: 0,
+    };
+  }
+  const promptBudget = getPromptTokenBudget(nextGenerationConfig);
+  if (promptBudget <= 0) {
+    return {
+      promptText: normalizedPromptText,
+      truncated: false,
+      originalPromptTokens: 0,
+      promptTokens: 0,
+    };
+  }
+  const promptTokens = await wllama.tokenize(normalizedPromptText, true);
+  const originalPromptTokens = Array.isArray(promptTokens) ? promptTokens.length : 0;
+  if (originalPromptTokens <= promptBudget) {
+    return {
+      promptText: normalizedPromptText,
+      truncated: false,
+      originalPromptTokens,
+      promptTokens: originalPromptTokens,
+    };
+  }
+  const trimmedTokens = promptTokens.slice(originalPromptTokens - promptBudget);
+  const trimmedPromptText = await wllama.detokenize(trimmedTokens, true);
+  return {
+    promptText: trimmedPromptText,
+    truncated: true,
+    originalPromptTokens,
+    promptTokens: trimmedTokens.length,
+  };
+}
+
+async function initialize(payload) {
+  const modelId =
+    typeof payload?.modelId === 'string' && payload.modelId.trim()
+      ? payload.modelId.trim()
+      : 'unsloth/Qwen3.5-2B-GGUF';
+  const runtime = normalizeRuntimeConfig(payload?.runtime);
+  const nextGenerationConfig = normalizeGenerationConfig(payload?.generationConfig);
+  generationConfig = nextGenerationConfig;
+
+  if (!runtime.modelUrl) {
+    throw new Error('The selected wllama model is missing a GGUF download URL.');
+  }
+
+  const nextRuntimeConfigKey = buildRuntimeConfigKey(modelId, runtime, nextGenerationConfig);
+  if (wllama && loadedModelId === modelId && loadedRuntimeConfigKey === nextRuntimeConfigKey) {
+    post('init-success', {
+      backend: 'cpu',
+      backendDevice: 'wasm',
+      engineType: 'wllama',
+      modelId,
+    });
+    postStatus('Ready (CPU)');
+    return;
+  }
+
+  await disposeLoadedModel();
+  postProgress({
+    percent: 0,
+    message: 'Preparing GGUF runtime...',
+    resetFiles: true,
+  });
+  postStatus(`Loading ${modelId} with CPU...`);
+
+  const nextWllama = new Wllama(
+    {
+      'single-thread/wllama.wasm': singleThreadWasmPath,
+    },
+    {
+      logger: LoggerWithoutDebug,
+      ...(runtime.parallelDownloads ? { parallelDownloads: runtime.parallelDownloads } : {}),
+      ...(runtime.allowOffline ? { allowOffline: true } : {}),
+    }
+  );
+
+  try {
+    await nextWllama.loadModelFromUrl(runtime.modelUrl, {
+      n_ctx: nextGenerationConfig.maxContextTokens,
+      n_threads: resolveThreadCount(runtime),
+      progressCallback: ({ loaded, total }) => {
+        const normalizedLoaded = Number.isFinite(loaded) && loaded >= 0 ? loaded : 0;
+        const normalizedTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+        const percent =
+          normalizedTotal > 0 ? Math.round((normalizedLoaded / normalizedTotal) * 100) : 0;
+        postProgress({
+          percent,
+          message:
+            normalizedLoaded > 0 && normalizedTotal > 0
+              ? 'Downloading GGUF model...'
+              : 'Loading GGUF model...',
+          loadedBytes: normalizedLoaded,
+          totalBytes: normalizedTotal,
+        });
+      },
+    });
+  } catch (error) {
+    try {
+      await nextWllama.exit();
+    } catch {
+      // Ignore cleanup failures after a load error.
+    }
+    throw error;
+  }
+
+  wllama = nextWllama;
+  loadedModelId = modelId;
+  loadedRuntimeConfigKey = nextRuntimeConfigKey;
+  postProgress({
+    percent: 100,
+    message: `Loaded ${modelId} (CPU).`,
+  });
+  post('init-success', {
+    backend: 'cpu',
+    backendDevice: 'wasm',
+    engineType: 'wllama',
+    modelId,
+  });
+  postStatus('Ready (CPU)');
+}
+
+async function generate(payload) {
+  if (!wllama) {
+    throw new Error('Model is not initialized.');
+  }
+  const requestId = typeof payload?.requestId === 'string' ? payload.requestId : '';
+  if (!requestId) {
+    throw new Error('A request id is required for generation.');
+  }
+
+  const nextGenerationConfig = normalizeGenerationConfig(payload?.generationConfig || generationConfig);
+  generationConfig = nextGenerationConfig;
+  const abortController = new AbortController();
+  activeGeneration = {
+    requestId,
+    abortController,
+  };
+
+  try {
+    postStatus('Generating (CPU)...');
+    let promptText = '';
+    if (Array.isArray(payload?.prompt)) {
+      const messages = normalizeWllamaPromptMessages(payload.prompt);
+      if (!messages.length) {
+        throw new Error('Prompt is empty.');
+      }
+      promptText = await wllama.formatChat(messages, true);
+    } else {
+      promptText = typeof payload?.prompt === 'string' ? payload.prompt : '';
+    }
+
+    const preparedPrompt = await trimPromptToBudget(promptText, nextGenerationConfig);
+    const stream = await wllama.createCompletion(preparedPrompt.promptText, {
+      stream: true,
+      useCache: false,
+      abortSignal: abortController.signal,
+      nPredict: nextGenerationConfig.maxOutputTokens,
+      sampling: buildSamplingConfig(nextGenerationConfig),
+    });
+
+    let currentText = '';
+    for await (const chunk of stream) {
+      const nextText =
+        typeof chunk?.currentText === 'string' ? chunk.currentText : String(chunk?.currentText || '');
+      if (!nextText) {
+        continue;
+      }
+      const deltaText = nextText.startsWith(currentText)
+        ? nextText.slice(currentText.length)
+        : nextText;
+      currentText = nextText;
+      if (deltaText) {
+        post('token', {
+          requestId,
+          text: deltaText,
+        });
+      }
+    }
+
+    post('complete', {
+      requestId,
+      text: currentText,
+    });
+    postStatus('Complete (CPU)');
+  } catch (error) {
+    if (isAbortError(error) || abortController.signal.aborted) {
+      post('canceled', { requestId });
+      return;
+    }
+    post('error', {
+      requestId,
+      message: toErrorMessage(error),
+    });
+    postStatus('Generation failed');
+  } finally {
+    if (activeGeneration?.requestId === requestId) {
+      activeGeneration = null;
+    }
+  }
+}
+
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || typeof data.type !== 'string') {
+    return;
+  }
+
+  if (data.type === 'init') {
+    void initialize(data.payload).catch((error) => {
+      post('init-error', {
+        message: toErrorMessage(error),
+      });
+      postProgress({
+        percent: 0,
+        message: 'Model load failed.',
+      });
+      postStatus('Error initializing model');
+    });
+    return;
+  }
+
+  if (data.type === 'generate') {
+    void generate(data.payload).catch((error) => {
+      post('error', {
+        requestId: data?.payload?.requestId || '',
+        message: toErrorMessage(error),
+      });
+      postStatus('Generation failed');
+    });
+    return;
+  }
+
+  if (data.type === 'cancel') {
+    const requestId = data?.payload?.requestId;
+    if (activeGeneration?.requestId === requestId) {
+      activeGeneration.abortController.abort();
+      return;
+    }
+    post('canceled', { requestId });
+  }
+});

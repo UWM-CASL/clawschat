@@ -1,9 +1,10 @@
 export const TRANSFORMERS_JS_ENGINE_TYPE = 'transformers-js';
 export const OPENAI_COMPATIBLE_ENGINE_TYPE = 'openai-compatible';
+export const WLLAMA_ENGINE_TYPE = 'wllama';
 export const DEFAULT_ENGINE_TYPE = TRANSFORMERS_JS_ENGINE_TYPE;
 
 export const ENGINE_TYPES = Object.freeze(
-  new Set([TRANSFORMERS_JS_ENGINE_TYPE, OPENAI_COMPATIBLE_ENGINE_TYPE])
+  new Set([TRANSFORMERS_JS_ENGINE_TYPE, OPENAI_COMPATIBLE_ENGINE_TYPE, WLLAMA_ENGINE_TYPE])
 );
 
 export function normalizeEngineType(value) {

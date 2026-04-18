@@ -63,6 +63,7 @@ export const ALLOWED_RUNTIME_DTYPES = Object.freeze(
     'q1f16',
   ])
 );
+export const CPU_ONLY_ENGINE_TYPES = Object.freeze(new Set(['wllama']));
 export const WEBGPU_COMPATIBLE_BACKEND_PREFERENCES = Object.freeze(new Set(['webgpu']));
 export const ALLOWED_TOOL_CALLING_FORMATS = Object.freeze(
   new Set([
@@ -159,6 +160,12 @@ function normalizeRuntime(rawRuntime) {
       ? rawRuntime.remoteModelId.trim()
       : '';
   const supportsTopK = rawRuntime?.supportsTopK === true;
+  const modelUrl =
+    typeof rawRuntime?.modelUrl === 'string' && rawRuntime.modelUrl.trim()
+      ? rawRuntime.modelUrl.trim()
+      : '';
+  const parallelDownloads = normalizePositiveIntegerLimit(rawRuntime?.parallelDownloads);
+  const allowOffline = rawRuntime?.allowOffline === true;
   return {
     ...(dtype ? { dtype } : {}),
     ...(dtypes ? { dtypes } : {}),
@@ -174,6 +181,9 @@ function normalizeRuntime(rawRuntime) {
     ...(apiBaseUrl ? { apiBaseUrl } : {}),
     ...(remoteModelId ? { remoteModelId } : {}),
     ...(supportsTopK ? { supportsTopK: true } : {}),
+    ...(modelUrl ? { modelUrl } : {}),
+    ...(parallelDownloads ? { parallelDownloads } : {}),
+    ...(allowOffline ? { allowOffline: true } : {}),
   };
 }
 

@@ -659,5 +659,15 @@ describe('LLMEngineClient', () => {
     expect(MockWorker.instances).toHaveLength(2);
     expect(MockWorker.instances[0].terminated).toBe(true);
     expect(MockWorker.instances[1].messages[0].payload.engineType).toBe('openai-compatible');
+
+    await client.initialize({
+      modelId: 'unsloth/Qwen3.5-2B-GGUF',
+      engineType: 'wllama',
+    });
+
+    expect(client.loadedEngineType).toBe('wllama');
+    expect(MockWorker.instances).toHaveLength(3);
+    expect(MockWorker.instances[1].terminated).toBe(true);
+    expect(MockWorker.instances[2].messages[0].payload.engineType).toBe('wllama');
   });
 });

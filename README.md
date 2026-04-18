@@ -4,7 +4,7 @@ Student-facing browser chat UI with local model inference.
 
 ## Runtime behavior
 
-- Inference runs through an engine-driver layer selected from model config and user preferences; bundled local models currently use the Transformers.js worker path, while browser-saved cloud models use the OpenAI-compatible worker path.
+- Inference runs through an engine-driver layer selected from model config and user preferences; bundled local models use either the Transformers.js worker path for ONNX models or the `wllama` worker path for GGUF models, while browser-saved cloud models use the OpenAI-compatible worker path.
 - Conversation turns are sent to the model as structured chat messages (`system`/`user`/`assistant`) rather than a flattened transcript string.
 - On initial load, the app shows a home screen with a `Start a conversation` action.
 - Clicking `Start a conversation` opens the chat workspace at `#/chat` with model selection, an empty composer, and no model load yet.
@@ -90,7 +90,7 @@ Student-facing browser chat UI with local model inference.
   - `CPU`
 - Selected cloud-provider models run through a browser fetch-backed OpenAI-compatible worker path instead of the local WebGPU/CPU runtimes; the backend selector is ignored for those models.
 - `WebGPU` mode prefers WebGPU and falls back to CPU/WASM for ONNX models that do not require WebGPU and do not opt out with `runtime.allowBackendFallback: false`.
-- CPU mode runs CPU-capable ONNX models through the browser WASM path. The ONNX worker keeps `useWasmCache` enabled, uses app-bundled ONNX Runtime WASM assets instead of the default CDN path, enables WASM proxying across ONNX backends, and lets `Settings -> System -> Transformers.js CPU threads` control `onnx.wasm.numThreads` (`0` keeps ORT auto).
+- CPU mode runs CPU-capable ONNX models through the browser ONNX Runtime WASM path and runs GGUF models through the bundled `wllama` WASM runtime. The ONNX worker keeps `useWasmCache` enabled, uses app-bundled ONNX Runtime WASM assets instead of the default CDN path, enables WASM proxying across ONNX backends, and lets `Settings -> System -> Transformers.js CPU threads` control `onnx.wasm.numThreads` (`0` keeps ORT auto). Selecting a CPU-only GGUF model automatically switches the backend preference to `CPU` before load.
 - If a generation request stops producing worker activity for 90 seconds, the engine client terminates that worker and surfaces a recoverable timeout instead of leaving the UI stuck indefinitely.
 - If WebGPU loses the active graphics device before any response tokens are shown, the engine client disposes the lost worker, reloads the same model on CPU once, and retries that generation automatically.
 - If `Stop generating` is pressed while that automatic CPU recovery is still initializing, the pending request is canceled and the retry is not resumed.
@@ -107,6 +107,7 @@ Student-facing browser chat UI with local model inference.
   - Fields are disabled until a model is loaded.
   - `Context size (short-term memory)` includes a `Reset to model default` link that applies the selected model default when clicked.
   - On the Transformers.js engine path, `Context size` is enforced as a hard prompt-token budget by left-truncating the oldest conversation tokens before generation, and `Maximum output tokens` is enforced separately as the generation cap.
+  - On the `wllama` engine path, `Context size` is applied at model-load time and the worker also trims the oldest prompt tokens before generation to keep the remaining prompt within the configured budget.
   - On the Transformers.js multimodal path, the worker trims the oldest non-system turns before generation so image/audio prompts stay within the configured context budget; if the current multimodal turn alone is too large, generation fails with guidance to raise the context size or reduce attachments.
   - If changed during generation, updates are queued and applied after the current response finishes.
 - `Settings -> Model` also includes:
@@ -128,7 +129,8 @@ Student-facing browser chat UI with local model inference.
 - Cloud provider metadata is stored in browser IndexedDB, and provider API keys are stored separately in encrypted browser-local IndexedDB records when WebCrypto key storage is available.
 - Model files are downloaded on first load and cached in-browser for reuse.
   - Transformers.js-backed models use the Transformers.js browser cache.
-  - `Settings -> System -> Clear Downloaded Model Files` clears the selected local Transformers.js model from that browser cache without guessing at cache internals.
+  - `wllama`-backed GGUF models use the browser-local `wllama` model cache.
+  - `Settings -> System -> Clear Downloaded Model Files` clears the selected local Transformers.js or `wllama` model from its engine-specific browser cache without guessing at cache internals.
 - `Settings -> Debug` shows a paginated debug log (20 entries per page, newest first) with CSV export, including proxy validation, MCP transport diagnostics, and one complete raw model-output blob per visible model turn, preserved before transcript parsing or tool-call folding.
 - Conversation list and transcript are state-driven (no placeholder messages).
 - On desktop widths, the conversation list can be collapsed from a border-mounted toggle to give the active chat more space; the preference is saved locally.
@@ -277,6 +279,12 @@ In addition to the bundled local model catalog, users can add browser-reachable 
   - Relies on the upstream model config for exact ONNX external-data shard counts across dtypes instead of forcing one app-level shard count.
   - Parses `<think>...</think>` reasoning into the transcript thinking section.
   - Uses tagged JSON tool calls inside `<tool_call>...</tool_call>` when tool calling is enabled.
+- `unsloth/Qwen3.5-2B-GGUF`
+  - Uses the `wllama` worker path in this app.
+  - Loads the pinned `Qwen3.5-2B-UD-Q4_K_XL.gguf` quant from `unsloth/Qwen3.5-2B-GGUF`.
+  - Runs as a text-only, single-thread CPU/WASM GGUF model in this app.
+  - Parses `<think>...</think>` reasoning into the transcript thinking section.
+  - Does not currently enable tool calling or multimodal input in this app.
 - Legacy stored IDs are automatically remapped to the supported model:
   - `onnx-community/gemma-4-E2B-it-ONNX` -> `huggingworld/gemma-4-E2B-it-ONNX`
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
@@ -325,7 +333,7 @@ For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` r
 - Audio input is upload-only. The app does not expose live recording.
 - Video input is not currently exposed because the supported browser runtime paths are not reliable enough yet.
 - The app still does not ship with a CSP. This is a documented hardening gap for a future pass.
-- The bundled Transformers.js models in `src/config/models.json` are pinned to explicit Hugging Face revisions, so browser caches stay stable across redeploys until the catalog is intentionally updated.
+- The bundled Transformers.js models in `src/config/models.json` are pinned to explicit Hugging Face revisions, and the bundled `wllama` Qwen GGUF entry uses a pinned Hugging Face `resolve/<commit>/...` URL, so browser caches stay stable across redeploys until the catalog is intentionally updated.
 
 See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 

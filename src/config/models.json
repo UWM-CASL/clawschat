@@ -167,6 +167,42 @@
         "audioInput": false,
         "videoInput": false
       }
+    },
+    {
+      "id": "unsloth/Qwen3.5-2B-GGUF",
+      "label": "unsloth/Qwen3.5-2B-GGUF",
+      "displayName": "Qwen 3.5 2B GGUF Q4_K_XL",
+      "engine": {
+        "type": "wllama"
+      },
+      "repositoryUrl": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF",
+      "runtime": {
+        "modelUrl": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/1c466474d208da1a7c4b8cb87ebcdac78f160e34/Qwen3.5-2B-UD-Q4_K_XL.gguf"
+      },
+      "thinkingTags": {
+        "open": "<think>",
+        "close": "</think>"
+      },
+      "generation": {
+        "defaultMaxOutputTokens": 1024,
+        "maxOutputTokens": 32768,
+        "defaultMaxContextTokens": 8192,
+        "maxContextTokens": 32768,
+        "minTemperature": 0.1,
+        "maxTemperature": 2.0,
+        "defaultTemperature": 0.7,
+        "defaultTopK": 20,
+        "defaultTopP": 0.8,
+        "defaultRepetitionPenalty": 1.0
+      },
+      "features": {
+        "streaming": true,
+        "thinking": true,
+        "toolCalling": false,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false
+      }
     }
   ],
   "legacyAliases": {

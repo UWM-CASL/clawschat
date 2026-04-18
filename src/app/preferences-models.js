@@ -1,4 +1,5 @@
 import {
+  CPU_ONLY_ENGINE_TYPES,
   DEFAULT_MODEL,
   MODEL_OPTIONS,
   MODEL_OPTIONS_BY_ID,
@@ -45,6 +46,10 @@ const MODEL_FEATURE_DEFINITIONS = Object.freeze([
 
 function isCloudModel(model) {
   return model?.engine?.type === 'openai-compatible';
+}
+
+function isCpuOnlyModel(model) {
+  return CPU_ONLY_ENGINE_TYPES.has(model?.engine?.type);
 }
 
 function formatInteger(value) {
@@ -157,6 +162,22 @@ export function createModelPreferencesController({
 
   function getSelectedBackendPreference() {
     return normalizeBackendPreference(backendSelect?.value || BACKEND_FALLBACK);
+  }
+
+  function maybeForceCpuBackendForModel(modelId) {
+    if (!(backendSelect instanceof HTMLSelectElement)) {
+      return false;
+    }
+    const normalizedModelId = normalizeModelId(modelId);
+    const model = MODEL_OPTIONS_BY_ID.get(normalizedModelId);
+    if (!isCpuOnlyModel(model)) {
+      return false;
+    }
+    if (backendSelect.value === 'cpu') {
+      return false;
+    }
+    backendSelect.value = 'cpu';
+    return true;
   }
 
   function getSelectedCpuThreadsPreference() {
@@ -314,6 +335,7 @@ export function createModelPreferencesController({
       return DEFAULT_MODEL;
     }
     const nextModelId = normalizeModelId(modelId || DEFAULT_MODEL);
+    maybeForceCpuBackendForModel(nextModelId);
     const changed = modelSelect.value !== nextModelId;
     modelSelect.value = nextModelId;
     syncModelCardSelection();
@@ -431,6 +453,11 @@ export function createModelPreferencesController({
         cloudNote.className = 'model-card-note';
         cloudNote.textContent = `Uses the saved ${providerLabel} endpoint.`;
         content.appendChild(cloudNote);
+      } else if (isCpuOnlyModel(model)) {
+        const cpuOnlyNote = documentRef.createElement('p');
+        cpuOnlyNote.className = 'model-card-note';
+        cpuOnlyNote.textContent = 'Runs in CPU mode only in this app.';
+        content.appendChild(cpuOnlyNote);
       } else if (model.runtime?.requiresWebGpu) {
         const requirement = documentRef.createElement('p');
         requirement.className = 'model-card-note';
@@ -508,6 +535,7 @@ export function createModelPreferencesController({
       return DEFAULT_MODEL;
     }
 
+    maybeForceCpuBackendForModel(getModelPickerValue());
     const selectedBackend = getSelectedBackendPreference();
     const requestedModelId = normalizeModelId(getModelPickerValue());
 
@@ -594,6 +622,7 @@ export function createModelPreferencesController({
 
     const selectedModel = syncModelSelectionForCurrentEnvironment();
     storage.setItem(modelStorageKey, selectedModel);
+    storage.setItem(backendStorageKey, getSelectedBackendPreference());
     syncGenerationSettingsFromModel(selectedModel, true);
   }
 

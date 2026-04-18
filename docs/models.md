@@ -5,7 +5,7 @@ Model support is configured in `src/config/models.json`:
 - `models`: list of supported models (`id`, `label`, optional card metadata, optional `features`)
   - The app also appends browser-saved cloud models at runtime from `Settings -> Cloud Providers`; those entries are normalized into the same picker/catalog shape even though they are not committed in `src/config/models.json`.
 - `models[].engine`: explicit inference-driver selection for that model
-  - `type`: currently `transformers-js` or `openai-compatible`
+  - `type`: currently `transformers-js`, `wllama`, or `openai-compatible`
 - `models[].displayName`: friendly card title shown in the pre-chat model picker
 - `models[].languageSupport`: optional language-tag metadata for the pre-chat picker
   - `tags`: ordered language entries with two-letter `code` and full `name`
@@ -29,6 +29,9 @@ Model support is configured in `src/config/models.json`:
   - `multimodalGeneration` (`true` only when the worker has a real multimodal execution path for image/audio/video inputs)
   - `allowBackendFallback` (`false` to block automatic fallback to a different backend package during init; users can still choose CPU mode explicitly)
   - `useExternalDataFormat` (`true`/number to enable loading `.onnx_data` sidecar files)
+  - `modelUrl` (pinned GGUF download URL for `wllama` models)
+  - `parallelDownloads` (optional `wllama` fetch fan-out hint)
+  - `allowOffline` (optional `wllama` cache-only load hint)
   - `providerId` / `providerType` / `providerDisplayName` (runtime-only metadata for browser-saved cloud models)
   - `apiBaseUrl` / `remoteModelId` (OpenAI-compatible worker endpoint/model routing)
   - `supportsTopK` (`true` only when the configured cloud provider should receive `top_k`)
@@ -89,7 +92,7 @@ When adding a new model:
 Minimum validation after adding a model:
 
 - The card renders correctly in the picker when the model is visible.
-- Backend availability behaves correctly for `auto`, `webgpu`, `wasm`, and `cpu`.
+- Backend availability or backend auto-switch behavior behaves correctly for `webgpu` and `cpu`, with legacy stored `auto` / `wasm` preferences still normalizing correctly.
 - The worker loads the right execution path.
 - Tool calling, thinking tags, and media input are either verified or explicitly disabled.
 - `pnpm typecheck`
@@ -143,7 +146,7 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
 ### Engine field
 
 - `engine.type`
-  Selects the inference driver for that model. The current app ships `transformers-js` for bundled ONNX/Transformers.js models and `openai-compatible` for browser-saved cloud models discovered from `Settings -> Cloud Providers`.
+  Selects the inference driver for that model. The current app ships `transformers-js` for bundled ONNX/Transformers.js models, `wllama` for bundled GGUF models, and `openai-compatible` for browser-saved cloud models discovered from `Settings -> Cloud Providers`.
 
 ### Runtime fields
 
@@ -159,6 +162,12 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
   Enables the multimodal processor/model path when the active prompt actually contains image/audio/video inputs. Text-only chats on those same models can still load through the lighter text-generation path.
 - `useExternalDataFormat`
   Enables `.onnx_data` sidecar loading for exported ONNX packages.
+- `modelUrl`
+  Used by the `wllama` worker to download the pinned GGUF artifact for the selected local model.
+- `parallelDownloads`
+  Optional `wllama` runtime hint for download concurrency.
+- `allowOffline`
+  Optional `wllama` runtime hint that prefers cached assets and avoids network fetches when possible.
 - `providerId` / `providerType` / `providerDisplayName`
   Runtime-only metadata for browser-saved cloud models so the worker can look up the saved provider and render a clearer picker card.
 - `apiBaseUrl`
@@ -233,7 +242,7 @@ Use this quick map before adding fields ad hoc:
 - New tool-call syntax:
   Check `src/llm/tool-calling.js`.
 - New backend or runtime requirement:
-  Check `src/config/model-settings.js`, `docs/engine-selection.md`, and `src/workers/llm.worker.js`.
+  Check `src/config/model-settings.js`, `docs/engine-selection.md`, and the relevant worker entrypoint such as `src/workers/llm.worker.js` or `src/workers/wllama.worker.js`.
 - New image/audio/video behavior:
   Check `src/main.js`, `src/app/preferences-models.js`, `src/app/composer-events.js`, `src/attachments/composer-attachments.js`, and `src/workers/llm.worker.js`.
 - New thought / reasoning output style:
@@ -279,6 +288,12 @@ Current models in Settings:
   - Relies on the upstream `transformers.js_config.use_external_data_format` map for per-dtype ONNX shard counts.
   - Uses `thinkingTags { open: "<think>", close: "</think>" }`.
   - Uses tagged JSON tool calls with `<tool_call>...</tool_call>` wrappers and `{"name":"...","arguments":{...}}` inside.
+- `unsloth/Qwen3.5-2B-GGUF`
+  - Uses the `wllama` engine.
+  - Uses runtime `modelUrl: https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/1c466474d208da1a7c4b8cb87ebcdac78f160e34/Qwen3.5-2B-UD-Q4_K_XL.gguf`.
+  - Runs as a text-only CPU/WASM GGUF model in this app. Selecting it auto-switches the backend preference to `CPU`.
+  - Uses `thinkingTags { open: "<think>", close: "</think>" }`.
+  - Keeps tool calling and multimodal input disabled in this app.
 - Legacy aliases remapped automatically at runtime:
   - `onnx-community/gemma-4-E2B-it-ONNX` -> `huggingworld/gemma-4-E2B-it-ONNX`
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
@@ -294,10 +309,11 @@ Notes:
 
 - Each model explicitly points at its engine driver in config.
 - Transformers.js is loaded from the locally installed package and bundled into the app build.
+- `@wllama/wllama` is also loaded from the locally installed package and bundles the single-thread `wllama.wasm` runtime asset into the app build.
 - The installed Transformers.js runtime now exposes newer low-bit ONNX dtypes including `q2`, `q2f16`, `q1`, and `q1f16`; the bundled catalog currently keeps Bonsai on `q1` for both WebGPU and CPU.
 - Model assets are downloaded at runtime and cached in-browser through the engine-specific path.
 - Model assets are not committed to this repository.
-- Transformers.js-backed model assets in the shipped catalog are revision-pinned, and the ONNX worker now uses app-bundled ONNX Runtime WASM assets instead of the default CDN path.
+- Transformers.js-backed model assets in the shipped catalog are revision-pinned, the bundled Qwen GGUF model uses a pinned Hugging Face `resolve/<commit>/...` URL, and the ONNX worker now uses app-bundled ONNX Runtime WASM assets instead of the default CDN path.
 - The pre-chat picker presents each model as a single-select horizontal row with capability chips, language tags, and short-term memory shown as tokens plus a rough word estimate rounded to the nearest 100.
 - Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
 - Audio input is upload-only. The app does not expose live recording.
@@ -316,5 +332,6 @@ Per-model limits and defaults:
 - `huggingworld/gemma-4-E2B-it-ONNX`: engine `transformers-js`, runtime revision `84b2c85ce64e8a0c999a3284f438d28db1d396a5`, runtime dtypes `{ webgpu: q4f16, cpu: q4f16 }`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, `inputLimits.maxAudioInputs: 1`, max context `131072`, default context `8192`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime revision `8ddaf6b6764ff2916a807e3c2ec0b5a441192473`, runtime dtypes `{ webgpu: q4, cpu: q4 }`, max context `131072`, default context `8192`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"shell":"..."}` inside `parameters`, no thinking tags
 - `onnx-community/Bonsai-8B-ONNX`: runtime revision `a5694a132e4050cef2dc335528016ce7e56504c9`, runtime dtypes `{ webgpu: q1, cpu: q1 }`, max context `65536`, default context `8192`, default temperature `0.5`, default top-k `20`, default top-p `0.85`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, tagged JSON tool-call format inside `<tool_call>...</tool_call>`, thinking tags `<think>` / `</think>`, and upstream-managed per-dtype ONNX shard metadata
+- `unsloth/Qwen3.5-2B-GGUF`: engine `wllama`, pinned GGUF URL `.../resolve/1c466474d208da1a7c4b8cb87ebcdac78f160e34/Qwen3.5-2B-UD-Q4_K_XL.gguf`, max context `32768`, default context `8192`, default temperature `0.7`, default top-k `20`, default top-p `0.8`, default repetition penalty `1.0`, feature flag `thinking`, no tool calling, no multimodal input, and `<think>` / `</think>` reasoning tags
 - `Llama 3.2 3B` keeps the browser-oriented `onnx-web` repo id as its canonical model in this app. The full ONNX repo remains a legacy alias because its browser load path was not reliable here: the `int8` package could fail with `Array buffer allocation failed`, and the `q4` package could fail to preload required `.onnx_data` shards.
 - The remaining listed Llama entry enables `useExternalDataFormat: true` for `.onnx_data` loading.

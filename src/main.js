@@ -3577,8 +3577,54 @@ async function clearSelectedModelDownloads() {
     setStatus('Selected model is unavailable.');
     return;
   }
+  if (selectedModel.engine?.type === 'wllama') {
+    const runtime =
+      selectedModel.runtime && typeof selectedModel.runtime === 'object' ? selectedModel.runtime : {};
+    const modelUrl =
+      typeof runtime.modelUrl === 'string' && runtime.modelUrl.trim() ? runtime.modelUrl.trim() : '';
+    if (!modelUrl) {
+      setStatus('Selected model is missing its GGUF cache key.');
+      return;
+    }
+
+    setStatus('Clearing downloaded model files...');
+    appendDebug(`Clearing cached wllama files for ${selectedModelId}.`);
+
+    try {
+      const { ModelManager } = await import('@wllama/wllama');
+      const manager = new ModelManager({
+        allowOffline: true,
+        logger: {
+          debug() {},
+          log() {},
+          warn() {},
+          error() {},
+        },
+      });
+      const cachedModels = await manager.getModels({ includeInvalid: true });
+      const cachedModel = cachedModels.find((candidate) => candidate.url === modelUrl);
+
+      if (!cachedModel) {
+        setStatus(`No cached files were found for ${selectedModel.displayName || selectedModelId}.`);
+        appendDebug(`No cached wllama files were found for ${selectedModelId}.`);
+        return;
+      }
+
+      await cachedModel.remove();
+      setStatus(
+        `Cleared cached files for ${selectedModel.displayName || selectedModelId}.`
+      );
+      appendDebug(`Cleared cached wllama files for ${selectedModelId}.`);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+      setStatus(`Failed to clear downloaded model files: ${message}`);
+      appendDebug(`Clear downloaded wllama model files failed: ${message}`);
+      return;
+    }
+  }
   if (selectedModel.engine?.type !== 'transformers-js') {
-    setStatus('Selected model does not use the Transformers.js browser cache.');
+    setStatus('Selected model does not use a clearable browser-local model cache.');
     return;
   }
 

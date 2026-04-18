@@ -735,6 +735,15 @@ export class LLMEngineClient {
     if (currentRequiresMultimodal !== nextRequiresMultimodal) {
       return true;
     }
+    if (
+      typeof this.engineDescriptor?.generationConfigRequiresReinit === 'function' &&
+      this.engineDescriptor.generationConfigRequiresReinit(
+        this.config.generationConfig,
+        nextGenerationConfig
+      )
+    ) {
+      return true;
+    }
     if (this.engineDescriptor?.reinitializeOnGenerationConfigChange !== true) {
       return false;
     }
