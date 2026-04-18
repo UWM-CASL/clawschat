@@ -9,6 +9,7 @@ The semantic memory layer exists to keep durable, high-value context available w
 Current goals:
 
 - keep memory local to the browser
+- keep memory isolated to the conversation where it was learned
 - stay explainable and inspectable
 - avoid depending on model-emitted memory tool calls
 - retrieve compact scaffolds rather than verbose prose
@@ -19,6 +20,7 @@ Current goals:
   - user-authored messages after a completed turn
   - agent summary nodes created during summary compaction
 - Retrieval happens during prompt assembly, before generation, using the latest user message on the active branch as the query.
+- Retrieval is hard-scoped to the active conversation; semantic memory from other conversations is not eligible, even when the wording overlaps.
 - Retrieved memory is appended as a compact system-prompt section.
 - Memory records are stored in IndexedDB separately from conversation/message/artifact records.
 - Deleting a conversation removes the semantic memory sources that came from that conversation.

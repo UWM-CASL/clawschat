@@ -85,6 +85,68 @@ describe('semantic-memory', () => {
     });
   });
 
+  test('keeps records isolated per conversation when the ideas match', () => {
+    const firstConversationCandidates = extractMemoryCandidatesFromText('I prefer oat milk.', {
+      source: {
+        conversationId: 'conversation-1',
+        messageId: 'user-1',
+        role: 'user',
+        createdAt: Date.UTC(2026, 3, 10, 12),
+      },
+    });
+    const secondConversationCandidates = extractMemoryCandidatesFromText('I prefer oat milk.', {
+      source: {
+        conversationId: 'conversation-2',
+        messageId: 'user-2',
+        role: 'user',
+        createdAt: Date.UTC(2026, 3, 10, 12, 1),
+      },
+    });
+
+    const { records } = mergeSemanticMemoryRecords(
+      [],
+      [...firstConversationCandidates, ...secondConversationCandidates],
+      Date.UTC(2026, 3, 10, 12, 2)
+    );
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.conversationId)).toEqual(
+      expect.arrayContaining(['conversation-1', 'conversation-2'])
+    );
+  });
+
+  test('does not retrieve semantic memory from a different conversation', () => {
+    const { records } = mergeSemanticMemoryRecords(
+      [],
+      extractMemoryCandidatesFromText('I am allergic to peanuts.', {
+        source: {
+          conversationId: 'conversation-1',
+          messageId: 'user-1',
+          role: 'user',
+          createdAt: Date.UTC(2026, 3, 10, 12),
+        },
+      }),
+      Date.UTC(2026, 3, 10, 12, 10)
+    );
+
+    const wrongConversationResult = retrieveSemanticMemories(records, 'peanut allergy', {
+      conversationId: 'conversation-2',
+      temporalRelevance: 'now',
+      now: Date.UTC(2026, 3, 10, 12, 20),
+    });
+    const rightConversationResult = retrieveSemanticMemories(records, 'peanut allergy', {
+      conversationId: 'conversation-1',
+      temporalRelevance: 'now',
+      now: Date.UTC(2026, 3, 10, 12, 20),
+    });
+
+    expect(wrongConversationResult.matches).toHaveLength(0);
+    expect(rightConversationResult.matches[0]).toMatchObject({
+      conversationId: 'conversation-1',
+      idea: 'I am allergic to peanuts',
+    });
+  });
+
   test('extracts multiple summary memories from structured headings', () => {
     const candidates = extractMemoryCandidatesFromSummary(`Summary:
 David is finishing a history paper.

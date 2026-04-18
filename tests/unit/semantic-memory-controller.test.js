@@ -111,6 +111,41 @@ describe('semantic-memory controller', () => {
     ]);
   });
 
+  test('buildPromptSection only returns memory from the active conversation', async () => {
+    const controller = createSemanticMemoryController({
+      loadSemanticMemories: async () => [],
+      replaceSemanticMemories: async () => {},
+      clearSemanticMemories: async () => {},
+      getConversationPathMessages,
+    });
+
+    const firstConversation = createConversation([
+      {
+        id: 'user-1',
+        role: 'user',
+        text: 'I am allergic to peanuts.',
+        createdAt: Date.UTC(2026, 3, 10, 12),
+        parentId: null,
+      },
+    ]);
+    const secondConversation = createConversation([
+      {
+        id: 'user-2',
+        role: 'user',
+        text: 'Can you remind me what I said about peanut allergy?',
+        createdAt: Date.UTC(2026, 3, 10, 12, 10),
+        parentId: null,
+      },
+    ]);
+    secondConversation.id = 'conversation-2';
+
+    await controller.rememberUserMessage(firstConversation, firstConversation.messageNodes[0]);
+
+    const promptSection = controller.buildPromptSection(secondConversation);
+
+    expect(promptSection).toBe('');
+  });
+
   test('remembers structured summary lines as memory candidates', async () => {
     const controller = createSemanticMemoryController({
       loadSemanticMemories: async () => [],

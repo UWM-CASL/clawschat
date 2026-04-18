@@ -690,8 +690,27 @@ function createRecordId() {
   return `memory-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function normalizeConversationId(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getConversationScopeId(entry) {
+  const explicitConversationId = normalizeConversationId(entry?.conversationId);
+  if (explicitConversationId) {
+    return explicitConversationId;
+  }
+  const directSourceConversationId = normalizeConversationId(entry?.source?.conversationId);
+  if (directSourceConversationId) {
+    return directSourceConversationId;
+  }
+  const sourceConversationId = (Array.isArray(entry?.sources) ? entry.sources : [])
+    .map((source) => normalizeConversationId(source?.conversationId))
+    .find(Boolean);
+  return sourceConversationId || '';
+}
+
 function memoryKey(candidate) {
-  return `${candidate.domain}::${candidate.kind}::${candidate.normalizedIdea}`;
+  return `${getConversationScopeId(candidate)}::${candidate.domain}::${candidate.kind}::${candidate.normalizedIdea}`;
 }
 
 function mergeAnchors(existing = [], next = []) {
@@ -714,6 +733,7 @@ function hasSourceRef(record, sourceRef) {
 export function mergeSemanticMemoryRecords(existingRecords = [], candidates = [], now = Date.now()) {
   const nextRecords = existingRecords.map((record) => ({
     ...record,
+    conversationId: getConversationScopeId(record),
     anchors: Array.isArray(record.anchors) ? record.anchors.map((anchor) => ({ ...anchor })) : [],
     paths: Array.isArray(record.paths) ? [...record.paths] : [],
     sources: Array.isArray(record.sources) ? record.sources.map((source) => ({ ...source })) : [],
@@ -730,6 +750,7 @@ export function mergeSemanticMemoryRecords(existingRecords = [], candidates = []
     if (!existing) {
       const nextRecord = {
         id: createRecordId(),
+        conversationId: getConversationScopeId(candidate),
         domain: candidate.domain,
         kind: candidate.kind,
         idea: candidate.idea,
@@ -806,6 +827,19 @@ function scoreTemporalFit(record, temporalRelevance) {
   return category === 'atemporal' ? 0.65 : 0.35;
 }
 
+function recordBelongsToConversation(record, conversationId) {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!normalizedConversationId) {
+    return true;
+  }
+  if (getConversationScopeId(record) === normalizedConversationId) {
+    return true;
+  }
+  return (Array.isArray(record?.sources) ? record.sources : []).some(
+    (source) => normalizeConversationId(source?.conversationId) === normalizedConversationId
+  );
+}
+
 export function retrieveSemanticMemories(
   records = [],
   idea,
@@ -851,21 +885,13 @@ export function retrieveSemanticMemories(
             : 0;
       const temporalScore = scoreTemporalFit(record, temporal);
       const effectiveStrength = calculateEffectiveStrength(record, now);
-      const conversationBias =
-        normalizedConversationId &&
-        (Array.isArray(record.sources) ? record.sources : []).some(
-          (source) => source?.conversationId === normalizedConversationId
-        )
-          ? 0.18
-          : 0;
       const score =
         textScore * 4 +
         anchorScore * 3 +
         pathScore * 1.75 +
         exactScore * 2 +
         temporalScore * 1.4 +
-        effectiveStrength +
-        conversationBias;
+        effectiveStrength;
       const stale = effectiveStrength < 0.35;
       return {
         ...record,
@@ -875,6 +901,7 @@ export function retrieveSemanticMemories(
         stale,
       };
     })
+    .filter((record) => recordBelongsToConversation(record, normalizedConversationId))
     .filter((record) => record.score > 1.2)
     .sort((left, right) => right.score - left.score)
     .slice(0, Math.max(1, Math.trunc(limit || 6)));

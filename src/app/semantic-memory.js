@@ -157,6 +157,10 @@ export function createSemanticMemoryController(dependencies = {}) {
         }
         return {
           ...record,
+          conversationId:
+            (Array.isArray(nextSources) ? nextSources : []).find(
+              (source) => typeof source?.conversationId === 'string' && source.conversationId.trim()
+            )?.conversationId || '',
           sources: nextSources,
         };
       })
