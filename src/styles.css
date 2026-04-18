@@ -432,8 +432,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
   gap: 0.6rem;
   align-items: center;
-  width: min(100%, var(--chat-content-max-width));
-  margin: 0 auto;
+  width: 100%;
 }
 
 .top-bar-start {
