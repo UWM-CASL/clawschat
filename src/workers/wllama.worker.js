@@ -1,4 +1,3 @@
-import { LoggerWithoutDebug, Wllama } from '@wllama/wllama';
 import singleThreadWasmPath from '@wllama/wllama/esm/single-thread/wllama.wasm?url';
 
 import {
@@ -25,6 +24,27 @@ let loadedModelId = '';
 let loadedRuntimeConfigKey = '';
 let generationConfig = buildDefaultGenerationConfig(WORKER_GENERATION_LIMITS);
 let activeGeneration = null;
+let wllamaLibraryPromise = null;
+
+function ensureWorkerDocumentShim() {
+  if (typeof globalThis.document === 'undefined') {
+    globalThis.document = {
+      baseURI: self.location?.href || '',
+    };
+    return;
+  }
+  if (typeof globalThis.document.baseURI !== 'string' || !globalThis.document.baseURI) {
+    globalThis.document.baseURI = self.location?.href || '';
+  }
+}
+
+async function loadWllamaLibrary() {
+  ensureWorkerDocumentShim();
+  if (!wllamaLibraryPromise) {
+    wllamaLibraryPromise = import('@wllama/wllama');
+  }
+  return wllamaLibraryPromise;
+}
 
 function toErrorMessage(value) {
   if (value instanceof Error) {
@@ -213,6 +233,8 @@ async function initialize(payload) {
     resetFiles: true,
   });
   postStatus(`Loading ${modelId} with CPU...`);
+
+  const { LoggerWithoutDebug, Wllama } = await loadWllamaLibrary();
 
   const nextWllama = new Wllama(
     {
