@@ -8,7 +8,6 @@ Inference is selected through the engine client boundary and executes through a 
 - `src/llm/engine-client.js` reads that engine type from the selected model config and uses the matching engine descriptor from `src/llm/engines/`.
 - The app currently ships:
   - `transformers-js` via `src/workers/llm.worker.js`
-  - `mediapipe-genai` via `src/workers/mediapipe-llm.worker.js`
   - `openai-compatible` via `src/workers/openai-compatible.worker.js`
 - Additional local or remote drivers can be added later without changing the UI/controller contract, as long as they implement the same client-facing `initialize` / `generate` / `cancel` lifecycle.
 
@@ -36,7 +35,6 @@ Inference is selected through the engine client boundary and executes through a 
 - For text-only Transformers.js turns, the worker now loads `AutoTokenizer` and `AutoModelForCausalLM` directly, feeds tokenized prompt tensors into `model.generate()`, and reuses `past_key_values` when a follow-up turn extends the previous prompt prefix.
 - ONNX models may provide mode-specific runtime hints such as `runtime.dtypes.webgpu` and `runtime.dtypes.cpu`.
 - ONNX model entries may also pin `runtime.revision` so Hub downloads stay on an exact model snapshot.
-- LiteRT-backed models may use engine-specific runtime hints such as `runtime.modelAssetPath` and `runtime.promptFormat` instead of Transformers.js-specific dtype settings.
 - Browser-saved cloud models use runtime hints such as `runtime.providerId`, `runtime.apiBaseUrl`, `runtime.remoteModelId`, and optional `runtime.supportsTopK` to drive the OpenAI-compatible worker.
 - The OpenAI-compatible worker keeps two request profiles: strict OpenAI-hosted endpoints suppress `top_k` and send `max_completion_tokens` on `/chat/completions`, while broader compatible endpoints keep the looser `max_tokens` request field.
 
@@ -53,7 +51,6 @@ If WebGPU fails before any response tokens have streamed with a recoverable runt
 If the user chooses `Stop generating` while that automatic CPU recovery is in flight, the pending request is canceled and the retry is not resumed after the replacement worker finishes initializing.
 If that automatic CPU retry is unavailable or still fails, the controller unloads the current worker, marks the model as not ready, and surfaces recovery guidance to retry, switch to CPU, or reload the page if the browser/driver keeps failing WebGPU execution.
 OpenAI-compatible requests stream through Server-Sent Events in a dedicated worker and still honor the existing cancellation contract by aborting the in-flight fetch when the user chooses `Stop generating`.
-LiteRT/MediaPipe-backed models apply context and sampler settings at initialization time, so generation-setting edits trigger a reinitialization before the next LiteRT request instead of being hot-swapped mid-session.
 
 ## UI boundary
 

@@ -164,7 +164,6 @@ function installInferenceOnlyMockWorker() {
         const scriptUrl = String(url || '');
         if (
           scriptUrl.includes('llm.worker') ||
-          scriptUrl.includes('mediapipe-llm.worker') ||
           scriptUrl.includes('openai-compatible.worker')
         ) {
           return new MockLlmWorker();

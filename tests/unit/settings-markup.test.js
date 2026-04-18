@@ -34,7 +34,7 @@ describe('settings markup', () => {
     expect(cpuThreadsInput?.getAttribute('type')).toBe('number');
     expect(cpuThreadsInput?.getAttribute('aria-describedby')).toBe('cpuThreadsHelp');
     expect(dom.window.document.getElementById('cpuThreadsHelp')?.textContent).toContain(
-      'LiteRT runtime'
+      'Transformers.js CPU/WASM path'
     );
   });
 

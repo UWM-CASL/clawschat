@@ -153,9 +153,8 @@ describe('model-settings availability', () => {
   test('falls back to the default model for removed model ids', () => {
     expect(normalizeModelId(REMOVED_LLAMA_1B_MODEL_ID)).toBe(GEMMA_4_MODEL_ID);
     expect(normalizeModelId(REMOVED_QWEN_2B_MODEL_ID)).toBe(GEMMA_4_MODEL_ID);
-    expect(normalizeModelId('Yoursmiling/Qwen3.5-2B-LiteRT')).toBe(GEMMA_4_MODEL_ID);
     expect(normalizeModelId('onnx-community/Qwen3-0.6B-ONNX')).toBe(GEMMA_4_MODEL_ID);
-    expect(normalizeModelId('litert-community/gemma-4-E4B-it-litert-lm')).toBe(GEMMA_4_MODEL_ID);
+    expect(normalizeModelId('example/unsupported-model')).toBe(GEMMA_4_MODEL_ID);
   });
 
   test('exposes model feature flags from config', () => {

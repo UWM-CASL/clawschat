@@ -5,7 +5,7 @@ Model support is configured in `src/config/models.json`:
 - `models`: list of supported models (`id`, `label`, optional card metadata, optional `features`)
   - The app also appends browser-saved cloud models at runtime from `Settings -> Cloud Providers`; those entries are normalized into the same picker/catalog shape even though they are not committed in `src/config/models.json`.
 - `models[].engine`: explicit inference-driver selection for that model
-  - `type`: currently `transformers-js`, `mediapipe-genai`, or `openai-compatible`
+  - `type`: currently `transformers-js` or `openai-compatible`
 - `models[].displayName`: friendly card title shown in the pre-chat model picker
 - `models[].languageSupport`: optional language-tag metadata for the pre-chat picker
   - `tags`: ordered language entries with two-letter `code` and full `name`
@@ -29,8 +29,6 @@ Model support is configured in `src/config/models.json`:
   - `multimodalGeneration` (`true` only when the worker has a real multimodal execution path for image/audio/video inputs)
   - `allowBackendFallback` (`false` to block automatic fallback to a different backend package during init; users can still choose CPU mode explicitly)
   - `useExternalDataFormat` (`true`/number to enable loading `.onnx_data` sidecar files)
-  - `modelAssetPath` (pinned LiteRT artifact URL for engines that fetch a specific artifact directly)
-  - `promptFormat` (worker-side prompt flattening profile for LiteRT models that do not use tokenizer `apply_chat_template()`)
   - `providerId` / `providerType` / `providerDisplayName` (runtime-only metadata for browser-saved cloud models)
   - `apiBaseUrl` / `remoteModelId` (OpenAI-compatible worker endpoint/model routing)
   - `supportsTopK` (`true` only when the configured cloud provider should receive `top_k`)
@@ -145,7 +143,7 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
 ### Engine field
 
 - `engine.type`
-  Selects the inference driver for that model. The current app ships `transformers-js` for ONNX/Transformers.js models, `mediapipe-genai` for LiteRT Gemma 4, and `openai-compatible` for browser-saved cloud models discovered from `Settings -> Cloud Providers`.
+  Selects the inference driver for that model. The current app ships `transformers-js` for bundled ONNX/Transformers.js models and `openai-compatible` for browser-saved cloud models discovered from `Settings -> Cloud Providers`.
 
 ### Runtime fields
 
@@ -161,10 +159,6 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
   Enables the multimodal processor/model path when the active prompt actually contains image/audio/video inputs. Text-only chats on those same models can still load through the lighter text-generation path.
 - `useExternalDataFormat`
   Enables `.onnx_data` sidecar loading for exported ONNX packages.
-- `modelAssetPath`
-  Used by engines such as `mediapipe-genai` to fetch a pinned LiteRT artifact directly.
-- `promptFormat`
-  Used by LiteRT worker paths to select the right flattened chat wrapper. Current values are `gemma-turns` and `qwen-im`.
 - `providerId` / `providerType` / `providerDisplayName`
   Runtime-only metadata for browser-saved cloud models so the worker can look up the saved provider and render a clearer picker card.
 - `apiBaseUrl`
@@ -299,7 +293,7 @@ Current models in Settings:
 Notes:
 
 - Each model explicitly points at its engine driver in config.
-- Transformers.js and MediaPipe Tasks GenAI are loaded from locally installed packages and bundled into the app build.
+- Transformers.js is loaded from the locally installed package and bundled into the app build.
 - The installed Transformers.js runtime now exposes newer low-bit ONNX dtypes including `q2`, `q2f16`, `q1`, and `q1f16`; the bundled catalog currently keeps Bonsai on `q1` for both WebGPU and CPU.
 - Model assets are downloaded at runtime and cached in-browser through the engine-specific path.
 - Model assets are not committed to this repository.

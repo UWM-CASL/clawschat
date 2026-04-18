@@ -11,9 +11,6 @@ importers:
       '@huggingface/transformers':
         specifier: ^4.1.0
         version: 4.1.0
-      '@mediapipe/tasks-genai':
-        specifier: 0.10.27
-        version: 0.10.27
       '@popperjs/core':
         specifier: ^2.11.8
         version: 2.11.8
@@ -479,9 +476,6 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
-
-  '@mediapipe/tasks-genai@0.10.27':
-    resolution: {integrity: sha512-cv69CPPAtEDBUs6dGZft2S+sBqde1XvEMST367siSyxrhffdWtm4uQIsfdedAbhJ33BwAjuMnAdxDrO9WrzIAQ==}
 
   '@napi-rs/canvas-android-arm64@0.1.97':
     resolution: {integrity: sha512-V1c/WVw+NzH8vk7ZK/O8/nyBSCQimU8sfMsB/9qeSvdkGKNU7+mxy/bIF0gTgeBFmHpj30S4E9WHMSrxXGQuVQ==}
@@ -1906,8 +1900,6 @@ snapshots:
     optional: true
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
-
-  '@mediapipe/tasks-genai@0.10.27': {}
 
   '@napi-rs/canvas-android-arm64@0.1.97':
     optional: true

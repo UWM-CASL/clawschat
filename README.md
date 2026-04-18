@@ -4,7 +4,7 @@ Student-facing browser chat UI with local model inference.
 
 ## Runtime behavior
 
-- Inference runs through an engine-driver layer selected from model config and user preferences; the app currently ships both a Transformers.js worker path and a LiteRT/MediaPipe GenAI worker path.
+- Inference runs through an engine-driver layer selected from model config and user preferences; bundled local models currently use the Transformers.js worker path, while browser-saved cloud models use the OpenAI-compatible worker path.
 - Conversation turns are sent to the model as structured chat messages (`system`/`user`/`assistant`) rather than a flattened transcript string.
 - On initial load, the app shows a home screen with a `Start a conversation` action.
 - Clicking `Start a conversation` opens the chat workspace at `#/chat` with model selection, an empty composer, and no model load yet.
@@ -99,7 +99,6 @@ Student-facing browser chat UI with local model inference.
 - The bundled ONNX Gemma 4 E2B entry now points at `huggingworld/gemma-4-E2B-it-ONNX` and runs through the Transformers.js worker path on both WebGPU and CPU.
 - The bundled ONNX Llama 3.2 3B entry now uses `q4` on both WebGPU and CPU.
 - The bundled ONNX Bonsai 8B experimental entry now uses `q1` on both WebGPU and CPU.
-- The bundled LiteRT runtime in this app does not currently expose a matching CPU-thread setting, so the System-tab thread control applies only to the Transformers.js/ONNX path.
 - Token controls in Settings:
   - `Maximum output tokens` and `Context size (short-term memory)` are model-aware integer fields.
   - Values are constrained by per-model limits from `src/config/models.json` and use `step=8`.
@@ -109,7 +108,6 @@ Student-facing browser chat UI with local model inference.
   - `Context size (short-term memory)` includes a `Reset to model default` link that applies the selected model default when clicked.
   - On the Transformers.js engine path, `Context size` is enforced as a hard prompt-token budget by left-truncating the oldest conversation tokens before generation, and `Maximum output tokens` is enforced separately as the generation cap.
   - On the Transformers.js multimodal path, the worker trims the oldest non-system turns before generation so image/audio prompts stay within the configured context budget; if the current multimodal turn alone is too large, generation fails with guidance to raise the context size or reduce attachments.
-  - LiteRT/MediaPipe-backed models apply context and sampler settings at initialization time, so generation-setting edits trigger a reinitialization before the next LiteRT request instead of hot-swapping those values mid-session.
   - If changed during generation, updates are queued and applied after the current response finishes.
 - `Settings -> Model` also includes:
   - `Response language`, stored per conversation or pending pre-chat draft, with a warning when the selected language is not listed for the selected model in this app.
@@ -131,7 +129,6 @@ Student-facing browser chat UI with local model inference.
 - Model files are downloaded on first load and cached in-browser for reuse.
   - Transformers.js-backed models use the Transformers.js browser cache.
   - `Settings -> System -> Clear Downloaded Model Files` clears the selected local Transformers.js model from that browser cache without guessing at cache internals.
-  - LiteRT-backed models fetch a pinned LiteRT artifact (`.task` or `.litertlm`) at runtime and rely on the browser HTTP cache.
 - `Settings -> Debug` shows a paginated debug log (20 entries per page, newest first) with CSV export, including proxy validation, MCP transport diagnostics, and one complete raw model-output blob per visible model turn, preserved before transcript parsing or tool-call folding.
 - Conversation list and transcript are state-driven (no placeholder messages).
 - On desktop widths, the conversation list can be collapsed from a border-mounted toggle to give the active chat more space; the preference is saved locally.
@@ -294,7 +291,7 @@ For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` r
 - `models[].repositoryUrl`: model details link used from the card footer
 - `models[].unavailableReason`: optional fixed reason that keeps a model visible in the picker but disabled in this app
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)
-  - `models[].runtime`: per-model runtime hints (optional `dtypes.webgpu`, optional `dtypes.cpu`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`, optional `modelAssetPath`, optional `promptFormat`)
+  - `models[].runtime`: per-model runtime hints (optional `dtypes.webgpu`, optional `dtypes.cpu`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
   - `models[].inputLimits`: optional per-media limits such as `maxImageInputs` and `maxAudioInputs`
   - `models[].thinkingControl`: optional model-specific reasoning control metadata (`defaultEnabled`, optional `runtimeParameter`, optional `enabledInstruction`, optional `disabledInstruction`)
   - `models[].generation`: per-model defaults and limits for output/context tokens, temperature, `defaultTopK`, `defaultTopP`, and optional runtime-supported defaults such as `defaultRepetitionPenalty`
@@ -314,7 +311,7 @@ For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` r
 ## Security notes
 
 - Precise location tool use now shows a one-time awareness prompt before first use. If declined, the app falls back to a coarse location label with no coordinates.
-- Transformers.js and MediaPipe Tasks GenAI are bundled from locally installed packages rather than imported from a CDN at runtime.
+- Transformers.js is bundled from the locally installed package rather than imported from a CDN at runtime.
 - Browser-local Python execution currently loads Pyodide assets from the pinned `https://cdn.jsdelivr.net/pyodide/v0.29.3/full/` distribution at runtime.
 - Optional CORS proxy support uses a validated prefix-style proxy URL from `Settings -> Proxy`; validation now sends an MCP `initialize` probe to `https://example-server.modelcontextprotocol.io/mcp`, accepts the reference server's auth challenge as proof that the proxied MCP transport is browser-readable, and retries only after a likely CORS failure. Same-origin requests, remote proxying of local/private-network targets, and requests with explicit authorization headers are left on the normal browser path.
 - OpenAI-compatible cloud providers are tested with a direct authenticated `GET /models` call and then used directly from the browser for `/chat/completions`; those requests require browser-readable CORS support because the app intentionally does not proxy authorization-bearing requests.
@@ -328,7 +325,7 @@ For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` r
 - Audio input is upload-only. The app does not expose live recording.
 - Video input is not currently exposed because the supported browser runtime paths are not reliable enough yet.
 - The app still does not ship with a CSP. This is a documented hardening gap for a future pass.
-- The bundled Transformers.js models in `src/config/models.json` are pinned to explicit Hugging Face revisions, so browser caches stay stable across redeploys until the catalog is intentionally updated. LiteRT artifacts also stay revision-pinned.
+- The bundled Transformers.js models in `src/config/models.json` are pinned to explicit Hugging Face revisions, so browser caches stay stable across redeploys until the catalog is intentionally updated.
 
 See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 

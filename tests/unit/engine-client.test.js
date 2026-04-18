@@ -498,36 +498,6 @@ describe('LLMEngineClient', () => {
     });
   });
 
-  test('reinitializes MediaPipe engines before generation when generation settings changed since init', async () => {
-    const client = new LLMEngineClient();
-    await client.initialize({
-      modelId: 'litert-community/gemma-4-E4B-it-litert-lm',
-      engineType: 'mediapipe-genai',
-      generationConfig: {
-        maxOutputTokens: 512,
-        maxContextTokens: 8192,
-        temperature: 1,
-        topK: 64,
-        topP: 0.95,
-        repetitionPenalty: 1,
-      },
-    });
-
-    client.setGenerationConfig({
-      maxOutputTokens: 768,
-    });
-
-    await client.generate('prompt', {
-      onToken: () => {},
-      onComplete: () => {},
-      onError: () => {},
-    });
-
-    const initMessages = MockWorker.instances[0].messages.filter((message) => message.type === 'init');
-    expect(initMessages).toHaveLength(2);
-    expect(initMessages[1]?.payload?.generationConfig?.maxOutputTokens).toBe(768);
-  });
-
   test('cancelGeneration sends a cancel request without reloading the worker', async () => {
     const client = new LLMEngineClient();
     await client.initialize({ modelId: 'example/model' });
@@ -679,5 +649,15 @@ describe('LLMEngineClient', () => {
     expect(client.loadedEngineType).toBe('transformers-js');
     expect(MockWorker.instances).toHaveLength(1);
     expect(MockWorker.instances[0].messages[0].payload.engineType).toBe('transformers-js');
+
+    await client.initialize({
+      modelId: 'cloud/example-model',
+      engineType: 'openai-compatible',
+    });
+
+    expect(client.loadedEngineType).toBe('openai-compatible');
+    expect(MockWorker.instances).toHaveLength(2);
+    expect(MockWorker.instances[0].terminated).toBe(true);
+    expect(MockWorker.instances[1].messages[0].payload.engineType).toBe('openai-compatible');
   });
 });
