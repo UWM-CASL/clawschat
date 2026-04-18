@@ -36,6 +36,7 @@ import { createWorkspaceSidePanelsController } from './app/workspace-side-panels
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createCorsAwareFetch, validateCorsProxyUrl } from './llm/browser-fetch.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
+import { expandWllamaModelUrls } from './llm/wllama-load.js';
 import { getEnabledMcpServerConfigs, inspectMcpServerEndpoint } from './llm/mcp-client.js';
 import {
   buildFactCheckingPrompt,
@@ -3601,16 +3602,27 @@ async function clearSelectedModelDownloads() {
           error() {},
         },
       });
-      const cachedModels = await manager.getModels({ includeInvalid: true });
-      const cachedModel = cachedModels.find((candidate) => candidate.url === modelUrl);
+      const cachedUrls = expandWllamaModelUrls(modelUrl);
+      const cacheEntriesBefore = await manager.cacheManager.list();
+      const cachedNames = await Promise.all(
+        cachedUrls.map((url) => manager.cacheManager.getNameFromURL(url))
+      );
+      const hadCachedFiles = cachedUrls.some((url) =>
+        cacheEntriesBefore.some(
+          (entry) =>
+            cachedNames.includes(entry.name) || entry.metadata?.originalURL === url
+        )
+      );
 
-      if (!cachedModel) {
+      if (!hadCachedFiles) {
         setStatus(`No cached files were found for ${selectedModel.displayName || selectedModelId}.`);
         appendDebug(`No cached wllama files were found for ${selectedModelId}.`);
         return;
       }
 
-      await cachedModel.remove();
+      for (const currentUrl of cachedUrls) {
+        await manager.cacheManager.delete(currentUrl);
+      }
       setStatus(
         `Cleared cached files for ${selectedModel.displayName || selectedModelId}.`
       );

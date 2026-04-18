@@ -4,7 +4,10 @@ import {
   buildDefaultGenerationConfig,
   sanitizeGenerationConfig,
 } from '../config/generation-config.js';
-import { shouldRetryWllamaModelLoad } from '../llm/wllama-load.js';
+import {
+  expandWllamaModelUrls,
+  shouldRetryWllamaModelLoad,
+} from '../llm/wllama-load.js';
 import { normalizeWllamaPromptMessages } from '../llm/wllama-prompt.js';
 
 const WORKER_GENERATION_LIMITS = {
@@ -103,13 +106,11 @@ async function createWllamaInstance(runtime = {}) {
 }
 
 async function clearCachedWllamaModel(instance, modelUrl) {
-  if (!instance?.modelManager || !modelUrl) {
+  if (!instance?.modelManager?.cacheManager || !modelUrl) {
     return;
   }
-  const cachedModels = await instance.modelManager.getModels({ includeInvalid: true });
-  const cachedModel = cachedModels.find((entry) => entry.url === modelUrl);
-  if (cachedModel) {
-    await cachedModel.remove();
+  for (const currentUrl of expandWllamaModelUrls(modelUrl)) {
+    await instance.modelManager.cacheManager.delete(currentUrl);
   }
 }
 
