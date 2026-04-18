@@ -119,8 +119,25 @@ export function createSemanticMemoryController(dependencies = {}) {
     return rememberFromCandidates(candidates, 'Summary memory');
   }
 
-  function buildPromptSection(conversation, leafMessageId = conversation?.activeLeafMessageId) {
+  function buildPromptSection(
+    conversation,
+    leafMessageId = conversation?.activeLeafMessageId,
+    { contextLimitTokens = 0, promptTokenCount = 0 } = {}
+  ) {
     if (!conversation) {
+      return '';
+    }
+    const normalizedContextLimit =
+      Number.isFinite(contextLimitTokens) && contextLimitTokens > 0
+        ? Math.trunc(contextLimitTokens)
+        : 0;
+    const normalizedPromptTokenCount =
+      Number.isFinite(promptTokenCount) && promptTokenCount > 0 ? Math.trunc(promptTokenCount) : 0;
+    if (
+      normalizedContextLimit > 0 &&
+      normalizedPromptTokenCount > 0 &&
+      normalizedPromptTokenCount <= normalizedContextLimit
+    ) {
       return '';
     }
     const pathMessages = getConversationPathMessages(conversation, leafMessageId);

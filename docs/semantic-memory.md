@@ -20,6 +20,7 @@ Current goals:
   - user-authored messages after a completed turn
   - agent summary nodes created during summary compaction
 - Retrieval happens during prompt assembly, before generation, using the latest user message on the active branch as the query.
+- Retrieval stays off until the estimated prompt for the active branch exceeds the selected model's configured context limit.
 - Retrieval is hard-scoped to the active conversation; semantic memory from other conversations is not eligible, even when the wording overlaps.
 - Retrieved memory is appended as a compact system-prompt section.
 - Memory records are stored in IndexedDB separately from conversation/message/artifact records.

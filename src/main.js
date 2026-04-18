@@ -8,7 +8,10 @@ import Tooltip from 'bootstrap/js/dist/tooltip';
 import { bindComposerEvents } from './app/composer-events.js';
 import { createComposerRuntimeController } from './app/composer-runtime.js';
 import { createCloudProviderSettingsController } from './app/cloud-provider-settings.js';
-import { createAgentAutomationController } from './app/agent-automation.js';
+import {
+  createAgentAutomationController,
+  estimatePromptTokenCount,
+} from './app/agent-automation.js';
 import {
   formatAttachmentSize,
   getAttachmentButtonAcceptValue,
@@ -2825,20 +2828,28 @@ function buildPromptForActiveConversation(
   conversation,
   leafMessageId = conversation?.activeLeafMessageId
 ) {
+  const selectedModelId = getConversationModelId(conversation);
+  const systemPromptSuffix = getConversationSystemPromptSuffix(selectedModelId, conversation);
+  const baseSystemPromptSuffix = [systemPromptSuffix, 'Below is your conversation with the user.']
+    .filter((part) => typeof part === 'string' && part.trim())
+    .join('\n\n');
+  const basePrompt = buildPromptForConversationLeaf(conversation, leafMessageId, {
+    systemPromptSuffix: baseSystemPromptSuffix,
+  });
+  const promptTokenCount = estimatePromptTokenCount(basePrompt);
+  const contextLimitTokens = sanitizeGenerationConfigForModel(selectedModelId, {
+    ...appState.activeGenerationConfig,
+  }).maxContextTokens;
   const semanticMemoryPromptSection = semanticMemoryController?.buildPromptSection(
     conversation,
-    leafMessageId
-  );
-  const systemPromptSuffix = getConversationSystemPromptSuffix(
-    getConversationModelId(conversation),
-    conversation
+    leafMessageId,
+    {
+      contextLimitTokens,
+      promptTokenCount,
+    }
   );
   return buildPromptForConversationLeaf(conversation, leafMessageId, {
-    systemPromptSuffix: [
-      systemPromptSuffix,
-      semanticMemoryPromptSection,
-      'Below is your conversation with the user.',
-    ]
+    systemPromptSuffix: [systemPromptSuffix, semanticMemoryPromptSection, 'Below is your conversation with the user.']
       .filter((part) => typeof part === 'string' && part.trim())
       .join('\n\n'),
   });

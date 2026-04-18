@@ -62,6 +62,61 @@ describe('semantic-memory controller', () => {
     expect(promptSection).toContain('users.user.plans.dinner.tonight');
   });
 
+  test('does not build a prompt section until prompt tokens exceed the context limit', async () => {
+    const controller = createSemanticMemoryController({
+      loadSemanticMemories: async () => [],
+      replaceSemanticMemories: async () => {},
+      clearSemanticMemories: async () => {},
+      getConversationPathMessages,
+    });
+    const conversation = createConversation([
+      {
+        id: 'user-1',
+        role: 'user',
+        text: 'I am allergic to peanuts.',
+        createdAt: Date.UTC(2026, 3, 10, 12),
+        parentId: null,
+      },
+      {
+        id: 'model-1',
+        role: 'model',
+        text: 'Noted.',
+        createdAt: Date.UTC(2026, 3, 10, 12, 1),
+        parentId: 'user-1',
+      },
+      {
+        id: 'user-2',
+        role: 'user',
+        text: 'What food should I avoid?',
+        createdAt: Date.UTC(2026, 3, 10, 12, 2),
+        parentId: 'model-1',
+      },
+    ]);
+
+    await controller.rememberUserMessage(conversation, conversation.messageNodes[0]);
+
+    const belowLimitPromptSection = controller.buildPromptSection(
+      conversation,
+      conversation.activeLeafMessageId,
+      {
+        contextLimitTokens: 100,
+        promptTokenCount: 100,
+      }
+    );
+    const aboveLimitPromptSection = controller.buildPromptSection(
+      conversation,
+      conversation.activeLeafMessageId,
+      {
+        contextLimitTokens: 100,
+        promptTokenCount: 101,
+      }
+    );
+
+    expect(belowLimitPromptSection).toBe('');
+    expect(aboveLimitPromptSection).toContain('Relevant semantic memory for this turn:');
+    expect(aboveLimitPromptSection).toContain('allergic to peanuts');
+  });
+
   test('forgets conversation-linked memories without dropping unrelated sources', async () => {
     const persistedStates = [];
     const controller = createSemanticMemoryController({
