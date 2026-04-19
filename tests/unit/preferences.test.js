@@ -430,7 +430,7 @@ describe('preferences controller', () => {
     expect(cards.length).toBe(modelSelect.querySelectorAll('option').length);
 
     const llama3BCard = getModelCard(modelCardList, LLAMA_3B_MODEL_ID);
-    expect(llama3BCard?.textContent).toContain('131,072 tokens');
+    expect(llama3BCard?.textContent).toContain('4,096 tokens');
     expect(llama3BCard?.textContent).not.toContain('Temp 0.6');
     expect(llama3BCard?.textContent).not.toContain('Default context 8,192');
     expect(
@@ -446,8 +446,8 @@ describe('preferences controller', () => {
     expect(getModelCard(modelCardList, 'onnx-community/Qwen3.5-2B-ONNX')).toBeNull();
 
     const bonsaiCard = getModelCard(modelCardList, BONSAI_8B_MODEL_ID);
-    expect(bonsaiCard?.textContent).toContain('65,536 tokens');
-    expect(bonsaiCard?.textContent).toContain('about 49,200 words');
+    expect(bonsaiCard?.textContent).toContain('4,096 tokens');
+    expect(bonsaiCard?.textContent).toContain('about 3,100 words');
     expect(
       /** @type {HTMLAnchorElement | null} */ (bonsaiCard?.querySelector('.model-card-link'))?.href
     ).toBe(`https://huggingface.co/${BONSAI_8B_MODEL_ID}`);
@@ -459,8 +459,8 @@ describe('preferences controller', () => {
     expect(bonsaiCard?.querySelector('.model-card-languages')).toBeNull();
 
     const gemmaCard = getModelCard(modelCardList, GEMMA_4_MODEL_ID);
-    expect(gemmaCard?.textContent).toContain('131,072 tokens');
-    expect(gemmaCard?.textContent).toContain('about 98,300 words');
+    expect(gemmaCard?.textContent).toContain('4,096 tokens');
+    expect(gemmaCard?.textContent).toContain('about 3,100 words');
     expect(gemmaCard?.textContent).not.toContain('Default context 8,192');
     expect(gemmaCard?.textContent).toContain('EN');
     expect(gemmaCard?.textContent).toContain('ES');
