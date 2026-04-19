@@ -32,6 +32,7 @@ Model support is configured in `src/config/models.json`:
   - `modelUrl` (pinned GGUF download URL for `wllama` models)
   - `parallelDownloads` (optional `wllama` fetch fan-out hint)
   - `allowOffline` (optional `wllama` cache-only load hint)
+  - `usePromptCache` / `batchSize` / `minP` are app-managed `wllama` runtime overrides derived from `Settings -> Model` rather than committed catalog fields
   - `providerId` / `providerType` / `providerDisplayName` (runtime-only metadata for browser-saved cloud models)
   - `apiBaseUrl` / `remoteModelId` (OpenAI-compatible worker endpoint/model routing)
   - `supportsTopK` (`true` only when the configured cloud provider should receive `top_k`)
@@ -313,7 +314,7 @@ Notes:
 - The installed Transformers.js runtime now exposes newer low-bit ONNX dtypes including `q2`, `q2f16`, `q1`, and `q1f16`; the bundled catalog currently keeps Bonsai on `q1` for both WebGPU and CPU.
 - Model assets are downloaded at runtime and cached in-browser through the engine-specific path.
 - Model assets are not committed to this repository.
-- Transformers.js-backed model assets in the shipped catalog are revision-pinned, the bundled Qwen GGUF model uses a pinned Hugging Face `resolve/<commit>/...` URL, and the ONNX worker now uses app-bundled ONNX Runtime WASM assets instead of the default CDN path.
+- Transformers.js-backed model assets in the shipped catalog are revision-pinned, the bundled LFM2.5 GGUF model uses a pinned Hugging Face `resolve/<commit>/...` URL, and the ONNX worker now uses app-bundled ONNX Runtime WASM assets instead of the default CDN path.
 - The pre-chat picker presents each model as a single-select horizontal row with capability chips, language tags, and short-term memory shown as tokens plus a rough word estimate rounded to the nearest 100.
 - Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
 - Audio input is upload-only. The app does not expose live recording.
@@ -323,8 +324,9 @@ Notes:
 - Temperature is numeric, step in 0.1, and disabled until a model is loaded.
 - Top K is numeric, step in 1, and uses a per-model default from `models[].generation.defaultTopK`.
 - Top P (nucleus sampling) is numeric, min 0.00, max 1.00, step in 0.05, and uses a per-model default from `models[].generation.defaultTopP`.
-- `repetition_penalty` is applied from per-model defaults when configured and supported by the installed Transformers.js runtime; unsupported upstream knobs such as `min_p` and `presence_penalty` are not exposed in this app.
+- `repetition_penalty` is applied from per-model defaults when configured and supported by the installed runtime; `wllama` models also expose a dedicated `Min P` field in `Settings -> Model`, while other upstream-only knobs such as `presence_penalty` are still not exposed in this app.
 - User changes to output/context tokens, temperature, Top K, and Top P are persisted per model in browser storage and restored when that model is selected again.
+- `wllama` models also persist per-model prompt-cache reuse and load-time batch-size overrides in browser storage.
 - If generation settings are changed while generating, they are queued and applied after that generation finishes.
 
 Per-model limits and defaults:

@@ -37,6 +37,9 @@ function createHarness() {
       <input id="topPInput" />
       <button id="resetTopKButton" type="button"></button>
       <button id="resetTopPButton" type="button"></button>
+      <input id="wllamaPromptCacheToggle" type="checkbox" checked />
+      <input id="wllamaBatchSizeInput" />
+      <input id="wllamaMinPInput" />
     `,
     { url: 'https://example.test/' }
   );
@@ -81,6 +84,9 @@ function createHarness() {
     topPInput: document.getElementById('topPInput'),
     resetTopKButton: document.getElementById('resetTopKButton'),
     resetTopPButton: document.getElementById('resetTopPButton'),
+    wllamaPromptCacheToggle: document.getElementById('wllamaPromptCacheToggle'),
+    wllamaBatchSizeInput: document.getElementById('wllamaBatchSizeInput'),
+    wllamaMinPInput: document.getElementById('wllamaMinPInput'),
     applyMathRenderingPreference: vi.fn(),
     applySingleKeyShortcutPreference: vi.fn(),
     applyTranscriptViewPreference: vi.fn(),
@@ -99,6 +105,7 @@ function createHarness() {
     reinitializeEngineFromSettings: vi.fn(async () => {}),
     clearSelectedModelDownloads: vi.fn(async () => {}),
     onGenerationSettingInputChanged: vi.fn(),
+    onWllamaSettingInputChanged: vi.fn(),
     getModelGenerationLimits: vi.fn(() => ({
       defaultMaxContextTokens: 1024,
       defaultTemperature: 0.7,
@@ -135,6 +142,9 @@ function createHarness() {
       resetTemperatureButton: document.getElementById('resetTemperatureButton'),
       resetTopKButton: document.getElementById('resetTopKButton'),
       resetTopPButton: document.getElementById('resetTopPButton'),
+      wllamaPromptCacheToggle: document.getElementById('wllamaPromptCacheToggle'),
+      wllamaBatchSizeInput: document.getElementById('wllamaBatchSizeInput'),
+      wllamaMinPInput: document.getElementById('wllamaMinPInput'),
     },
   };
 }
@@ -251,5 +261,23 @@ describe('settings-events-models', () => {
     });
     expect(harness.deps.refreshConversationSystemPromptPreview).not.toHaveBeenCalled();
     expect(harness.deps.reinitializeEngineFromSettings).toHaveBeenCalledTimes(1);
+  });
+
+  test('wllama-only controls forward changes to the dedicated handler', () => {
+    const harness = createHarness();
+    const promptCacheToggle = /** @type {HTMLInputElement} */ (
+      harness.elements.wllamaPromptCacheToggle
+    );
+    const batchSizeInput = /** @type {HTMLInputElement} */ (harness.elements.wllamaBatchSizeInput);
+    const minPInput = /** @type {HTMLInputElement} */ (harness.elements.wllamaMinPInput);
+
+    promptCacheToggle.checked = false;
+    promptCacheToggle.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+    batchSizeInput.value = '768';
+    batchSizeInput.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+    minPInput.value = '0.15';
+    minPInput.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+
+    expect(harness.deps.onWllamaSettingInputChanged).toHaveBeenCalledTimes(3);
   });
 });

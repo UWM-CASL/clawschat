@@ -113,6 +113,7 @@ Student-facing browser chat UI with local model inference.
 - `Settings -> Model` also includes:
   - `Response language`, stored per conversation or pending pre-chat draft, with a warning when the selected language is not listed for the selected model in this app.
   - `Enable model thinking when supported`, stored per conversation or pending pre-chat draft, which only affects models with a configured thinking-control contract.
+  - For `wllama` GGUF models only: `Reuse prompt cache between turns`, `Prompt batch size`, and `Min P`, stored per model and applied through the local CPU/WASM `wllama` runtime.
 - Temperature control in Settings:
   - `Temperature (Creativity)` is model-aware and constrained by per-model `minTemperature`, `maxTemperature`, and `defaultTemperature`.
   - Values use `step=0.1`.
@@ -124,7 +125,7 @@ Student-facing browser chat UI with local model inference.
   - `Top K (Predictability)` uses `step=1` and loads a model-specific default from `src/config/models.json`.
   - `Top P (Strangeness)` (nucleus sampling) uses min `0.00`, max `1.00`, and `step=0.05`, with a model-specific default from `src/config/models.json`.
   - `Top K` and `Top P` are persisted per model, like temperature and token limits.
-  - The runtime also applies per-model `repetition_penalty` defaults where Transformers.js supports them; unsupported knobs such as `min_p` and `presence_penalty` are intentionally not exposed in this app.
+  - The runtime also applies per-model `repetition_penalty` defaults where supported. `Min P` is now exposed only for `wllama` models in the same `Settings -> Model` panel; other engine-specific sampling knobs remain intentionally hidden until the app has a verified runtime contract for them.
 - The selected backend and model are stored in `localStorage`.
 - Cloud provider metadata is stored in browser IndexedDB, and provider API keys are stored separately in encrypted browser-local IndexedDB records when WebCrypto key storage is available.
 - Model files are downloaded on first load and cached in-browser for reuse.

@@ -85,6 +85,7 @@ import {
   TOKEN_STEP,
   TOP_K_STEP,
   TOP_P_STEP,
+  getModelEngineType,
   getModelAvailability,
   clamp,
   browserSupportsWebGpu,
@@ -93,6 +94,15 @@ import {
   resolveRuntimeDtypeForBackend,
   replaceRuntimeModelCatalog,
 } from './config/model-settings.js';
+import {
+  buildDefaultWllamaSettings,
+  sanitizeWllamaSettings,
+  MAX_WLLAMA_MIN_P,
+  MIN_WLLAMA_BATCH_SIZE,
+  MIN_WLLAMA_MIN_P,
+  WLLAMA_BATCH_SIZE_STEP,
+  WLLAMA_MIN_P_STEP,
+} from './config/wllama-settings.js';
 import { buildRuntimeModelCatalog } from './cloud/cloud-provider-config.js';
 import { inspectOpenAiCompatibleEndpoint } from './cloud/openai-compatible.js';
 import { normalizeMessageContentParts, setUserMessageText } from './state/conversation-content.js';
@@ -216,6 +226,7 @@ const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
 const CPU_THREADS_STORAGE_KEY = 'llm-cpu-threads-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
+const MODEL_WLLAMA_SETTINGS_STORAGE_KEY = 'llm-model-wllama-settings';
 const TOOL_CONSENT_STORAGE_KEY = 'tool-consents-v1';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
 const SUPPORTED_BACKEND_PREFERENCES = new Set(['webgpu', 'cpu']);
@@ -391,6 +402,7 @@ const modelCardList = /** @type {HTMLElement | null} */ (document.getElementById
 const backendSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('backendSelect'));
 const cpuThreadsInput = /** @type {HTMLInputElement | null} */ (document.getElementById('cpuThreadsInput'));
 const clearModelDownloadsButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('clearModelDownloadsButton'));
+const clearModelDownloadsHelp = /** @type {HTMLElement | null} */ (document.getElementById('clearModelDownloadsHelp'));
 const maxOutputTokensInput = /** @type {HTMLInputElement | null} */ (document.getElementById('maxOutputTokensInput'));
 const maxContextTokensInput = /** @type {HTMLInputElement | null} */ (document.getElementById('maxContextTokensInput'));
 const temperatureInput = /** @type {HTMLInputElement | null} */ (document.getElementById('temperatureInput'));
@@ -400,6 +412,13 @@ const resetTopKButton = /** @type {HTMLButtonElement | null} */ (document.getEle
 const resetTopPButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('resetTopPButton'));
 const topKInput = /** @type {HTMLInputElement | null} */ (document.getElementById('topKInput'));
 const topPInput = /** @type {HTMLInputElement | null} */ (document.getElementById('topPInput'));
+const wllamaSettingsSection = /** @type {HTMLElement | null} */ (document.getElementById('wllamaSettingsSection'));
+const wllamaPromptCacheToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('wllamaPromptCacheToggle'));
+const wllamaPromptCacheHelp = /** @type {HTMLElement | null} */ (document.getElementById('wllamaPromptCacheHelp'));
+const wllamaBatchSizeInput = /** @type {HTMLInputElement | null} */ (document.getElementById('wllamaBatchSizeInput'));
+const wllamaBatchSizeHelp = /** @type {HTMLElement | null} */ (document.getElementById('wllamaBatchSizeHelp'));
+const wllamaMinPInput = /** @type {HTMLInputElement | null} */ (document.getElementById('wllamaMinPInput'));
+const wllamaMinPHelp = /** @type {HTMLElement | null} */ (document.getElementById('wllamaMinPHelp'));
 const maxOutputTokensHelp = /** @type {HTMLElement | null} */ (document.getElementById('maxOutputTokensHelp'));
 const maxContextTokensHelp = /** @type {HTMLElement | null} */ (document.getElementById('maxContextTokensHelp'));
 const temperatureHelp = /** @type {HTMLElement | null} */ (document.getElementById('temperatureHelp'));
@@ -447,6 +466,7 @@ const jumpToNextModelButton = /** @type {HTMLButtonElement | null} */ (document.
 const jumpToLatestButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('jumpToLatestButton'));
 const chatMain = /** @type {HTMLElement | null} */ (document.querySelector('.chat-main'));
 let isTaskListTrayExpanded = false;
+let reinitializeInferenceSettings = async () => {};
 const homePanel = document.getElementById('homePanel');
 const preChatPanel = document.getElementById('preChatPanel');
 const preChatHeading = document.getElementById('preChatHeading');
@@ -1291,6 +1311,58 @@ function persistGenerationConfigForModel(modelId, config) {
   localStorage.setItem(MODEL_GENERATION_SETTINGS_STORAGE_KEY, JSON.stringify(byModel));
 }
 
+function isWllamaModel(modelId) {
+  return getModelEngineType(modelId) === 'wllama';
+}
+
+function getStoredModelWllamaSettings() {
+  try {
+    const raw = localStorage.getItem(MODEL_WLLAMA_SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function sanitizeWllamaSettingsForModel(modelId, candidateSettings, generationConfig = null) {
+  const normalizedModelId = normalizeModelId(modelId);
+  const normalizedGenerationConfig = sanitizeGenerationConfigForModel(
+    normalizedModelId,
+    generationConfig || appState.activeGenerationConfig
+  );
+  return sanitizeWllamaSettings(candidateSettings, {
+    maxContextTokens: normalizedGenerationConfig.maxContextTokens,
+  });
+}
+
+function getStoredWllamaSettingsForModel(modelId, generationConfig = null) {
+  const normalizedModelId = normalizeModelId(modelId);
+  if (!isWllamaModel(normalizedModelId)) {
+    return null;
+  }
+  const byModel = getStoredModelWllamaSettings();
+  const stored = byModel[normalizedModelId];
+  if (!stored || typeof stored !== 'object') {
+    return null;
+  }
+  return sanitizeWllamaSettingsForModel(normalizedModelId, stored, generationConfig);
+}
+
+function persistWllamaSettingsForModel(modelId, settings, generationConfig = null) {
+  const normalizedModelId = normalizeModelId(modelId);
+  if (!isWllamaModel(normalizedModelId)) {
+    return;
+  }
+  const sanitized = sanitizeWllamaSettingsForModel(normalizedModelId, settings, generationConfig);
+  const byModel = getStoredModelWllamaSettings();
+  byModel[normalizedModelId] = sanitized;
+  localStorage.setItem(MODEL_WLLAMA_SETTINGS_STORAGE_KEY, JSON.stringify(byModel));
+}
+
 function buildGenerationConfigFromUI(modelId) {
   return sanitizeGenerationConfig(
     {
@@ -1302,6 +1374,112 @@ function buildGenerationConfigFromUI(modelId) {
     },
     getModelGenerationLimits(modelId)
   );
+}
+
+function buildWllamaSettingsFromUI(modelId, generationConfig = null) {
+  return sanitizeWllamaSettingsForModel(
+    modelId,
+    {
+      usePromptCache: wllamaPromptCacheToggle?.checked !== false,
+      batchSize: wllamaBatchSizeInput?.value,
+      minP: wllamaMinPInput?.value,
+    },
+    generationConfig
+  );
+}
+
+function getEffectiveWllamaSettingsForModel(modelId, generationConfig = null) {
+  const normalizedModelId = normalizeModelId(modelId);
+  if (!isWllamaModel(normalizedModelId)) {
+    return null;
+  }
+  return (
+    getStoredWllamaSettingsForModel(normalizedModelId, generationConfig) ||
+    sanitizeWllamaSettingsForModel(normalizedModelId, buildDefaultWllamaSettings(), generationConfig)
+  );
+}
+
+function renderClearModelDownloadsHelp(modelId) {
+  if (!(clearModelDownloadsHelp instanceof HTMLElement)) {
+    return;
+  }
+  clearModelDownloadsHelp.textContent = isWllamaModel(modelId)
+    ? 'Clears cached wllama GGUF files for the selected local CPU model. Loaded in-memory sessions keep working until that model is reloaded.'
+    : 'Clears cached Transformers.js files for the selected local ONNX model. Loaded in-memory sessions keep working until that model is reloaded.';
+}
+
+function renderWllamaSettingsVisibility(modelId) {
+  if (!(wllamaSettingsSection instanceof HTMLElement)) {
+    return;
+  }
+  const visible = isWllamaModel(modelId);
+  wllamaSettingsSection.classList.toggle('d-none', !visible);
+  if (visible) {
+    wllamaSettingsSection.removeAttribute('aria-hidden');
+  } else {
+    wllamaSettingsSection.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function renderWllamaSettingsHelpText(settings, generationConfig) {
+  const maxBatchSize = Math.max(
+    MIN_WLLAMA_BATCH_SIZE,
+    Number(generationConfig?.maxContextTokens) || MIN_WLLAMA_BATCH_SIZE
+  );
+  if (wllamaPromptCacheHelp) {
+    wllamaPromptCacheHelp.textContent = settings.usePromptCache
+      ? 'Prompt cache reuse is enabled. Follow-up turns can reuse compatible prefixes instead of reprocessing the full prompt every time.'
+      : 'Prompt cache reuse is disabled. Every turn starts from a cleared KV cache.';
+  }
+  if (wllamaBatchSizeHelp) {
+    wllamaBatchSizeHelp.textContent = `Load-time prompt batch size. Higher values can speed prompt ingestion but use more memory. Allowed: ${formatInteger(
+      MIN_WLLAMA_BATCH_SIZE
+    )} to ${formatInteger(maxBatchSize)} in steps of ${formatInteger(WLLAMA_BATCH_SIZE_STEP)}.`;
+  }
+  if (wllamaMinPHelp) {
+    wllamaMinPHelp.textContent = `Additional probability floor after Top K / Top P. ${MIN_WLLAMA_MIN_P.toFixed(
+      2
+    )} disables it; higher values can make wllama generations more selective. Allowed: ${MIN_WLLAMA_MIN_P.toFixed(
+      2
+    )} to ${MAX_WLLAMA_MIN_P.toFixed(2)} in steps of ${WLLAMA_MIN_P_STEP.toFixed(2)}.`;
+  }
+}
+
+function syncWllamaSettingsFromModel(modelId, { useDefaults = true, generationConfig = null } = {}) {
+  const normalizedModelId = normalizeModelId(modelId);
+  renderWllamaSettingsVisibility(normalizedModelId);
+  renderClearModelDownloadsHelp(normalizedModelId);
+  if (!isWllamaModel(normalizedModelId)) {
+    return;
+  }
+
+  const effectiveGenerationConfig =
+    generationConfig || sanitizeGenerationConfigForModel(normalizedModelId, appState.activeGenerationConfig);
+  const settings = useDefaults
+    ? getEffectiveWllamaSettingsForModel(normalizedModelId, effectiveGenerationConfig)
+    : buildWllamaSettingsFromUI(normalizedModelId, effectiveGenerationConfig);
+  if (!settings) {
+    return;
+  }
+
+  if (wllamaPromptCacheToggle instanceof HTMLInputElement) {
+    wllamaPromptCacheToggle.checked = settings.usePromptCache;
+  }
+  if (wllamaBatchSizeInput instanceof HTMLInputElement) {
+    wllamaBatchSizeInput.min = String(MIN_WLLAMA_BATCH_SIZE);
+    wllamaBatchSizeInput.max = String(
+      Math.max(MIN_WLLAMA_BATCH_SIZE, effectiveGenerationConfig.maxContextTokens)
+    );
+    wllamaBatchSizeInput.step = String(WLLAMA_BATCH_SIZE_STEP);
+    wllamaBatchSizeInput.value = String(settings.batchSize);
+  }
+  if (wllamaMinPInput instanceof HTMLInputElement) {
+    wllamaMinPInput.min = MIN_WLLAMA_MIN_P.toFixed(2);
+    wllamaMinPInput.max = MAX_WLLAMA_MIN_P.toFixed(2);
+    wllamaMinPInput.step = WLLAMA_MIN_P_STEP.toFixed(2);
+    wllamaMinPInput.value = settings.minP.toFixed(2);
+  }
+  renderWllamaSettingsHelpText(settings, effectiveGenerationConfig);
 }
 
 function renderGenerationSettingsHelpText(config, limits) {
@@ -1374,6 +1552,10 @@ function syncGenerationSettingsFromModel(modelId, useDefaults = true) {
   appState.activeGenerationConfig = { ...config };
   engine.setGenerationConfig(appState.activeGenerationConfig);
   renderGenerationSettingsHelpText(config, limits);
+  syncWllamaSettingsFromModel(normalizedModelId, {
+    useDefaults,
+    generationConfig: config,
+  });
 }
 
 function updateGenerationSettingsEnabledState() {
@@ -1405,6 +1587,15 @@ function updateGenerationSettingsEnabledState() {
   if (topPInput) {
     topPInput.disabled = disabled;
   }
+  if (wllamaPromptCacheToggle instanceof HTMLInputElement) {
+    wllamaPromptCacheToggle.disabled = disabled;
+  }
+  if (wllamaBatchSizeInput instanceof HTMLInputElement) {
+    wllamaBatchSizeInput.disabled = disabled;
+  }
+  if (wllamaMinPInput instanceof HTMLInputElement) {
+    wllamaMinPInput.disabled = disabled;
+  }
 }
 
 function applyPendingGenerationSettingsIfReady() {
@@ -1432,6 +1623,13 @@ function onGenerationSettingInputChanged() {
   appState.activeGenerationConfig = nextConfig;
   syncGenerationSettingsFromModel(selectedModel, false);
   persistGenerationConfigForModel(selectedModel, nextConfig);
+  if (isWllamaModel(selectedModel)) {
+    persistWllamaSettingsForModel(
+      selectedModel,
+      buildWllamaSettingsFromUI(selectedModel, nextConfig),
+      nextConfig
+    );
+  }
   if (isGeneratingResponse(appState)) {
     appState.pendingGenerationConfig = nextConfig;
     setStatus('Generation settings will apply after current response.');
@@ -1442,6 +1640,38 @@ function onGenerationSettingInputChanged() {
   setStatus('Generation settings updated.');
   appendDebug(
     `Generation settings applied (maxOutputTokens=${nextConfig.maxOutputTokens}, maxContextTokens=${nextConfig.maxContextTokens}, temperature=${nextConfig.temperature.toFixed(1)}, topK=${nextConfig.topK}, topP=${nextConfig.topP.toFixed(2)}, repetitionPenalty=${nextConfig.repetitionPenalty.toFixed(2)}).`
+  );
+}
+
+function onWllamaSettingInputChanged() {
+  const selectedModel = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+  if (!isWllamaModel(selectedModel)) {
+    return;
+  }
+  const nextGenerationConfig = buildGenerationConfigFromUI(selectedModel);
+  const nextWllamaSettings = buildWllamaSettingsFromUI(selectedModel, nextGenerationConfig);
+  persistWllamaSettingsForModel(selectedModel, nextWllamaSettings, nextGenerationConfig);
+  syncWllamaSettingsFromModel(selectedModel, {
+    useDefaults: false,
+    generationConfig: nextGenerationConfig,
+  });
+  if (isGeneratingResponse(appState)) {
+    setStatus('wllama settings will apply on the next request.');
+    appendDebug(
+      `wllama settings changed during generation; promptCache=${nextWllamaSettings.usePromptCache}, batchSize=${nextWllamaSettings.batchSize}, minP=${nextWllamaSettings.minP.toFixed(2)}.`
+    );
+    return;
+  }
+  if (!isEngineReady(appState)) {
+    setStatus('wllama settings updated.');
+    appendDebug(
+      `wllama settings updated while no model was loaded (promptCache=${nextWllamaSettings.usePromptCache}, batchSize=${nextWllamaSettings.batchSize}, minP=${nextWllamaSettings.minP.toFixed(2)}).`
+    );
+    return;
+  }
+  void reinitializeInferenceSettings();
+  appendDebug(
+    `wllama settings updated (promptCache=${nextWllamaSettings.usePromptCache}, batchSize=${nextWllamaSettings.batchSize}, minP=${nextWllamaSettings.minP.toFixed(2)}).`
   );
 }
 
@@ -1873,6 +2103,8 @@ function buildConversationRuntimeConfigForPrompt(conversation = null, prompt = n
   const thinkingControl = model?.thinkingControl || null;
   const thinkingEnabled = getConversationThinkingEnabled(conversation);
   const baseRuntime = { ...runtime };
+  const generationConfig = sanitizeGenerationConfigForModel(modelId, appState.activeGenerationConfig);
+  const wllamaSettings = getEffectiveWllamaSettingsForModel(modelId, generationConfig);
   delete baseRuntime.multimodalGeneration;
   return {
     ...baseRuntime,
@@ -1891,6 +2123,13 @@ function buildConversationRuntimeConfigForPrompt(conversation = null, prompt = n
       : {}),
     ...(thinkingControl?.runtimeParameter === 'enable_thinking'
       ? { enableThinking: thinkingEnabled }
+      : {}),
+    ...(wllamaSettings
+      ? {
+          usePromptCache: wllamaSettings.usePromptCache,
+          batchSize: wllamaSettings.batchSize,
+          minP: wllamaSettings.minP,
+        }
       : {}),
   };
 }
@@ -4315,6 +4554,7 @@ const appController = createAppController({
   onGenerationSettled: flushQueuedMarkdownRendererRefresh,
   streamUpdateIntervalMs: STREAM_UPDATE_INTERVAL_MS,
 });
+reinitializeInferenceSettings = () => appController.reinitializeEngineFromSettings();
 
 transcriptActions = createTranscriptActions({
   appState,
@@ -4519,6 +4759,9 @@ bindSettingsEvents({
   topPInput,
   resetTopKButton,
   resetTopPButton,
+  wllamaPromptCacheToggle,
+  wllamaBatchSizeInput,
+  wllamaMinPInput,
   colorSchemeQuery,
   setActiveSettingsTab,
   setSettingsPageVisibility,
@@ -4584,6 +4827,7 @@ bindSettingsEvents({
   reinitializeEngineFromSettings: () => appController.reinitializeEngineFromSettings(),
   clearSelectedModelDownloads,
   onGenerationSettingInputChanged,
+  onWllamaSettingInputChanged,
   getModelGenerationLimits,
   normalizeModelId,
   defaultModelId: DEFAULT_MODEL,

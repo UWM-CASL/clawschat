@@ -96,6 +96,9 @@ function createHarness() {
         <input id="topPInput" />
         <button id="resetTopKButton" type="button"></button>
         <button id="resetTopPButton" type="button"></button>
+        <input id="wllamaPromptCacheToggle" type="checkbox" checked />
+        <input id="wllamaBatchSizeInput" />
+        <input id="wllamaMinPInput" />
       </div>
     `,
     { url: 'https://example.test/' }
@@ -170,6 +173,9 @@ function createHarness() {
     topPInput: document.getElementById('topPInput'),
     resetTopKButton: document.getElementById('resetTopKButton'),
     resetTopPButton: document.getElementById('resetTopPButton'),
+    wllamaPromptCacheToggle: document.getElementById('wllamaPromptCacheToggle'),
+    wllamaBatchSizeInput: document.getElementById('wllamaBatchSizeInput'),
+    wllamaMinPInput: document.getElementById('wllamaMinPInput'),
     colorSchemeQuery,
     setActiveSettingsTab: vi.fn(),
     setSettingsPageVisibility: vi.fn(),
@@ -215,6 +221,7 @@ function createHarness() {
     reinitializeEngineFromSettings: vi.fn(async () => {}),
     clearSelectedModelDownloads: vi.fn(async () => {}),
     onGenerationSettingInputChanged: vi.fn(),
+    onWllamaSettingInputChanged: vi.fn(),
     getModelGenerationLimits: vi.fn(() => ({
       defaultMaxContextTokens: 1024,
       defaultTemperature: 0.7,

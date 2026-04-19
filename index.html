@@ -953,6 +953,70 @@
                       />
                       <p id="topPHelp" class="form-text mb-0">Load a model to edit this setting.</p>
                     </div>
+                    <section
+                      id="wllamaSettingsSection"
+                      class="border rounded p-3 d-none"
+                      aria-labelledby="wllamaSettingsHeading"
+                      aria-hidden="true"
+                    >
+                      <div class="d-flex align-items-center justify-content-between gap-2">
+                        <h4 id="wllamaSettingsHeading" class="h6 mb-0">wllama only</h4>
+                        <span class="badge text-bg-secondary">CPU GGUF</span>
+                      </div>
+                      <p class="form-text mt-2 mb-3">
+                        These controls only apply to GGUF models loaded through the local
+                        <code>wllama</code> runtime.
+                      </p>
+                      <div class="form-check form-switch">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          id="wllamaPromptCacheToggle"
+                          checked
+                          disabled
+                        />
+                        <label class="form-check-label" for="wllamaPromptCacheToggle">
+                          Reuse prompt cache between turns
+                        </label>
+                        <p id="wllamaPromptCacheHelp" class="form-text mb-0">
+                          Load a wllama model to edit this setting.
+                        </p>
+                      </div>
+                      <div class="settings-control-group mt-3">
+                        <label class="form-label" for="wllamaBatchSizeInput">
+                          Prompt batch size
+                        </label>
+                        <input
+                          id="wllamaBatchSizeInput"
+                          class="form-control"
+                          type="number"
+                          inputmode="numeric"
+                          min="32"
+                          step="32"
+                          disabled
+                        />
+                        <p id="wllamaBatchSizeHelp" class="form-text mb-0">
+                          Load a wllama model to edit this setting.
+                        </p>
+                      </div>
+                      <div class="settings-control-group mb-0">
+                        <label class="form-label" for="wllamaMinPInput">Min P</label>
+                        <input
+                          id="wllamaMinPInput"
+                          class="form-control"
+                          type="number"
+                          inputmode="decimal"
+                          min="0.00"
+                          max="1.00"
+                          step="0.05"
+                          disabled
+                        />
+                        <p id="wllamaMinPHelp" class="form-text mb-0">
+                          Load a wllama model to edit this setting.
+                        </p>
+                      </div>
+                    </section>
                     <div class="settings-control-group">
                       <label class="form-label" for="conversationLanguageSelect">
                         Response language

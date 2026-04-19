@@ -25,6 +25,7 @@ const WORKER_GENERATION_LIMITS = {
 
 let wllama = null;
 let loadedModelId = '';
+let loadedRuntimeConfig = {};
 let loadedRuntimeConfigKey = '';
 let generationConfig = buildDefaultGenerationConfig(WORKER_GENERATION_LIMITS);
 let activeGeneration = null;
@@ -71,6 +72,7 @@ function buildWllamaLoadConfig(runtime = {}, nextGenerationConfig = {}, extraCon
   return {
     n_ctx: nextGenerationConfig.maxContextTokens,
     n_threads: resolveThreadCount(runtime),
+    ...(runtime.batchSize ? { n_batch: runtime.batchSize } : {}),
     ...extraConfig,
   };
 }
@@ -226,6 +228,14 @@ function normalizePositiveInteger(value, fallback = 0) {
   return normalized > 0 ? normalized : fallback;
 }
 
+function normalizeProbability(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Number(Math.max(0, Math.min(1, parsed)).toFixed(2));
+}
+
 function normalizeRuntimeConfig(rawRuntime) {
   const modelUrl =
     typeof rawRuntime?.modelUrl === 'string' && rawRuntime.modelUrl.trim()
@@ -234,11 +244,16 @@ function normalizeRuntimeConfig(rawRuntime) {
   const allowOffline = rawRuntime?.allowOffline === true;
   const parallelDownloads = normalizePositiveInteger(rawRuntime?.parallelDownloads, 0);
   const cpuThreads = normalizePositiveInteger(rawRuntime?.cpuThreads, 0);
+  const batchSize = normalizePositiveInteger(rawRuntime?.batchSize, 0);
+  const minP = normalizeProbability(rawRuntime?.minP, 0);
   return {
     ...(modelUrl ? { modelUrl } : {}),
     ...(allowOffline ? { allowOffline: true } : {}),
     ...(parallelDownloads ? { parallelDownloads } : {}),
     ...(cpuThreads ? { cpuThreads } : {}),
+    ...(batchSize ? { batchSize } : {}),
+    ...(rawRuntime?.usePromptCache === false ? { usePromptCache: false } : { usePromptCache: true }),
+    ...(minP > 0 ? { minP } : {}),
   };
 }
 
@@ -250,12 +265,13 @@ function buildRuntimeConfigKey(modelId, runtime = {}, nextGenerationConfig = {})
   });
 }
 
-function buildSamplingConfig(nextGenerationConfig) {
+function buildSamplingConfig(nextGenerationConfig, runtime = {}) {
   return {
     temp: nextGenerationConfig.temperature,
     top_k: nextGenerationConfig.topK,
     top_p: nextGenerationConfig.topP,
     penalty_repeat: nextGenerationConfig.repetitionPenalty,
+    ...(Number.isFinite(runtime.minP) && runtime.minP > 0 ? { min_p: runtime.minP } : {}),
   };
 }
 
@@ -275,6 +291,7 @@ async function disposeLoadedModel() {
   const loadedInstance = wllama;
   wllama = null;
   loadedModelId = '';
+  loadedRuntimeConfig = {};
   loadedRuntimeConfigKey = '';
   activeGeneration = null;
   if (!loadedInstance) {
@@ -448,6 +465,7 @@ async function initialize(payload) {
 
   wllama = nextWllama;
   loadedModelId = modelId;
+  loadedRuntimeConfig = runtime;
   loadedRuntimeConfigKey = nextRuntimeConfigKey;
   postProgress({
     percent: 100,
@@ -495,10 +513,10 @@ async function generate(payload) {
     const preparedPrompt = await trimPromptToBudget(promptText, nextGenerationConfig);
     const stream = await wllama.createCompletion(preparedPrompt.promptText, {
       stream: true,
-      useCache: false,
+      useCache: loadedRuntimeConfig.usePromptCache !== false,
       abortSignal: abortController.signal,
       nPredict: nextGenerationConfig.maxOutputTokens,
-      sampling: buildSamplingConfig(nextGenerationConfig),
+      sampling: buildSamplingConfig(nextGenerationConfig, loadedRuntimeConfig),
     });
 
     let currentText = '';

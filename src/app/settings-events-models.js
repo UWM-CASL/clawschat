@@ -27,6 +27,9 @@ export function bindModelSettingsEvents({
   topPInput,
   resetTopKButton,
   resetTopPButton,
+  wllamaPromptCacheToggle,
+  wllamaBatchSizeInput,
+  wllamaMinPInput,
   applyMathRenderingPreference,
   applySingleKeyShortcutPreference,
   applyTranscriptViewPreference,
@@ -45,6 +48,7 @@ export function bindModelSettingsEvents({
   reinitializeEngineFromSettings,
   clearSelectedModelDownloads,
   onGenerationSettingInputChanged,
+  onWllamaSettingInputChanged,
   getModelGenerationLimits,
   normalizeModelId,
   defaultModelId,
@@ -230,5 +234,17 @@ export function bindModelSettingsEvents({
       topPInput.value = limits.defaultTopP.toFixed(2);
       onGenerationSettingInputChanged();
     });
+  }
+
+  if (wllamaPromptCacheToggle instanceof HTMLInputElement) {
+    wllamaPromptCacheToggle.addEventListener('change', onWllamaSettingInputChanged);
+  }
+
+  if (wllamaBatchSizeInput instanceof HTMLInputElement) {
+    wllamaBatchSizeInput.addEventListener('change', onWllamaSettingInputChanged);
+  }
+
+  if (wllamaMinPInput instanceof HTMLInputElement) {
+    wllamaMinPInput.addEventListener('change', onWllamaSettingInputChanged);
   }
 }
