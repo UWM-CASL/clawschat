@@ -617,6 +617,36 @@ async function clearTextGenerationPrefixCache() {
   await setTextGenerationPrefixCache(null);
 }
 
+async function disposeDisposableValue(value, excluded = new Set(), seen = new Set()) {
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) {
+    return;
+  }
+  if (excluded.has(value) || seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  if (typeof value.dispose === 'function') {
+    try {
+      await value.dispose();
+    } catch {
+      // Ignore disposal failures to avoid masking inference results.
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      await disposeDisposableValue(item, excluded, seen);
+    }
+    return;
+  }
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+    return;
+  }
+  for (const entry of Object.values(value)) {
+    await disposeDisposableValue(entry, excluded, seen);
+  }
+}
+
 async function disposeLoadedModelResources() {
   await clearTextGenerationPrefixCache();
   for (const candidate of [processor, model, tokenizer]) {
@@ -1278,6 +1308,7 @@ async function invokeTextGeneration(
 ) {
   let streamedText = '';
   const resolvedInputs = resolveTextGenerationModelInputs(preparedTextInputs);
+  const retainGenerationMetadata = ENABLE_TEXT_GENERATION_PREFIX_CACHE;
   const modelGenerationOptions = {
     ...resolvedInputs.modelInputs,
     ...generationOptions,
@@ -1289,7 +1320,7 @@ async function invokeTextGeneration(
           ),
         }
       : {}),
-    return_dict_in_generate: true,
+    ...(retainGenerationMetadata ? { return_dict_in_generate: true } : {}),
   };
   logWorkerDebug('generate-invoke', {
     requestId: generationState.requestId,
@@ -1322,24 +1353,38 @@ async function invokeTextGeneration(
     });
   }
 
-  if (!streamedText) {
-    const generatedSequence = generationOutput?.sequences?.slice?.(null, [
-      preparedTextInputs.promptTokens,
-      null,
-    ]);
-    const decoded = generatedSequence
-      ? tokenizerInstance.batch_decode(generatedSequence, buildMultimodalDecodeOptions(runtime))
-      : [];
-    streamedText = Array.isArray(decoded) ? String(decoded[0] || '') : '';
-    if (streamedText) {
-      queueBufferedToken(generationState, streamedText);
+  try {
+    if (!streamedText) {
+      const generatedSequence = retainGenerationMetadata
+        ? generationOutput?.sequences?.slice?.(null, [preparedTextInputs.promptTokens, null])
+        : generationOutput?.slice?.(null, [preparedTextInputs.promptTokens, null]) ||
+          generationOutput;
+      try {
+        const decoded = generatedSequence
+          ? tokenizerInstance.batch_decode(generatedSequence, buildMultimodalDecodeOptions(runtime))
+          : [];
+        streamedText = Array.isArray(decoded) ? String(decoded[0] || '') : '';
+        if (streamedText) {
+          queueBufferedToken(generationState, streamedText);
+        }
+      } finally {
+        await disposeDisposableValue(
+          generatedSequence,
+          generationOutput ? new Set([generationOutput]) : new Set()
+        );
+      }
+    }
+
+    await updateTextGenerationPrefixCache(generationOutput);
+    return {
+      streamedText,
+      modelGenerationOptions,
+    };
+  } finally {
+    if (!retainGenerationMetadata) {
+      await disposeDisposableValue(generationOutput);
     }
   }
-  await updateTextGenerationPrefixCache(generationOutput);
-  return {
-    streamedText,
-    modelGenerationOptions,
-  };
 }
 
 function promptContainsStructuredMedia(prompt) {
@@ -1750,47 +1795,65 @@ async function generate(payload) {
       }
       const imageInputs = images.length > 1 ? images : images[0] || null;
       const audioInputs = audios.length > 1 ? audios : audios[0] || null;
-      const modelInputs = await multimodalProcessor(promptText, imageInputs, audioInputs, {
-        add_special_tokens: false,
-      });
-      const promptTokens = getPromptTokenCount(modelInputs?.input_ids);
-      const maxLength = resolveGenerationMaxLength(promptTokens, requestGenerationConfig);
-      const multimodalGenerationOptions = {
-        ...generationOptions,
-        ...(maxLength > 0 ? { max_length: maxLength } : {}),
-      };
-      logWorkerDebug('generate-invoke', {
-        requestId,
-        mode: 'multimodal',
-        backendInUse,
-        loadedBackendDevice,
-        promptTokens,
-        maxNewTokens: requestGenerationConfig.maxOutputTokens,
-        maxLength: maxLength || '(runtime default)',
-      });
-
-      if (TextStreamer) {
-        const streamer = buildMultimodalStreamerOptions(tokenizer, runtime, (text) => {
-          streamedText += text;
-          queueBufferedToken(generationState, text);
+      let modelInputs = null;
+      let multimodalGenerationOutput = null;
+      try {
+        modelInputs = await multimodalProcessor(promptText, imageInputs, audioInputs, {
+          add_special_tokens: false,
+        });
+        const promptTokens = getPromptTokenCount(modelInputs?.input_ids);
+        const maxLength = resolveGenerationMaxLength(promptTokens, requestGenerationConfig);
+        const multimodalGenerationOptions = {
+          ...generationOptions,
+          ...(maxLength > 0 ? { max_length: maxLength } : {}),
+        };
+        logWorkerDebug('generate-invoke', {
+          requestId,
+          mode: 'multimodal',
+          backendInUse,
+          loadedBackendDevice,
+          promptTokens,
+          maxNewTokens: requestGenerationConfig.maxOutputTokens,
+          maxLength: maxLength || '(runtime default)',
         });
 
-        await model.generate({
-          ...modelInputs,
-          ...multimodalGenerationOptions,
-          streamer,
-        });
-      } else {
-        const output = await model.generate({
-          ...modelInputs,
-          ...multimodalGenerationOptions,
-        });
-        const decoded = multimodalProcessor.batch_decode(
-          output.slice(null, [modelInputs.input_ids.dims.at(-1), null]),
-          buildMultimodalDecodeOptions(runtime)
-        );
-        streamedText = decoded?.[0] || '';
-        queueBufferedToken(generationState, streamedText);
+        if (TextStreamer) {
+          const streamer = buildMultimodalStreamerOptions(tokenizer, runtime, (text) => {
+            streamedText += text;
+            queueBufferedToken(generationState, text);
+          });
+
+          multimodalGenerationOutput = await model.generate({
+            ...modelInputs,
+            ...multimodalGenerationOptions,
+            streamer,
+          });
+        } else {
+          multimodalGenerationOutput = await model.generate({
+            ...modelInputs,
+            ...multimodalGenerationOptions,
+          });
+          const generatedSequence = multimodalGenerationOutput?.slice?.(null, [
+            modelInputs?.input_ids?.dims?.at(-1),
+            null,
+          ]);
+          try {
+            const decoded = multimodalProcessor.batch_decode(
+              generatedSequence,
+              buildMultimodalDecodeOptions(runtime)
+            );
+            streamedText = decoded?.[0] || '';
+            queueBufferedToken(generationState, streamedText);
+          } finally {
+            await disposeDisposableValue(
+              generatedSequence,
+              multimodalGenerationOutput ? new Set([multimodalGenerationOutput]) : new Set()
+            );
+          }
+        }
+      } finally {
+        await disposeDisposableValue(multimodalGenerationOutput);
+        await disposeDisposableValue(modelInputs);
       }
     } else {
       const textGenerationModel = model;
@@ -1822,48 +1885,56 @@ async function generate(payload) {
           maxContextTokens: requestGenerationConfig.maxContextTokens,
         });
       }
+      let alignedPreparedTextInputs = null;
       try {
-        const textGenerationResult = await invokeTextGeneration(
-          textGenerationModel,
-          tokenizer,
-          preparedTextInputs,
-          requestGenerationConfig,
-          generationOptions,
-          generationState,
-          runtime
-        );
-        streamedText = textGenerationResult.streamedText;
-      } catch (error) {
-        const alignedPreparedTextInputs =
-          loadedBackendDevice === 'webgpu' &&
-          !streamedText &&
-          !generationState.bufferedText &&
-          isUnalignedAccessGenerationError(error)
-            ? alignPreparedTextInputs(preparedTextInputs)
-            : null;
-        if (
-          !alignedPreparedTextInputs ||
-          alignedPreparedTextInputs === preparedTextInputs ||
-          alignedPreparedTextInputs.promptTokens >= preparedTextInputs.promptTokens
-        ) {
-          throw error;
+        try {
+          const textGenerationResult = await invokeTextGeneration(
+            textGenerationModel,
+            tokenizer,
+            preparedTextInputs,
+            requestGenerationConfig,
+            generationOptions,
+            generationState,
+            runtime
+          );
+          streamedText = textGenerationResult.streamedText;
+        } catch (error) {
+          alignedPreparedTextInputs =
+            loadedBackendDevice === 'webgpu' &&
+            !streamedText &&
+            !generationState.bufferedText &&
+            isUnalignedAccessGenerationError(error)
+              ? alignPreparedTextInputs(preparedTextInputs)
+              : null;
+          if (
+            !alignedPreparedTextInputs ||
+            alignedPreparedTextInputs === preparedTextInputs ||
+            alignedPreparedTextInputs.promptTokens >= preparedTextInputs.promptTokens
+          ) {
+            throw error;
+          }
+          logWorkerWarn('generate-webgpu-unaligned-retry', {
+            requestId,
+            modelId: loadedModelId || payload.modelId || '',
+            originalPromptTokens: preparedTextInputs.promptTokens,
+            alignedPromptTokens: alignedPreparedTextInputs.promptTokens,
+          });
+          const retryResult = await invokeTextGeneration(
+            textGenerationModel,
+            tokenizer,
+            alignedPreparedTextInputs,
+            requestGenerationConfig,
+            generationOptions,
+            generationState,
+            runtime
+          );
+          streamedText = retryResult.streamedText;
         }
-        logWorkerWarn('generate-webgpu-unaligned-retry', {
-          requestId,
-          modelId: loadedModelId || payload.modelId || '',
-          originalPromptTokens: preparedTextInputs.promptTokens,
-          alignedPromptTokens: alignedPreparedTextInputs.promptTokens,
-        });
-        const retryResult = await invokeTextGeneration(
-          textGenerationModel,
-          tokenizer,
-          alignedPreparedTextInputs,
-          requestGenerationConfig,
-          generationOptions,
-          generationState,
-          runtime
-        );
-        streamedText = retryResult.streamedText;
+      } finally {
+        await disposeDisposableValue(preparedTextInputs?.modelInputs);
+        if (alignedPreparedTextInputs && alignedPreparedTextInputs !== preparedTextInputs) {
+          await disposeDisposableValue(alignedPreparedTextInputs?.modelInputs);
+        }
       }
     }
 

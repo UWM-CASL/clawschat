@@ -407,17 +407,100 @@ describe('llm.worker init regression', () => {
         attention_mask: [[1, 1, 1]],
         max_new_tokens: 64,
         max_length: 67,
-        return_dict_in_generate: true,
         streamer: expect.objectContaining({
           skip_prompt: true,
           skip_special_tokens: true,
         }),
       })
     );
+    const firstGenerateCall = /** @type {any} */ (textModel.generate.mock.calls[0]?.[0]);
+    expect(firstGenerateCall?.return_dict_in_generate).toBeUndefined();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
       type: 'complete',
       payload: {
         requestId: 'request-1',
+        text: 'Model output',
+      },
+    });
+  });
+
+  test('disposes streamed text-generation inputs and outputs after each request', async () => {
+    const inputIds = {
+      dims: [1, 3],
+      dispose: vi.fn(),
+    };
+    const attentionMask = {
+      dims: [1, 3],
+      dispose: vi.fn(),
+    };
+    const tokenizer = {
+      apply_chat_template: vi.fn(() => ({
+        input_ids: inputIds,
+        attention_mask: attentionMask,
+      })),
+      batch_decode: vi.fn(() => ['']),
+      dispose: vi.fn(),
+    };
+    const generationOutput = {
+      dispose: vi.fn(),
+    };
+    const textModel = createTextModel(async (options = {}) => {
+      options.streamer?.callback_function?.('Model output');
+      return generationOutput;
+    });
+    tokenizerFactory.mockResolvedValue(tokenizer);
+    textModelFactory.mockResolvedValue(textModel);
+
+    await import('../../src/workers/llm.worker.js');
+    const workerSelf = /** @type {any} */ (globalThis.self);
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload: {
+            modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+            backendPreference: 'cpu',
+            runtime: {
+              dtypes: {
+                cpu: 'q4',
+              },
+            },
+          },
+        },
+      })
+    );
+
+    workerSelf.postMessage.mockClear();
+
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'generate',
+          payload: {
+            requestId: 'request-dispose',
+            prompt: [{ role: 'user', content: 'Hello there' }],
+            runtime: {},
+            generationConfig: {
+              maxOutputTokens: 64,
+              maxContextTokens: 8192,
+              temperature: 0.6,
+              topK: 50,
+              topP: 0.9,
+              repetitionPenalty: 1.0,
+            },
+          },
+        },
+      })
+    );
+
+    expect(inputIds.dispose).toHaveBeenCalledTimes(1);
+    expect(attentionMask.dispose).toHaveBeenCalledTimes(1);
+    expect(generationOutput.dispose).toHaveBeenCalledTimes(1);
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'complete',
+      payload: {
+        requestId: 'request-dispose',
         text: 'Model output',
       },
     });
