@@ -268,6 +268,9 @@ describe('app-controller', () => {
       },
       expect.objectContaining({
         signal: expect.any(Object),
+        runtime: {
+          enableThinking: false,
+        },
       })
     );
     expect(conversation.name).toBe('Plant Energy Basics');

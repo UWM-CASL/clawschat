@@ -1130,6 +1130,9 @@ export function createAppController(dependencies) {
         inputs,
         {
           signal: renameAbortController.signal,
+          runtime: {
+            enableThinking: false,
+          },
         }
       );
       const nextName = dependencies.normalizeConversationName(finalOutput);

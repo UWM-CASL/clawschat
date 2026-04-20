@@ -2759,6 +2759,10 @@ function requestSingleGeneration(prompt, options = {}) {
         ? options.generationConfig
         : {}),
     });
+    const requestRuntime = {
+      ...buildConversationRuntimeConfigForPrompt(activeConversation, prompt),
+      ...(options.runtime && typeof options.runtime === 'object' ? options.runtime : {}),
+    };
     let streamedText = '';
     let isSettled = false;
 
@@ -2802,6 +2806,7 @@ function requestSingleGeneration(prompt, options = {}) {
     signal?.addEventListener('abort', handleAbort, { once: true });
     try {
       engine.generate(prompt, {
+        runtime: requestRuntime,
         generationConfig: requestGenerationConfig,
         onToken: (chunk) => {
           streamedText += String(chunk || '');
