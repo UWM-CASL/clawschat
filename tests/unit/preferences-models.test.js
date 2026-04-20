@@ -161,7 +161,7 @@ describe('preferences-models', () => {
     expect(firstButton?.getAttribute('aria-checked')).toBe('true');
   });
 
-  test('keeps Gemma available when CPU mode is selected', () => {
+  test('falls back away from Gemma when CPU mode is selected', () => {
     const harness = createHarness();
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
@@ -181,10 +181,14 @@ describe('preferences-models', () => {
       announceFallback: true,
     });
 
-    expect(selectedModel).toBe(GEMMA_4_MODEL_ID);
+    expect(selectedModel).toBe(LLAMA_3B_MODEL_ID);
     expect(modelSelect.value).toBe(selectedModel);
-    expect(harness.deps.setStatus).not.toHaveBeenCalled();
-    expect(getModelCard(modelCardList, GEMMA_4_MODEL_ID)?.textContent).toContain('4,096 tokens');
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      expect.stringContaining(`${GEMMA_4_MODEL_ID} is unavailable with CPU.`)
+    );
+    expect(getModelCard(modelCardList, GEMMA_4_MODEL_ID)?.textContent).toContain(
+      'This model requires WebGPU. Switch to WebGPU mode.'
+    );
   });
 
   test('restores a removed model id as the default visible model', () => {
@@ -314,7 +318,7 @@ describe('preferences-models', () => {
     expect(cpuThreadsInput.max).toBe('6');
   });
 
-  test('probes WebGPU availability and keeps cpu-capable Gemma selected when no adapter is available', async () => {
+  test('probes WebGPU availability and switches away from Gemma when no adapter is available', async () => {
     const requestAdapter = vi.fn(async () => null);
     const harness = createHarness({
       navigatorRef: /** @type {any} */ ({
@@ -338,9 +342,11 @@ describe('preferences-models', () => {
     expect(harness.appState.webGpuProbeCompleted).toBe(true);
     expect(harness.appState.webGpuAdapterAvailable).toBe(false);
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      GEMMA_4_MODEL_ID,
+      LLAMA_3B_MODEL_ID,
       true
     );
-    expect(harness.deps.setStatus).not.toHaveBeenCalled();
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      `${GEMMA_4_MODEL_ID} is unavailable because no usable WebGPU adapter was found. Switched to ${LLAMA_3B_MODEL_ID}.`
+    );
   });
 });

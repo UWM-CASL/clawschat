@@ -24,9 +24,9 @@
       "runtime": {
         "revision": "84b2c85ce64e8a0c999a3284f438d28db1d396a5",
         "dtypes": {
-          "webgpu": "q4f16",
-          "cpu": "q4f16"
+          "webgpu": "q4f16"
         },
+        "requiresWebGpu": true,
         "multimodalGeneration": true,
         "useExternalDataFormat": true
       },

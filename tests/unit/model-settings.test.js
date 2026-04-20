@@ -24,15 +24,15 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS[0]?.id).toBe(GEMMA_4_MODEL_ID);
   });
 
-  test('keeps Gemma 4 available in cpu mode without WebGPU', () => {
+  test('marks Gemma 4 unavailable in cpu mode without WebGPU', () => {
     expect(
       getModelAvailability(GEMMA_4_MODEL_ID, {
         backendPreference: 'cpu',
         webGpuAvailable: false,
       })
     ).toEqual({
-      available: true,
-      reason: '',
+      available: false,
+      reason: 'This model requires WebGPU, which is not available in this browser.',
     });
   });
 
@@ -93,15 +93,15 @@ describe('model-settings availability', () => {
     });
   });
 
-  test('maps legacy wasm preference into cpu mode for Gemma 4', () => {
+  test('maps legacy wasm preference into cpu mode for Gemma 4 and keeps it unavailable there', () => {
     expect(
       getModelAvailability(GEMMA_4_MODEL_ID, {
         backendPreference: 'wasm',
         webGpuAvailable: true,
       })
     ).toEqual({
-      available: true,
-      reason: '',
+      available: false,
+      reason: 'This model requires WebGPU. Switch to WebGPU mode.',
     });
   });
 
@@ -109,13 +109,13 @@ describe('model-settings availability', () => {
     expect(normalizeModelId('onnx-community/gemma-4-E2B-it-ONNX')).toBe(GEMMA_4_MODEL_ID);
   });
 
-  test('falls back to the first cpu-capable visible model when WebGPU mode is unavailable', () => {
+  test('falls back to the first cpu-capable visible model when Gemma 4 is unavailable', () => {
     expect(
       getFirstAvailableModelId({
         backendPreference: 'cpu',
         webGpuAvailable: false,
       })
-    ).toBe(GEMMA_4_MODEL_ID);
+    ).toBe(LLAMA_3B_MODEL_ID);
   });
 
   test('detects WebGPU support from a navigator-like object', () => {
@@ -184,7 +184,7 @@ describe('model-settings availability', () => {
     ).toBe('q4');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime, 'cpu')
-    ).toBe('q4f16');
+    ).toBeNull();
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime, 'webgpu')
     ).toBe('q1');
@@ -261,8 +261,8 @@ describe('model-settings availability', () => {
       revision: '84b2c85ce64e8a0c999a3284f438d28db1d396a5',
       dtypes: {
         webgpu: 'q4f16',
-        cpu: 'q4f16',
       },
+      requiresWebGpu: true,
       multimodalGeneration: true,
       useExternalDataFormat: true,
     });

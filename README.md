@@ -96,7 +96,7 @@ Student-facing browser chat UI with local model inference.
 - If `Stop generating` is pressed while that automatic CPU recovery is still initializing, the pending request is canceled and the retry is not resumed.
 - If that automatic CPU retry is not possible or still fails, the app unloads the current worker, marks the model as not ready, and tells the user to retry, switch to CPU mode, or reload the page if the browser/driver keeps dropping the device.
 - On the Transformers.js text path, the worker now loads `AutoTokenizer` + `AutoModelForCausalLM` directly, skips the extra pipeline retokenization pass, and intentionally clears prompt-cache state between turns because `past_key_values` reuse was retaining too much browser memory in practice.
-- The bundled ONNX Gemma 4 E2B entry now points at `huggingworld/gemma-4-E2B-it-ONNX` and runs through the Transformers.js worker path on both WebGPU and CPU.
+- The bundled ONNX Gemma 4 E2B entry now points at `huggingworld/gemma-4-E2B-it-ONNX`, runs through the Transformers.js worker path on WebGPU only, and is disabled whenever the app is in CPU mode or no usable WebGPU adapter is available.
 - The bundled ONNX Llama 3.2 3B entry now uses `q4` on both WebGPU and CPU.
 - The bundled ONNX Bonsai 8B experimental entry now uses `q1` on both WebGPU and CPU.
 - Token controls in Settings:
@@ -267,7 +267,8 @@ In addition to the bundled local model catalog, users can add browser-reachable 
 
 - `huggingworld/gemma-4-E2B-it-ONNX` (default)
   - Uses the Transformers.js worker path in this app.
-  - Uses `q4f16` on WebGPU and CPU, with external ONNX data loading.
+  - Uses `q4f16` on WebGPU only, with external ONNX data loading.
+  - Is unavailable in CPU mode and when the browser has no usable WebGPU adapter.
   - Enables multimodal generation for image and audio input in the current worker path.
   - Reuses the existing lazy multimodal processor load path so preprocessing assets are not pulled during initial model load.
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.

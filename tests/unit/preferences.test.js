@@ -413,7 +413,7 @@ describe('preferences controller', () => {
       announceFallback: true,
     });
 
-    expect(selectedModel).toBe('huggingworld/gemma-4-E2B-it-ONNX');
+    expect(selectedModel).toBe(LLAMA_3B_MODEL_ID);
     expect(modelSelect.value).toBe(selectedModel);
   });
 
