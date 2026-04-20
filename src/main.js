@@ -36,6 +36,7 @@ import { createWorkspaceSidePanelsController } from './app/workspace-side-panels
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createCorsAwareFetch, validateCorsProxyUrl } from './llm/browser-fetch.js';
 import { createOrchestrationRunner } from './llm/orchestration-runner.js';
+import { shouldUseMultimodalGenerationForPrompt } from './llm/runtime-config.js';
 import { expandWllamaModelUrls } from './llm/wllama-load.js';
 import { getEnabledMcpServerConfigs, inspectMcpServerEndpoint } from './llm/mcp-client.js';
 import {
@@ -2092,18 +2093,6 @@ function getConversationLanguageWarningText(modelId, languagePreference) {
   return `This app does not have published language support metadata for the selected model. ${selectedLanguage.name} may work, but cool and scary things can happen.`;
 }
 
-function promptContainsMultimodalInputs(prompt) {
-  if (!Array.isArray(prompt)) {
-    return false;
-  }
-  return prompt.some((message) => {
-    const contentParts = Array.isArray(message?.content) ? message.content : [];
-    return contentParts.some(
-      (part) => part?.type === 'image' || part?.type === 'audio' || part?.type === 'video'
-    );
-  });
-}
-
 function buildConversationRuntimeConfigForPrompt(conversation = null, prompt = null) {
   const modelId = conversation
     ? getConversationModelId(conversation)
@@ -2112,8 +2101,7 @@ function buildConversationRuntimeConfigForPrompt(conversation = null, prompt = n
   const runtime = model?.runtime || {};
   const features = model?.features || {};
   const inputLimits = model?.inputLimits || {};
-  const multimodalGeneration =
-    runtime.multimodalGeneration === true && promptContainsMultimodalInputs(prompt);
+  const multimodalGeneration = shouldUseMultimodalGenerationForPrompt(runtime, prompt);
   const thinkingControl = model?.thinkingControl || null;
   const thinkingEnabled = getConversationThinkingEnabled(conversation);
   const baseRuntime = { ...runtime };

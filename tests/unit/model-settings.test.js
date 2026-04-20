@@ -239,6 +239,7 @@ describe('model-settings availability', () => {
         cpu: 'q4f16',
       },
       multimodalGeneration: true,
+      preferMultimodalForText: true,
       useExternalDataFormat: true,
     });
     expect(MODEL_OPTIONS_BY_ID.get(BONSAI_8B_MODEL_ID)?.runtime).toMatchObject({

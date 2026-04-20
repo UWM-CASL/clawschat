@@ -10,7 +10,7 @@ Student-facing browser chat UI with local model inference.
 - Clicking `Start a conversation` opens the chat workspace at `#/chat` with model selection, an empty composer, and no model load yet.
 - The selected model starts loading only after the first message is sent.
 - For multimodal models, the worker defers multimodal processor loading until the first generation request so image/audio preprocessing assets are not pulled in during initial model load.
-- Text-only chats on multimodal-capable models now initialize through the lighter text-generation path first; the worker reloads the multimodal sessions only when the prompt actually contains image or audio inputs.
+- Text-only chats on multimodal-capable models normally initialize through the lighter text-generation path first; the worker reloads the multimodal sessions only when the prompt actually contains image or audio inputs. Gemma 4 stays on its full multimodal runtime even for text-only turns because its lighter path regressed in-browser.
 - Each conversation stores its own selected model.
 - Changing the model for the active conversation updates that conversation only.
 - Switching to a saved conversation with a different model keeps the current model loaded until the next send for that conversation.
@@ -300,7 +300,7 @@ For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` r
 - `models[].repositoryUrl`: model details link used from the card footer
 - `models[].unavailableReason`: optional fixed reason that keeps a model visible in the picker but disabled in this app
   - `models[].features`: normalized capability flags (`streaming`, `thinking`, `imageInput`, `audioInput`, `videoInput`)
-  - `models[].runtime`: per-model runtime hints (optional `dtypes.webgpu`, optional `dtypes.cpu`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `useExternalDataFormat`)
+- `models[].runtime`: per-model runtime hints (optional `dtypes.webgpu`, optional `dtypes.cpu`, optional `enableThinking`, optional `requiresWebGpu`, optional `multimodalGeneration`, optional `preferMultimodalForText`, optional `useExternalDataFormat`)
   - `models[].inputLimits`: optional per-media limits such as `maxImageInputs` and `maxAudioInputs`
   - `models[].thinkingControl`: optional model-specific reasoning control metadata (`defaultEnabled`, optional `runtimeParameter`, optional `enabledInstruction`, optional `disabledInstruction`)
   - `models[].generation`: per-model defaults and limits for output/context tokens, temperature, `defaultTopK`, `defaultTopP`, and optional runtime-supported defaults such as `defaultRepetitionPenalty`

@@ -133,6 +133,7 @@ function normalizeRuntime(rawRuntime) {
   const enableThinking = rawRuntime?.enableThinking === true;
   const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
+  const preferMultimodalForText = rawRuntime?.preferMultimodalForText === true;
   const allowBackendFallback = rawRuntime?.allowBackendFallback !== false;
   const useExternalDataFormat =
     rawRuntime?.useExternalDataFormat === true ||
@@ -173,6 +174,7 @@ function normalizeRuntime(rawRuntime) {
     ...(enableThinking ? { enableThinking: true } : {}),
     ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
+    ...(preferMultimodalForText ? { preferMultimodalForText: true } : {}),
     ...(allowBackendFallback === false ? { allowBackendFallback: false } : {}),
     ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
     ...(providerId ? { providerId } : {}),
