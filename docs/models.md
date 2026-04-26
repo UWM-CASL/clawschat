@@ -60,6 +60,7 @@ Model support is configured in `src/config/models.json`:
   - `defaultEnabled` (`false` only when the model should default to non-thinking mode in this app)
   - `runtimeParameter` (currently `enable_thinking` when the worker should pass a runtime switch)
   - `enabledInstruction` / `disabledInstruction` (literal model-specific system-prompt switch text such as `/think` and `/no_think`)
+  - `enabledExtraBody` / `disabledExtraBody` (OpenAI-compatible extra request body JSON object merged into `/chat/completions` for the matching conversation thinking state, for example `{"chat_template_kwargs":{"enable_thinking":false}}`)
 - `models[].toolCalling`: optional per-model tool-call output profile used to build prompts and future parsing:
   - `toolListFormat` (optional: `markdown` by default, `json` for models that expect a JSON tool list in the system prompt)
   - `format` (`json`, `tagged-json`, `special-token-call`, `xml-tool-call`, or `gemma-special-token-call`)
@@ -214,6 +215,9 @@ Normalized in `src/config/model-settings.js` via `MODEL_FEATURE_FLAGS`.
 - `thinkingControl.enabledInstruction`
 - `thinkingControl.disabledInstruction`
   Literal system-prompt switch strings the app appends when the model expects prompt-level reasoning control.
+- `thinkingControl.enabledExtraBody`
+- `thinkingControl.disabledExtraBody`
+  Extra OpenAI-compatible request body objects merged into `/chat/completions` only for the matching thinking state. Use these for provider-specific chat-template switches such as `chat_template_kwargs.enable_thinking`.
 
 Important multimodal rule:
 

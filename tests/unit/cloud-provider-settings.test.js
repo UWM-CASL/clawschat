@@ -217,6 +217,10 @@ describe('cloud-provider settings controller', () => {
         enabled: true,
         enabledInstruction: 'Use deeper reasoning before answering.',
         disabledInstruction: 'Answer directly without extra reasoning.',
+        enabledExtraBody:
+          '{\n  "chat_template_kwargs": {\n    "enable_thinking": true\n  }\n}',
+        disabledExtraBody:
+          '{\n  "chat_template_kwargs": {\n    "enable_thinking": false\n  }\n}',
       }
     );
 
@@ -231,6 +235,16 @@ describe('cloud-provider settings controller', () => {
               defaultEnabled: true,
               enabledInstruction: 'Use deeper reasoning before answering.',
               disabledInstruction: 'Answer directly without extra reasoning.',
+              enabledExtraBody: {
+                chat_template_kwargs: {
+                  enable_thinking: true,
+                },
+              },
+              disabledExtraBody: {
+                chat_template_kwargs: {
+                  enable_thinking: false,
+                },
+              },
             },
           }),
         ],
@@ -242,6 +256,9 @@ describe('cloud-provider settings controller', () => {
     expect(thinkingToggle?.checked).toBe(true);
     expect(harness.document.getElementById('cloudProvidersList')?.textContent).toContain(
       'System prompt text when thinking is enabled'
+    );
+    expect(harness.document.getElementById('cloudProvidersList')?.textContent).toContain(
+      'Extra request body JSON when thinking is disabled'
     );
   });
 

@@ -51,6 +51,14 @@ function createHarness() {
             id="cloudModelThinkingDisabled"
             data-cloud-model-thinking-setting="disabledInstruction"
           >Answer directly.</textarea>
+          <textarea
+            id="cloudModelThinkingEnabledExtraBody"
+            data-cloud-model-thinking-setting="enabledExtraBody"
+          >{"chat_template_kwargs":{"enable_thinking":true}}</textarea>
+          <textarea
+            id="cloudModelThinkingDisabledExtraBody"
+            data-cloud-model-thinking-setting="disabledExtraBody"
+          >{"chat_template_kwargs":{"enable_thinking":false}}</textarea>
           <input
             id="cloudModelRateLimitRequests"
             type="number"
@@ -181,6 +189,8 @@ describe('settings-events-cloud', () => {
         enabled: true,
         enabledInstruction: 'Think carefully before answering.',
         disabledInstruction: 'Answer directly.',
+        enabledExtraBody: '{"chat_template_kwargs":{"enable_thinking":true}}',
+        disabledExtraBody: '{"chat_template_kwargs":{"enable_thinking":false}}',
       }
     );
     expect(harness.deps.setStatus).toHaveBeenCalledWith(

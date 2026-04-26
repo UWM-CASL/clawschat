@@ -179,6 +179,16 @@ describe('cloud provider helpers', () => {
             thinkingControl: {
               enabledInstruction: 'Use extended reasoning.',
               disabledInstruction: 'Answer directly.',
+              enabledExtraBody: {
+                chat_template_kwargs: {
+                  enable_thinking: true,
+                },
+              },
+              disabledExtraBody: {
+                chat_template_kwargs: {
+                  enable_thinking: false,
+                },
+              },
             },
           },
         ],
@@ -201,6 +211,16 @@ describe('cloud provider helpers', () => {
           defaultEnabled: true,
           enabledInstruction: 'Use extended reasoning.',
           disabledInstruction: 'Answer directly.',
+          enabledExtraBody: {
+            chat_template_kwargs: {
+              enable_thinking: true,
+            },
+          },
+          disabledExtraBody: {
+            chat_template_kwargs: {
+              enable_thinking: false,
+            },
+          },
         },
         toolCalling: {
           format: 'json',

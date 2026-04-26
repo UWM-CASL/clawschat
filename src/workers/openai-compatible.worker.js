@@ -52,6 +52,28 @@ function formatRetryAfter(retryAfterMs) {
   return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
 }
 
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function mergeRequestBody(baseBody, extraBody) {
+  if (!isPlainObject(extraBody)) {
+    return baseBody;
+  }
+  const merged = { ...baseBody };
+  Object.entries(extraBody).forEach(([key, value]) => {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      return;
+    }
+    if (isPlainObject(value) && isPlainObject(merged[key])) {
+      merged[key] = mergeRequestBody(merged[key], value);
+      return;
+    }
+    merged[key] = value;
+  });
+  return merged;
+}
+
 function buildRequestPayload(config, payload) {
   const runtime = payload?.runtime && typeof payload.runtime === 'object' ? payload.runtime : {};
   const generationConfig =
@@ -65,7 +87,7 @@ function buildRequestPayload(config, payload) {
   const maxOutputTokensField = inferOpenAiCompatibleMaxOutputTokensField(
     runtime.apiBaseUrl || config?.runtime?.apiBaseUrl || ''
   );
-  return {
+  const requestBody = {
     model: runtime.remoteModelId || config?.modelId || '',
     messages,
     stream: true,
@@ -74,6 +96,7 @@ function buildRequestPayload(config, payload) {
     [maxOutputTokensField]: generationConfig.maxOutputTokens,
     ...(runtime.supportsTopK === true ? { top_k: generationConfig.topK } : {}),
   };
+  return mergeRequestBody(requestBody, runtime.extraBody);
 }
 
 async function parseJsonSafely(response) {

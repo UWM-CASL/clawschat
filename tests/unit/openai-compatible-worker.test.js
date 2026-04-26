@@ -115,6 +115,11 @@ describe('openai-compatible.worker', () => {
           apiBaseUrl: 'https://example.test/v1',
           remoteModelId: 'provider/model',
           supportsTopK: true,
+          extraBody: {
+            chat_template_kwargs: {
+              enable_thinking: false,
+            },
+          },
         },
       },
     });
@@ -135,6 +140,9 @@ describe('openai-compatible.worker', () => {
         top_p: 0.95,
         max_tokens: 64,
         top_k: 40,
+        chat_template_kwargs: {
+          enable_thinking: false,
+        },
       }),
       signal: expect.any(Object),
     });

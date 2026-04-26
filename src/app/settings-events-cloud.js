@@ -325,10 +325,12 @@ export function bindCloudProviderSettingsEvents({
         if (
           thinking.enabled &&
           !thinking.enabledInstruction?.trim() &&
-          !thinking.disabledInstruction?.trim()
+          !thinking.disabledInstruction?.trim() &&
+          !thinking.enabledExtraBody?.trim() &&
+          !thinking.disabledExtraBody?.trim()
         ) {
           setStatus(
-            'Enter at least one thinking system-prompt instruction to enable thinking control.'
+            'Enter at least one thinking system-prompt instruction or extra request body JSON object to enable thinking control.'
           );
           return;
         }

@@ -96,14 +96,32 @@ function normalizeCloudThinkingControl(rawThinkingControl) {
     typeof rawThinkingControl.disabledInstruction === 'string'
       ? rawThinkingControl.disabledInstruction.trim()
       : '';
-  if (!enabledInstruction && !disabledInstruction) {
+  const enabledExtraBody = normalizeCloudExtraBody(rawThinkingControl.enabledExtraBody);
+  const disabledExtraBody = normalizeCloudExtraBody(rawThinkingControl.disabledExtraBody);
+  if (!enabledInstruction && !disabledInstruction && !enabledExtraBody && !disabledExtraBody) {
     return null;
   }
   return {
     defaultEnabled: rawThinkingControl.defaultEnabled !== false,
     ...(enabledInstruction ? { enabledInstruction } : {}),
     ...(disabledInstruction ? { disabledInstruction } : {}),
+    ...(enabledExtraBody ? { enabledExtraBody } : {}),
+    ...(disabledExtraBody ? { disabledExtraBody } : {}),
   };
+}
+
+function normalizeCloudExtraBody(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  try {
+    const normalized = JSON.parse(JSON.stringify(value));
+    return normalized && typeof normalized === 'object' && !Array.isArray(normalized)
+      ? normalized
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeCloudGenerationLimits(rawGeneration, { managed = false } = {}) {

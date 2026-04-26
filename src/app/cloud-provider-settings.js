@@ -164,6 +164,12 @@ function cloudModelThinkingEnabled(model) {
   return Boolean(model?.thinkingControl);
 }
 
+function formatExtraBodyValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? JSON.stringify(value, null, 2)
+    : '';
+}
+
 function buildCloudModelToolCallingHelpText(model) {
   if (cloudModelSupportsDetectedToolCalling(model)) {
     return 'Provider metadata suggests this model supports tool or function calling. Leave this on to include built-in tool instructions in the computed system prompt for this model.';
@@ -177,14 +183,41 @@ function normalizeCloudModelThinkingInput(candidate) {
     typeof candidate?.enabledInstruction === 'string' ? candidate.enabledInstruction.trim() : '';
   const disabledInstruction =
     typeof candidate?.disabledInstruction === 'string' ? candidate.disabledInstruction.trim() : '';
-  if (!enabled || (!enabledInstruction && !disabledInstruction)) {
+  const enabledExtraBody = parseExtraBodyInput(
+    candidate?.enabledExtraBody,
+    'Extra request body JSON when thinking is enabled'
+  );
+  const disabledExtraBody = parseExtraBodyInput(
+    candidate?.disabledExtraBody,
+    'Extra request body JSON when thinking is disabled'
+  );
+  if (!enabled || (!enabledInstruction && !disabledInstruction && !enabledExtraBody && !disabledExtraBody)) {
     return null;
   }
   return {
     defaultEnabled: true,
     ...(enabledInstruction ? { enabledInstruction } : {}),
     ...(disabledInstruction ? { disabledInstruction } : {}),
+    ...(enabledExtraBody ? { enabledExtraBody } : {}),
+    ...(disabledExtraBody ? { disabledExtraBody } : {}),
   };
+}
+
+function parseExtraBodyInput(value, label) {
+  const normalizedValue = typeof value === 'string' ? value.trim() : '';
+  if (!normalizedValue) {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(normalizedValue);
+  } catch {
+    throw new Error(`${label} must be valid JSON.`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  return parsed;
 }
 
 function toRateLimitWindowParts(rateLimit) {
@@ -372,12 +405,30 @@ export function createCloudProviderSettingsController({
         label: 'System prompt text when thinking is enabled',
         value: model.thinkingControl?.enabledInstruction || '',
         placeholder: 'Example: Use extended reasoning before answering.',
+        rows: 2,
       },
       {
         key: 'disabledInstruction',
         label: 'System prompt text when thinking is disabled',
         value: model.thinkingControl?.disabledInstruction || '',
         placeholder: 'Example: Answer directly without hidden reasoning.',
+        rows: 2,
+      },
+      {
+        key: 'enabledExtraBody',
+        label: 'Extra request body JSON when thinking is enabled',
+        value: formatExtraBodyValue(model.thinkingControl?.enabledExtraBody),
+        placeholder:
+          '{\n  "chat_template_kwargs": {\n    "enable_thinking": true\n  }\n}',
+        rows: 4,
+      },
+      {
+        key: 'disabledExtraBody',
+        label: 'Extra request body JSON when thinking is disabled',
+        value: formatExtraBodyValue(model.thinkingControl?.disabledExtraBody),
+        placeholder:
+          '{\n  "chat_template_kwargs": {\n    "enable_thinking": false\n  }\n}',
+        rows: 4,
       },
     ].forEach((field) => {
       const wrapper = documentRef.createElement('div');
@@ -393,7 +444,7 @@ export function createCloudProviderSettingsController({
       const textarea = documentRef.createElement('textarea');
       textarea.id = inputId;
       textarea.className = 'form-control';
-      textarea.rows = 2;
+      textarea.rows = field.rows;
       textarea.value = field.value;
       textarea.placeholder = field.placeholder;
       textarea.disabled = !thinkingEnabled;

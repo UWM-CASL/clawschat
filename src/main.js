@@ -2349,6 +2349,9 @@ function buildConversationRuntimeConfigForPrompt(conversation = null, prompt = n
   const multimodalGeneration = shouldUseMultimodalGenerationForPrompt(runtime, prompt);
   const thinkingControl = model?.thinkingControl || null;
   const thinkingEnabled = getConversationThinkingEnabled(conversation);
+  const thinkingExtraBody = thinkingEnabled
+    ? thinkingControl?.enabledExtraBody
+    : thinkingControl?.disabledExtraBody;
   const baseRuntime = { ...runtime };
   const generationConfig = sanitizeGenerationConfigForModel(
     modelId,
@@ -2373,6 +2376,9 @@ function buildConversationRuntimeConfigForPrompt(conversation = null, prompt = n
       : {}),
     ...(thinkingControl?.runtimeParameter === 'enable_thinking'
       ? { enableThinking: thinkingEnabled }
+      : {}),
+    ...(thinkingExtraBody && typeof thinkingExtraBody === 'object'
+      ? { extraBody: thinkingExtraBody }
       : {}),
     ...(wllamaSettings
       ? {
