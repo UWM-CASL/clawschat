@@ -569,6 +569,66 @@ describe('app-controller', () => {
     expect(finalModelMessages.at(-1)?.text).toBe('It is currently 1:00 AM local time.');
   });
 
+  test('does not continue generation after stop is clicked during a tool call', async () => {
+    const harness = createControllerHarness();
+    const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });
+    const userMessage = addMessageToConversation(conversation, 'user', 'What time is it?');
+    harness.conversations.push(conversation);
+    harness.activeConversationId.value = conversation.id;
+    harness.state.modelReady = true;
+    harness.dependencies.detectToolCalls.mockImplementation((rawText) =>
+      String(rawText || '').includes('{"name":"get_current_date_time","parameters":{}}')
+        ? [
+            {
+              name: 'get_current_date_time',
+              arguments: {},
+              rawText: '{"name":"get_current_date_time","parameters":{}}',
+              format: 'json',
+            },
+          ]
+        : []
+    );
+    let resolveToolCall = (_value) => {};
+    const toolCallPromise = new Promise((resolve) => {
+      resolveToolCall = resolve;
+    });
+    harness.dependencies.executeToolCall.mockReturnValue(toolCallPromise);
+    harness.engine.generate
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onComplete('{"name":"get_current_date_time","parameters":{}}');
+      })
+      .mockImplementationOnce((_prompt, handlers) => {
+        handlers.onComplete('This continuation should not run.');
+      });
+
+    harness.controller.startModelGeneration(
+      conversation,
+      buildPromptForConversationLeaf(conversation),
+      {
+        parentMessageId: userMessage.id,
+      }
+    );
+
+    await Promise.resolve();
+    expect(harness.dependencies.executeToolCall).toHaveBeenCalledTimes(1);
+
+    await harness.controller.stopGeneration();
+    resolveToolCall({
+      toolName: 'get_current_date_time',
+      arguments: {},
+      resultText: '{"iso":"2026-03-26T06:00:00.000Z"}',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(harness.engine.generate).toHaveBeenCalledTimes(1);
+    expect(conversation.messageNodes.some((message) => message.role === 'tool')).toBe(false);
+    expect(harness.callLog).toContain('status:Stopped');
+    expect(harness.dependencies.appendDebug).toHaveBeenCalledWith(
+      'Tool continuation canceled by user after tool execution.'
+    );
+  });
+
   test('logs one complete raw output blob across tool interception and continuation', async () => {
     const harness = createControllerHarness();
     const conversation = createConversation({ id: 'conversation-1', modelId: 'test-model' });

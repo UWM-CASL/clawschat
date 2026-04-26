@@ -76,6 +76,7 @@ Tool calls now follow an agent-style interruption flow.
 - The continuation payload fed back into the conversation uses the raw tool call, not any extra visible narration.
 - The requested tool executes before the turn is allowed to continue.
 - After the tool result is appended to conversation state, the controller starts the next generation step.
+- If `Stop generating` is pressed while a tool call is pending, that generation session is marked canceled and the post-tool continuation is not started.
 
 This keeps the model from speaking as though it already knows the tool result before the tool has actually run.
 

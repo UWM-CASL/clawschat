@@ -216,10 +216,30 @@ export function createAppController(dependencies) {
       : 120;
   let activeRenameAbortController = null;
   let activeRenameConversationId = '';
+  let activeGenerationSession = null;
+  let generationSessionCounter = 0;
 
   function notifyGenerationSettled() {
     if (typeof dependencies.onGenerationSettled === 'function') {
       dependencies.onGenerationSettled();
+    }
+  }
+
+  function createGenerationSession() {
+    generationSessionCounter += 1;
+    return {
+      id: generationSessionCounter,
+      stopRequested: false,
+    };
+  }
+
+  function isGenerationStopRequested(generationSession) {
+    return generationSession?.stopRequested === true;
+  }
+
+  function clearActiveGenerationSession(generationSession) {
+    if (activeGenerationSession === generationSession) {
+      activeGenerationSession = null;
     }
   }
 
@@ -448,15 +468,27 @@ export function createAppController(dependencies) {
     activeConversation,
     modelMessage,
     toolCalls,
-    { updateLastSpokenOnComplete = false } = {}
+    { updateLastSpokenOnComplete = false, generationSession = null } = {}
   ) {
+    if (isGenerationStopRequested(generationSession)) {
+      dependencies.appendDebug('Tool continuation canceled by user before tool execution.');
+      return;
+    }
     let parentMessageId = modelMessage.id;
     for (const toolCall of toolCalls) {
+      if (isGenerationStopRequested(generationSession)) {
+        dependencies.appendDebug('Tool continuation canceled by user.');
+        return;
+      }
       let executionResult;
       try {
         executionResult = await dependencies.executeToolCall(toolCall);
         dependencies.appendDebug(`Executed tool: ${executionResult.toolName}`);
       } catch (error) {
+        if (isGenerationStopRequested(generationSession)) {
+          dependencies.appendDebug('Tool call canceled by user.');
+          return;
+        }
         const message = toErrorMessage(error);
         executionResult = {
           toolName: toolCall?.name || 'unknown_tool',
@@ -465,6 +497,10 @@ export function createAppController(dependencies) {
           resultText: buildFailedToolResultText(toolCall, error),
         };
         dependencies.appendDebug(`Tool execution failed: ${message}`);
+      }
+      if (isGenerationStopRequested(generationSession)) {
+        dependencies.appendDebug('Tool continuation canceled by user after tool execution.');
+        return;
       }
       const toolMessage = dependencies.addMessageToConversation(
         activeConversation,
@@ -489,6 +525,10 @@ export function createAppController(dependencies) {
       dependencies.scrollTranscriptToBottom();
       dependencies.queueConversationStateSave();
     }
+    if (isGenerationStopRequested(generationSession)) {
+      dependencies.appendDebug('Tool continuation canceled by user before response continuation.');
+      return;
+    }
     dependencies.setStatus('Tool result ready. Continuing response...');
     void startModelGeneration(
       activeConversation,
@@ -496,6 +536,7 @@ export function createAppController(dependencies) {
       {
         parentMessageId,
         updateLastSpokenOnComplete,
+        generationSession,
       }
     );
   }
@@ -657,6 +698,11 @@ export function createAppController(dependencies) {
         : '';
     const clearExistingMessageBeforeStream = Boolean(options.clearExistingMessageBeforeStream);
     const updateLastSpokenOnComplete = Boolean(options.updateLastSpokenOnComplete);
+    const generationSession = options.generationSession || createGenerationSession();
+    if (isGenerationStopRequested(generationSession)) {
+      return;
+    }
+    activeGenerationSession = generationSession;
     const existingModelMessage = existingModelMessageId
       ? dependencies.getMessageNodeById(activeConversation, existingModelMessageId)
       : null;
@@ -804,6 +850,7 @@ export function createAppController(dependencies) {
                   interceptedToolCall.toolCalls,
                   {
                     updateLastSpokenOnComplete,
+                    generationSession,
                   }
                 );
               },
@@ -826,6 +873,7 @@ export function createAppController(dependencies) {
                 logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);
                 dependencies.appendDebug(`Tool call interception failed: ${message}`);
                 dependencies.queueConversationStateSave();
+                clearActiveGenerationSession(generationSession);
                 notifyGenerationSettled();
               }
             );
@@ -975,6 +1023,7 @@ export function createAppController(dependencies) {
                 modelMessage.toolCalls,
                 {
                   updateLastSpokenOnComplete,
+                  generationSession,
                 }
               );
             });
@@ -987,6 +1036,7 @@ export function createAppController(dependencies) {
           if (typeof dependencies.onModelMessageComplete === 'function') {
             dependencies.onModelMessageComplete(activeConversation, modelMessage);
           }
+          clearActiveGenerationSession(generationSession);
           notifyGenerationSettled();
         },
         onError: (message) => {
@@ -1004,6 +1054,7 @@ export function createAppController(dependencies) {
               updateLastSpokenOnComplete,
             }
           );
+          clearActiveGenerationSession(generationSession);
         },
       });
     } catch (error) {
@@ -1018,11 +1069,16 @@ export function createAppController(dependencies) {
           updateLastSpokenOnComplete,
         }
       );
+      clearActiveGenerationSession(generationSession);
     }
   }
 
   async function stopGeneration() {
     dependencies.setStatus('Stopping generation...');
+    const generationSession = activeGenerationSession;
+    if (generationSession) {
+      generationSession.stopRequested = true;
+    }
     try {
       await dependencies.engine.cancelGeneration();
       setModelReady(dependencies.state, true);
@@ -1039,6 +1095,7 @@ export function createAppController(dependencies) {
       dependencies.setStatus(`Error: ${message}`);
       dependencies.appendDebug(`Cancel failed: ${message}`);
     } finally {
+      clearActiveGenerationSession(generationSession);
       dependencies.markActiveIncompleteModelMessageComplete();
       setGenerating(dependencies.state, false);
       dependencies.updateActionButtons();
