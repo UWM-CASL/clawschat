@@ -32,6 +32,12 @@
   --action-btn-border: #2b5f97;
   --action-btn-hover-bg: #234f81;
   --action-btn-hover-text: #ffffff;
+  --outline-btn-text: #243247;
+  --outline-btn-border: #637892;
+  --outline-btn-bg: transparent;
+  --outline-btn-hover-bg: #d9e2ed;
+  --outline-btn-hover-border: #4f6681;
+  --outline-btn-disabled-text: #66758a;
   --primary-btn-bg: #1e568f;
   --primary-btn-border: #1e568f;
   --primary-btn-hover-bg: #194978;
@@ -77,6 +83,12 @@
   --action-btn-border: #607086;
   --action-btn-hover-bg: #2d425f;
   --action-btn-hover-text: #f7fbff;
+  --outline-btn-text: #d9e4f2;
+  --outline-btn-border: #7d8fa7;
+  --outline-btn-bg: #141a23;
+  --outline-btn-hover-bg: #253142;
+  --outline-btn-hover-border: #a2b2c8;
+  --outline-btn-disabled-text: #8d9aae;
   --primary-btn-bg: #2b4f77;
   --primary-btn-border: #2b4f77;
   --primary-btn-hover-bg: #243f5f;
@@ -2641,18 +2653,20 @@
 }
 
 .btn-outline-primary,
+.btn-outline-secondary,
 .btn-outline-danger {
-  --bs-btn-color: var(--ink-strong);
-  --bs-btn-border-color: var(--control-border);
+  --bs-btn-color: var(--outline-btn-text);
+  --bs-btn-bg: var(--outline-btn-bg);
+  --bs-btn-border-color: var(--outline-btn-border);
   --bs-btn-hover-color: var(--ink-strong);
-  --bs-btn-hover-bg: var(--surface-muted);
-  --bs-btn-hover-border-color: var(--focus-ring);
+  --bs-btn-hover-bg: var(--outline-btn-hover-bg);
+  --bs-btn-hover-border-color: var(--outline-btn-hover-border);
   --bs-btn-focus-shadow-rgb: 134, 169, 209;
   --bs-btn-active-color: var(--ink-strong);
-  --bs-btn-active-bg: var(--surface-muted);
-  --bs-btn-active-border-color: var(--focus-ring);
-  --bs-btn-disabled-color: var(--ink-muted);
-  --bs-btn-disabled-border-color: var(--control-border);
+  --bs-btn-active-bg: var(--outline-btn-hover-bg);
+  --bs-btn-active-border-color: var(--outline-btn-hover-border);
+  --bs-btn-disabled-color: var(--outline-btn-disabled-text);
+  --bs-btn-disabled-border-color: var(--outline-btn-border);
 }
 
 .tooltip {
@@ -2681,8 +2695,7 @@
 
 .form-control,
 .form-select,
-.form-check-input,
-.btn-outline-secondary {
+.form-check-input {
   border-color: var(--control-border);
 }
 

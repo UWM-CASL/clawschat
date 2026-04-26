@@ -11,6 +11,10 @@ import {
   normalizeModelId,
   normalizeSupportedBackendPreference,
 } from '../config/model-settings.js';
+import {
+  buildDefaultGenerationConfig,
+  sanitizeGenerationConfig,
+} from '../config/generation-config.js';
 
 const BACKEND_FALLBACK = 'webgpu';
 const CPU_THREAD_AUTO = 0;
@@ -98,6 +102,7 @@ function shouldShowLanguageOverflow(model, visibleTagCount = DEFAULT_LANGUAGE_TA
  * @param {HTMLSelectElement | null} [options.backendSelect]
  * @param {HTMLInputElement | null} [options.cpuThreadsInput]
  * @param {(modelId: string) => any} options.getRuntimeConfigForModel
+ * @param {(modelId: string) => any} [options.getStoredGenerationConfigForModel]
  * @param {(modelId: string, resetQueuedValues: boolean) => void} options.syncGenerationSettingsFromModel
  * @param {(modelId: string, generationConfig: any) => void} options.persistGenerationConfigForModel
  * @param {(message: string) => void} options.setStatus
@@ -119,6 +124,7 @@ export function createModelPreferencesController({
   backendSelect,
   cpuThreadsInput,
   getRuntimeConfigForModel,
+  getStoredGenerationConfigForModel = null,
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
   setStatus,
@@ -270,6 +276,14 @@ export function createModelPreferencesController({
     });
   }
 
+  function getConfiguredGenerationConfigForModel(modelId, limits) {
+    const storedConfig =
+      typeof getStoredGenerationConfigForModel === 'function'
+        ? getStoredGenerationConfigForModel(modelId)
+        : null;
+    return sanitizeGenerationConfig(storedConfig || buildDefaultGenerationConfig(limits), limits);
+  }
+
   function createLanguageSupportNode(model) {
     const tags = Array.isArray(model?.languageSupport?.tags) ? model.languageSupport.tags : [];
     if (!tags.length) {
@@ -374,6 +388,10 @@ export function createModelPreferencesController({
     const effectiveGenerationLimits = getModelGenerationLimits(model.id, {
       backendPreference: selectedBackend,
     });
+    const effectiveGenerationConfig = getConfiguredGenerationConfigForModel(
+      model.id,
+      effectiveGenerationLimits
+    );
     const reducedGenerationLimits = hasReducedGenerationLimits(
       effectiveGenerationLimits,
       model.generation
@@ -456,8 +474,8 @@ export function createModelPreferencesController({
     const context = documentRef.createElement('p');
     context.className = 'model-card-context';
     context.innerHTML = `<i class="bi bi-text-paragraph" aria-hidden="true"></i> <strong>${formatInteger(
-      effectiveGenerationLimits.maxContextTokens
-    )} tokens</strong> / about ${formatWordEstimate(effectiveGenerationLimits.maxContextTokens)} words`;
+      effectiveGenerationConfig.maxContextTokens
+    )} tokens</strong> / about ${formatWordEstimate(effectiveGenerationConfig.maxContextTokens)} words`;
     primary.appendChild(context);
     content.appendChild(primary);
 

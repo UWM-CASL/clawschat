@@ -4397,6 +4397,7 @@ const preferencesController = createPreferencesController({
   colorSchemeQuery,
   refreshModelThinkingVisibility,
   getRuntimeConfigForModel,
+  getStoredGenerationConfigForModel,
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
   validateCorsProxyUrl: (proxyUrl, options = {}) =>

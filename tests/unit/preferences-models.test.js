@@ -19,6 +19,7 @@ function createHarness({
   navigatorRef = /** @type {any} */ ({ gpu: {} }),
   appStateOverrides = {},
   getRuntimeConfigForModel = null,
+  getStoredGenerationConfigForModel = null,
 } = {}) {
   const dom = new JSDOM(
     `
@@ -54,9 +55,17 @@ function createHarness({
   const getRuntimeConfigForModelMock = /** @type {(modelId: string) => any} */ (
     vi.fn(runtimeConfigResolver)
   );
+  const storedGenerationConfigResolver =
+    typeof getStoredGenerationConfigForModel === 'function'
+      ? getStoredGenerationConfigForModel
+      : () => null;
+  const getStoredGenerationConfigForModelMock = /** @type {(modelId: string) => any} */ (
+    vi.fn(storedGenerationConfigResolver)
+  );
 
   const deps = {
     getRuntimeConfigForModel: getRuntimeConfigForModelMock,
+    getStoredGenerationConfigForModel: getStoredGenerationConfigForModelMock,
     syncGenerationSettingsFromModel: vi.fn(),
     persistGenerationConfigForModel: vi.fn(),
     setStatus: vi.fn(),
@@ -165,6 +174,32 @@ describe('preferences-models', () => {
     expect(modelSelect.value).toBe(firstButton?.dataset.modelId);
     expect(harness.document.activeElement).toBe(firstButton);
     expect(firstButton?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('renders model card context and word estimate from saved generation settings', () => {
+    const harness = createHarness({
+      getStoredGenerationConfigForModel: (modelId) =>
+        modelId === GEMMA_4_MODEL_ID
+          ? {
+              maxContextTokens: 2048,
+              maxOutputTokens: 512,
+              temperature: 0.6,
+              topK: 50,
+              topP: 0.9,
+              repetitionPenalty: 1,
+            }
+          : null,
+    });
+    const modelCardList = /** @type {HTMLElement} */ (
+      harness.document.getElementById('modelCardList')
+    );
+
+    harness.controller.populateModelSelect();
+
+    const gemmaCard = getModelCard(modelCardList, GEMMA_4_MODEL_ID);
+    expect(gemmaCard?.textContent).toContain('2,048 tokens');
+    expect(gemmaCard?.textContent).toContain('about 1,500 words');
+    expect(gemmaCard?.textContent).not.toContain('4,096 tokens');
   });
 
   test('falls back away from Gemma when CPU mode is selected', () => {
