@@ -2,6 +2,75 @@
 
 Student-facing browser chat UI with local model inference.
 
+The app is built for students who need a browser-based chat workspace that can run small language models locally where possible. It is deployed as a static GitHub Pages site, uses WebGPU when available, falls back to browser CPU/WASM paths where supported, and keeps prompts and outputs local by default unless a user explicitly configures a remote provider.
+
+## Project constraints
+
+- Static hosting only: no backend routes, no SSR, no server deployment assumptions.
+- GitHub Pages compatible: the build must work under a repository subpath such as `/browser-llm-runner/`.
+- Accessibility target: WCAG 2.1 AA.
+- Privacy default: no telemetry that captures prompts, outputs, or uploaded content.
+- Runtime boundary: UI code talks through the engine client, not directly to runtime-specific model APIs.
+- Streaming reliability: any streaming generation path must have a visible, keyboard-accessible stop control.
+
+## Quick start
+
+Install dependencies:
+
+```sh
+pnpm install
+```
+
+Run the development server:
+
+```sh
+pnpm dev
+```
+
+Build the static site:
+
+```sh
+pnpm build
+```
+
+Preview the build:
+
+```sh
+pnpm preview
+```
+
+Run the usual verification gate:
+
+```sh
+pnpm lint
+pnpm typecheck
+pnpm test
+```
+
+For UI changes, also run:
+
+```sh
+pnpm test:a11y
+pnpm test:e2e
+```
+
+For detailed local operation, reset, troubleshooting, and deployment notes, see [`docs/operations.md`](docs/operations.md).
+
+## Maintainer orientation
+
+This repo now treats human maintainability as part of the definition of done. Before non-trivial code changes, read:
+
+- [`AGENTS.md`](AGENTS.md) for hard project constraints.
+- [`GUIDANCE.md`](GUIDANCE.md) for the general human-maintenance standard.
+- [`MAINTAINERS.md`](MAINTAINERS.md) for the repo-specific maintainer workflow and current refactor direction.
+- [`docs/architecture.md`](docs/architecture.md) for the architecture story and target shape.
+- [`docs/conventions.md`](docs/conventions.md) for local coding and documentation conventions.
+- [`docs/failure-model.md`](docs/failure-model.md) for known failure surfaces and recovery expectations.
+- [`docs/change-guide.md`](docs/change-guide.md) for common change paths.
+- [`docs/maintainer-faq.md`](docs/maintainer-faq.md) for practical maintainer questions.
+
+The README should stay a front door. Detailed behavior, architecture, failure, and change-path documentation should live in focused docs and be linked from here.
+
 ## Runtime behavior
 
 - Inference runs through an engine-driver layer selected from model config and user preferences; bundled local models use either the Transformers.js worker path for ONNX models or the `wllama` worker path for GGUF models, while configured cloud models use the OpenAI-compatible worker path.
@@ -376,6 +445,7 @@ See [`docs/security.md`](docs/security.md) for the tracked hardening notes.
 - Responsive viewport-height synchronization for the shell and mobile offcanvas/layout behavior lives in `src/app/viewport-layout.js`.
 - `src/main.js` remains the app shell for routing, page-level visibility, persistence hookup, and wiring dependencies into those modules.
 - See `docs/conversation-domain.md`, `docs/app-state.md`, `docs/app-controller.md`, `docs/orchestrations.md`, `docs/semantic-memory.md`, and `docs/ui-views.md` for the current boundaries.
+- See `docs/architecture.md`, `docs/conventions.md`, `docs/failure-model.md`, `docs/change-guide.md`, and `docs/maintainer-faq.md` for the repo-wide maintainer story and target direction.
 - See `docs/tools.md` for current built-in and MCP tool-calling behavior plus the remaining `SKILL.md` planning.
 - See `docs/web-search-hypothesis.md` for the current low-bandwidth, mobile-assisted search design hypothesis.
 - See `docs/models.md` for the model catalog schema and the contributor checklist for adding, disabling, replacing, or retiring models.

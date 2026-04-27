@@ -16,7 +16,7 @@ Accessibility target: WCAG 2.1 AA (non-negotiable).
 
 Agents must:
 
-* Read AGENTS.md, README.md, and docs/ before major edits.
+* Read AGENTS.md, GUIDANCE.md, README.md, MAINTAINERS.md, and relevant docs/ before major edits.
 * Prefer incremental commits and minimal surface-area changes.
 * Keep architecture boundaries: UI must not directly call runtime-specific model APIs.
 * Update docs when changing behavior, constraints, or deployment assumptions.
@@ -275,11 +275,13 @@ In PR description, include a brief checklist of what you verified:
 If you change behavior, update:
 
 * README.md for user-visible changes and GitHub Pages deployment notes (base path, routing mode)
+* MAINTAINERS.md when the maintainer workflow, risk posture, or refactor direction changes
 * docs/ for:
 
   * model support and distribution
   * engine selection (WebGPU/CPU) and fallback behavior
   * accessibility patterns (live region strategy, focus management)
+  * architecture, conventions, failure model, and common change paths when boundaries or assumptions change
 
 ## 12) Suggested repo structure (keep accurate; update if different)
 
