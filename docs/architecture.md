@@ -95,6 +95,7 @@ Transcript content orchestration also belongs here: `src/app/transcript-content-
 Message-copy behavior also belongs here: `src/app/message-copy.js` owns clipboard fallback and copy-text assembly while transcript events and shortcuts only trigger the action.
 Conversation download behavior also belongs here: `src/app/conversation-downloads.js` owns browser blob downloads, active-branch JSON/Markdown download orchestration, and bulk archive export status while `src/main.js` only wires dependencies.
 Conversation sidebar menu behavior also belongs here: `src/app/conversation-menu.js` owns menu open/close state, download submenu toggling, menu capability state, and action focus handoff while `src/app/conversation-list-events.js` only routes DOM events.
+Generation settings behavior also belongs here: `src/app/generation-settings.js` owns model generation/Wllama setting normalization, browser-local persistence, help text, and delayed-apply behavior while settings events only report user edits.
 
 `src/llm/`
 
