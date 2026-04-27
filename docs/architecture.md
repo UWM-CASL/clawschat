@@ -98,6 +98,7 @@ Conversation sidebar menu behavior also belongs here: `src/app/conversation-menu
 Generation settings behavior also belongs here: `src/app/generation-settings.js` owns model generation/Wllama setting normalization, browser-local persistence, help text, and delayed-apply behavior while settings events only report user edits.
 Pre-chat workspace behavior also belongs here: `src/app/pre-chat-workspace.js` owns setup status hints, pre-chat action visibility, agent draft labels, composer visibility, and the small shell selectors around pending conversation type.
 Agent automation UI behavior also belongs here: `src/app/agent-automation-ui.js` owns the active-agent pause/resume control, heartbeat countdown text, coarse live-region announcements, and countdown timer lifecycle while `src/app/agent-automation.js` owns the follow-up and summary orchestration workflow.
+Orchestration run adapter behavior also belongs here: `src/app/orchestration-runs.js` owns the browser-facing bridge from orchestration prompt steps to one-shot engine generation plus per-step thinking-output cleanup while `src/llm/orchestration-runner.js` owns the step execution contract.
 
 `src/llm/`
 

@@ -31,6 +31,7 @@ import { createModelLoadFeedbackController } from './app/model-load-feedback.js'
 import { createSemanticMemoryController } from './app/semantic-memory.js';
 import './styles.css';
 import { bindConversationListEvents } from './app/conversation-list-events.js';
+import { createOrchestrationRunController } from './app/orchestration-runs.js';
 import { createPreferencesController } from './app/preferences.js';
 import { createPreChatWorkspaceController } from './app/pre-chat-workspace.js';
 import { createRoutingShell } from './app/routing-shell.js';
@@ -46,7 +47,6 @@ import { createViewportLayoutController } from './app/viewport-layout.js';
 import { createWorkspaceSidePanelsController } from './app/workspace-side-panels.js';
 import { LLMEngineClient } from './llm/engine-client.js';
 import { createCorsAwareFetch, validateCorsProxyUrl } from './llm/browser-fetch.js';
-import { createOrchestrationRunner } from './llm/orchestration-runner.js';
 import { shouldUseMultimodalGenerationForPrompt } from './llm/runtime-config.js';
 import { expandWllamaModelUrls } from './llm/wllama-load.js';
 import { getEnabledMcpServerConfigs, inspectMcpServerEndpoint } from './llm/mcp-client.js';
@@ -2100,118 +2100,6 @@ function getLoadedModelId() {
   return null;
 }
 
-function requestSingleGeneration(prompt, options = {}) {
-  return new Promise((resolve, reject) => {
-    const signal =
-      globalThis.AbortSignal && options.signal instanceof globalThis.AbortSignal
-        ? options.signal
-        : null;
-    const activeConversation = getActiveConversation();
-    const selectedModelId = getConversationModelId(activeConversation);
-    const requestGenerationConfig = sanitizeGenerationConfigForModel(selectedModelId, {
-      ...appState.activeGenerationConfig,
-      ...(options.generationConfig && typeof options.generationConfig === 'object'
-        ? options.generationConfig
-        : {}),
-    });
-    const requestRuntime = {
-      ...buildConversationRuntimeConfigForPrompt(activeConversation, prompt),
-      ...(options.runtime && typeof options.runtime === 'object' ? options.runtime : {}),
-    };
-    let streamedText = '';
-    let isSettled = false;
-
-    const settle = (callback) => {
-      if (isSettled) {
-        return;
-      }
-      isSettled = true;
-      signal?.removeEventListener('abort', handleAbort);
-      callback();
-    };
-
-    const rejectAsAbort = () => {
-      settle(() => {
-        const AbortError =
-          globalThis.DOMException ||
-          class AbortError extends Error {
-            constructor(message) {
-              super(message);
-              this.name = 'AbortError';
-            }
-          };
-        reject(new AbortError('Generation canceled.', 'AbortError'));
-      });
-    };
-
-    const handleAbort = () => {
-      void engine
-        .cancelGeneration()
-        .catch(() => {})
-        .finally(() => {
-          rejectAsAbort();
-        });
-    };
-
-    if (signal?.aborted) {
-      rejectAsAbort();
-      return;
-    }
-
-    signal?.addEventListener('abort', handleAbort, { once: true });
-    try {
-      engine.generate(prompt, {
-        runtime: requestRuntime,
-        generationConfig: requestGenerationConfig,
-        onToken: (chunk) => {
-          streamedText += String(chunk || '');
-        },
-        onComplete: (finalText) => {
-          settle(() => {
-            resolve(String(finalText || streamedText).trim());
-          });
-        },
-        onError: (message) => {
-          settle(() => {
-            reject(new Error(String(message || 'Generation failed.')));
-          });
-        },
-        onCancel: () => {
-          rejectAsAbort();
-        },
-      });
-    } catch (error) {
-      settle(() => {
-        reject(error);
-      });
-    }
-  });
-}
-
-function removeGenericThinkingSections(text) {
-  return String(text || '').replace(/<think\b[^>]*>[\s\S]*?(?:<\/think>|$)/gi, '');
-}
-
-function formatOrchestrationStepOutput(step, rawOutput, thinkingTags) {
-  const output = String(rawOutput || '').trim();
-  if (!output) {
-    return '';
-  }
-
-  const stripThinking = Boolean(step?.outputProcessing?.stripThinking);
-  if (!stripThinking) {
-    return output;
-  }
-
-  const parsed = parseThinkingText(output, thinkingTags);
-  const withoutThinking = parsed.response.trim();
-  if (withoutThinking) {
-    return withoutThinking;
-  }
-
-  return removeGenericThinkingSections(output).trim();
-}
-
 function applyVariantCardSignals(item, variantState) {
   if (!item) {
     return;
@@ -3499,14 +3387,20 @@ function preparePendingConversationDraft(conversationType = CONVERSATION_TYPES.C
   resetPendingConversationModelPreferences();
 }
 
-const runOrchestration = createOrchestrationRunner({
-  generateText: requestSingleGeneration,
-  formatStepOutput: (step, rawOutput) => {
-    const selectedModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
-    return formatOrchestrationStepOutput(step, rawOutput, getThinkingTagsForModel(selectedModelId));
-  },
-  onDebug: appendDebug,
+const orchestrationRunController = createOrchestrationRunController({
+  appState,
+  engine,
+  defaultModelId: DEFAULT_MODEL,
+  getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
+  normalizeModelId,
+  getActiveConversation,
+  getConversationModelId,
+  sanitizeGenerationConfigForModel,
+  buildConversationRuntimeConfigForPrompt,
+  getThinkingTagsForModel,
+  appendDebug,
 });
+const runOrchestration = orchestrationRunController.runOrchestration;
 
 semanticMemoryController = createSemanticMemoryController({
   loadSemanticMemories,

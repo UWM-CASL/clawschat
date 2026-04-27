@@ -26,6 +26,7 @@ This project uses transparent, JSON-defined orchestrations for small follow-up t
 ## Runtime behavior
 
 - Orchestration step execution lives in `src/llm/orchestration-runner.js`.
+- Browser integration for each prompt step lives in `src/app/orchestration-runs.js`, which adapts the active conversation/model settings to one-shot engine generation and applies `outputProcessing.stripThinking` before a step output becomes available to later steps.
 - `Settings -> Orchestrations` separates app-managed definitions from user-authored definitions.
   - Built-in app orchestrations are shown for transparency but are intentionally read-only in the UI.
   - Custom orchestrations can be created, edited, exported, imported, and removed in-browser.
