@@ -7,6 +7,7 @@ import Modal from 'bootstrap/js/dist/modal';
 import Tooltip from 'bootstrap/js/dist/tooltip';
 import { bindComposerEvents } from './app/composer-events.js';
 import { createComposerRuntimeController } from './app/composer-runtime.js';
+import { createDebugLogController } from './app/debug-log.js';
 import { createCloudProviderSettingsController } from './app/cloud-provider-settings.js';
 import {
   createAgentAutomationController,
@@ -207,7 +208,6 @@ import {
 } from './state/cloud-provider-store.js';
 import { PRECONFIGURED_CLOUD_PROVIDERS } from './config/preconfigured-cloud-providers.js';
 import { renderConversationListView } from './ui/conversation-list-view.js';
-import { buildDebugLogCsv, renderDebugLogView } from './ui/debug-log-view.js';
 import { loadMarkdownRenderer, renderPlainTextMarkdownFallback } from './ui/markdown-renderer.js';
 import { createTranscriptView } from './ui/transcript-view.js';
 import { renderTaskListTray } from './ui/task-list-tray.js';
@@ -901,6 +901,13 @@ const appState = createAppState({
   maxDebugEntries: MAX_DEBUG_ENTRIES,
 });
 appState.webGpuAdapterAvailable = browserSupportsWebGpu();
+const debugLogController = createDebugLogController({
+  appState,
+  container: debugLogPanel,
+  pageSize: DEBUG_LOG_PAGE_SIZE,
+  triggerDownload,
+  setStatus,
+});
 const baseFetchRef = typeof fetch === 'function' ? fetch.bind(globalThis) : null;
 const corsAwareFetch = createCorsAwareFetch({
   fetchRef: baseFetchRef,
@@ -1936,105 +1943,12 @@ function onWllamaSettingInputChanged() {
   );
 }
 
-function normalizeDebugEntryKind(value) {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  return normalized === 'raw-model-output' ? normalized : 'event';
-}
-
-function buildDebugEntry(entryInput) {
-  if (entryInput && typeof entryInput === 'object' && !Array.isArray(entryInput)) {
-    return {
-      id: `debug-entry-${++appState.debugEntryCounter}`,
-      createdAt: Number.isFinite(entryInput.createdAt)
-        ? Math.trunc(entryInput.createdAt)
-        : Date.now(),
-      kind: normalizeDebugEntryKind(entryInput.kind),
-      message:
-        typeof entryInput.message === 'string'
-          ? entryInput.message
-          : String(entryInput.message || ''),
-      details:
-        typeof entryInput.details === 'string'
-          ? entryInput.details
-          : String(entryInput.details || ''),
-    };
-  }
-
-  return {
-    id: `debug-entry-${++appState.debugEntryCounter}`,
-    createdAt: Date.now(),
-    kind: 'event',
-    message: typeof entryInput === 'string' ? entryInput : String(entryInput || ''),
-    details: '',
-  };
-}
-
-function getDebugLogPageCount() {
-  if (!Array.isArray(appState.debugEntries) || !appState.debugEntries.length) {
-    return 0;
-  }
-  return Math.ceil(appState.debugEntries.length / DEBUG_LOG_PAGE_SIZE);
-}
-
-function clampDebugPageIndex() {
-  const pageCount = getDebugLogPageCount();
-  if (!Number.isFinite(appState.debugPageIndex) || appState.debugPageIndex < 0) {
-    appState.debugPageIndex = 0;
-    return appState.debugPageIndex;
-  }
-  if (pageCount === 0) {
-    appState.debugPageIndex = 0;
-    return appState.debugPageIndex;
-  }
-  appState.debugPageIndex = Math.min(Math.trunc(appState.debugPageIndex), pageCount - 1);
-  return appState.debugPageIndex;
-}
-
-function buildDebugLogCsvFileName() {
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d{3}Z$/, 'Z');
-  return `browser-llm-runner-debug-log-${timestamp}.csv`;
-}
-
-function exportDebugLogAsCsv() {
-  if (!Array.isArray(appState.debugEntries) || appState.debugEntries.length === 0) {
-    setStatus('No debug log entries to export.');
-    return;
-  }
-  const csvDocument = `\uFEFF${buildDebugLogCsv(appState.debugEntries)}`;
-  const blob = new Blob([csvDocument], { type: 'text/csv;charset=utf-8' });
-  triggerDownload(blob, buildDebugLogCsvFileName());
-  setStatus('Debug log downloaded as CSV.');
-  appendDebug('Debug log exported as CSV.');
-}
-
 function renderDebugLog() {
-  if (!(debugLogPanel instanceof HTMLElement)) {
-    return;
-  }
-  const { pageIndex } = renderDebugLogView({
-    container: debugLogPanel,
-    entries: appState.debugEntries,
-    pageIndex: clampDebugPageIndex(),
-    pageSize: DEBUG_LOG_PAGE_SIZE,
-    onPageChange: (nextPageIndex) => {
-      appState.debugPageIndex = nextPageIndex;
-      renderDebugLog();
-    },
-    onExportCsv: exportDebugLogAsCsv,
-  });
-  appState.debugPageIndex = pageIndex;
+  debugLogController.render();
 }
 
 function appendDebug(entryInput) {
-  appState.debugEntries.push(buildDebugEntry(entryInput));
-  if (appState.debugEntries.length > appState.maxDebugEntries) {
-    appState.debugEntries.shift();
-  }
-  clampDebugPageIndex();
-  renderDebugLog();
+  return debugLogController.append(entryInput);
 }
 
 function setStatus(message) {

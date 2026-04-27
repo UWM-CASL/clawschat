@@ -90,6 +90,7 @@ Owns DOM rendering. View modules should render from state and callback dependenc
 
 Owns browser-facing controllers: preferences, settings events, composer behavior, transcript navigation, shell events, side panels, viewport layout, and semantic-memory coordination.
 Small accessibility-sensitive helpers such as status-region tone and live-region DOM updates also belong here when they are shared by the shell but are not full renderers.
+Debug-log state orchestration also belongs here: `src/app/debug-log.js` owns entry normalization, pagination state, and CSV export wiring while `src/ui/debug-log-view.js` owns the rendered markup.
 
 `src/llm/`
 
