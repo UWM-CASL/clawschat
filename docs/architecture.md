@@ -96,6 +96,7 @@ Message-copy behavior also belongs here: `src/app/message-copy.js` owns clipboar
 Conversation download behavior also belongs here: `src/app/conversation-downloads.js` owns browser blob downloads, active-branch JSON/Markdown download orchestration, and bulk archive export status while `src/main.js` only wires dependencies.
 Conversation sidebar menu behavior also belongs here: `src/app/conversation-menu.js` owns menu open/close state, download submenu toggling, menu capability state, and action focus handoff while `src/app/conversation-list-events.js` only routes DOM events.
 Generation settings behavior also belongs here: `src/app/generation-settings.js` owns model generation/Wllama setting normalization, browser-local persistence, help text, and delayed-apply behavior while settings events only report user edits.
+Pre-chat workspace behavior also belongs here: `src/app/pre-chat-workspace.js` owns setup status hints, pre-chat action visibility, agent draft labels, composer visibility, and the small shell selectors around pending conversation type.
 
 `src/llm/`
 

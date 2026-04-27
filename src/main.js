@@ -31,6 +31,7 @@ import { createSemanticMemoryController } from './app/semantic-memory.js';
 import './styles.css';
 import { bindConversationListEvents } from './app/conversation-list-events.js';
 import { createPreferencesController } from './app/preferences.js';
+import { createPreChatWorkspaceController } from './app/pre-chat-workspace.js';
 import { createRoutingShell } from './app/routing-shell.js';
 import { bindShellEvents } from './app/shell-events.js';
 import { bindSettingsEvents } from './app/settings-events.js';
@@ -145,8 +146,6 @@ import {
   getActiveUserEditMessageId,
   getCurrentViewRoute as selectCurrentViewRoute,
   hasDismissedTerminalForConversation,
-  hasConversationHistory as selectHasConversationHistory,
-  hasSelectedConversationWithHistory as selectHasSelectedConversationWithHistory,
   hasStartedWorkspace as selectHasStartedWorkspace,
   isBlockingOrchestrationState,
   isChatTitleEditingState,
@@ -168,9 +167,7 @@ import {
   setUserMessageEditState,
   shouldDisableNewAgentButton,
   shouldDisableNewConversationButton,
-  shouldShowNewConversationButton as selectShouldShowNewConversationButton,
   shouldDisableConversationControls,
-  shouldDisableComposerForPreChatConversationSelection as selectShouldDisableComposerForPreChatConversationSelection,
 } from './state/app-state.js';
 import { loadConversationState, saveConversationState } from './state/conversation-store.js';
 import {
@@ -779,10 +776,6 @@ const SHORTCUT_KEY = {
   settings: 's',
   title: 't',
 };
-const PRE_CHAT_STATUS_HINT_DEFAULT = 'Send your first message to load the selected model.';
-const PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION = 'To see your conversation, load a model first.';
-const PRE_CHAT_STATUS_HINT_MODEL_READY =
-  'The current model is ready. Send your first message to continue with it, or choose a different model first.';
 const appState = createAppState({
   activeGenerationConfig: {
     ...buildDefaultGenerationConfig(normalizeGenerationLimits(null)),
@@ -932,6 +925,27 @@ const {
   conversationList,
   isUiBusy,
   setActiveConversationById,
+});
+const preChatWorkspaceController = createPreChatWorkspaceController({
+  appState,
+  onboardingStatusRegion,
+  onboardingStatusRegionHeading,
+  onboardingStatusRegionMessage,
+  preChatActions,
+  preChatLoadModelBtn,
+  preChatEditConversationSystemPromptBtn,
+  messageInput,
+  preChatHeading,
+  preChatLead,
+  preChatAgentFields,
+  agentNameInput,
+  agentPersonalityInput,
+  chatForm,
+  taskListTray,
+  getActiveConversation,
+  getAgentDisplayName,
+  setRegionVisibility,
+  isUiBusy,
 });
 const {
   ensureModelVariantControlsVisible,
@@ -1219,38 +1233,19 @@ function setStatus(message) {
 }
 
 function updatePreChatStatusHint() {
-  if (!(onboardingStatusRegion instanceof HTMLElement)) {
-    return;
-  }
-  if (selectHasStartedWorkspace(appState) && !isLoadingModelState(appState)) {
-    applyStatusRegion(
-      onboardingStatusRegion,
-      onboardingStatusRegionHeading,
-      onboardingStatusRegionMessage,
-      appState.isPreparingNewConversation && isEngineReady(appState)
-        ? PRE_CHAT_STATUS_HINT_MODEL_READY
-        : hasSelectedConversationWithHistory()
-          ? PRE_CHAT_STATUS_HINT_EXISTING_CONVERSATION
-          : PRE_CHAT_STATUS_HINT_DEFAULT,
-      'Setup status'
-    );
-  }
-}
-
-function hasConversationHistory(conversation) {
-  return selectHasConversationHistory(conversation);
+  preChatWorkspaceController.updatePreChatStatusHint();
 }
 
 function hasSelectedConversationWithHistory() {
-  return selectHasSelectedConversationWithHistory(appState);
+  return preChatWorkspaceController.hasSelectedConversationWithHistory();
 }
 
 function shouldDisableComposerForPreChatConversationSelection() {
-  return selectShouldDisableComposerForPreChatConversationSelection(appState);
+  return preChatWorkspaceController.shouldDisableComposerForPreChatConversationSelection();
 }
 
 function shouldShowNewConversationButton() {
-  return selectShouldShowNewConversationButton(appState);
+  return preChatWorkspaceController.shouldShowNewConversationButton();
 }
 
 function normalizeAttachmentInputLimit(value) {
@@ -2503,95 +2498,19 @@ function setRegionVisibility(region, visible) {
 }
 
 function updatePreChatActionButtons() {
-  const activeConversation = getActiveConversation();
-  const hasExistingConversation = hasConversationHistory(activeConversation);
-  const isPreChatAvailable = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
-  const canShowPreChatActions =
-    isPreChatAvailable && !isEngineReady(appState) && Boolean(activeConversation);
-  const isBusy = isUiBusy();
-  const isAgentDraft = !activeConversation && isPendingAgentConversation();
-  const isAgentPreChatConversation = isAgentDraft || isAgentConversation(activeConversation);
-
-  if (preChatActions instanceof HTMLElement) {
-    preChatActions.classList.toggle('d-none', !canShowPreChatActions);
-  }
-  if (preChatLoadModelBtn instanceof HTMLButtonElement) {
-    preChatLoadModelBtn.classList.toggle('d-none', !hasExistingConversation);
-    preChatLoadModelBtn.disabled = !canShowPreChatActions || !hasExistingConversation || isBusy;
-  }
-  if (preChatEditConversationSystemPromptBtn instanceof HTMLButtonElement) {
-    preChatEditConversationSystemPromptBtn.classList.toggle('d-none', isAgentPreChatConversation);
-    preChatEditConversationSystemPromptBtn.disabled =
-      !isPreChatAvailable || isBusy || isAgentPreChatConversation;
-  }
+  preChatWorkspaceController.updatePreChatActionButtons();
 }
 
 function updateMessageInputPlaceholder() {
-  if (!(messageInput instanceof HTMLTextAreaElement)) {
-    return;
-  }
-  const activeConversation = getActiveConversation();
-  if (!activeConversation && isPendingAgentConversation()) {
-    messageInput.placeholder = `Say hello to ${getAgentDisplayName(null)}...`;
-    return;
-  }
-  if (isAgentConversation(activeConversation) && !hasConversationHistory(activeConversation)) {
-    messageInput.placeholder = `Say hello to ${getAgentDisplayName(activeConversation)}...`;
-    return;
-  }
-  messageInput.placeholder = 'Type your message...';
+  preChatWorkspaceController.updateMessageInputPlaceholder();
 }
 
 function updatePreChatModeUi() {
-  const activeConversation = getActiveConversation();
-  const isAgentDraft = !activeConversation && isPendingAgentConversation();
-  const isAgentPreChatConversation = isAgentDraft || isAgentConversation(activeConversation);
-  const agentNameValue = isAgentConversation(activeConversation)
-    ? normalizeConversationName(activeConversation?.agent?.name || activeConversation?.name || '')
-    : appState.pendingAgentName;
-  const agentDescriptionValue = isAgentConversation(activeConversation)
-    ? normalizeSystemPrompt(activeConversation?.agent?.description)
-    : appState.pendingAgentDescription;
-  if (preChatHeading instanceof HTMLElement) {
-    preChatHeading.textContent = isAgentPreChatConversation
-      ? 'Create a New Agent'
-      : 'Start a New Chat';
-  }
-  if (preChatLead instanceof HTMLElement) {
-    preChatLead.textContent = isAgentPreChatConversation
-      ? 'Name your agent, describe its personality, choose a model, then say hello below to begin.'
-      : 'Choose a model, then send your first message below to begin.';
-  }
-  if (preChatAgentFields instanceof HTMLElement) {
-    preChatAgentFields.classList.toggle('d-none', !isAgentPreChatConversation);
-  }
-  if (agentNameInput instanceof HTMLInputElement && agentNameInput.value !== agentNameValue) {
-    agentNameInput.value = agentNameValue;
-  }
-  if (
-    agentPersonalityInput instanceof HTMLTextAreaElement &&
-    agentPersonalityInput.value !== agentDescriptionValue
-  ) {
-    agentPersonalityInput.value = agentDescriptionValue;
-  }
-  updateMessageInputPlaceholder();
+  preChatWorkspaceController.updatePreChatModeUi();
 }
 
 function updateComposerVisibility() {
-  const showComposer = selectHasStartedWorkspace(appState) && !isSettingsView(appState);
-  setRegionVisibility(chatForm, showComposer);
-  if (taskListTray instanceof HTMLElement) {
-    const showTaskTray =
-      showComposer && appState.workspaceView === 'chat' && taskListTray.dataset.hasItems === 'true';
-    setRegionVisibility(taskListTray, showTaskTray);
-  }
-  if (chatForm instanceof HTMLElement) {
-    chatForm.classList.remove('is-prechat');
-  }
-  if (messageInput instanceof HTMLTextAreaElement) {
-    messageInput.disabled = shouldDisableComposerForPreChatConversationSelection();
-  }
-  updatePreChatModeUi();
+  preChatWorkspaceController.updateComposerVisibility();
 }
 
 function updateChatTitle() {
@@ -3689,11 +3608,11 @@ function resetPendingConversationModelPreferences() {
 }
 
 function getPendingConversationType() {
-  return normalizeConversationType(appState.pendingConversationType);
+  return preChatWorkspaceController.getPendingConversationType();
 }
 
 function isPendingAgentConversation() {
-  return getPendingConversationType() === CONVERSATION_TYPES.AGENT;
+  return preChatWorkspaceController.isPendingAgentConversation();
 }
 
 function clearPendingAgentDraft() {
