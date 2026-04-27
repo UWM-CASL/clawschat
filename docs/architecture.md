@@ -92,6 +92,7 @@ Owns browser-facing controllers: preferences, settings events, composer behavior
 Small accessibility-sensitive helpers such as status-region tone and live-region DOM updates also belong here when they are shared by the shell but are not full renderers.
 Debug-log state orchestration also belongs here: `src/app/debug-log.js` owns entry normalization, pagination state, and CSV export wiring while `src/ui/debug-log-view.js` owns the rendered markup.
 Transcript content orchestration also belongs here: `src/app/transcript-content-renderer.js` owns lazy Markdown loading, MathJax configuration/typesetting, and MathML extraction while `src/ui/transcript-view.js` owns transcript markup.
+Message-copy behavior also belongs here: `src/app/message-copy.js` owns clipboard fallback and copy-text assembly while transcript events and shortcuts only trigger the action.
 
 `src/llm/`
 

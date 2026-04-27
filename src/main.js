@@ -8,6 +8,7 @@ import Tooltip from 'bootstrap/js/dist/tooltip';
 import { bindComposerEvents } from './app/composer-events.js';
 import { createComposerRuntimeController } from './app/composer-runtime.js';
 import { createDebugLogController } from './app/debug-log.js';
+import { createMessageCopyController } from './app/message-copy.js';
 import { createCloudProviderSettingsController } from './app/cloud-provider-settings.js';
 import {
   createAgentAutomationController,
@@ -835,6 +836,17 @@ const transcriptContentRenderer = createTranscriptContentRenderer({
   isGeneratingResponse: () => isGeneratingResponse(appState),
   renderTranscript: () => renderTranscript(),
 });
+const messageCopyController = createMessageCopyController({
+  documentRef: document,
+  navigatorRef: navigator,
+  getActiveConversation,
+  getMessageNodeById,
+  getConversationPathMessages,
+  findMessageElement,
+  typesetMathInElement,
+  extractMathMlFromElement,
+  setStatus,
+});
 const baseFetchRef = typeof fetch === 'function' ? fetch.bind(globalThis) : null;
 const corsAwareFetch = createCorsAwareFetch({
   fetchRef: baseFetchRef,
@@ -1159,118 +1171,8 @@ function closeKeyboardShortcuts() {
   }
 }
 
-async function copyTextToClipboard(text) {
-  const normalizedText = String(text || '');
-  if (!normalizedText) {
-    return false;
-  }
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(normalizedText);
-      return true;
-    }
-  } catch (_error) {
-    // Fall through to legacy fallback.
-  }
-  const fallbackTextArea = document.createElement('textarea');
-  fallbackTextArea.value = normalizedText;
-  fallbackTextArea.setAttribute('readonly', '');
-  fallbackTextArea.style.position = 'fixed';
-  fallbackTextArea.style.opacity = '0';
-  fallbackTextArea.style.pointerEvents = 'none';
-  document.body.appendChild(fallbackTextArea);
-  fallbackTextArea.select();
-  let copied = false;
-  try {
-    copied = document.execCommand('copy');
-  } catch (_error) {
-    copied = false;
-  }
-  document.body.removeChild(fallbackTextArea);
-  return copied;
-}
-
 async function handleMessageCopyAction(messageId, copyType) {
-  const activeConversation = getActiveConversation();
-  if (!activeConversation || !messageId) {
-    return;
-  }
-  const message = getMessageNodeById(activeConversation, messageId);
-  if (!message) {
-    return;
-  }
-  let textToCopy = '';
-  let copiedStatus = 'Copied to clipboard.';
-  let emptyStatus = 'Nothing available to copy.';
-  const getModelTurnMessages = (rootMessageId) => {
-    const pathMessages = getConversationPathMessages(activeConversation);
-    const startIndex = pathMessages.findIndex((candidate) => candidate?.id === rootMessageId);
-    if (startIndex < 0) {
-      return [];
-    }
-    const turnMessages = [];
-    for (let index = startIndex; index < pathMessages.length; index += 1) {
-      const candidate = pathMessages[index];
-      if (!candidate) {
-        continue;
-      }
-      if (index > startIndex && candidate.role === 'user') {
-        break;
-      }
-      if (candidate.role === 'model' || candidate.role === 'tool') {
-        turnMessages.push(candidate);
-      }
-    }
-    return turnMessages;
-  };
-  if (copyType === 'thoughts') {
-    textToCopy = message.role === 'model' ? String(message.thoughts || '') : '';
-  } else if (copyType === 'response') {
-    if (message.role === 'model') {
-      const turnMessages = getModelTurnMessages(message.id);
-      textToCopy = turnMessages
-        .map((turnMessage) =>
-          turnMessage.role === 'tool'
-            ? String(turnMessage.toolResult || turnMessage.text || '').trim()
-            : String(turnMessage.response || turnMessage.text || '').trim()
-        )
-        .filter(Boolean)
-        .join('\n\n');
-    } else {
-      textToCopy = '';
-    }
-  } else if (copyType === 'mathml') {
-    if (message.role === 'model') {
-      const messageElement = findMessageElement(messageId);
-      const responseElements = Array.from(
-        messageElement?.querySelectorAll('.response-content') || []
-      );
-      if (responseElements.length) {
-        const mathMlBlocks = [];
-        for (const responseElement of responseElements) {
-          if (!(responseElement instanceof HTMLElement)) {
-            continue;
-          }
-          await typesetMathInElement(responseElement);
-          const mathMl = extractMathMlFromElement(responseElement);
-          if (mathMl) {
-            mathMlBlocks.push(mathMl);
-          }
-        }
-        textToCopy = mathMlBlocks.join('\n\n');
-      }
-    }
-    copiedStatus = 'MathML copied to clipboard.';
-    emptyStatus = 'No rendered MathML available to copy.';
-  } else {
-    textToCopy = String(message.text || '');
-  }
-  if (!textToCopy) {
-    setStatus(emptyStatus);
-    return;
-  }
-  const didCopy = await copyTextToClipboard(textToCopy);
-  setStatus(didCopy ? copiedStatus : 'Copy failed.');
+  return messageCopyController.handleMessageCopyAction(messageId, copyType);
 }
 
 function extractMathMlFromElement(element) {
