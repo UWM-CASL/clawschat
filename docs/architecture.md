@@ -89,6 +89,7 @@ Owns DOM rendering. View modules should render from state and callback dependenc
 `src/app/`
 
 Owns browser-facing controllers: preferences, settings events, composer behavior, transcript navigation, shell events, side panels, viewport layout, and semantic-memory coordination.
+Small accessibility-sensitive helpers such as status-region tone and live-region DOM updates also belong here when they are shared by the shell but are not full renderers.
 
 `src/llm/`
 
@@ -189,4 +190,3 @@ The app intentionally does not include:
 - OAuth-based MCP integrations
 
 Adding any of these would change the project contract and requires explicit approval plus documentation updates.
-

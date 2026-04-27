@@ -28,6 +28,7 @@ import { createRoutingShell } from './app/routing-shell.js';
 import { bindShellEvents } from './app/shell-events.js';
 import { bindSettingsEvents } from './app/settings-events.js';
 import { createShortcutHandlers } from './app/shortcut-events.js';
+import { applyStatusRegion } from './app/status-region.js';
 import { createTranscriptNavigationController } from './app/transcript-navigation.js';
 import { createTranscriptActions } from './app/transcript-actions.js';
 import { bindTranscriptEvents } from './app/transcript-events.js';
@@ -2034,54 +2035,6 @@ function appendDebug(entryInput) {
   }
   clampDebugPageIndex();
   renderDebugLog();
-}
-
-function getStatusTone(message) {
-  const normalized = String(message || '').trim();
-  if (!normalized) {
-    return { heading: 'Chat status', variant: 'secondary', role: 'status', live: 'polite' };
-  }
-  if (/error|failed|unable|cannot|no active|copy failed/i.test(normalized)) {
-    return { heading: 'Chat error', variant: 'danger', role: 'alert', live: 'assertive' };
-  }
-  if (/loading|preparing|stopping|please wait|apply after current response/i.test(normalized)) {
-    return { heading: 'Chat status', variant: 'warning', role: 'status', live: 'polite' };
-  }
-  if (
-    /ready|saved|downloaded|copied|stopped|generated|updated|canceled|branch mode enabled/i.test(
-      normalized
-    )
-  ) {
-    return { heading: 'Chat status', variant: 'success', role: 'status', live: 'polite' };
-  }
-  return { heading: 'Chat status', variant: 'secondary', role: 'status', live: 'polite' };
-}
-
-function applyStatusRegion(region, headingElement, messageElement, message, headingOverride = '') {
-  if (!(region instanceof HTMLElement) || !(messageElement instanceof HTMLElement)) {
-    return;
-  }
-  const normalizedMessage = String(message || '').trim();
-  region.classList.toggle('d-none', !normalizedMessage);
-  if (!normalizedMessage) {
-    messageElement.textContent = '';
-    return;
-  }
-  const tone = getStatusTone(normalizedMessage);
-  region.classList.remove(
-    'alert-secondary',
-    'alert-success',
-    'alert-warning',
-    'alert-danger',
-    'alert-info'
-  );
-  region.classList.add(`alert-${tone.variant}`);
-  region.setAttribute('role', tone.role);
-  region.setAttribute('aria-live', tone.live);
-  if (headingElement instanceof HTMLElement) {
-    headingElement.textContent = headingOverride || tone.heading;
-  }
-  messageElement.textContent = normalizedMessage;
 }
 
 function setStatus(message) {
