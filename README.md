@@ -164,7 +164,7 @@ The README should stay a front door. Detailed behavior, architecture, failure, a
   - `CPU`
 - Selected cloud-provider models run through a browser fetch-backed OpenAI-compatible worker path instead of the local WebGPU/CPU runtimes; the backend selector is ignored for those models.
 - `WebGPU` mode prefers WebGPU and falls back to CPU/WASM for ONNX models that do not require WebGPU and do not opt out with `runtime.allowBackendFallback: false`.
-- CPU mode runs CPU-capable ONNX models through the browser ONNX Runtime WASM path and runs GGUF models through the bundled `wllama` WASM runtime. The ONNX worker keeps `useWasmCache` enabled, uses app-bundled ONNX Runtime WASM assets instead of the default CDN path, enables WASM proxying across ONNX backends, and lets `Settings -> System -> CPU threads` control `onnx.wasm.numThreads` plus the explicit `wllama` thread hint (`0` keeps each engine on its own auto policy). On secure static hosts, the app also registers a same-origin COOP/COEP service worker so `wllama` can use multithreaded WASM when the browser allows `SharedArrayBuffer`; otherwise it falls back to single-thread WASM. Selecting a CPU-only GGUF model automatically switches the backend preference to `CPU` before load.
+- CPU mode runs CPU-capable ONNX models through the browser ONNX Runtime WASM path and runs GGUF models through the bundled `wllama` WASM runtime. The ONNX worker keeps `useWasmCache` enabled, uses app-bundled ONNX Runtime WASM assets instead of the default CDN path, keeps ONNX Runtime's extra proxy worker disabled because inference is already inside the app's LLM worker, and lets `Settings -> System -> CPU threads` control `onnx.wasm.numThreads` plus the explicit `wllama` thread hint (`0` keeps each engine on its own auto policy). On secure static hosts, the app also registers a same-origin COOP/COEP service worker so `wllama` can use multithreaded WASM when the browser allows `SharedArrayBuffer`; otherwise it falls back to single-thread WASM. Selecting a CPU-only GGUF model automatically switches the backend preference to `CPU` before load.
 - If a generation request stops producing worker activity for 90 seconds, the engine client terminates that worker and surfaces a recoverable timeout instead of leaving the UI stuck indefinitely. CPU/WASM local-model generation gets a 300-second first-token warmup window because the first Llama 3.2 CPU inference can spend several minutes in prompt prefill before printable text streams.
 - During local generation, the status region reports coarse phases such as prompt preparation, prompt prefill, first generated token, and printable response streaming so long CPU waits do not look idle. These updates stay coarse and do not announce every streamed token.
 - If WebGPU loses the active graphics device before any response tokens are shown, the engine client disposes the lost worker, reloads the same model on CPU once, and retries that generation automatically.
@@ -349,8 +349,11 @@ In addition to the bundled local model catalog, the app can ship predefined clou
   - Uses runtime `enable_thinking` and parses Gemma's `<|channel>...<channel|>` reasoning into the transcript thinking section.
   - Uses Gemma's special-token tool-call format supported by this app.
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
-  - Uses `q4` on WebGPU and CPU in this app.
-  - Remains the canonical Llama 3.2 3B entry for this browser app because the full ONNX repo was not reliable here.
+  - Uses `q4` on WebGPU only in this app.
+  - Stays WebGPU-only because direct Transformers.js CPU/WASM probes for this package load successfully but fail at the first `OrtRun()` with `std::bad_alloc`.
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+  - Uses `q4f16` on WebGPU and CPU in this app.
+  - Provides the tested Transformers.js CPU/WASM Llama path for browsers without WebGPU.
 - `onnx-community/Bonsai-8B-ONNX`
   - Uses the Transformers.js worker path in this app.
   - Experimental ONNX entry using `q1` on WebGPU and CPU in this app.
@@ -368,7 +371,7 @@ In addition to the bundled local model catalog, the app can ship predefined clou
   - `onnx-community/Llama-3.2-3B-Instruct-ONNX` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - `Xenova/distilgpt2` -> `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
 
-For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` repo id as the canonical model. The full ONNX repo remains a legacy alias only because its browser load path was not reliable in this app: the `int8` package hit `Array buffer allocation failed`, and the `q4` package failed to preload required `.onnx_data` shards in-browser.
+For `Llama 3.2 3B` specifically, the app keeps the browser-oriented `onnx-web` repo id for WebGPU. The full ONNX repo remains a legacy alias only because its browser load path was not reliable in this app: the full repo needs explicit `.onnx_data` shard counts and still hit `std::bad_alloc` during CPU session creation in direct browser probes, while the `onnx-web` package hit `std::bad_alloc` during CPU generation through Transformers.js.
 
 - Model support configuration lives in `src/config/models.json`:
 - `models`: options shown in the pre-chat model card picker

@@ -421,11 +421,11 @@ describe('llm.worker backend selection', () => {
 
 describe('llm.worker wasm backend config', () => {
   test('exports the intended ONNX wasm defaults', () => {
-    expect(ONNX_WASM_PROXY_ENABLED).toBe(true);
+    expect(ONNX_WASM_PROXY_ENABLED).toBe(false);
     expect(ONNX_WASM_NUM_THREADS).toBe(0);
   });
 
-  test('enables proxying and automatic thread selection on CPU wasm attempts', () => {
+  test('keeps proxying disabled and uses upstream-aligned asyncify assets on CPU wasm attempts', () => {
     const env = {
       backends: {
         onnx: {
@@ -435,11 +435,13 @@ describe('llm.worker wasm backend config', () => {
     };
 
     const result = configureOnnxWasmBackend(env, 'wasm');
-    expect(env.backends.onnx.wasm.proxy).toBe(true);
+    expect(env.backends.onnx.wasm.proxy).toBe(false);
     expect(env.backends.onnx.wasm.numThreads).toBe(0);
+    expect(result?.wasmPaths?.mjs).toContain('ort-wasm-simd-threaded.asyncify.mjs');
+    expect(result?.wasmPaths?.wasm).toContain('ort-wasm-simd-threaded.asyncify.wasm');
     expect(result).toEqual({
       backend: 'wasm',
-      proxy: true,
+      proxy: false,
       numThreads: 0,
       wasmPaths: expect.objectContaining({
         mjs: expect.any(String),
@@ -448,7 +450,7 @@ describe('llm.worker wasm backend config', () => {
     });
   });
 
-  test('keeps proxying enabled for default CPU fallback attempts', () => {
+  test('keeps proxying disabled for default CPU fallback attempts', () => {
     const env = {
       backends: {
         onnx: {
@@ -458,11 +460,11 @@ describe('llm.worker wasm backend config', () => {
     };
 
     const result = configureOnnxWasmBackend(env, 'default');
-    expect(env.backends.onnx.wasm.proxy).toBe(true);
+    expect(env.backends.onnx.wasm.proxy).toBe(false);
     expect(env.backends.onnx.wasm.numThreads).toBe(0);
     expect(result).toEqual({
       backend: 'default',
-      proxy: true,
+      proxy: false,
       numThreads: 0,
       wasmPaths: expect.objectContaining({
         mjs: expect.any(String),
@@ -471,7 +473,7 @@ describe('llm.worker wasm backend config', () => {
     });
   });
 
-  test('keeps proxying enabled for webgpu attempts', () => {
+  test('keeps proxying disabled for webgpu attempts', () => {
     const env = {
       backends: {
         onnx: {
@@ -481,13 +483,13 @@ describe('llm.worker wasm backend config', () => {
     };
 
     const result = configureOnnxWasmBackend(env, 'webgpu');
-    expect(env.backends.onnx.wasm.proxy).toBe(true);
+    expect(env.backends.onnx.wasm.proxy).toBe(false);
     expect(env.backends.onnx.wasm.numThreads).toBe(0);
     expect(result?.wasmPaths?.mjs).toContain('ort-wasm-simd-threaded.asyncify.mjs');
     expect(result?.wasmPaths?.wasm).toContain('ort-wasm-simd-threaded.asyncify.wasm');
     expect(result).toEqual({
       backend: 'webgpu',
-      proxy: true,
+      proxy: false,
       numThreads: 0,
       wasmPaths: expect.objectContaining({
         mjs: expect.any(String),
@@ -506,11 +508,11 @@ describe('llm.worker wasm backend config', () => {
     };
 
     const result = configureOnnxWasmBackend(env, 'wasm', { cpuThreads: 3 });
-    expect(env.backends.onnx.wasm.proxy).toBe(true);
+    expect(env.backends.onnx.wasm.proxy).toBe(false);
     expect(env.backends.onnx.wasm.numThreads).toBe(3);
     expect(result).toEqual({
       backend: 'wasm',
-      proxy: true,
+      proxy: false,
       numThreads: 3,
       wasmPaths: expect.objectContaining({
         mjs: expect.any(String),

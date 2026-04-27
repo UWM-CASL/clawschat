@@ -23,13 +23,14 @@ Inference is selected through the engine client boundary and executes through a 
   - `wasm` -> `cpu`
 - ONNX worker defaults keep browser cache support enabled for both modes:
   - `env.useWasmCache = true`
-  - `onnx.wasm.proxy = true`
+  - `onnx.wasm.proxy = false` because the app already runs local inference in its own LLM worker
   - `onnx.wasm.numThreads = 0` by default, or the user-selected value from `Settings -> System -> CPU threads`
-  - `onnx.wasm.wasmPaths` now points at app-bundled ONNX Runtime WASM files instead of the default CDN path (the installed `onnxruntime-web/webgpu` bundle currently uses the asyncify WebGPU EP assets, threaded WASM for CPU, and asyncify on Safari CPU fallback)
+  - `onnx.wasm.wasmPaths` points at app-bundled ONNX Runtime WASM files instead of the default CDN path while matching Transformers.js' upstream path choice: asyncify assets for current Chromium/Firefox-style browsers and non-asyncify assets for Safari
   - `Settings -> System -> Clear Downloaded Model Files` uses Transformers.js cache metadata to remove the selected ONNX model, and `wllama`'s `ModelManager` to remove the selected cached GGUF model
 - The app registers a same-origin `coi-serviceworker.js` on secure static hosts so pages such as GitHub Pages can add COOP/COEP headers after the first load/reload and expose `SharedArrayBuffer` for `wllama`.
 - Models with `requiresWebGpu: true` only attempt WebGPU and are unavailable in CPU mode.
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` runs through the `transformers-js` worker with `q4` on WebGPU and CPU.
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web` runs through the `transformers-js` worker with `q4` on WebGPU only. Direct CPU/WASM browser probes load the package but fail on the first ONNX Runtime run with `std::bad_alloc`.
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa` runs through the `transformers-js` worker with `q4f16` on WebGPU and CPU and is the tested Llama CPU fallback.
 - `huggingworld/gemma-4-E2B-it-ONNX` now runs through the `transformers-js` worker with `q4f16` on WebGPU only.
 - `onnx-community/Bonsai-8B-ONNX` now runs through the `transformers-js` worker with `q1` on WebGPU and CPU.
 - `LiquidAI/LFM2.5-1.2B-Thinking-GGUF` runs through the `wllama` worker with the pinned `LFM2.5-1.2B-Thinking-Q4_K_M.gguf` file on CPU/WASM only.

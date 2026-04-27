@@ -5,6 +5,7 @@ import { createPreferencesController } from '../../src/app/preferences.js';
 import { getEnabledToolDefinitions } from '../../src/llm/tool-calling.js';
 
 const GEMMA_4_MODEL_ID = 'huggingworld/gemma-4-E2B-it-ONNX';
+const LLAMA_1B_MODEL_ID = 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa';
 const LLAMA_3B_MODEL_ID = 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
 const BONSAI_8B_MODEL_ID = 'onnx-community/Bonsai-8B-ONNX';
 
@@ -413,7 +414,7 @@ describe('preferences controller', () => {
       announceFallback: true,
     });
 
-    expect(selectedModel).toBe(LLAMA_3B_MODEL_ID);
+    expect(selectedModel).toBe(LLAMA_1B_MODEL_ID);
     expect(modelSelect.value).toBe(selectedModel);
   });
 
@@ -442,13 +443,15 @@ describe('preferences controller', () => {
     expect(
       /** @type {HTMLAnchorElement | null} */ (llama3BCard?.querySelector('.model-card-link'))?.href
     ).toBe(`https://huggingface.co/${LLAMA_3B_MODEL_ID}`);
+    const llama1BCard = getModelCard(modelCardList, LLAMA_1B_MODEL_ID);
+    expect(llama1BCard?.textContent).toContain('4,096 tokens');
+    expect(
+      /** @type {HTMLAnchorElement | null} */ (llama1BCard?.querySelector('.model-card-link'))?.href
+    ).toBe(`https://huggingface.co/${LLAMA_1B_MODEL_ID}`);
 
     expect(getModelCard(modelCardList, 'LiquidAI/LFM2.5-350M-ONNX')).toBeNull();
     expect(getModelCard(modelCardList, 'LiquidAI/LFM2.5-1.2B-Instruct-ONNX')).toBeNull();
     expect(getModelCard(modelCardList, 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX')).toBeNull();
-    expect(getModelCard(modelCardList, 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')).toBe(
-      null
-    );
     expect(getModelCard(modelCardList, 'onnx-community/Qwen3.5-2B-ONNX')).toBeNull();
 
     const bonsaiCard = getModelCard(modelCardList, BONSAI_8B_MODEL_ID);
@@ -534,6 +537,7 @@ describe('preferences controller', () => {
     };
 
     expect(getFeatureLabels(LLAMA_3B_MODEL_ID)).toEqual(['Can use built-in tools']);
+    expect(getFeatureLabels(LLAMA_1B_MODEL_ID)).toEqual([]);
     expect(getFeatureLabels(GEMMA_4_MODEL_ID)).toEqual([
       'Shows a thinking section',
       'Can use built-in tools',

@@ -4,6 +4,7 @@ import { createAppState } from '../../src/state/app-state.js';
 import { createModelPreferencesController } from '../../src/app/preferences-models.js';
 
 const GEMMA_4_MODEL_ID = 'huggingworld/gemma-4-E2B-it-ONNX';
+const LLAMA_1B_MODEL_ID = 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa';
 const LLAMA_3B_MODEL_ID = 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
 const BONSAI_8B_MODEL_ID = 'onnx-community/Bonsai-8B-ONNX';
 const LFM_25_12B_WLLAMA_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-GGUF';
@@ -133,12 +134,12 @@ describe('preferences-models', () => {
         node.getAttribute('aria-label')
       )
     ).toEqual(['Can use built-in tools']);
+    const llama1BCard = getModelCard(modelCardList, LLAMA_1B_MODEL_ID);
+    expect(llama1BCard?.textContent).toContain('4,096 tokens');
+    expect(llama1BCard?.querySelectorAll('.model-feature-pill')).toHaveLength(0);
     expect(getModelCard(modelCardList, 'LiquidAI/LFM2.5-350M-ONNX')).toBeNull();
     expect(getModelCard(modelCardList, 'LiquidAI/LFM2.5-1.2B-Instruct-ONNX')).toBeNull();
     expect(getModelCard(modelCardList, 'LiquidAI/LFM2.5-1.2B-Thinking-ONNX')).toBeNull();
-    expect(getModelCard(modelCardList, 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')).toBe(
-      null
-    );
     expect(getModelCard(modelCardList, 'onnx-community/Qwen3.5-2B-ONNX')).toBeNull();
 
     const bonsaiCard = getModelCard(modelCardList, BONSAI_8B_MODEL_ID);
@@ -222,7 +223,7 @@ describe('preferences-models', () => {
       announceFallback: true,
     });
 
-    expect(selectedModel).toBe(LLAMA_3B_MODEL_ID);
+    expect(selectedModel).toBe(LLAMA_1B_MODEL_ID);
     expect(modelSelect.value).toBe(selectedModel);
     expect(harness.deps.setStatus).toHaveBeenCalledWith(
       expect.stringContaining(`${GEMMA_4_MODEL_ID} is unavailable with CPU.`)
@@ -269,7 +270,7 @@ describe('preferences-models', () => {
     const generationConfig = { maxOutputTokens: 512 };
 
     harness.controller.populateModelSelect();
-    modelSelect.value = LLAMA_3B_MODEL_ID;
+    modelSelect.value = LLAMA_1B_MODEL_ID;
     backendSelect.value = 'cpu';
     cpuThreadsInput.value = '3';
 
@@ -277,24 +278,24 @@ describe('preferences-models', () => {
 
     expect(engineConfig).toEqual({
       engineType: 'transformers-js',
-      modelId: LLAMA_3B_MODEL_ID,
+      modelId: LLAMA_1B_MODEL_ID,
       backendPreference: 'cpu',
-      runtime: { runtimeModelId: LLAMA_3B_MODEL_ID, cpuThreads: 3 },
+      runtime: { runtimeModelId: LLAMA_1B_MODEL_ID, cpuThreads: 3 },
       generationConfig,
     });
-    expect(harness.deps.getRuntimeConfigForModel).toHaveBeenCalledWith(LLAMA_3B_MODEL_ID);
+    expect(harness.deps.getRuntimeConfigForModel).toHaveBeenCalledWith(LLAMA_1B_MODEL_ID);
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      LLAMA_3B_MODEL_ID,
+      LLAMA_1B_MODEL_ID,
       false
     );
 
     harness.controller.persistInferencePreferences(generationConfig);
 
-    expect(harness.storage.getItem('model')).toBe(LLAMA_3B_MODEL_ID);
+    expect(harness.storage.getItem('model')).toBe(LLAMA_1B_MODEL_ID);
     expect(harness.storage.getItem('backend')).toBe('cpu');
     expect(harness.storage.getItem('cpu-threads')).toBe('3');
     expect(harness.deps.persistGenerationConfigForModel).toHaveBeenCalledWith(
-      LLAMA_3B_MODEL_ID,
+      LLAMA_1B_MODEL_ID,
       generationConfig
     );
   });
@@ -383,11 +384,11 @@ describe('preferences-models', () => {
     expect(harness.appState.webGpuProbeCompleted).toBe(true);
     expect(harness.appState.webGpuAdapterAvailable).toBe(false);
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      LLAMA_3B_MODEL_ID,
+      LLAMA_1B_MODEL_ID,
       true
     );
     expect(harness.deps.setStatus).toHaveBeenCalledWith(
-      `${GEMMA_4_MODEL_ID} is unavailable because no usable WebGPU adapter was found. Switched to ${LLAMA_3B_MODEL_ID}.`
+      `${GEMMA_4_MODEL_ID} is unavailable because no usable WebGPU adapter was found. Switched to ${LLAMA_1B_MODEL_ID}.`
     );
   });
 });

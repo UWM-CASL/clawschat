@@ -314,8 +314,12 @@ Current models in Settings:
   - Keeps image and audio input enabled in the app with `inputLimits.maxImageInputs = 1` and `inputLimits.maxAudioInputs = 1`.
 - `onnx-community/Llama-3.2-3B-Instruct-onnx-web`
   - Uses the `transformers-js` engine.
-  - Uses runtime revision `8ddaf6b6764ff2916a807e3c2ec0b5a441192473` and runtime dtypes `{ webgpu: q4, cpu: q4 }`.
-  - Keeps the browser-oriented `onnx-web` repo id as the canonical Llama 3.2 3B model in this app.
+  - Uses runtime revision `8ddaf6b6764ff2916a807e3c2ec0b5a441192473`, runtime dtypes `{ webgpu: q4 }`, `requiresWebGpu: true`, and `useExternalDataFormat: true`.
+  - Keeps the browser-oriented `onnx-web` repo id for the WebGPU Llama 3.2 3B model in this app.
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`
+  - Uses the `transformers-js` engine.
+  - Uses runtime revision `d8a977535f724334ae6e3c84ba681c77053daa4f`, runtime dtypes `{ webgpu: q4f16, cpu: q4f16 }`, and `useExternalDataFormat: true`.
+  - Provides the tested browser CPU/WASM Llama fallback.
 - `onnx-community/Bonsai-8B-ONNX`
   - Uses the `transformers-js` engine.
   - Experimental ONNX path using runtime revision `a5694a132e4050cef2dc335528016ce7e56504c9` and runtime dtypes `{ webgpu: q1, cpu: q1 }`.
@@ -345,13 +349,13 @@ Current models in Settings:
 Notes:
 
 - Each model explicitly points at its engine driver in config.
-- Transformers.js is loaded from the locally installed package and bundled into the app build.
+- Transformers.js is loaded from the locally installed package and bundled into the app build. The app currently uses `@huggingface/transformers` 4.2.0 with its matching `onnxruntime-web` dev build for browser WebGPU/WASM execution.
 - `@wllama/wllama` is also loaded from the locally installed package and bundles both the single-thread and multi-thread `wllama.wasm` runtime assets into the app build.
 - On secure static hosts, the app's same-origin `coi-serviceworker.js` helper reloads once to add COOP/COEP headers so `wllama` can use its multi-thread build when the browser exposes `SharedArrayBuffer`.
 - The installed Transformers.js runtime now exposes newer low-bit ONNX dtypes including `q2`, `q2f16`, `q1`, and `q1f16`; the bundled catalog currently keeps Bonsai on `q1` for both WebGPU and CPU.
 - Model assets are downloaded at runtime and cached in-browser through the engine-specific path.
 - Model assets are not committed to this repository.
-- Transformers.js-backed model assets in the shipped catalog are revision-pinned, the bundled LFM2.5 GGUF model uses a pinned Hugging Face `resolve/<commit>/...` URL, and the ONNX worker now uses app-bundled ONNX Runtime WASM assets instead of the default CDN path.
+- Transformers.js-backed model assets in the shipped catalog are revision-pinned, the bundled LFM2.5 GGUF model uses a pinned Hugging Face `resolve/<commit>/...` URL, and the ONNX worker uses app-bundled ONNX Runtime WASM assets instead of the default CDN path while keeping ONNX Runtime's extra proxy worker disabled inside the app's dedicated LLM worker.
 - The pre-chat picker presents separate `Local Models` and `Cloud Models` sections, with each model shown as a single-select horizontal row with capability chips, language tags, and short-term memory shown as tokens plus a rough word estimate rounded to the nearest 100.
 - Model capability flags describe what a model can support; the image/audio/video UI is only enabled when the runtime also declares `multimodalGeneration: true`.
 - Audio input is upload-only. The app does not expose live recording.
@@ -369,8 +373,9 @@ Notes:
 Per-model limits and defaults:
 
 - `huggingworld/gemma-4-E2B-it-ONNX`: engine `transformers-js`, runtime revision `84b2c85ce64e8a0c999a3284f438d28db1d396a5`, runtime dtypes `{ webgpu: q4f16 }`, `requiresWebGpu: true`, `multimodalGeneration: true`, `useExternalDataFormat: true`, `inputLimits.maxImageInputs: 1`, `inputLimits.maxAudioInputs: 1`, max context/output `131072`, default context `4096`, default output `1024`, default temperature `1.0`, default top-k `64`, default top-p `0.95`, default repetition penalty `1.0`, feature flags `thinking`, `toolCalling`, `imageInput`, and `audioInput`, tool call format `gemma-special-token-call`, thinking tags `<|channel>` / `<channel|>` with leading `thought` stripped, thinking control `{ runtimeParameter: "enable_thinking" }`
-- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime revision `8ddaf6b6764ff2916a807e3c2ec0b5a441192473`, runtime dtypes `{ webgpu: q4, cpu: q4 }`, max context/output `131072`, default context `4096`, default output `1024`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"shell":"..."}` inside `parameters`, no thinking tags
+- `onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa`: runtime revision `d8a977535f724334ae6e3c84ba681c77053daa4f`, runtime dtypes `{ webgpu: q4f16, cpu: q4f16 }`, `useExternalDataFormat: true`, max context/output `131072`, default context `4096`, default output `1024`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, no thinking tags, no tool calling
+- `onnx-community/Llama-3.2-3B-Instruct-onnx-web`: runtime revision `8ddaf6b6764ff2916a807e3c2ec0b5a441192473`, runtime dtypes `{ webgpu: q4 }`, `requiresWebGpu: true`, max context/output `131072`, default context `4096`, default output `1024`, default temperature `0.6`, default top-p `0.9`, default top-k `50`, feature flag `toolCalling`, tool call format `{"name":"tool_name","parameters":{...}}` with `run_shell_command` preferring `{"shell":"..."}` inside `parameters`, no thinking tags
 - `onnx-community/Bonsai-8B-ONNX`: runtime revision `a5694a132e4050cef2dc335528016ce7e56504c9`, runtime dtypes `{ webgpu: q1, cpu: q1 }`, max context/output `65536`, default context `4096`, default output `1024`, default temperature `0.5`, default top-k `20`, default top-p `0.85`, default repetition penalty `1.0`, feature flags `thinking` and `toolCalling`, tagged JSON tool-call format inside `<tool_call>...</tool_call>`, thinking tags `<think>` / `</think>`, and upstream-managed per-dtype ONNX shard metadata
 - `LiquidAI/LFM2.5-1.2B-Thinking-GGUF`: engine `wllama`, pinned GGUF URL `.../resolve/6eef5895049f444e3436c6f583207e610a1485ce/LFM2.5-1.2B-Thinking-Q4_K_M.gguf`, max context/output `32768`, default context `4096`, default output `1024`, default temperature `0.1`, default top-k `50`, default top-p `0.1`, default repetition penalty `1.05`, feature flag `thinking`, no tool calling, no multimodal input, `<think>` / `</think>` reasoning tags, prompt-cache reuse auto-disabled above `2048` context tokens, prompt batch size capped to a smaller browser-safe range, and automatic multi-thread `wllama` when the browser can activate cross-origin isolation
-- `Llama 3.2 3B` keeps the browser-oriented `onnx-web` repo id as its canonical model in this app. The full ONNX repo remains a legacy alias because its browser load path was not reliable here: the `int8` package could fail with `Array buffer allocation failed`, and the `q4` package could fail to preload required `.onnx_data` shards.
-- The remaining listed Llama entry enables `useExternalDataFormat: true` for `.onnx_data` loading.
+- `Llama 3.2 3B` keeps the browser-oriented `onnx-web` repo id for WebGPU only. Direct Transformers.js CPU/WASM probes for the `onnx-web` repo fail on first generation with `std::bad_alloc`; the full ONNX repo requires explicit external-data shard counts and still fails CPU session creation with `std::bad_alloc` in the same browser harness.
+- The Llama 3.2 1B `onnx-web-gqa` entry enables `useExternalDataFormat: true` for `.onnx_data` loading and passed the CPU-only browser generation probe.

@@ -23,7 +23,10 @@ const WORKER_STREAM_UPDATE_INTERVAL_MS = 32;
 const WORKER_DEBUG_PREFIX = '[llm.worker]';
 const ENABLE_WORKER_DEBUG_CONSOLE_LOGS = false;
 const ENABLE_WORKER_WARN_CONSOLE_LOGS = false;
-const ONNX_WASM_PROXY_ENABLED = true;
+// This worker already keeps ONNX Runtime CPU work off the UI thread. Keep ORT's
+// own proxy worker disabled to avoid a second worker layer and duplicate WASM
+// runtime state during large browser-only model loads.
+const ONNX_WASM_PROXY_ENABLED = false;
 const ONNX_WASM_NUM_THREADS = 0;
 // Prefix-cache reuse was retaining too much browser memory with the current local runtimes.
 const ENABLE_TEXT_GENERATION_PREFIX_CACHE = false;
@@ -323,25 +326,19 @@ function isSafariUserAgent() {
   );
 }
 
-function resolveLocalOnnxWasmPaths(backend = 'wasm') {
-  if (backend === 'webgpu') {
-    // Keep the bundled wasm assets aligned with the installed `onnxruntime-web/webgpu`
-    // entrypoint. The current WebGPU bundle expects the WebGPU EP asyncify module, and
-    // wiring in the JSEP wasm here causes `webgpuInit is not a function` during init.
-    return {
-      mjs: ortWasmAsyncifyModulePath,
-      wasm: ortWasmAsyncifyBinaryPath,
-    };
-  }
+function resolveLocalOnnxWasmPaths() {
   if (isSafariUserAgent()) {
+    // Match Transformers.js' upstream browser default for Safari.
     return {
-      mjs: ortWasmAsyncifyModulePath,
-      wasm: ortWasmAsyncifyBinaryPath,
+      mjs: ortWasmModulePath,
+      wasm: ortWasmBinaryPath,
     };
   }
+  // Match Transformers.js' upstream browser default while serving the assets
+  // from this static bundle instead of the jsDelivr fallback.
   return {
-    mjs: ortWasmModulePath,
-    wasm: ortWasmBinaryPath,
+    mjs: ortWasmAsyncifyModulePath,
+    wasm: ortWasmAsyncifyBinaryPath,
   };
 }
 
@@ -352,7 +349,7 @@ function configureOnnxWasmBackend(env, backend = 'wasm', runtime = {}) {
   const requestedCpuThreads = normalizeOnnxWasmThreadCount(runtime?.cpuThreads);
   env.backends.onnx.wasm.numThreads = requestedCpuThreads;
   env.backends.onnx.wasm.proxy = ONNX_WASM_PROXY_ENABLED;
-  env.backends.onnx.wasm.wasmPaths = resolveLocalOnnxWasmPaths(backend);
+  env.backends.onnx.wasm.wasmPaths = resolveLocalOnnxWasmPaths();
   const result = {
     backend,
     proxy: ONNX_WASM_PROXY_ENABLED,

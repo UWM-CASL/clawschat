@@ -13,6 +13,7 @@ import {
 } from '../../src/config/model-settings.js';
 
 const LLAMA_3B_MODEL_ID = 'onnx-community/Llama-3.2-3B-Instruct-onnx-web';
+const LLAMA_1B_MODEL_ID = 'onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa';
 const GEMMA_4_MODEL_ID = 'huggingworld/gemma-4-E2B-it-ONNX';
 const BONSAI_8B_MODEL_ID = 'onnx-community/Bonsai-8B-ONNX';
 const LFM_25_12B_WLLAMA_MODEL_ID = 'LiquidAI/LFM2.5-1.2B-Thinking-GGUF';
@@ -82,10 +83,22 @@ describe('model-settings availability', () => {
     });
   });
 
-  test('keeps Llama 3.2 3B available in webgpu mode when WebGPU is missing because CPU fallback stays available', () => {
+  test('marks Llama 3.2 3B unavailable when WebGPU is missing', () => {
     expect(
       getModelAvailability(LLAMA_3B_MODEL_ID, {
         backendPreference: 'webgpu',
+        webGpuAvailable: false,
+      })
+    ).toEqual({
+      available: false,
+      reason: 'This model requires WebGPU, which is not available in this browser.',
+    });
+  });
+
+  test('keeps Llama 3.2 1B available in cpu mode without WebGPU', () => {
+    expect(
+      getModelAvailability(LLAMA_1B_MODEL_ID, {
+        backendPreference: 'cpu',
         webGpuAvailable: false,
       })
     ).toEqual({
@@ -116,7 +129,7 @@ describe('model-settings availability', () => {
         backendPreference: 'cpu',
         webGpuAvailable: false,
       })
-    ).toBe(LLAMA_3B_MODEL_ID);
+    ).toBe(LLAMA_1B_MODEL_ID);
   });
 
   test('detects WebGPU support from a navigator-like object', () => {
@@ -173,15 +186,13 @@ describe('model-settings availability', () => {
   });
 
   test('only exposes the current visible catalog', () => {
-    expect(MODEL_OPTIONS).toHaveLength(4);
+    expect(MODEL_OPTIONS).toHaveLength(5);
     expect(MODEL_OPTIONS_BY_ID.get('LiquidAI/LFM2.5-350M-ONNX')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('LiquidAI/LFM2.5-1.2B-Instruct-ONNX')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('LiquidAI/LFM2.5-1.2B-Thinking-ONNX')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Qwen3.5-0.8B-ONNX')).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('onnx-community/gemma-3n-E2B-it-ONNX')).toBeUndefined();
-    expect(
-      MODEL_OPTIONS_BY_ID.get('onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa')
-    ).toBeUndefined();
+    expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)).toBeDefined();
     expect(MODEL_OPTIONS_BY_ID.get(REMOVED_LLAMA_1B_MODEL_ID)).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get(REMOVED_QWEN_2B_MODEL_ID)).toBeUndefined();
     expect(MODEL_OPTIONS_BY_ID.get('onnx-community/Qwen3-1.7B-ONNX')).toBeUndefined();
@@ -193,7 +204,13 @@ describe('model-settings availability', () => {
     ).toBe('q4');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)?.runtime, 'cpu')
-    ).toBe('q4');
+    ).toBeNull();
+    expect(
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime, 'webgpu')
+    ).toBe('q4f16');
+    expect(
+      resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime, 'cpu')
+    ).toBe('q4f16');
     expect(
       resolveRuntimeDtypeForBackend(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)?.runtime, 'cpu')
     ).toBeNull();
@@ -265,7 +282,15 @@ describe('model-settings availability', () => {
       revision: '8ddaf6b6764ff2916a807e3c2ec0b5a441192473',
       dtypes: {
         webgpu: 'q4',
-        cpu: 'q4',
+      },
+      requiresWebGpu: true,
+      useExternalDataFormat: true,
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)?.runtime).toMatchObject({
+      revision: 'd8a977535f724334ae6e3c84ba681c77053daa4f',
+      dtypes: {
+        webgpu: 'q4f16',
+        cpu: 'q4f16',
       },
       useExternalDataFormat: true,
     });
@@ -324,6 +349,10 @@ describe('model-settings availability', () => {
     expect(MODEL_OPTIONS_BY_ID.get(LLAMA_3B_MODEL_ID)).toMatchObject({
       displayName: 'Llama 3.2 3B Instruct',
       repositoryUrl: 'https://huggingface.co/onnx-community/Llama-3.2-3B-Instruct-onnx-web',
+    });
+    expect(MODEL_OPTIONS_BY_ID.get(LLAMA_1B_MODEL_ID)).toMatchObject({
+      displayName: 'Llama 3.2 1B Instruct',
+      repositoryUrl: 'https://huggingface.co/onnx-community/Llama-3.2-1B-Instruct-onnx-web-gqa',
     });
     expect(MODEL_OPTIONS_BY_ID.get(GEMMA_4_MODEL_ID)).toMatchObject({
       displayName: 'Gemma 4 E2B',
