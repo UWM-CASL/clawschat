@@ -15,6 +15,7 @@ vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class TextStreamerMock {
     constructor(_tokenizer, options = {}) {
       this.callback_function = options.callback_function || null;
+      this.token_callback_function = options.token_callback_function || null;
       this.skip_prompt = options.skip_prompt === true;
       this.skip_special_tokens = options.skip_special_tokens === true;
     }
@@ -95,12 +96,14 @@ describe('llm.worker init regression', () => {
       runtime: {},
     };
 
-    await workerSelf.onmessage(/** @type {any} */ ({
-      data: {
-        type: 'init',
-        payload,
-      },
-    }));
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload,
+        },
+      })
+    );
 
     expect(tokenizerFactory).toHaveBeenCalledTimes(1);
     expect(textModelFactory).toHaveBeenCalledTimes(1);
@@ -115,12 +118,14 @@ describe('llm.worker init regression', () => {
 
     workerSelf.postMessage.mockClear();
 
-    await workerSelf.onmessage(/** @type {any} */ ({
-      data: {
-        type: 'init',
-        payload,
-      },
-    }));
+    await workerSelf.onmessage(
+      /** @type {any} */ ({
+        data: {
+          type: 'init',
+          payload,
+        },
+      })
+    );
 
     expect(tokenizerFactory).toHaveBeenCalledTimes(1);
     expect(textModelFactory).toHaveBeenCalledTimes(1);
@@ -341,6 +346,7 @@ describe('llm.worker init regression', () => {
   test('invokes the text-generation model directly for cpu generation after prompt preparation', async () => {
     const tokenizer = createTokenizer();
     const textModel = createTextModel(async (options = {}) => {
+      options.streamer?.token_callback_function?.([201n]);
       options.streamer?.callback_function?.('Model output');
       return {
         sequences: [[101, 102, 103, 201]],
@@ -410,9 +416,16 @@ describe('llm.worker init regression', () => {
         streamer: expect.objectContaining({
           skip_prompt: true,
           skip_special_tokens: true,
+          token_callback_function: expect.any(Function),
         }),
       })
     );
+    expect(workerSelf.postMessage).toHaveBeenCalledWith({
+      type: 'activity',
+      payload: {
+        requestId: 'request-1',
+      },
+    });
     const firstGenerateCall = /** @type {any} */ (textModel.generate.mock.calls[0]?.[0]);
     expect(firstGenerateCall?.return_dict_in_generate).toBeUndefined();
     expect(workerSelf.postMessage).toHaveBeenCalledWith({

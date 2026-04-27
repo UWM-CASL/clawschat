@@ -2,6 +2,7 @@ import { DEFAULT_ENGINE_TYPE, getEngineDescriptor, normalizeEngineType } from '.
 
 const ENGINE_DEBUG_PREFIX = '[LLMEngineClient]';
 const GENERATION_INACTIVITY_TIMEOUT_MS = 90000;
+const CPU_FIRST_TOKEN_INACTIVITY_TIMEOUT_MS = 300000;
 const ENABLE_ENGINE_DEBUG_CONSOLE_LOGS = false;
 const ENABLE_ENGINE_WARN_CONSOLE_LOGS = false;
 
@@ -19,10 +20,7 @@ function normalizeInitBackendPreference(preference) {
   return 'webgpu';
 }
 
-function isWebGpuDeviceLostGenerationError(
-  message,
-  { backend = '', backendDevice = '' } = {}
-) {
+function isWebGpuDeviceLostGenerationError(message, { backend = '', backendDevice = '' } = {}) {
   const normalizedMessage = String(message || '');
   const normalizedBackend = typeof backend === 'string' ? backend.trim().toLowerCase() : '';
   const normalizedBackendDevice =
@@ -34,16 +32,10 @@ function isWebGpuDeviceLostGenerationError(
     /\bwgpu::/i.test(normalizedMessage) ||
     /\bGPUBuffer\b/i.test(normalizedMessage) ||
     /\bmapAsync\b/i.test(normalizedMessage);
-  return (
-    referencesWebGpuRuntime &&
-    /\bdevice\b(?:[^\n.]{0,40}\b)?lost\b/i.test(normalizedMessage)
-  );
+  return referencesWebGpuRuntime && /\bdevice\b(?:[^\n.]{0,40}\b)?lost\b/i.test(normalizedMessage);
 }
 
-function isRecoverableWebGpuGenerationError(
-  message,
-  { backend = '', backendDevice = '' } = {}
-) {
+function isRecoverableWebGpuGenerationError(message, { backend = '', backendDevice = '' } = {}) {
   const normalizedMessage = String(message || '');
   const normalizedBackend = typeof backend === 'string' ? backend.trim().toLowerCase() : '';
   const normalizedBackendDevice =
@@ -428,6 +420,16 @@ export class LLMEngineClient {
       return;
     }
 
+    if (data.type === 'activity') {
+      if (
+        this.pendingGeneration &&
+        (!data.payload?.requestId || data.payload.requestId === this.pendingGeneration.requestId)
+      ) {
+        this.#touchGenerationWatchdog();
+      }
+      return;
+    }
+
     if (data.type === 'canceled') {
       if (data.payload?.requestId === this.pendingCancelRequestId) {
         if (typeof this.#pendingCancelResolve === 'function') {
@@ -559,31 +561,48 @@ export class LLMEngineClient {
       return;
     }
     const requestId = this.pendingGeneration.requestId;
+    const timeoutMs = this.#getGenerationInactivityTimeoutMs();
     this.#generationWatchdogTimeout = setTimeout(() => {
       if (!this.pendingGeneration || this.pendingGeneration.requestId !== requestId) {
         return;
       }
-      const timeoutSeconds = Math.round(GENERATION_INACTIVITY_TIMEOUT_MS / 1000);
+      const timeoutSeconds = Math.round(timeoutMs / 1000);
       const backendLabel = this.loadedBackend ? this.loadedBackend.toUpperCase() : 'UNKNOWN';
       const deviceLabel = this.loadedBackendDevice || 'unknown';
       const message = `Generation timed out after ${timeoutSeconds} seconds without worker activity on ${backendLabel} (${deviceLabel}). The worker was terminated so the next request can recover cleanly.`;
       logEngineError('generate-timeout', {
         requestId,
-        timeoutMs: GENERATION_INACTIVITY_TIMEOUT_MS,
+        timeoutMs,
         loadedModelId: this.loadedModelId,
         loadedBackend: this.loadedBackend,
         loadedBackendDevice: this.loadedBackendDevice,
       });
       this.#handleWorkerFailure(new Error(message));
-    }, GENERATION_INACTIVITY_TIMEOUT_MS);
+    }, timeoutMs);
     if (announce) {
       logEngineDebug('generate-watchdog-armed', {
         requestId,
-        timeoutMs: GENERATION_INACTIVITY_TIMEOUT_MS,
+        timeoutMs,
         loadedBackend: this.loadedBackend,
         loadedBackendDevice: this.loadedBackendDevice,
       });
     }
+  }
+
+  #getGenerationInactivityTimeoutMs() {
+    if (!this.pendingGeneration || this.pendingGeneration.receivedAnyTokens) {
+      return GENERATION_INACTIVITY_TIMEOUT_MS;
+    }
+    const backend = String(this.loadedBackend || '')
+      .trim()
+      .toLowerCase();
+    const backendDevice = String(this.loadedBackendDevice || '')
+      .trim()
+      .toLowerCase();
+    if (backend === 'cpu' || backendDevice === 'wasm') {
+      return CPU_FIRST_TOKEN_INACTIVITY_TIMEOUT_MS;
+    }
+    return GENERATION_INACTIVITY_TIMEOUT_MS;
   }
 
   #touchGenerationWatchdog() {
@@ -619,7 +638,10 @@ export class LLMEngineClient {
     if (normalizeInitBackendPreference(config?.backendPreference) !== 'webgpu') {
       return false;
     }
-    if (config?.runtime?.allowBackendFallback === false || config?.runtime?.requiresWebGpu === true) {
+    if (
+      config?.runtime?.allowBackendFallback === false ||
+      config?.runtime?.requiresWebGpu === true
+    ) {
       return false;
     }
     const message = toErrorMessage(error);
@@ -671,7 +693,9 @@ export class LLMEngineClient {
       backendDevice: this.loadedBackendDevice,
     });
     this.onStatus(
-      isDeviceLost ? 'WebGPU device lost. Retrying on CPU...' : 'WebGPU generation failed. Retrying on CPU...'
+      isDeviceLost
+        ? 'WebGPU device lost. Retrying on CPU...'
+        : 'WebGPU generation failed. Retrying on CPU...'
     );
     this.#discardWorkerForRecovery();
     try {

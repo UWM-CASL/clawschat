@@ -36,12 +36,11 @@ class MockWorker {
       const nextInitEvent = nextInitResponse
         ? {
             type: nextInitResponse.type || 'init-success',
-            payload:
-              nextInitResponse.payload || {
-                backend: nextInitResponse.backend,
-                backendDevice: nextInitResponse.backendDevice,
-                modelId: nextInitResponse.modelId,
-              },
+            payload: nextInitResponse.payload || {
+              backend: nextInitResponse.backend,
+              backendDevice: nextInitResponse.backendDevice,
+              modelId: nextInitResponse.modelId,
+            },
           }
         : {
             type: 'init-success',
@@ -73,6 +72,15 @@ class MockWorker {
         return;
       }
       const requestId = message.payload.requestId;
+      if (currentGenerateMode === 'activityThenStall') {
+        setTimeout(() => {
+          this.#emit('message', {
+            type: 'activity',
+            payload: { requestId },
+          });
+        }, 80000);
+        return;
+      }
       if (currentGenerateMode === 'deviceLost') {
         queueMicrotask(() => {
           this.#emit('message', {
@@ -263,7 +271,9 @@ describe('LLMEngineClient', () => {
     expect(client.loadedBackendDevice).toBe('wasm');
     expect(MockWorker.instances).toHaveLength(2);
     expect(MockWorker.instances[0].terminated).toBe(true);
-    expect(MockWorker.instances[1].messages.filter((message) => message.type === 'init')).toHaveLength(1);
+    expect(
+      MockWorker.instances[1].messages.filter((message) => message.type === 'init')
+    ).toHaveLength(1);
     expect(
       MockWorker.instances[1].messages.filter((message) => message.type === 'generate')
     ).toHaveLength(1);
@@ -307,7 +317,9 @@ describe('LLMEngineClient', () => {
     expect(client.loadedBackendDevice).toBe('wasm');
     expect(MockWorker.instances).toHaveLength(2);
     expect(MockWorker.instances[0].terminated).toBe(true);
-    expect(MockWorker.instances[1].messages.filter((message) => message.type === 'init')).toHaveLength(1);
+    expect(
+      MockWorker.instances[1].messages.filter((message) => message.type === 'init')
+    ).toHaveLength(1);
     expect(
       MockWorker.instances[1].messages.filter((message) => message.type === 'generate')
     ).toHaveLength(1);
@@ -352,9 +364,9 @@ describe('LLMEngineClient', () => {
     expect(onError).not.toHaveBeenCalled();
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(client.pendingGeneration).toBeNull();
-    expect(MockWorker.instances[1].messages.filter((message) => message.type === 'generate')).toHaveLength(
-      0
-    );
+    expect(
+      MockWorker.instances[1].messages.filter((message) => message.type === 'generate')
+    ).toHaveLength(0);
   });
 
   test('terminates the failed webgpu worker before retrying initialization on cpu', async () => {
@@ -514,7 +526,9 @@ describe('LLMEngineClient', () => {
       onError: () => {},
     });
 
-    const initMessages = MockWorker.instances[0].messages.filter((message) => message.type === 'init');
+    const initMessages = MockWorker.instances[0].messages.filter(
+      (message) => message.type === 'init'
+    );
     expect(initMessages).toHaveLength(2);
     expect(initMessages[1]?.payload?.runtime).toEqual({
       multimodalGeneration: true,
@@ -631,12 +645,19 @@ describe('LLMEngineClient', () => {
     expect(client.loadedModelId).toBeNull();
   });
 
-  test('terminates stalled generations after the inactivity timeout', async () => {
+  test('terminates stalled webgpu generations after the default inactivity timeout', async () => {
     vi.useFakeTimers();
     MockWorker.generateMode = 'stall';
+    MockWorker.initResponses = [
+      {
+        backend: 'webgpu',
+        backendDevice: 'webgpu',
+        modelId: 'example/model',
+      },
+    ];
 
     const client = new LLMEngineClient();
-    await client.initialize({ modelId: 'example/model' });
+    await client.initialize({ modelId: 'example/model', backendPreference: 'webgpu' });
 
     const onError = vi.fn();
     client.generate('prompt', {
@@ -650,13 +671,83 @@ describe('LLMEngineClient', () => {
 
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toContain(
-      'Generation timed out after 90 seconds without worker activity on CPU (wasm).'
+      'Generation timed out after 90 seconds without worker activity on WEBGPU (webgpu).'
     );
     expect(client.pendingGeneration).toBeNull();
     expect(client.worker).toBeNull();
     expect(client.loadedModelId).toBeNull();
     expect(client.loadedBackendDevice).toBeNull();
     expect(MockWorker.instances[0].terminated).toBe(true);
+  });
+
+  test('allows a longer first-token window for stalled cpu generations', async () => {
+    vi.useFakeTimers();
+    MockWorker.generateMode = 'stall';
+
+    const client = new LLMEngineClient();
+    await client.initialize({ modelId: 'example/model', backendPreference: 'cpu' });
+
+    const onError = vi.fn();
+    client.generate('prompt', {
+      onToken: vi.fn(),
+      onComplete: vi.fn(),
+      onError,
+      onCancel: vi.fn(),
+    });
+
+    await vi.advanceTimersByTimeAsync(90000);
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(client.pendingGeneration).not.toBeNull();
+    expect(client.worker).not.toBeNull();
+
+    await vi.advanceTimersByTimeAsync(210000);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain(
+      'Generation timed out after 300 seconds without worker activity on CPU (wasm).'
+    );
+    expect(client.pendingGeneration).toBeNull();
+    expect(client.worker).toBeNull();
+    expect(MockWorker.instances[0].terminated).toBe(true);
+  });
+
+  test('extends the watchdog when the worker reports generation activity', async () => {
+    vi.useFakeTimers();
+    MockWorker.generateMode = 'activityThenStall';
+    MockWorker.initResponses = [
+      {
+        backend: 'webgpu',
+        backendDevice: 'webgpu',
+        modelId: 'example/model',
+      },
+    ];
+
+    const client = new LLMEngineClient();
+    const onStatus = vi.fn();
+    const onError = vi.fn();
+    client.onStatus = onStatus;
+    await client.initialize({ modelId: 'example/model', backendPreference: 'webgpu' });
+
+    client.generate('prompt', {
+      onToken: vi.fn(),
+      onComplete: vi.fn(),
+      onError,
+      onCancel: vi.fn(),
+    });
+
+    await vi.advanceTimersByTimeAsync(90000);
+
+    expect(onStatus).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(client.pendingGeneration).not.toBeNull();
+
+    await vi.advanceTimersByTimeAsync(80000);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain(
+      'Generation timed out after 90 seconds without worker activity on WEBGPU (webgpu).'
+    );
   });
 
   test('switching models unloads the previous worker before loading the next model', async () => {

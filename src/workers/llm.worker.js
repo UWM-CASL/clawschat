@@ -122,6 +122,16 @@ function postProgress({
   });
 }
 
+function postGenerationActivity(requestId) {
+  if (!requestId) {
+    return;
+  }
+  self.postMessage({
+    type: 'activity',
+    payload: { requestId },
+  });
+}
+
 function getTimestamp() {
   if (typeof globalThis.performance?.now === 'function') {
     return globalThis.performance.now();
@@ -585,6 +595,9 @@ function buildMultimodalStreamerOptions(tokenizerInstance, runtime = {}, onText 
     skip_prompt: true,
     skip_special_tokens: shouldSkipSpecialTokensInMultimodalOutput(runtime),
     callback_function: onText,
+    token_callback_function: () => {
+      postGenerationActivity(activeGenerationState?.requestId || '');
+    },
   });
 }
 
@@ -960,7 +973,10 @@ function buildMultimodalPromptText(processorInstance, messages, runtime = {}) {
   if (!processorInstance || typeof processorInstance.apply_chat_template !== 'function') {
     throw new Error('Multimodal processor is missing apply_chat_template().');
   }
-  return processorInstance.apply_chat_template(messages, buildMultimodalChatTemplateOptions(runtime));
+  return processorInstance.apply_chat_template(
+    messages,
+    buildMultimodalChatTemplateOptions(runtime)
+  );
 }
 
 function trimMultimodalMessagesToContextBudget(
@@ -1257,7 +1273,12 @@ function alignPreparedTextInputs(preparedTextInputs, alignment = 4) {
 
 export { alignPreparedTextInputs };
 
-function prepareTextGenerationInputs(tokenizerInstance, prompt, requestGenerationConfig, runtime = {}) {
+function prepareTextGenerationInputs(
+  tokenizerInstance,
+  prompt,
+  requestGenerationConfig,
+  runtime = {}
+) {
   if (!tokenizerInstance || typeof tokenizerInstance.apply_chat_template !== 'function') {
     throw new Error('Text-generation tokenizer is missing apply_chat_template().');
   }
@@ -1340,6 +1361,9 @@ async function invokeTextGeneration(
       callback_function: (text) => {
         streamedText += text;
         queueBufferedToken(generationState, text);
+      },
+      token_callback_function: () => {
+        postGenerationActivity(generationState.requestId);
       },
     });
 
@@ -1688,7 +1712,11 @@ async function generate(payload) {
     return;
   }
 
-  postStatus(`Generating (${backendInUse.toUpperCase()})...`);
+  postStatus(
+    loadedBackendDevice === 'wasm'
+      ? `Generating (${backendInUse.toUpperCase()}). First response may take several minutes on CPU...`
+      : `Generating (${backendInUse.toUpperCase()})...`
+  );
 
   if (!InterruptableStoppingCriteriaClass) {
     ({ InterruptableStoppingCriteria: InterruptableStoppingCriteriaClass } =
