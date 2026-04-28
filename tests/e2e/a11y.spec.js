@@ -90,7 +90,8 @@ test('@a11y settings screen keyboard open/close and no wcag2a/2aa violations', a
   await expect(page).toHaveURL(/#\/chat\/settings$/);
 
   await expect(page.getByRole('tabpanel', { name: 'System' })).toBeVisible();
-  await expect(page.locator('#backendSelect')).toBeVisible();
+  await expect(page.locator('#backendSelect')).toHaveCount(0);
+  await expect(page.locator('#cpuThreadsInput')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Debug' }).click();
   await expect(page.getByRole('tabpanel', { name: 'Debug' })).toBeVisible();
   await expect(page.locator('#debugLogPanel')).toContainText(

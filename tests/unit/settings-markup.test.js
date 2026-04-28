@@ -26,15 +26,15 @@ describe('settings markup', () => {
     ]);
   });
 
-  test('includes the local CPU thread control on the System tab', () => {
+  test('omits device and CPU thread controls from the System tab', () => {
     const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
     const dom = new JSDOM(html);
     const cpuThreadsInput = dom.window.document.getElementById('cpuThreadsInput');
+    const backendSelect = dom.window.document.getElementById('backendSelect');
 
-    expect(cpuThreadsInput).not.toBeNull();
-    expect(cpuThreadsInput?.getAttribute('type')).toBe('number');
-    expect(cpuThreadsInput?.getAttribute('aria-describedby')).toBe('cpuThreadsHelp');
-    expect(dom.window.document.getElementById('cpuThreadsHelp')?.textContent).toContain('wllama');
+    expect(cpuThreadsInput).toBeNull();
+    expect(backendSelect).toBeNull();
+    expect(dom.window.document.getElementById('cpuThreadsHelp')).toBeNull();
   });
 
   test('registers the COOP/COEP service worker helper from index.html', () => {

@@ -748,32 +748,6 @@
                   >
                     <h3 class="h6 mb-0" id="settingsSystemHeading">System</h3>
                     <div class="settings-control-group">
-                      <label class="form-label" for="backendSelect">Backend</label>
-                      <select id="backendSelect" class="form-select">
-                        <option value="webgpu" selected>WebGPU</option>
-                        <option value="cpu">CPU</option>
-                      </select>
-                    </div>
-                    <div class="settings-control-group">
-                      <label class="form-label" for="cpuThreadsInput">CPU threads</label>
-                      <input
-                        id="cpuThreadsInput"
-                        class="form-control"
-                        type="number"
-                        inputmode="numeric"
-                        min="0"
-                        step="1"
-                        value="0"
-                        aria-describedby="cpuThreadsHelp"
-                      />
-                      <p id="cpuThreadsHelp" class="form-text mb-0">
-                        Auto (`0`) keeps each local CPU engine on its own thread policy.
-                        Transformers.js uses ONNX Runtime Web auto-selection. `wllama` uses its
-                        multithread default when cross-origin isolation is available and otherwise
-                        falls back to single-thread WASM.
-                      </p>
-                    </div>
-                    <div class="settings-control-group">
                       <button
                         id="clearModelDownloadsButton"
                         type="button"

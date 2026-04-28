@@ -31,7 +31,7 @@ These constraints outrank convenience:
 - UI changes must preserve WCAG 2.1 AA behavior.
 - Streaming generation requires visible, keyboard-accessible cancellation.
 - UI code must not call runtime-specific model APIs directly.
-- Browser-hostile assumptions are bugs: root-relative paths, unavailable WebGPU, blocked CORS, storage failures, and slow CPU inference must be handled deliberately.
+- Browser-hostile assumptions are bugs: root-relative paths, unavailable runtime capabilities, blocked CORS, storage failures, and slow local inference must be handled deliberately.
 
 ## Current State
 

@@ -80,7 +80,6 @@ import {
   MODEL_OPTIONS_BY_ID,
   getModelAvailability,
   clamp,
-  browserSupportsWebGpu,
   normalizeGenerationLimits,
   normalizeModelId,
   resolveRuntimeDtypeForBackend,
@@ -197,13 +196,10 @@ const CORS_PROXY_STORAGE_KEY = 'cors-proxy-url';
 const MCP_SERVERS_STORAGE_KEY = 'mcp-server-configurations';
 const MODEL_STORAGE_KEY = 'llm-model-preference';
 const BACKEND_STORAGE_KEY = 'llm-backend-preference';
-const CPU_THREADS_STORAGE_KEY = 'llm-cpu-threads-preference';
 const MODEL_GENERATION_SETTINGS_STORAGE_KEY = 'llm-model-generation-settings';
 const MODEL_WLLAMA_SETTINGS_STORAGE_KEY = 'llm-model-wllama-settings';
 const TOOL_CONSENT_STORAGE_KEY = 'tool-consents-v1';
 const UNTITLED_CONVERSATION_PREFIX = 'New Conversation';
-const SUPPORTED_BACKEND_PREFERENCES = new Set(['webgpu', 'cpu']);
-const WEBGPU_REQUIRED_MODEL_SUFFIX = ' (WebGPU required)';
 const FIX_RESPONSE_ORCHESTRATION = fixResponseOrchestration;
 const RENAME_CHAT_ORCHESTRATION = renameChatOrchestration;
 const BUILT_IN_ORCHESTRATIONS = [
@@ -412,12 +408,6 @@ const modelSelect = /** @type {HTMLSelectElement | null} */ (
   document.getElementById('modelSelect')
 );
 const modelCardList = /** @type {HTMLElement | null} */ (document.getElementById('modelCardList'));
-const backendSelect = /** @type {HTMLSelectElement | null} */ (
-  document.getElementById('backendSelect')
-);
-const cpuThreadsInput = /** @type {HTMLInputElement | null} */ (
-  document.getElementById('cpuThreadsInput')
-);
 const clearModelDownloadsButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('clearModelDownloadsButton')
 );
@@ -781,7 +771,7 @@ const appState = createAppState({
   mcpServers: [],
   maxDebugEntries: MAX_DEBUG_ENTRIES,
 });
-appState.webGpuAdapterAvailable = browserSupportsWebGpu();
+appState.webGpuAdapterAvailable = true;
 const debugLogController = createDebugLogController({
   appState,
   container: debugLogPanel,
@@ -865,7 +855,6 @@ const generationSettingsController = createGenerationSettingsController({
   modelWllamaSettingsStorageKey: MODEL_WLLAMA_SETTINGS_STORAGE_KEY,
   defaultModelId: DEFAULT_MODEL,
   modelSelect,
-  backendSelect,
   maxOutputTokensInput,
   maxContextTokensInput,
   temperatureInput,
@@ -1187,17 +1176,14 @@ function scheduleMathTypeset(element, options = {}) {
   transcriptContentRenderer.scheduleMathTypeset(element, options);
 }
 
-function getModelGenerationLimits(
-  modelId,
-  { backendPreference = backendSelect?.value || 'webgpu' } = {}
-) {
+function getModelGenerationLimits(modelId, { backendPreference = 'default' } = {}) {
   return generationSettingsController.getModelGenerationLimits(modelId, { backendPreference });
 }
 
 function sanitizeGenerationConfigForModel(
   modelId,
   candidateConfig,
-  { backendPreference = backendSelect?.value || 'webgpu' } = {}
+  { backendPreference = 'default' } = {}
 ) {
   return generationSettingsController.sanitizeGenerationConfigForModel(modelId, candidateConfig, {
     backendPreference,
@@ -1751,10 +1737,7 @@ function createConversation(name) {
   const conversation = createConversationRecord({
     id: conversationId,
     name: conversationName,
-    modelId: getAvailableModelId(
-      modelSelect?.value || DEFAULT_MODEL,
-      normalizeBackendPreference(backendSelect?.value || 'webgpu')
-    ),
+    modelId: getAvailableModelId(modelSelect?.value || DEFAULT_MODEL, 'default'),
     conversationType,
     untitledPrefix: UNTITLED_CONVERSATION_PREFIX,
     systemPrompt: appState.defaultSystemPrompt,
@@ -1792,7 +1775,7 @@ function getConversationModelId(conversation) {
   const loadedModelId = getLoadedModelId();
   return getAvailableModelId(
     conversation?.modelId || loadedModelId || modelSelect?.value || DEFAULT_MODEL,
-    normalizeBackendPreference(backendSelect?.value || 'webgpu')
+    'default'
   );
 }
 
@@ -1817,7 +1800,7 @@ function assignConversationModelId(conversation, modelId) {
   }
   const nextModelId = getAvailableModelId(
     modelId || conversation.modelId || DEFAULT_MODEL,
-    normalizeBackendPreference(backendSelect?.value || 'webgpu')
+    'default'
   );
   const changed = conversation.modelId !== nextModelId;
   conversation.modelId = nextModelId;
@@ -1832,7 +1815,7 @@ function syncConversationModelSelection(
   conversation,
   { announceFallback = false, useDefaults = true } = {}
 ) {
-  const selectedBackend = normalizeBackendPreference(backendSelect?.value || 'webgpu');
+  const selectedBackend = 'default';
   const hasStoredModelId = Boolean(
     typeof conversation?.modelId === 'string' && conversation.modelId.trim()
   );
@@ -1864,13 +1847,10 @@ function syncConversationModelSelection(
     const requestedModel = MODEL_OPTIONS_BY_ID.get(requestedModelId);
     const availability = getModelAvailability(requestedModelId, {
       backendPreference: selectedBackend,
-      webGpuAvailable: getWebGpuAvailability(),
     });
     if (requestedModel) {
       setStatus(
-        requestedModel.runtime?.requiresWebGpu
-          ? `${requestedModel.label} is unavailable with ${formatBackendPreferenceLabel(selectedBackend)}. ${availability.reason} Switched to ${selectedModelId}.`
-          : `${requestedModel.label} is unavailable. ${availability.reason} Switched to ${selectedModelId}.`
+        `${requestedModel.label} is unavailable. ${availability.reason} Switched to ${selectedModelId}.`
       );
     }
   }
@@ -2648,34 +2628,7 @@ async function clearSelectedModelDownloads() {
     selectedModel.runtime && typeof selectedModel.runtime === 'object' ? selectedModel.runtime : {};
   const revision =
     typeof runtime.revision === 'string' && runtime.revision.trim() ? runtime.revision.trim() : '';
-  const webgpuDtype = resolveRuntimeDtypeForBackend(runtime, 'webgpu');
-  const cpuDtype = resolveRuntimeDtypeForBackend(runtime, 'cpu');
-  /** @type {Array<{device: 'webgpu' | 'wasm', dtype?: string, includeTokenizer?: boolean, includeProcessor?: boolean}>} */
-  const clearPlans = [];
-
-  if (webgpuDtype) {
-    clearPlans.push({
-      device: 'webgpu',
-      dtype: webgpuDtype,
-      includeTokenizer: true,
-      includeProcessor: runtime.multimodalGeneration === true,
-    });
-  }
-  if (cpuDtype && (!webgpuDtype || cpuDtype !== webgpuDtype)) {
-    clearPlans.push({
-      device: 'wasm',
-      dtype: cpuDtype,
-      includeTokenizer: !webgpuDtype,
-      includeProcessor: !webgpuDtype && runtime.multimodalGeneration === true,
-    });
-  }
-  if (!clearPlans.length) {
-    clearPlans.push({
-      device: 'wasm',
-      includeTokenizer: true,
-      includeProcessor: runtime.multimodalGeneration === true,
-    });
-  }
+  const runtimeDtype = resolveRuntimeDtypeForBackend(runtime, 'default');
 
   setStatus('Clearing downloaded model files...');
   appendDebug(`Clearing cached Transformers.js files for ${selectedModelId}.`);
@@ -2685,20 +2638,17 @@ async function clearSelectedModelDownloads() {
     let filesDeleted = 0;
     let filesCached = 0;
 
-    for (const plan of clearPlans) {
-      const result = await ModelRegistry.clear_cache(
-        selectedModelId,
-        /** @type {any} */ ({
-          ...(revision ? { revision } : {}),
-          ...(plan.dtype ? { dtype: plan.dtype } : {}),
-          device: plan.device,
-          include_tokenizer: plan.includeTokenizer !== false,
-          include_processor: plan.includeProcessor !== false,
-        })
-      );
-      filesDeleted += Number(result?.filesDeleted) || 0;
-      filesCached += Number(result?.filesCached) || 0;
-    }
+    const result = await ModelRegistry.clear_cache(
+      selectedModelId,
+      /** @type {any} */ ({
+        ...(revision ? { revision } : {}),
+        ...(runtimeDtype ? { dtype: runtimeDtype } : {}),
+        include_tokenizer: true,
+        include_processor: runtime.multimodalGeneration === true,
+      })
+    );
+    filesDeleted += Number(result?.filesDeleted) || 0;
+    filesCached += Number(result?.filesCached) || 0;
 
     if (filesCached > 0) {
       setStatus(
@@ -2848,9 +2798,6 @@ const preferencesController = createPreferencesController({
   mcpServersStorageKey: MCP_SERVERS_STORAGE_KEY,
   modelStorageKey: MODEL_STORAGE_KEY,
   backendStorageKey: BACKEND_STORAGE_KEY,
-  cpuThreadsStorageKey: CPU_THREADS_STORAGE_KEY,
-  supportedBackendPreferences: SUPPORTED_BACKEND_PREFERENCES,
-  webGpuRequiredModelSuffix: WEBGPU_REQUIRED_MODEL_SUFFIX,
   availableToolDefinitions: getEnabledToolDefinitions(),
   themeSelect,
   showThinkingToggle,
@@ -2894,8 +2841,6 @@ const preferencesController = createPreferencesController({
   defaultSystemPromptInput,
   modelSelect,
   modelCardList,
-  backendSelect,
-  cpuThreadsInput,
   colorSchemeQuery,
   refreshModelThinkingVisibility,
   getRuntimeConfigForModel,
@@ -2934,7 +2879,6 @@ const {
   applyMcpServersPreference,
   applyTranscriptViewPreference,
   applyConversationPanelCollapsedPreference,
-  applyCpuThreadsPreference,
   applySingleKeyShortcutPreference,
   clearCustomOrchestrationFeedback,
   clearSkillPackageFeedback,
@@ -2942,7 +2886,6 @@ const {
   clearCorsProxyPreference,
   clearMcpServerFeedback,
   getStoredCorsProxyPreference,
-  formatBackendPreferenceLabel,
   getAvailableModelId,
   getStoredDefaultSystemPrompt,
   getStoredMathRenderingPreference,
@@ -2954,17 +2897,14 @@ const {
   getStoredTranscriptViewPreference,
   getStoredConversationPanelCollapsedPreference,
   migrateStoredEnabledToolNamesPreference,
-  getWebGpuAvailability,
   exportAllCustomOrchestrations,
   exportCustomOrchestration,
   importCustomOrchestrationFile,
   importSkillPackageFile,
   importMcpServerEndpoint,
   loadCustomOrchestrationIntoEditor,
-  normalizeBackendPreference,
   persistInferencePreferences,
   populateModelSelect,
-  probeWebGpuAvailability,
   readEngineConfigFromUI,
   removeCustomOrchestrationPreference,
   removeSkillPackagePreference,
@@ -3099,11 +3039,6 @@ async function initializeStoredBrowserState() {
   populateModelSelect();
   restoreInferencePreferences();
   syncConversationLanguageAndThinkingControls();
-  try {
-    await probeWebGpuAvailability();
-  } catch (_error) {
-    // probeWebGpuAvailability already records recoverable adapter failures.
-  }
 
   updateWelcomePanelVisibility({ syncRoute: false });
   applyAppRouteFromHash();
@@ -3505,8 +3440,6 @@ bindSettingsEvents({
   conversationLanguageSelect,
   enableModelThinkingToggle,
   modelSelect,
-  backendSelect,
-  cpuThreadsInput,
   clearModelDownloadsButton,
   maxOutputTokensInput,
   maxContextTokensInput,
@@ -3564,7 +3497,6 @@ bindSettingsEvents({
   applyDefaultSystemPrompt,
   applyConversationLanguagePreference,
   applyConversationThinkingPreference,
-  applyCpuThreadsPreference,
   clearMcpServerFeedback,
   importMcpServerEndpoint,
   refreshMathRendering: () => {

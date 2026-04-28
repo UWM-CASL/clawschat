@@ -131,10 +131,8 @@ function normalizeRuntime(rawRuntime) {
       ? rawRuntime.revision.trim()
       : '';
   const enableThinking = rawRuntime?.enableThinking === true;
-  const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
   const preferMultimodalForText = rawRuntime?.preferMultimodalForText === true;
-  const allowBackendFallback = rawRuntime?.allowBackendFallback !== false;
   const useExternalDataFormat =
     rawRuntime?.useExternalDataFormat === true ||
     (Number.isInteger(rawRuntime?.useExternalDataFormat) && rawRuntime.useExternalDataFormat > 0)
@@ -187,10 +185,8 @@ function normalizeRuntime(rawRuntime) {
     ...(dtypes ? { dtypes } : {}),
     ...(revision ? { revision } : {}),
     ...(enableThinking ? { enableThinking: true } : {}),
-    ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
     ...(preferMultimodalForText ? { preferMultimodalForText: true } : {}),
-    ...(allowBackendFallback === false ? { allowBackendFallback: false } : {}),
     ...(useExternalDataFormat ? { useExternalDataFormat } : {}),
     ...(providerId ? { providerId } : {}),
     ...(providerType ? { providerType } : {}),
@@ -511,23 +507,13 @@ function normalizeCatalogModel(model) {
 }
 
 export function normalizeSupportedBackendPreference(value) {
-  if (value === 'cpu' || value === 'wasm') {
-    return 'cpu';
-  }
-  if (value === 'webgpu' || value === 'auto') {
-    return 'webgpu';
-  }
-  return 'webgpu';
+  void value;
+  return 'default';
 }
 
-export function resolveRuntimeDtypeForBackend(runtime = {}, backendPreference = 'webgpu') {
-  const normalizedBackendPreference = normalizeSupportedBackendPreference(backendPreference);
-  const backendKey = normalizedBackendPreference === 'cpu' ? 'cpu' : 'webgpu';
-  return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
-}
-
-export function browserSupportsWebGpu(navigatorLike = globalThis.navigator) {
-  return Boolean(navigatorLike && typeof navigatorLike === 'object' && 'gpu' in navigatorLike);
+export function resolveRuntimeDtypeForBackend(runtime = {}, backendPreference = 'default') {
+  void backendPreference;
+  return normalizeRuntimeDtype(runtime?.dtypes?.cpu ?? runtime?.dtype);
 }
 
 const staticConfiguredModels = Array.isArray(modelCatalog?.models)
@@ -628,19 +614,16 @@ export function getModelEngineType(modelId) {
   return MODEL_OPTIONS_BY_ID.get(resolvedModelId)?.engine?.type || DEFAULT_ENGINE_TYPE;
 }
 
-export function getModelGenerationLimits(modelId, { backendPreference = 'webgpu' } = {}) {
+export function getModelGenerationLimits(modelId, { backendPreference = 'default' } = {}) {
   const resolvedModelId = normalizeConfiguredModelId(modelId);
   const generation =
     MODEL_OPTIONS_BY_ID.get(resolvedModelId)?.generation || normalizeGenerationLimits(null);
-  const normalizedBackendPreference = normalizeSupportedBackendPreference(backendPreference);
-  return generation?.backendOverrides?.[normalizedBackendPreference] || generation;
+  void backendPreference;
+  return generation?.backendOverrides?.cpu || generation;
 }
 
-export function getModelAvailability(
-  modelId,
-  { backendPreference = 'webgpu', webGpuAvailable = browserSupportsWebGpu() } = {}
-) {
-  const normalizedBackendPreference = normalizeSupportedBackendPreference(backendPreference);
+export function getModelAvailability(modelId, options = {}) {
+  void options;
   const resolvedModelId = normalizeConfiguredModelId(modelId);
   const model = MODEL_OPTIONS_BY_ID.get(resolvedModelId);
 
@@ -665,33 +648,6 @@ export function getModelAvailability(
     return {
       available: false,
       reason: 'Save an API key for this cloud model in Settings -> Cloud Providers.',
-    };
-  }
-
-  if (model.runtime?.requiresWebGpu) {
-    if (!webGpuAvailable) {
-      return {
-        available: false,
-        reason: 'This model requires WebGPU, which is not available in this browser.',
-      };
-    }
-    if (!WEBGPU_COMPATIBLE_BACKEND_PREFERENCES.has(normalizedBackendPreference)) {
-      return {
-        available: false,
-        reason: 'This model requires WebGPU. Switch to WebGPU mode.',
-      };
-    }
-  }
-
-  if (
-    model.runtime?.allowBackendFallback === false &&
-    !webGpuAvailable &&
-    WEBGPU_COMPATIBLE_BACKEND_PREFERENCES.has(normalizedBackendPreference)
-  ) {
-    return {
-      available: false,
-      reason:
-        'This model is configured for WebGPU-first loading in this mode. Enable CPU mode explicitly to use its separate CPU fallback quantization.',
     };
   }
 

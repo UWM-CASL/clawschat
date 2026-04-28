@@ -38,7 +38,7 @@ Current engine paths:
 - `wllama` worker path for bundled GGUF models.
 - OpenAI-compatible worker path for user-configured or app-managed cloud models.
 
-Local models prefer WebGPU when supported and use CPU/WASM only where the selected model and runtime allow it. Cloud models ignore the local backend selector and use browser fetch from the OpenAI-compatible worker path.
+Local model loading does not expose or pass a device selection. Transformers.js-backed models use the browser-default load path with CPU-safe dtype defaults, `wllama` models use the bundled GGUF worker path, and cloud models use browser fetch from the OpenAI-compatible worker path.
 
 During load and generation:
 
@@ -54,8 +54,7 @@ During load and generation:
 Streaming generation must support cancellation across:
 
 - normal local generation
-- slow CPU/WASM first-token waits
-- automatic WebGPU-to-CPU recovery
+- slow local first-token waits
 - tool-call interruption and continuation
 - OpenAI-compatible remote streaming
 - `wllama` completion streams
@@ -67,7 +66,7 @@ When cancellation succeeds, the UI should return buttons, status, and focus to a
 
 Settings are browser-local. Important panels include:
 
-- `System`: backend preference, CPU thread hints, and downloaded-model cache clearing.
+- `System`: downloaded-model cache clearing.
 - `Conversation`: transcript view, math rendering, shortcuts, export, and delete-conversation controls.
 - `Tools`: built-in tool enablement and tool-prompt exposure.
 - `Proxy`: optional validated CORS proxy configuration.
@@ -140,4 +139,3 @@ Known accepted risks remain documented in `docs/security.md` and `docs/failure-m
 - Some runtime assets are fetched from pinned external providers.
 - Browser-only cloud-provider secret storage is imperfect.
 - Several modules remain large and should be refactored with characterization tests first.
-

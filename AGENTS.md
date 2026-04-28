@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Purpose: Give coding agents the minimum reliable context to build, test, and change this repo safely.
-Project: A student-facing, in-browser chat app that runs small language models locally using WebGPU (preferred) with CPU fallback, deployed as a static site on GitHub Pages.
+Project: A student-facing, in-browser chat app that runs small language models locally in browser workers without exposing device selection, deployed as a static site on GitHub Pages.
 Accessibility target: WCAG 2.1 AA (non-negotiable).
 
 ## 0) Prime directives
@@ -60,9 +60,9 @@ All work must result in a static build:
   * Prefer native elements for controls; Bootstrap styling must not replace semantics.
 * Model runtime (browser-only):
 
-  * Preferred execution: WebGPU.
-  * Fallback execution: CPU (WASM or equivalent), still functional.
-  * Engine selection must be explicit and testable (capability detection + user override).
+  * Local execution runs in browser workers through the configured engine driver.
+  * Do not expose a WebGPU/CPU selector or pass a Transformers.js `device` option unless explicitly re-approved and documented.
+  * Engine selection by model must be explicit and testable.
 * Concurrency:
 
   * Heavy work (download/init/inference) should run in Web Workers when feasible.
@@ -107,8 +107,8 @@ All inference must go through a single abstraction (example naming; keep consist
 
 * `LLMEngine` interface
 
-  * `WebGPUEngine` implementation
-  * `CPUEngine` implementation
+  * per-model local engine implementations
+  * optional user-configured remote engine implementations
 
 UI must not call runtime-specific APIs directly. UI talks to the engine layer only.
 
@@ -177,7 +177,7 @@ These are hard constraints.
 
 6.7 Errors and recovery
 
-* Errors must be actionable (“Try CPU mode”, “Clear downloaded models”, “Retry download”).
+* Errors must be actionable (“Lower context size”, “Clear downloaded models”, “Retry download”).
 * Don’t strand users after a failure; provide a clear next step.
 
 ## 7) Model distribution, caching, and storage
@@ -236,14 +236,14 @@ Never:
 9.1 Unit tests
 
 * Test engine abstraction and state logic without real model weights.
-* Mock the engine interface; do not require WebGPU for unit tests.
+* Mock the engine interface; do not require real model downloads or special browser hardware for unit tests.
 
 9.2 E2E tests (recommended; required for key flows)
 Cover:
 
 * Load app → select model → send message → receive streamed response
 * Stop generating
-* CPU fallback path (simulate WebGPU unavailable)
+* Local runtime failure path
 * Keyboard-only navigation through model picker, transcript, input, send, stop, settings
 
 9.3 A11y tests (required for UI changes)
@@ -279,7 +279,7 @@ If you change behavior, update:
 * docs/ for:
 
   * model support and distribution
-  * engine selection (WebGPU/CPU) and fallback behavior
+  * engine selection, runtime defaults, and fallback behavior
   * accessibility patterns (live region strategy, focus management)
   * architecture, conventions, failure model, and common change paths when boundaries or assumptions change
 
@@ -306,7 +306,7 @@ Never edit:
 
 * GitHub Pages deployability: build outputs static assets; base path works under repo subpath
 * Accessibility: keyboard-only works; focus visible; labels correct; live region not spammy
-* Correctness: engine abstraction used; WebGPU and CPU paths both functional
+* Correctness: engine abstraction used; local and configured remote paths functional
 * Reliability: cancellation works; errors actionable; recovery path exists
 * Security/privacy: no secrets; no prompt logging; no surprise network calls
 * Tests: updated/added as needed; a11y checks included for UI changes

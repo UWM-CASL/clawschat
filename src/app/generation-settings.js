@@ -146,7 +146,7 @@ export function createGenerationSettingsController({
   }
 
   function getBackendPreference() {
-    return backendSelect?.value || 'webgpu';
+    return backendSelect?.value || 'default';
   }
 
   function getBaseModelGenerationLimits(modelId) {
@@ -380,8 +380,7 @@ export function createGenerationSettingsController({
   function renderGenerationSettingsHelpText(config, limits) {
     const normalizedModelId = getSelectedModelId();
     const baseLimits = getBaseModelGenerationLimits(normalizedModelId);
-    const currentBackend = String(getBackendPreference()).trim().toLowerCase();
-    const backendLabel = currentBackend === 'cpu' ? 'CPU' : 'WebGPU';
+    const backendLabel = 'browser default';
     const hasReducedTokenLimits =
       Number(limits?.maxContextTokens) < Number(baseLimits?.maxContextTokens) ||
       Number(limits?.maxOutputTokens) < Number(baseLimits?.maxOutputTokens);

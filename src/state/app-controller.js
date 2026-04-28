@@ -60,13 +60,13 @@ function formatGenerationFailureMessage(rawMessage, backendLabel = '') {
     typeof backendLabel === 'string' && backendLabel.trim() ? backendLabel.trim().toUpperCase() : '';
   if (isFatalWebGpuDeviceLostError(normalizedMessage, backendLabel)) {
     const backendText = normalizedBackendLabel ? ` on ${normalizedBackendLabel}` : ' on WEBGPU';
-    return `WebGPU lost the active graphics device during generation${backendText}. The model was unloaded so the next request can recover cleanly. Retry the prompt, switch to CPU mode, or reload the page if this keeps happening. (${normalizedMessage})`;
+    return `WebGPU lost the active graphics device during generation${backendText}. The model was unloaded so the next request can recover cleanly. Retry the prompt or reload the page if this keeps happening. (${normalizedMessage})`;
   }
   if (!isFatalGenerationMemoryError(normalizedMessage)) {
     return normalizedMessage;
   }
   const backendText = normalizedBackendLabel ? ` on ${normalizedBackendLabel}` : '';
-  return `Browser memory was exhausted during generation${backendText}. Lower Context size, choose a smaller model, or use WebGPU if available. (${normalizedMessage})`;
+  return `Browser memory was exhausted during generation${backendText}. Lower Context size or choose a smaller model. (${normalizedMessage})`;
 }
 
 function buildFailedToolResultText(toolCall, error) {
@@ -299,7 +299,7 @@ export function createAppController(dependencies) {
       isFatalMemoryError
         ? 'Generation failed. Model unloaded after running out of memory.'
         : isFatalWebGpuError
-          ? 'Generation failed. Model unloaded after WebGPU device loss. Retry or switch to CPU.'
+          ? 'Generation failed. Model unloaded after WebGPU device loss. Retry or reload the page.'
         : 'Generation failed'
     );
     logVisibleTurnRawOutputIfNeeded(modelMessage, visibleModelTurnMessage);

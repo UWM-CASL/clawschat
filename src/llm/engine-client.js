@@ -6,60 +6,6 @@ const CPU_FIRST_TOKEN_INACTIVITY_TIMEOUT_MS = 300000;
 const ENABLE_ENGINE_DEBUG_CONSOLE_LOGS = false;
 const ENABLE_ENGINE_WARN_CONSOLE_LOGS = false;
 
-function toErrorMessage(value) {
-  if (value instanceof Error) {
-    return value.message;
-  }
-  return String(value || 'Unknown error');
-}
-
-function normalizeInitBackendPreference(preference) {
-  if (preference === 'cpu' || preference === 'wasm') {
-    return 'cpu';
-  }
-  return 'webgpu';
-}
-
-function isWebGpuDeviceLostGenerationError(message, { backend = '', backendDevice = '' } = {}) {
-  const normalizedMessage = String(message || '');
-  const normalizedBackend = typeof backend === 'string' ? backend.trim().toLowerCase() : '';
-  const normalizedBackendDevice =
-    typeof backendDevice === 'string' ? backendDevice.trim().toLowerCase() : '';
-  const referencesWebGpuRuntime =
-    normalizedBackend === 'webgpu' ||
-    normalizedBackendDevice === 'webgpu' ||
-    /\bwebgpu\b/i.test(normalizedMessage) ||
-    /\bwgpu::/i.test(normalizedMessage) ||
-    /\bGPUBuffer\b/i.test(normalizedMessage) ||
-    /\bmapAsync\b/i.test(normalizedMessage);
-  return referencesWebGpuRuntime && /\bdevice\b(?:[^\n.]{0,40}\b)?lost\b/i.test(normalizedMessage);
-}
-
-function isRecoverableWebGpuGenerationError(message, { backend = '', backendDevice = '' } = {}) {
-  const normalizedMessage = String(message || '');
-  const normalizedBackend = typeof backend === 'string' ? backend.trim().toLowerCase() : '';
-  const normalizedBackendDevice =
-    typeof backendDevice === 'string' ? backendDevice.trim().toLowerCase() : '';
-  const referencesWebGpuRuntime =
-    normalizedBackend === 'webgpu' ||
-    normalizedBackendDevice === 'webgpu' ||
-    /\bwebgpu\b/i.test(normalizedMessage) ||
-    /\bwgpu::/i.test(normalizedMessage) ||
-    /\bGPUBuffer\b/i.test(normalizedMessage) ||
-    /\bmapAsync\b/i.test(normalizedMessage) ||
-    /\/webgpu\//i.test(normalizedMessage);
-  if (!referencesWebGpuRuntime) {
-    return false;
-  }
-  return (
-    isWebGpuDeviceLostGenerationError(normalizedMessage, { backend, backendDevice }) ||
-    /failed to call OrtRun\(\)/i.test(normalizedMessage) ||
-    /Failed to download data from buffer/i.test(normalizedMessage) ||
-    /\bGPU validation\b/i.test(normalizedMessage) ||
-    /\bValidationError\b/i.test(normalizedMessage)
-  );
-}
-
 function logEngineDebug(event, details = undefined) {
   if (!ENABLE_ENGINE_DEBUG_CONSOLE_LOGS) {
     return;
@@ -123,7 +69,7 @@ export class LLMEngineClient {
     this.config = {
       engineType: DEFAULT_ENGINE_TYPE,
       modelId: 'huggingworld/gemma-4-E2B-it-ONNX',
-      backendPreference: 'webgpu',
+      backendPreference: 'default',
       runtime: {},
       generationConfig: {
         maxOutputTokens: 1024,
@@ -139,7 +85,7 @@ export class LLMEngineClient {
     this.onProgress = (_progress) => {};
   }
 
-  async initialize(config = {}, { attemptedCpuFallback = false } = {}) {
+  async initialize(config = {}) {
     const engineType = normalizeEngineType(config.engineType || this.config.engineType);
     const modelId = config.modelId || this.config.modelId;
     logEngineDebug('initialize-request', {
@@ -187,24 +133,6 @@ export class LLMEngineClient {
         engineType: this.loadedEngineType,
       });
       return result;
-    } catch (error) {
-      if (this.#shouldRetryInitOnCpu(error, this.config, { attemptedCpuFallback })) {
-        logEngineWarn('init-webgpu-retry-cpu', {
-          modelId,
-          engineType,
-          message: toErrorMessage(error),
-        });
-        this.onStatus('WebGPU initialization failed. Retrying on CPU...');
-        this.dispose();
-        return await this.initialize(
-          {
-            ...this.config,
-            backendPreference: 'cpu',
-          },
-          { attemptedCpuFallback: true }
-        );
-      }
-      throw error;
     } finally {
       this.pendingInit = null;
       this.pendingInitConfigKey = '';
@@ -248,8 +176,6 @@ export class LLMEngineClient {
       onError: handlers.onError,
       onCancel: handlers.onCancel,
       receivedAnyTokens: false,
-      attemptedCpuRecovery: false,
-      cancelRequested: false,
     };
     logEngineDebug('generate-request', {
       requestId,
@@ -284,7 +210,6 @@ export class LLMEngineClient {
     if (!this.pendingGeneration) {
       return;
     }
-    this.pendingGeneration.cancelRequested = true;
     if (!this.worker) {
       this.#cancelPendingGenerationWithoutWorker();
       return;
@@ -484,8 +409,6 @@ export class LLMEngineClient {
           this.#pendingCancelReject(new Error(data.payload.message));
         }
         this.pendingGeneration = null;
-      } else if (this.#shouldAttemptCpuRecovery(data.payload?.message)) {
-        void this.#retryGenerationOnCpuAfterWebGpuFailure(data.payload?.message || '');
       } else {
         this.pendingGeneration.onError(data.payload.message);
         this.pendingGeneration = null;
@@ -629,118 +552,6 @@ export class LLMEngineClient {
         generationConfig: pendingGeneration.generationConfig,
       },
     };
-  }
-
-  #shouldRetryInitOnCpu(error, config, { attemptedCpuFallback = false } = {}) {
-    if (attemptedCpuFallback) {
-      return false;
-    }
-    if (normalizeInitBackendPreference(config?.backendPreference) !== 'webgpu') {
-      return false;
-    }
-    if (
-      config?.runtime?.allowBackendFallback === false ||
-      config?.runtime?.requiresWebGpu === true
-    ) {
-      return false;
-    }
-    const message = toErrorMessage(error);
-    return (
-      /\bWEBGPU\b/i.test(message) ||
-      /\bWebGPU\b/i.test(message) ||
-      /No usable WebGPU adapter/i.test(message) ||
-      /WebGPU unavailable/i.test(message)
-    );
-  }
-
-  #shouldAttemptCpuRecovery(message) {
-    if (!this.pendingGeneration) {
-      return false;
-    }
-    if (this.pendingGeneration.attemptedCpuRecovery || this.pendingGeneration.receivedAnyTokens) {
-      return false;
-    }
-    if (this.pendingGeneration.requestId === this.pendingCancelRequestId) {
-      return false;
-    }
-    if (
-      this.config?.runtime?.requiresWebGpu === true ||
-      this.pendingGeneration.runtime?.requiresWebGpu === true
-    ) {
-      return false;
-    }
-    return isRecoverableWebGpuGenerationError(message, {
-      backend: this.loadedBackend,
-      backendDevice: this.loadedBackendDevice,
-    });
-  }
-
-  async #retryGenerationOnCpuAfterWebGpuFailure(originalMessage) {
-    const pendingGeneration = this.pendingGeneration;
-    if (!pendingGeneration) {
-      return;
-    }
-    pendingGeneration.attemptedCpuRecovery = true;
-    logEngineWarn('generate-webgpu-retry-cpu', {
-      requestId: pendingGeneration.requestId,
-      loadedModelId: this.loadedModelId,
-      loadedBackend: this.loadedBackend,
-      loadedBackendDevice: this.loadedBackendDevice,
-      message: originalMessage,
-    });
-    const isDeviceLost = isWebGpuDeviceLostGenerationError(originalMessage, {
-      backend: this.loadedBackend,
-      backendDevice: this.loadedBackendDevice,
-    });
-    this.onStatus(
-      isDeviceLost
-        ? 'WebGPU device lost. Retrying on CPU...'
-        : 'WebGPU generation failed. Retrying on CPU...'
-    );
-    this.#discardWorkerForRecovery();
-    try {
-      await this.initialize({
-        modelId: this.config.modelId,
-        engineType: this.config.engineType,
-        backendPreference: 'cpu',
-        runtime: pendingGeneration.runtime,
-        generationConfig: pendingGeneration.generationConfig,
-      });
-      if (
-        this.pendingGeneration !== pendingGeneration ||
-        pendingGeneration.cancelRequested ||
-        !this.worker
-      ) {
-        return;
-      }
-      this.#armGenerationWatchdog({ announce: true });
-      this.worker.postMessage(this.#buildGenerateMessage(pendingGeneration));
-    } catch (error) {
-      if (this.pendingGeneration !== pendingGeneration) {
-        return;
-      }
-      const recoveryMessage = isDeviceLost
-        ? `WebGPU device lost and automatic CPU recovery failed. Original error: ${originalMessage} Retry error: ${toErrorMessage(error)}`
-        : `WebGPU generation failed and automatic CPU recovery failed. Original error: ${originalMessage} Retry error: ${toErrorMessage(error)}`;
-      pendingGeneration.onError(recoveryMessage);
-      this.pendingGeneration = null;
-    }
-  }
-
-  #discardWorkerForRecovery() {
-    if (this.worker) {
-      this.worker.terminate();
-      this.worker = null;
-    }
-    this.pendingInit = null;
-    this.pendingInitConfigKey = '';
-    this.loadedModelId = null;
-    this.loadedBackend = null;
-    this.loadedBackendDevice = null;
-    this.loadedEngineType = null;
-    this.loadedInitConfigKey = '';
-    this.engineDescriptor = null;
-    this.#clearPendingInitState();
   }
 
   #getInitConfigKey(config) {

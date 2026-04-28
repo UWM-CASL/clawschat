@@ -185,7 +185,7 @@ describe('app-controller', () => {
 
     const modelMessage = conversation.messageNodes.find((message) => message.role === 'model');
     expect(modelMessage?.text).toContain('Browser memory was exhausted during generation on CPU.');
-    expect(modelMessage?.text).toContain('Lower Context size, choose a smaller model');
+    expect(modelMessage?.text).toContain('Lower Context size or choose a smaller model');
     expect(modelMessage?.isResponseComplete).toBe(true);
     expect(harness.engine.dispose).toHaveBeenCalledTimes(1);
     expect(harness.state.modelReady).toBe(false);
@@ -226,14 +226,14 @@ describe('app-controller', () => {
       'WebGPU lost the active graphics device during generation on WEBGPU.'
     );
     expect(modelMessage?.text).toContain(
-      'Retry the prompt, switch to CPU mode, or reload the page if this keeps happening.'
+      'Retry the prompt or reload the page if this keeps happening.'
     );
     expect(modelMessage?.isResponseComplete).toBe(true);
     expect(harness.engine.dispose).toHaveBeenCalledTimes(1);
     expect(harness.state.modelReady).toBe(false);
     expect(harness.state.isGenerating).toBe(false);
     expect(harness.callLog).toContain(
-      'status:Generation failed. Model unloaded after WebGPU device loss. Retry or switch to CPU.'
+      'status:Generation failed. Model unloaded after WebGPU device loss. Retry or reload the page.'
     );
     expect(harness.callLog).toContain(
       'debug:Disposed current model worker after WebGPU device loss.'

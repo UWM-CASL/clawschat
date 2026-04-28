@@ -384,38 +384,40 @@ describe('llm.worker multimodal prompt budgeting', () => {
 });
 
 describe('llm.worker backend selection', () => {
-  test('webgpu preference attempts only the webgpu backend inside the worker', () => {
-    expect(getBackendAttemptOrder('webgpu', {})).toEqual(['webgpu']);
+  test('webgpu preference is normalized to the browser default attempt', () => {
+    expect(getBackendAttemptOrder('webgpu', {})).toEqual(['default']);
   });
 
-  test('legacy auto preference maps to a webgpu-only worker attempt', () => {
-    expect(getBackendAttemptOrder('auto', {})).toEqual(['webgpu']);
+  test('legacy auto preference is normalized to the browser default attempt', () => {
+    expect(getBackendAttemptOrder('auto', {})).toEqual(['default']);
   });
 
-  test('can disable automatic cpu fallback for webgpu-first models with separate packages', () => {
-    expect(getBackendAttemptOrder('webgpu', { allowBackendFallback: false })).toEqual(['webgpu']);
+  test('fallback flags do not change the browser default attempt', () => {
+    expect(getBackendAttemptOrder('webgpu', { allowBackendFallback: false })).toEqual([
+      'default',
+    ]);
   });
 
-  test('cpu preference maps directly to the browser wasm backend', () => {
-    expect(getBackendAttemptOrder('cpu', {})).toEqual(['wasm']);
+  test('cpu preference is normalized to the browser default attempt', () => {
+    expect(getBackendAttemptOrder('cpu', {})).toEqual(['default']);
   });
 
-  test('labels the browser wasm backend as cpu for current and legacy cpu preferences', () => {
-    expect(resolveBackendLabel('cpu', 'wasm')).toBe('cpu');
+  test('labels the browser default attempt as cpu for status purposes', () => {
+    expect(resolveBackendLabel('default', 'default')).toBe('cpu');
+    expect(resolveBackendLabel('cpu', 'default')).toBe('cpu');
+  });
+
+  test('labels legacy explicit backends as cpu after device management is removed', () => {
+    expect(resolveBackendLabel('webgpu', 'webgpu')).toBe('cpu');
     expect(resolveBackendLabel('wasm', 'wasm')).toBe('cpu');
   });
 
-  test('labels webgpu execution consistently for current and legacy webgpu preferences', () => {
-    expect(resolveBackendLabel('webgpu', 'webgpu')).toBe('webgpu');
-    expect(resolveBackendLabel('auto', 'webgpu')).toBe('webgpu');
+  test('webgpu-required model flags are ignored by backend attempt ordering', () => {
+    expect(getBackendAttemptOrder('cpu', { requiresWebGpu: true })).toEqual(['default']);
   });
 
-  test('webgpu-required models reject cpu-only preference', () => {
-    expect(getBackendAttemptOrder('cpu', { requiresWebGpu: true })).toEqual([]);
-  });
-
-  test('webgpu-required models keep legacy auto mapped to webgpu-only attempts', () => {
-    expect(getBackendAttemptOrder('auto', { requiresWebGpu: true })).toEqual(['webgpu']);
+  test('legacy auto still uses the browser default attempt for old webgpu-required config', () => {
+    expect(getBackendAttemptOrder('auto', { requiresWebGpu: true })).toEqual(['default']);
   });
 });
 

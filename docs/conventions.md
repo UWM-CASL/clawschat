@@ -73,7 +73,7 @@ Settings and panels should follow the existing pattern:
 - Engine drivers are selected from normalized model config.
 - Worker messages must remain explicit and cancellable.
 - Runtime-specific behavior belongs in the relevant driver or worker, not in generic UI code.
-- Automatic fallback behavior must be documented and tested.
+- Runtime fallback behavior must be documented and tested when it exists.
 - A generation path that streams must support stop/cancel.
 
 ## Tooling Conventions
@@ -100,7 +100,7 @@ Errors should be visible and recoverable where possible.
 Examples of useful recovery guidance:
 
 - retry the operation
-- switch to CPU mode
+- choose a smaller model or lower context size
 - clear downloaded model files
 - reduce attachment size
 - remove a proxy or provider configuration
@@ -145,7 +145,7 @@ Update docs when changing:
 - commands or scripts
 - deployment assumptions
 - model catalog behavior
-- engine selection or fallback
+- engine selection, runtime defaults, or fallback
 - storage shape
 - user-facing settings
 - tool syntax
@@ -168,4 +168,3 @@ Before adding one, be able to answer:
 - When should it be simplified or removed?
 
 Do not add registries, factories, classes, or event systems because they look more engineered. Add them only when they make future change safer.
-

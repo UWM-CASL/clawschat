@@ -157,7 +157,7 @@ function postPrefillStatus(generationState) {
   const backendLabel = getGenerationBackendLabel();
   postGenerationPhaseStatus(
     generationState,
-    loadedBackendDevice === 'wasm'
+    backendInUse === 'cpu' || loadedBackendDevice === 'wasm' || loadedBackendDevice === 'default'
       ? 'Running CPU prompt prefill. Waiting for the first token...'
       : `Running prompt prefill (${backendLabel})...`
   );
@@ -397,35 +397,22 @@ async function ensureMultimodalProcessor(modelId, runtime = {}, progressCallback
 }
 
 function getBackendAttemptOrder(preference, runtimeConfig = {}) {
-  const normalizedPreference = normalizeBackendPreference(preference);
-  const runtime = normalizeRuntimeConfig(runtimeConfig);
-  if (runtime.requiresWebGpu) {
-    if (normalizedPreference === 'cpu') {
-      return [];
-    }
-    return ['webgpu'];
-  }
-  if (normalizedPreference === 'cpu') {
-    return ['wasm'];
-  }
-  return ['webgpu'];
+  void preference;
+  void runtimeConfig;
+  return ['default'];
 }
 
 function normalizeBackendPreference(preference) {
-  if (preference === 'cpu' || preference === 'wasm') {
-    return 'cpu';
-  }
-  return 'webgpu';
+  void preference;
+  return 'default';
 }
 
 function resolveBackendLabel(preference, backend) {
-  if (backend === 'webgpu') {
-    return 'webgpu';
-  }
+  void preference;
   if (backend === 'wasm' || backend === 'default') {
     return 'cpu';
   }
-  return normalizeBackendPreference(preference);
+  return 'cpu';
 }
 
 export { resolveBackendLabel };
@@ -455,57 +442,6 @@ function extractErrorMessage(error) {
     // ignore serialization failures and use fallback below
   }
   return 'Unknown initialization error';
-}
-
-function isMemoryAllocationError(rawMessage) {
-  const normalizedMessage = String(rawMessage || '');
-  return (
-    /\bstd::bad_alloc\b/i.test(normalizedMessage) ||
-    /\bout of memory\b/i.test(normalizedMessage) ||
-    /ERROR_CODE:\s*6/i.test(normalizedMessage)
-  );
-}
-
-function getManualCpuFallbackSuffix() {
-  return ' (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)';
-}
-
-function formatWebGpuInitializationError(error) {
-  const rawMessage = extractErrorMessage(error);
-  if (/^\d+$/.test(rawMessage)) {
-    return `WebGPU initialization failed (${rawMessage}). Confirm WebGPU is enabled and that this browser/device exposes a usable adapter.`;
-  }
-  if (isMemoryAllocationError(rawMessage)) {
-    return `WebGPU could not allocate enough memory to create a session. Close other GPU-heavy tabs or apps and retry. (${rawMessage})`;
-  }
-  return rawMessage;
-}
-
-async function probeWebGpuAvailability(navigatorGpu) {
-  if (!(navigatorGpu && typeof navigatorGpu.requestAdapter === 'function')) {
-    return {
-      available: false,
-      reason: 'WebGPU unavailable in this browser.',
-    };
-  }
-  try {
-    const adapter = await navigatorGpu.requestAdapter();
-    if (!adapter) {
-      return {
-        available: false,
-        reason: 'No usable WebGPU adapter was found.',
-      };
-    }
-    return {
-      available: true,
-      reason: '',
-    };
-  } catch (error) {
-    return {
-      available: false,
-      reason: formatWebGpuInitializationError(error),
-    };
-  }
 }
 
 function normalizeRuntimeDtype(rawDtype) {
@@ -554,9 +490,7 @@ function normalizeRuntimeConfig(rawRuntime) {
       : rawRuntime?.enableThinking === false
         ? false
         : null;
-  const requiresWebGpu = rawRuntime?.requiresWebGpu === true;
   const multimodalGeneration = rawRuntime?.multimodalGeneration === true;
-  const allowBackendFallback = rawRuntime?.allowBackendFallback !== false;
   const imageInput = rawRuntime?.imageInput === true;
   const audioInput = rawRuntime?.audioInput === true;
   const videoInput = rawRuntime?.videoInput === true;
@@ -583,9 +517,7 @@ function normalizeRuntimeConfig(rawRuntime) {
     ...(dtypes ? { dtypes } : {}),
     ...(revision ? { revision } : {}),
     ...(enableThinking === true || enableThinking === false ? { enableThinking } : {}),
-    ...(requiresWebGpu ? { requiresWebGpu: true } : {}),
     ...(multimodalGeneration ? { multimodalGeneration: true } : {}),
-    ...(allowBackendFallback === false ? { allowBackendFallback: false } : {}),
     ...(imageInput ? { imageInput: true } : {}),
     ...(audioInput ? { audioInput: true } : {}),
     ...(videoInput ? { videoInput: true } : {}),
@@ -597,9 +529,9 @@ function normalizeRuntimeConfig(rawRuntime) {
   };
 }
 
-function resolveRuntimeDtype(runtime = {}, backend = 'webgpu') {
-  const backendKey = backend === 'webgpu' ? 'webgpu' : 'cpu';
-  return normalizeRuntimeDtype(runtime?.dtypes?.[backendKey] ?? runtime?.dtype);
+function resolveRuntimeDtype(runtime = {}, backend = 'default') {
+  void backend;
+  return normalizeRuntimeDtype(runtime?.dtypes?.cpu ?? runtime?.dtype);
 }
 
 function buildRuntimeConfigKey(runtime = {}) {
@@ -1521,17 +1453,13 @@ function promptContainsStructuredMedia(prompt) {
 
 async function initialize(payload) {
   const modelId = payload.modelId || 'huggingworld/gemma-4-E2B-it-ONNX';
-  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'webgpu');
+  const backendPreference = normalizeBackendPreference(payload.backendPreference || 'default');
   generationConfig = normalizeGenerationConfig(payload.generationConfig);
   const runtime = normalizeRuntimeConfig(payload.runtime);
-  let attempts = getBackendAttemptOrder(backendPreference, runtime);
+  const attempts = getBackendAttemptOrder(backendPreference, runtime);
   const errors = [];
   const navigatorLike = /** @type {any} */ (
     typeof navigator !== 'undefined' ? navigator : undefined
-  );
-  const navigatorGpu = navigatorLike?.gpu;
-  const hasNavigatorGpuApi = Boolean(
-    navigatorGpu && typeof navigatorGpu.requestAdapter === 'function'
   );
   logWorkerDebug('init-start', {
     modelId,
@@ -1544,59 +1472,8 @@ async function initialize(payload) {
         : '(unknown)',
     hasSharedArrayBuffer: typeof globalThis.SharedArrayBuffer !== 'undefined',
     crossOriginIsolated: globalThis.crossOriginIsolated === true,
-    hasNavigatorGpuApi,
     attempts: [...attempts],
   });
-  const webGpuProbe = attempts.includes('webgpu')
-    ? await probeWebGpuAvailability(navigatorGpu)
-    : { available: false, reason: '' };
-  logWorkerDebug('webgpu-probe', webGpuProbe);
-
-  if (runtime.requiresWebGpu && attempts.length === 0) {
-    self.postMessage({
-      type: 'init-error',
-      payload: {
-        message: `Failed to initialize model. ${modelId} requires WebGPU. Switch to WebGPU mode.`,
-      },
-    });
-    postProgress({ percent: 0, message: 'Model load failed.' });
-    postStatus('Error initializing model');
-    return;
-  }
-
-  if (runtime.requiresWebGpu) {
-    if (webGpuProbe.reason === 'WebGPU unavailable in this browser.') {
-      self.postMessage({
-        type: 'init-error',
-        payload: {
-          message: `Failed to initialize model. ${modelId} requires WebGPU, but no WebGPU adapter API is available in this browser.`,
-        },
-      });
-      postProgress({ percent: 0, message: 'Model load failed.' });
-      postStatus('Error initializing model');
-      return;
-    }
-    if (!webGpuProbe.available) {
-      const message =
-        webGpuProbe.reason === 'No usable WebGPU adapter was found.'
-          ? `Failed to initialize model. ${modelId} requires WebGPU, but no usable WebGPU adapter was found.`
-          : `Failed to initialize model. ${webGpuProbe.reason}`;
-      self.postMessage({
-        type: 'init-error',
-        payload: {
-          message,
-        },
-      });
-      postProgress({ percent: 0, message: 'Model load failed.' });
-      postStatus('Error initializing model');
-      return;
-    }
-  } else if (!webGpuProbe.available) {
-    const fallbackSuffix =
-      runtime.allowBackendFallback === false ? getManualCpuFallbackSuffix() : '';
-    errors.push(`WEBGPU: ${webGpuProbe.reason}${fallbackSuffix}`);
-    attempts = attempts.filter((backend) => backend !== 'webgpu');
-  }
   logWorkerDebug('init-attempt-order', {
     modelId,
     backendPreference,
@@ -1660,7 +1537,6 @@ async function initialize(payload) {
       postStatus(`Loading ${modelId} with ${backendStatusLabel}...`);
       postProgress({ percent: 5, message: `Preparing ${backendStatusLabel} backend...` });
       const modelLoadOptions = {
-        ...(backend !== 'default' ? { device: backend } : {}),
         ...(runtimeDtype ? { dtype: runtimeDtype } : {}),
         ...(runtime.revision ? { revision: runtime.revision } : {}),
         ...(runtime.useExternalDataFormat
@@ -1746,8 +1622,7 @@ async function initialize(payload) {
       return;
     } catch (error) {
       await disposeLoadedModelResources();
-      const rawMessage =
-        backend === 'webgpu' ? formatWebGpuInitializationError(error) : extractErrorMessage(error);
+      const rawMessage = extractErrorMessage(error);
       logWorkerWarn('init-backend-failed', {
         modelId,
         backend,
@@ -1759,11 +1634,7 @@ async function initialize(payload) {
           `${backend.toUpperCase()}: ${rawMessage} (This model appears gated or blocked for direct browser access. Use a public model like huggingworld/gemma-4-E2B-it-ONNX, or self-host pinned model files for static delivery.)`
         );
       } else {
-        const fallbackSuffix =
-          backend === 'webgpu' && runtime.allowBackendFallback === false
-            ? getManualCpuFallbackSuffix()
-            : '';
-        errors.push(`${backend.toUpperCase()}: ${rawMessage}${fallbackSuffix}`);
+        errors.push(`${backend.toUpperCase()}: ${rawMessage}`);
       }
     }
   }
@@ -1809,7 +1680,7 @@ async function generate(payload) {
   }
 
   postStatus(
-    loadedBackendDevice === 'wasm'
+    backendInUse === 'cpu' || loadedBackendDevice === 'wasm' || loadedBackendDevice === 'default'
       ? `Generating (${backendInUse.toUpperCase()}). First response may take several minutes on CPU...`
       : `Generating (${backendInUse.toUpperCase()})...`
   );

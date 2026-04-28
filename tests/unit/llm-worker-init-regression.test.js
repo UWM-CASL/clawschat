@@ -111,10 +111,11 @@ describe('llm.worker init regression', () => {
       type: 'init-success',
       payload: {
         backend: 'cpu',
-        backendDevice: 'wasm',
+        backendDevice: 'default',
         modelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX',
       },
     });
+    expect(textModelFactory.mock.calls[0]?.[1]).not.toHaveProperty('device');
 
     workerSelf.postMessage.mockClear();
 
@@ -133,13 +134,13 @@ describe('llm.worker init regression', () => {
       type: 'init-success',
       payload: {
         backend: 'cpu',
-        backendDevice: 'wasm',
+        backendDevice: 'default',
         modelId: 'onnx-community/Llama-3.2-1B-Instruct-ONNX',
       },
     });
   });
 
-  test('surfaces a WebGPU init error before text model loading when no usable adapter exists', async () => {
+  test('ignores WebGPU preference and loads the text model without a device option', async () => {
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
       value: {
@@ -171,17 +172,24 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(tokenizerFactory).not.toHaveBeenCalled();
-    expect(textModelFactory).not.toHaveBeenCalled();
+    expect(tokenizerFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory.mock.calls[0]?.[1]).toMatchObject({
+      dtype: 'q4',
+      use_external_data_format: true,
+    });
+    expect(textModelFactory.mock.calls[0]?.[1]).not.toHaveProperty('device');
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
-      type: 'init-error',
+      type: 'init-success',
       payload: {
-        message: 'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found.',
+        backend: 'cpu',
+        backendDevice: 'default',
+        modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       },
     });
   });
 
-  test('surfaces a WebGPU init error before multimodal Gemma model loading when no usable adapter exists', async () => {
+  test('ignores WebGPU preference and loads multimodal Gemma without a device option', async () => {
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
       value: {
@@ -214,16 +222,23 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(multimodalFactory).not.toHaveBeenCalled();
+    expect(multimodalFactory).toHaveBeenCalledTimes(1);
+    expect(multimodalFactory.mock.calls[0]?.[1]).toMatchObject({
+      dtype: 'q4f16',
+      use_external_data_format: true,
+    });
+    expect(multimodalFactory.mock.calls[0]?.[1]).not.toHaveProperty('device');
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
-      type: 'init-error',
+      type: 'init-success',
       payload: {
-        message: 'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found.',
+        backend: 'cpu',
+        backendDevice: 'default',
+        modelId: 'huggingworld/gemma-4-E2B-it-ONNX',
       },
     });
   });
 
-  test('does not auto-fallback to cpu for Bonsai 8B when WebGPU has no usable adapter', async () => {
+  test('ignores fallback flags and uses the browser default attempt for Bonsai 8B', async () => {
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
       value: {
@@ -255,13 +270,18 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(tokenizerFactory).not.toHaveBeenCalled();
-    expect(textModelFactory).not.toHaveBeenCalled();
+    expect(tokenizerFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory.mock.calls[0]?.[1]).toMatchObject({
+      dtype: 'q4',
+    });
+    expect(textModelFactory.mock.calls[0]?.[1]).not.toHaveProperty('device');
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
-      type: 'init-error',
+      type: 'init-success',
       payload: {
-        message:
-          'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found. (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)',
+        backend: 'cpu',
+        backendDevice: 'default',
+        modelId: 'onnx-community/Bonsai-8B-ONNX',
       },
     });
   });
@@ -305,12 +325,12 @@ describe('llm.worker init regression', () => {
       type: 'init-error',
       payload: {
         message:
-          "Failed to initialize model. WEBGPU: WebGPU could not allocate enough memory to create a session. Close other GPU-heavy tabs or apps and retry. (Can't create a session. ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc) (Automatic CPU fallback is disabled for this model. Switch to CPU mode manually if you want to try the CPU version of this model.)",
+          "Failed to initialize model. DEFAULT: Can't create a session. ERROR_CODE: 6, ERROR_MESSAGE: std::bad_alloc",
       },
     });
   });
 
-  test('does not attempt any cpu worker init after a failed webgpu probe', async () => {
+  test('loads through the browser default attempt even when navigator.gpu is absent', async () => {
     await import('../../src/workers/llm.worker.js');
     const workerSelf = /** @type {any} */ (globalThis.self);
 
@@ -333,12 +353,19 @@ describe('llm.worker init regression', () => {
       })
     );
 
-    expect(tokenizerFactory).not.toHaveBeenCalled();
-    expect(textModelFactory).not.toHaveBeenCalled();
+    expect(tokenizerFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory).toHaveBeenCalledTimes(1);
+    expect(textModelFactory.mock.calls[0]?.[1]).toMatchObject({
+      dtype: 'q4',
+      use_external_data_format: true,
+    });
+    expect(textModelFactory.mock.calls[0]?.[1]).not.toHaveProperty('device');
     expect(workerSelf.postMessage).toHaveBeenCalledWith({
-      type: 'init-error',
+      type: 'init-success',
       payload: {
-        message: 'Failed to initialize model. WEBGPU: WebGPU unavailable in this browser.',
+        backend: 'cpu',
+        backendDevice: 'default',
+        modelId: 'onnx-community/Llama-3.2-3B-Instruct-onnx-web',
       },
     });
   });

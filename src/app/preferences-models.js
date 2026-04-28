@@ -3,7 +3,6 @@ import {
   DEFAULT_MODEL,
   MODEL_OPTIONS,
   MODEL_OPTIONS_BY_ID,
-  browserSupportsWebGpu,
   getFirstAvailableModelId,
   getModelEngineType,
   getModelGenerationLimits,
@@ -16,7 +15,7 @@ import {
   sanitizeGenerationConfig,
 } from '../config/generation-config.js';
 
-const BACKEND_FALLBACK = 'webgpu';
+const BACKEND_FALLBACK = 'default';
 const CPU_THREAD_AUTO = 0;
 const DEFAULT_CPU_THREAD_MAX = 32;
 const DEFAULT_LANGUAGE_TAG_COUNT = 4;
@@ -96,7 +95,6 @@ function shouldShowLanguageOverflow(model, visibleTagCount = DEFAULT_LANGUAGE_TA
  * @param {string} options.backendStorageKey
  * @param {string} [options.cpuThreadsStorageKey]
  * @param {Set<string>} [options.supportedBackendPreferences]
- * @param {string} [options.webGpuRequiredModelSuffix]
  * @param {HTMLSelectElement | null} [options.modelSelect]
  * @param {HTMLElement | null} [options.modelCardList]
  * @param {HTMLSelectElement | null} [options.backendSelect]
@@ -106,7 +104,6 @@ function shouldShowLanguageOverflow(model, visibleTagCount = DEFAULT_LANGUAGE_TA
  * @param {(modelId: string, resetQueuedValues: boolean) => void} options.syncGenerationSettingsFromModel
  * @param {(modelId: string, generationConfig: any) => void} options.persistGenerationConfigForModel
  * @param {(message: string) => void} options.setStatus
- * @param {(message: string) => void} options.appendDebug
  * @param {() => void} [options.onSelectedModelCardChange]
  */
 export function createModelPreferencesController({
@@ -118,7 +115,6 @@ export function createModelPreferencesController({
   backendStorageKey,
   cpuThreadsStorageKey = '',
   supportedBackendPreferences = new Set([BACKEND_FALLBACK]),
-  webGpuRequiredModelSuffix = '',
   modelSelect,
   modelCardList,
   backendSelect,
@@ -128,7 +124,6 @@ export function createModelPreferencesController({
   syncGenerationSettingsFromModel,
   persistGenerationConfigForModel,
   setStatus,
-  appendDebug,
   onSelectedModelCardChange,
 }) {
   const supportedBackendPreferenceSet =
@@ -179,33 +174,13 @@ export function createModelPreferencesController({
   }
 
   function maybeForceCpuBackendForModel(modelId) {
-    if (!(backendSelect instanceof HTMLSelectElement)) {
-      return false;
-    }
-    const normalizedModelId = normalizeModelId(modelId);
-    const model = MODEL_OPTIONS_BY_ID.get(normalizedModelId);
-    if (!isCpuOnlyModel(model)) {
-      return false;
-    }
-    if (backendSelect.value === 'cpu') {
-      return false;
-    }
-    backendSelect.value = 'cpu';
-    return true;
-  }
-
-  function getSelectedCpuThreadsPreference() {
-    return normalizeCpuThreadsPreference(cpuThreadsInput?.value ?? CPU_THREAD_AUTO);
+    void modelId;
+    return false;
   }
 
   function formatBackendPreferenceLabel(value) {
-    if (value === 'webgpu') {
-      return 'WebGPU';
-    }
-    if (value === 'cpu') {
-      return 'CPU';
-    }
-    return 'WebGPU';
+    void value;
+    return 'browser default';
   }
 
   function getStoredCpuThreadsPreference() {
@@ -225,10 +200,7 @@ export function createModelPreferencesController({
   }
 
   function getWebGpuAvailability() {
-    if (appState.webGpuProbeCompleted) {
-      return appState.webGpuAdapterAvailable;
-    }
-    return browserSupportsWebGpu(navigatorRef);
+    return true;
   }
 
   function isVisibleModelId(modelId) {
@@ -498,7 +470,7 @@ export function createModelPreferencesController({
     } else if (isCpuOnlyModel(model)) {
       const cpuOnlyNote = documentRef.createElement('p');
       cpuOnlyNote.className = 'model-card-note';
-      cpuOnlyNote.textContent = 'Runs in CPU mode only in this app.';
+      cpuOnlyNote.textContent = 'Runs locally through the bundled wllama runtime.';
       content.appendChild(cpuOnlyNote);
     } else if (reducedGenerationLimits) {
       const generationSafetyNote = documentRef.createElement('p');
@@ -507,11 +479,6 @@ export function createModelPreferencesController({
         selectedBackend
       )} token limits in this app to avoid browser memory exhaustion.`;
       content.appendChild(generationSafetyNote);
-    } else if (model.runtime?.requiresWebGpu) {
-      const requirement = documentRef.createElement('p');
-      requirement.className = 'model-card-note';
-      requirement.textContent = 'This model requires WebGPU.';
-      content.appendChild(requirement);
     }
     selectButton.appendChild(content);
 
@@ -614,12 +581,7 @@ export function createModelPreferencesController({
           webGpuAvailable,
         });
         option.disabled = !availability.available;
-        option.textContent =
-          !availability.available && model.runtime?.requiresWebGpu
-            ? `${model.label}${webGpuRequiredModelSuffix}`
-            : !availability.available
-              ? `${model.label} (Unavailable)`
-              : model.label;
+        option.textContent = !availability.available ? `${model.label} (Unavailable)` : model.label;
         optGroup.appendChild(option);
       });
       modelSelect.appendChild(optGroup);
@@ -651,9 +613,7 @@ export function createModelPreferencesController({
       });
       if (requestedModel) {
         setStatus(
-          requestedModel.runtime?.requiresWebGpu
-            ? `${requestedModel.label} is unavailable with ${formatBackendPreferenceLabel(selectedBackend)}. ${availability.reason} Switched to ${selectedModelId}.`
-            : `${requestedModel.label} is unavailable. ${availability.reason} Switched to ${selectedModelId}.`
+          `${requestedModel.label} is unavailable. ${availability.reason} Switched to ${selectedModelId}.`
         );
       }
     }
@@ -662,42 +622,12 @@ export function createModelPreferencesController({
   }
 
   async function probeWebGpuAvailability() {
-    if (!browserSupportsWebGpu(navigatorRef)) {
-      appState.webGpuProbeCompleted = true;
-      appState.webGpuAdapterAvailable = false;
-      const selectedModel = syncModelSelectionForCurrentEnvironment();
-      syncGenerationSettingsFromModel(selectedModel, true);
-      return false;
-    }
-
-    try {
-      const gpuNavigator = /** @type {any} */ (navigatorRef);
-      const adapter = await gpuNavigator.gpu.requestAdapter();
-      appState.webGpuProbeCompleted = true;
-      appState.webGpuAdapterAvailable = Boolean(adapter);
-    } catch (error) {
-      appState.webGpuProbeCompleted = true;
-      appState.webGpuAdapterAvailable = false;
-      appendDebug(
-        `WebGPU adapter probe failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-
-    const previousModelId = normalizeModelId(modelSelect?.value || DEFAULT_MODEL);
+    void navigatorRef;
+    appState.webGpuProbeCompleted = true;
+    appState.webGpuAdapterAvailable = true;
     const selectedModel = syncModelSelectionForCurrentEnvironment();
     syncGenerationSettingsFromModel(selectedModel, true);
-
-    if (
-      previousModelId !== selectedModel &&
-      MODEL_OPTIONS_BY_ID.get(previousModelId)?.runtime?.requiresWebGpu &&
-      !appState.webGpuAdapterAvailable
-    ) {
-      setStatus(
-        `${previousModelId} is unavailable because no usable WebGPU adapter was found. Switched to ${selectedModel}.`
-      );
-    }
-
-    return appState.webGpuAdapterAvailable;
+    return true;
   }
 
   function restoreInferencePreferences() {
@@ -737,10 +667,7 @@ export function createModelPreferencesController({
       engineType: getModelEngineType(selectedModel),
       modelId: selectedModel,
       backendPreference: selectedBackend,
-      runtime: {
-        ...(getRuntimeConfigForModel(selectedModel) || {}),
-        cpuThreads: getSelectedCpuThreadsPreference(),
-      },
+      runtime: getRuntimeConfigForModel(selectedModel) || {},
       generationConfig: activeGenerationConfig,
     };
   }
@@ -754,9 +681,6 @@ export function createModelPreferencesController({
     }
     storage.setItem(modelStorageKey, selectedModel);
     storage.setItem(backendStorageKey, selectedBackend);
-    if (cpuThreadsStorageKey) {
-      storage.setItem(cpuThreadsStorageKey, String(getSelectedCpuThreadsPreference()));
-    }
     persistGenerationConfigForModel(selectedModel, activeGenerationConfig);
   }
 

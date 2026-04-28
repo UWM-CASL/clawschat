@@ -113,7 +113,7 @@ Check:
 3. Worker debug entries in `Settings -> Debug`.
 4. Browser console/network failures.
 5. Browser storage/cache state.
-6. Whether WebGPU or CPU mode is actually selected.
+6. Whether the selected model's engine and runtime hints match the worker path.
 
 Then add a focused regression test around the layer that failed.
 
@@ -146,4 +146,3 @@ Documented, behavior-preserving extraction:
 5. Split the largest test files to match the new boundaries.
 
 Each step should leave the repo easier for an entry-level maintainer to navigate.
-

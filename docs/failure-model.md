@@ -8,8 +8,8 @@ The app runs entirely in the browser. Failures are often caused by browser capab
 
 - The app can be served as static files from GitHub Pages.
 - The app may be hosted under a repo subpath.
-- WebGPU may be unavailable or may fail during generation.
-- CPU/WASM fallback may be slow but should remain recoverable where supported.
+- Browser-local model execution may be unavailable, slow, or fail during generation.
+- Local WASM/browser-default inference may be slow but should remain recoverable where supported.
 - Browser storage may be missing, full, stale, or contain old schema shapes.
 - Model output is untrusted.
 - User-uploaded files are untrusted.
@@ -20,9 +20,8 @@ The app runs entirely in the browser. Failures are often caused by browser capab
 
 Possible failures:
 
-- WebGPU is unavailable.
-- WebGPU adapter/device initialization fails.
-- WebGPU device is lost during generation.
+- Browser model/runtime initialization fails.
+- A browser graphics/runtime device is lost during generation.
 - `SharedArrayBuffer` is unavailable because cross-origin isolation is not active.
 - Web Workers fail to initialize.
 - Browser storage APIs are blocked or quota-limited.
@@ -30,9 +29,8 @@ Possible failures:
 Expected behavior:
 
 - Unsupported models are visibly disabled or explained.
-- Recoverable WebGPU generation failure can retry on CPU once when possible.
-- `Stop generating` must cancel pending fallback initialization.
-- CPU-only models should force or guide CPU backend selection.
+- The app should not expose a local device selector or depend on a user-managed WebGPU/CPU mode.
+- `Stop generating` must cancel pending initialization or generation.
 - Errors should tell users what to try next.
 
 ## Model Download and Cache Failures
@@ -58,14 +56,14 @@ Possible failures:
 
 - A worker becomes idle without completion.
 - A model takes a long time before the first printable token.
-- Cancellation races with worker initialization, CPU fallback, or tool-call continuation.
+- Cancellation races with worker initialization or tool-call continuation.
 - A partial model response remains after cancellation.
 
 Expected behavior:
 
 - Streaming generation always has a visible stop control.
 - Worker inactivity timeouts recover the app to a usable state.
-- Cancellation prevents resumed tool or fallback continuation.
+- Cancellation prevents resumed tool continuation.
 - Status, button labels, and focus return to a sane ready state.
 
 ## Storage and Migration Failures
@@ -214,4 +212,3 @@ Known risks that future work should reduce:
 - `src/main.js`, tool-calling, shell-command, and style files remain large.
 - Pyodide assets are loaded from a pinned CDN URL.
 - OpenAI-compatible providers and MCP servers are user-configured external network surfaces.
-

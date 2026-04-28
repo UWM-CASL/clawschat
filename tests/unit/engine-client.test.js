@@ -234,142 +234,79 @@ describe('LLMEngineClient', () => {
     expect(finalText).toBe('Hello world');
   });
 
-  test('retries once on cpu after a WebGPU device-loss generation error before any tokens stream', async () => {
+  test('surfaces a WebGPU device-loss generation error without automatic CPU retry', async () => {
     MockWorker.initResponses = [
       {
         backend: 'webgpu',
         backendDevice: 'webgpu',
         modelId: 'example/model',
-      },
-      {
-        backend: 'cpu',
-        backendDevice: 'wasm',
-        modelId: 'example/model',
-      },
-    ];
-    MockWorker.generateModes = ['deviceLost', 'complete'];
-
-    const client = new LLMEngineClient();
-    const onStatus = vi.fn();
-    const onError = vi.fn();
-    client.onStatus = onStatus;
-    await client.initialize({ modelId: 'example/model', backendPreference: 'webgpu' });
-
-    const completed = new Promise((resolve) => {
-      client.generate('prompt', {
-        onToken: vi.fn(),
-        onError,
-        onComplete: resolve,
-      });
-    });
-
-    const finalText = await completed;
-
-    expect(finalText).toBe('Hello world');
-    expect(onError).not.toHaveBeenCalled();
-    expect(client.loadedBackend).toBe('cpu');
-    expect(client.loadedBackendDevice).toBe('wasm');
-    expect(MockWorker.instances).toHaveLength(2);
-    expect(MockWorker.instances[0].terminated).toBe(true);
-    expect(
-      MockWorker.instances[1].messages.filter((message) => message.type === 'init')
-    ).toHaveLength(1);
-    expect(
-      MockWorker.instances[1].messages.filter((message) => message.type === 'generate')
-    ).toHaveLength(1);
-    expect(onStatus).toHaveBeenCalledWith('WebGPU device lost. Retrying on CPU...');
-  });
-
-  test('retries once on cpu after a non-device-loss WebGPU runtime error before any tokens stream', async () => {
-    MockWorker.initResponses = [
-      {
-        backend: 'webgpu',
-        backendDevice: 'webgpu',
-        modelId: 'example/model',
-      },
-      {
-        backend: 'cpu',
-        backendDevice: 'wasm',
-        modelId: 'example/model',
-      },
-    ];
-    MockWorker.generateModes = ['webgpuRuntimeError', 'complete'];
-
-    const client = new LLMEngineClient();
-    const onStatus = vi.fn();
-    const onError = vi.fn();
-    client.onStatus = onStatus;
-    await client.initialize({ modelId: 'example/model', backendPreference: 'webgpu' });
-
-    const completed = new Promise((resolve) => {
-      client.generate('prompt', {
-        onToken: vi.fn(),
-        onError,
-        onComplete: resolve,
-      });
-    });
-
-    const finalText = await completed;
-
-    expect(finalText).toBe('Hello world');
-    expect(onError).not.toHaveBeenCalled();
-    expect(client.loadedBackend).toBe('cpu');
-    expect(client.loadedBackendDevice).toBe('wasm');
-    expect(MockWorker.instances).toHaveLength(2);
-    expect(MockWorker.instances[0].terminated).toBe(true);
-    expect(
-      MockWorker.instances[1].messages.filter((message) => message.type === 'init')
-    ).toHaveLength(1);
-    expect(
-      MockWorker.instances[1].messages.filter((message) => message.type === 'generate')
-    ).toHaveLength(1);
-    expect(onStatus).toHaveBeenCalledWith('WebGPU generation failed. Retrying on CPU...');
-  });
-
-  test('canceling during automatic cpu recovery prevents the retried generation from resuming', async () => {
-    vi.useFakeTimers();
-    MockWorker.initResponses = [
-      {
-        backend: 'webgpu',
-        backendDevice: 'webgpu',
-        modelId: 'example/model',
-      },
-      {
-        backend: 'cpu',
-        backendDevice: 'wasm',
-        modelId: 'example/model',
-        delayMs: 50,
       },
     ];
     MockWorker.generateModes = ['deviceLost'];
 
     const client = new LLMEngineClient();
-    const onCancel = vi.fn();
-    const onError = vi.fn();
+    const onStatus = vi.fn();
+    client.onStatus = onStatus;
     await client.initialize({ modelId: 'example/model', backendPreference: 'webgpu' });
 
-    client.generate('prompt', {
-      onToken: vi.fn(),
-      onError,
-      onComplete: vi.fn(),
-      onCancel,
+    const failed = new Promise((resolve) => {
+      client.generate('prompt', {
+        onToken: vi.fn(),
+        onError: resolve,
+        onComplete: vi.fn(),
+      });
     });
 
-    await Promise.resolve();
-    expect(MockWorker.instances).toHaveLength(2);
+    const errorMessage = await failed;
 
-    await client.cancelGeneration();
-    await vi.advanceTimersByTimeAsync(50);
-
-    expect(onError).not.toHaveBeenCalled();
-    expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(client.pendingGeneration).toBeNull();
+    expect(String(errorMessage)).toContain('Device] is lost');
+    expect(client.loadedBackend).toBe('webgpu');
+    expect(client.loadedBackendDevice).toBe('webgpu');
+    expect(MockWorker.instances).toHaveLength(1);
+    expect(MockWorker.instances[0].terminated).toBe(false);
     expect(
-      MockWorker.instances[1].messages.filter((message) => message.type === 'generate')
-    ).toHaveLength(0);
+      MockWorker.instances[0].messages.filter((message) => message.type === 'generate')
+    ).toHaveLength(1);
+    expect(onStatus).not.toHaveBeenCalledWith('WebGPU device lost. Retrying on CPU...');
   });
 
-  test('terminates the failed webgpu worker before retrying initialization on cpu', async () => {
+  test('surfaces a WebGPU runtime error without automatic CPU retry', async () => {
+    MockWorker.initResponses = [
+      {
+        backend: 'webgpu',
+        backendDevice: 'webgpu',
+        modelId: 'example/model',
+      },
+    ];
+    MockWorker.generateModes = ['webgpuRuntimeError'];
+
+    const client = new LLMEngineClient();
+    const onStatus = vi.fn();
+    client.onStatus = onStatus;
+    await client.initialize({ modelId: 'example/model', backendPreference: 'webgpu' });
+
+    const failed = new Promise((resolve) => {
+      client.generate('prompt', {
+        onToken: vi.fn(),
+        onError: resolve,
+        onComplete: vi.fn(),
+      });
+    });
+
+    const errorMessage = await failed;
+
+    expect(String(errorMessage)).toContain('WebGPU validation failed');
+    expect(client.loadedBackend).toBe('webgpu');
+    expect(client.loadedBackendDevice).toBe('webgpu');
+    expect(MockWorker.instances).toHaveLength(1);
+    expect(MockWorker.instances[0].terminated).toBe(false);
+    expect(
+      MockWorker.instances[0].messages.filter((message) => message.type === 'generate')
+    ).toHaveLength(1);
+    expect(onStatus).not.toHaveBeenCalledWith('WebGPU generation failed. Retrying on CPU...');
+  });
+
+  test('surfaces initialization errors without automatic CPU retry', async () => {
     MockWorker.initResponses = [
       {
         type: 'init-error',
@@ -377,38 +314,29 @@ describe('LLMEngineClient', () => {
           message: 'Failed to initialize model. WEBGPU: No usable WebGPU adapter was found.',
         },
       },
-      {
-        backend: 'cpu',
-        backendDevice: 'wasm',
-        modelId: 'example/model',
-      },
     ];
 
     const client = new LLMEngineClient();
     const onStatus = vi.fn();
     client.onStatus = onStatus;
 
-    const result = await client.initialize({
-      modelId: 'example/model',
-      backendPreference: 'webgpu',
-      runtime: {
-        dtypes: {
-          webgpu: 'q4f16',
-          cpu: 'q4',
+    await expect(
+      client.initialize({
+        modelId: 'example/model',
+        backendPreference: 'webgpu',
+        runtime: {
+          dtypes: {
+            webgpu: 'q4f16',
+            cpu: 'q4',
+          },
         },
-      },
-    });
+      })
+    ).rejects.toThrow('Failed to initialize model. WEBGPU: No usable WebGPU adapter was found.');
 
-    expect(result).toEqual({
-      backend: 'cpu',
-      backendDevice: 'wasm',
-      modelId: 'example/model',
-    });
-    expect(MockWorker.instances).toHaveLength(2);
-    expect(MockWorker.instances[0].terminated).toBe(true);
+    expect(MockWorker.instances).toHaveLength(1);
+    expect(MockWorker.instances[0].terminated).toBe(false);
     expect(MockWorker.instances[0].messages[0]?.payload?.backendPreference).toBe('webgpu');
-    expect(MockWorker.instances[1].messages[0]?.payload?.backendPreference).toBe('cpu');
-    expect(onStatus).toHaveBeenCalledWith('WebGPU initialization failed. Retrying on CPU...');
+    expect(onStatus).not.toHaveBeenCalledWith('WebGPU initialization failed. Retrying on CPU...');
   });
 
   test('does not retry initialization on cpu when backend fallback is disabled', async () => {

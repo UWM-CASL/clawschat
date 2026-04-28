@@ -101,7 +101,6 @@ function createPreferencesHarness({
       backendStorageKey: 'backend',
       cpuThreadsStorageKey: 'cpu-threads',
       supportedBackendPreferences: new Set(['webgpu', 'cpu']),
-      webGpuRequiredModelSuffix: ' (WebGPU required)',
       availableToolDefinitions: getEnabledToolDefinitions(),
       themeSelect: document.getElementById('themeSelect'),
       showThinkingToggle: document.getElementById('showThinkingToggle'),
@@ -401,7 +400,7 @@ describe('preferences controller', () => {
     );
   });
 
-  test('falls back to an available model when the current backend cannot use the requested model', () => {
+  test('keeps the requested model when legacy backend values are ignored', () => {
     const harness = createPreferencesHarness();
     const modelSelect = harness.document.getElementById('modelSelect');
     const backendSelect = harness.document.getElementById('backendSelect');
@@ -414,7 +413,7 @@ describe('preferences controller', () => {
       announceFallback: true,
     });
 
-    expect(selectedModel).toBe(LLAMA_1B_MODEL_ID);
+    expect(selectedModel).toBe('huggingworld/gemma-4-E2B-it-ONNX');
     expect(modelSelect.value).toBe(selectedModel);
   });
 

@@ -2,7 +2,7 @@
 
 Student-facing browser chat UI with local model inference.
 
-The app is built for students who need a browser-based chat workspace that can run small language models locally where possible. It is deployed as a static GitHub Pages site, uses WebGPU when available, falls back to browser CPU/WASM paths where supported, and keeps prompts and outputs local by default unless a user explicitly configures a remote provider.
+The app is built for students who need a browser-based chat workspace that can run small language models locally where possible. It is deployed as a static GitHub Pages site, loads bundled local models through browser-default Transformers.js or `wllama` worker paths without exposing device selection, and keeps prompts and outputs local by default unless a user explicitly configures a remote provider.
 
 ## Project constraints
 
@@ -80,7 +80,7 @@ Inference runs through the engine-client boundary. Bundled local models use work
 
 For the full user-visible runtime story, see [`docs/runtime-behavior.md`](docs/runtime-behavior.md). For focused subsystem details, see:
 
-- [`docs/engine-selection.md`](docs/engine-selection.md) for WebGPU/CPU/cloud selection and fallback behavior.
+- [`docs/engine-selection.md`](docs/engine-selection.md) for engine drivers, local runtime defaults, and cloud model routing.
 - [`docs/models.md`](docs/models.md) for the model catalog and supported-model checklist.
 - [`docs/tools.md`](docs/tools.md) for built-in tools, MCP behavior, and the browser-local shell subset.
 - [`docs/orchestrations.md`](docs/orchestrations.md) for app-managed and user-authored orchestration flows.

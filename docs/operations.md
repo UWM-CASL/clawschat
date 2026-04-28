@@ -8,7 +8,7 @@ The project is a static Vite app. There is no backend service to start.
 
 - Node.js 22 in CI; use a current Node.js version locally.
 - pnpm 10.17.1, as declared in `package.json`.
-- A browser with WebGPU for the preferred local runtime path.
+- A current browser capable of running Web Workers, WASM, IndexedDB, and the app's bundled model/runtime assets.
 - Chromium installed by Playwright for e2e and a11y tests.
 
 Install dependencies:
@@ -175,16 +175,15 @@ Do not add default API keys, remote inference shortcuts, analytics tokens, or cr
 
 ## Troubleshooting
 
-Model load fails on WebGPU:
+Model load fails:
 
-- Try CPU mode if the model supports it.
 - Clear downloaded model files and reload.
-- Check `docs/engine-selection.md` for backend-specific constraints.
+- Check `docs/engine-selection.md` for engine-specific constraints.
 - Check `Settings -> Debug` for worker or device-loss details.
 
-CPU generation appears stalled:
+Local generation appears stalled:
 
-- CPU/WASM prefill can be slow.
+- Local prefill can be slow.
 - The app should report coarse generation phases in the status region.
 - If no worker activity is reported within the configured timeout, the client should recover with an actionable error.
 
@@ -205,4 +204,3 @@ Playwright tests fail locally:
 - Install Chromium with `pnpm exec playwright install chromium`.
 - Make sure another process is not already using the configured port.
 - Delete stale local browser state when the test depends on a fresh origin.
-

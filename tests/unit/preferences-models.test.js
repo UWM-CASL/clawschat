@@ -26,11 +26,6 @@ function createHarness({
     `
       <div id="modelCardList"></div>
       <select id="modelSelect"></select>
-      <select id="backendSelect">
-        <option value="webgpu">WebGPU</option>
-        <option value="cpu">CPU</option>
-      </select>
-      <input id="cpuThreadsInput" type="number" />
     `,
     { url: 'https://example.test/' }
   );
@@ -86,8 +81,7 @@ function createHarness({
       modelStorageKey: 'model',
       backendStorageKey: 'backend',
       cpuThreadsStorageKey: 'cpu-threads',
-      supportedBackendPreferences: new Set(['webgpu', 'cpu']),
-      webGpuRequiredModelSuffix: ' (WebGPU required)',
+      supportedBackendPreferences: new Set(['default']),
       modelSelect: document.getElementById('modelSelect'),
       modelCardList: document.getElementById('modelCardList'),
       backendSelect: document.getElementById('backendSelect'),
@@ -151,7 +145,7 @@ describe('preferences-models', () => {
     ).toEqual(['Shows a thinking section', 'Can use built-in tools']);
 
     const lfmCard = getModelCard(modelCardList, LFM_25_12B_WLLAMA_MODEL_ID);
-    expect(lfmCard?.textContent).toContain('Runs in CPU mode only in this app.');
+    expect(lfmCard?.textContent).toContain('Runs locally through the bundled wllama runtime.');
     expect(
       Array.from(lfmCard?.querySelectorAll('.model-feature-pill') || []).map((node) =>
         node.getAttribute('aria-label')
@@ -203,34 +197,22 @@ describe('preferences-models', () => {
     expect(gemmaCard?.textContent).not.toContain('4,096 tokens');
   });
 
-  test('falls back away from Gemma when CPU mode is selected', () => {
+  test('keeps Gemma selected when legacy CPU preference is ignored', () => {
     const harness = createHarness();
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
     );
-    const backendSelect = /** @type {HTMLSelectElement} */ (
-      harness.document.getElementById('backendSelect')
-    );
-    const modelCardList = /** @type {HTMLElement} */ (
-      harness.document.getElementById('modelCardList')
-    );
 
     harness.controller.populateModelSelect();
     modelSelect.value = GEMMA_4_MODEL_ID;
-    backendSelect.value = 'cpu';
 
     const selectedModel = harness.controller.syncModelSelectionForCurrentEnvironment({
       announceFallback: true,
     });
 
-    expect(selectedModel).toBe(LLAMA_1B_MODEL_ID);
+    expect(selectedModel).toBe(GEMMA_4_MODEL_ID);
     expect(modelSelect.value).toBe(selectedModel);
-    expect(harness.deps.setStatus).toHaveBeenCalledWith(
-      expect.stringContaining(`${GEMMA_4_MODEL_ID} is unavailable with CPU.`)
-    );
-    expect(getModelCard(modelCardList, GEMMA_4_MODEL_ID)?.textContent).toContain(
-      'This model requires WebGPU. Switch to WebGPU mode.'
-    );
+    expect(harness.deps.setStatus).not.toHaveBeenCalled();
   });
 
   test('restores a removed model id as the default visible model', () => {
@@ -244,12 +226,12 @@ describe('preferences-models', () => {
 
     harness.controller.restoreInferencePreferences();
 
-    expect(harness.controller.getAvailableModelId('onnx-community/Qwen3.5-2B-ONNX', 'webgpu')).toBe(
-      GEMMA_4_MODEL_ID
-    );
+    expect(
+      harness.controller.getAvailableModelId('onnx-community/Qwen3.5-2B-ONNX', 'webgpu')
+    ).toBe(GEMMA_4_MODEL_ID);
     expect(modelSelect.value).toBe(GEMMA_4_MODEL_ID);
     expect(harness.storage.getItem('model')).toBe(GEMMA_4_MODEL_ID);
-    expect(harness.storage.getItem('backend')).toBe('webgpu');
+    expect(harness.storage.getItem('backend')).toBe('default');
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
       GEMMA_4_MODEL_ID,
       true
@@ -261,26 +243,18 @@ describe('preferences-models', () => {
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
     );
-    const backendSelect = /** @type {HTMLSelectElement} */ (
-      harness.document.getElementById('backendSelect')
-    );
-    const cpuThreadsInput = /** @type {HTMLInputElement} */ (
-      harness.document.getElementById('cpuThreadsInput')
-    );
     const generationConfig = { maxOutputTokens: 512 };
 
     harness.controller.populateModelSelect();
     modelSelect.value = LLAMA_1B_MODEL_ID;
-    backendSelect.value = 'cpu';
-    cpuThreadsInput.value = '3';
 
     const engineConfig = harness.controller.readEngineConfigFromUI(generationConfig);
 
     expect(engineConfig).toEqual({
       engineType: 'transformers-js',
       modelId: LLAMA_1B_MODEL_ID,
-      backendPreference: 'cpu',
-      runtime: { runtimeModelId: LLAMA_1B_MODEL_ID, cpuThreads: 3 },
+      backendPreference: 'default',
+      runtime: { runtimeModelId: LLAMA_1B_MODEL_ID },
       generationConfig,
     });
     expect(harness.deps.getRuntimeConfigForModel).toHaveBeenCalledWith(LLAMA_1B_MODEL_ID);
@@ -292,15 +266,15 @@ describe('preferences-models', () => {
     harness.controller.persistInferencePreferences(generationConfig);
 
     expect(harness.storage.getItem('model')).toBe(LLAMA_1B_MODEL_ID);
-    expect(harness.storage.getItem('backend')).toBe('cpu');
-    expect(harness.storage.getItem('cpu-threads')).toBe('3');
+    expect(harness.storage.getItem('backend')).toBe('default');
+    expect(harness.storage.getItem('cpu-threads')).toBeNull();
     expect(harness.deps.persistGenerationConfigForModel).toHaveBeenCalledWith(
       LLAMA_1B_MODEL_ID,
       generationConfig
     );
   });
 
-  test('switches the backend to cpu automatically when a cpu-only wllama model is selected', () => {
+  test('keeps the default backend preference when a wllama model is selected', () => {
     const harness = createHarness({
       getRuntimeConfigForModel: (modelId) => {
         if (modelId === LFM_25_12B_WLLAMA_MODEL_ID) {
@@ -315,52 +289,43 @@ describe('preferences-models', () => {
     const modelSelect = /** @type {HTMLSelectElement} */ (
       harness.document.getElementById('modelSelect')
     );
-    const backendSelect = /** @type {HTMLSelectElement} */ (
-      harness.document.getElementById('backendSelect')
-    );
     const generationConfig = { maxOutputTokens: 512 };
 
     harness.controller.populateModelSelect();
-    backendSelect.value = 'webgpu';
     harness.controller.setSelectedModelId(LFM_25_12B_WLLAMA_MODEL_ID, { dispatch: false });
 
     expect(modelSelect.value).toBe(LFM_25_12B_WLLAMA_MODEL_ID);
-    expect(backendSelect.value).toBe('cpu');
 
     const engineConfig = harness.controller.readEngineConfigFromUI(generationConfig);
     expect(engineConfig).toEqual({
       engineType: 'wllama',
       modelId: LFM_25_12B_WLLAMA_MODEL_ID,
-      backendPreference: 'cpu',
+      backendPreference: 'default',
       runtime: {
         modelUrl:
           'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-GGUF/resolve/6eef5895049f444e3436c6f583207e610a1485ce/LFM2.5-1.2B-Thinking-Q4_K_M.gguf',
-        cpuThreads: 0,
       },
       generationConfig,
     });
   });
 
-  test('restores the persisted cpu thread preference into the system control', () => {
+  test('ignores persisted cpu thread preference when no system control is present', () => {
     const harness = createHarness({
       navigatorRef: /** @type {any} */ ({
         gpu: {},
         hardwareConcurrency: 6,
       }),
     });
-    const cpuThreadsInput = /** @type {HTMLInputElement} */ (
-      harness.document.getElementById('cpuThreadsInput')
-    );
 
     harness.storage.setItem('cpu-threads', '5');
 
     harness.controller.restoreInferencePreferences();
 
-    expect(cpuThreadsInput.value).toBe('5');
-    expect(cpuThreadsInput.max).toBe('6');
+    expect(harness.document.getElementById('cpuThreadsInput')).toBeNull();
+    expect(harness.storage.getItem('cpu-threads')).toBe('5');
   });
 
-  test('probes WebGPU availability and switches away from Gemma when no adapter is available', async () => {
+  test('keeps model selection stable when legacy WebGPU probe is called', async () => {
     const requestAdapter = vi.fn(async () => null);
     const harness = createHarness({
       navigatorRef: /** @type {any} */ ({
@@ -379,16 +344,14 @@ describe('preferences-models', () => {
 
     const adapterAvailable = await harness.controller.probeWebGpuAvailability();
 
-    expect(adapterAvailable).toBe(false);
-    expect(requestAdapter).toHaveBeenCalledTimes(1);
+    expect(adapterAvailable).toBe(true);
+    expect(requestAdapter).not.toHaveBeenCalled();
     expect(harness.appState.webGpuProbeCompleted).toBe(true);
-    expect(harness.appState.webGpuAdapterAvailable).toBe(false);
+    expect(harness.appState.webGpuAdapterAvailable).toBe(true);
     expect(harness.deps.syncGenerationSettingsFromModel).toHaveBeenCalledWith(
-      LLAMA_1B_MODEL_ID,
+      GEMMA_4_MODEL_ID,
       true
     );
-    expect(harness.deps.setStatus).toHaveBeenCalledWith(
-      `${GEMMA_4_MODEL_ID} is unavailable because no usable WebGPU adapter was found. Switched to ${LLAMA_1B_MODEL_ID}.`
-    );
+    expect(harness.deps.setStatus).not.toHaveBeenCalled();
   });
 });
