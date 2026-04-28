@@ -1282,6 +1282,50 @@
                       </form>
                     </div>
                     <div class="settings-control-group">
+                      <form id="cloudProviderImportForm" class="mcp-server-form">
+                        <p class="form-label mb-1" id="cloudProviderImportLabel">
+                          Import cloud provider
+                        </p>
+                        <p id="cloudProviderImportHelp" class="form-text mt-0">
+                          Import a <code>.cloud-pro.json</code> file. API keys are never included
+                          in exports, so enter a key to test <code>/models</code> before the
+                          provider is saved.
+                        </p>
+                        <label class="form-label" for="cloudProviderImportInput">
+                          Cloud provider file
+                        </label>
+                        <div class="input-group mb-3">
+                          <input
+                            id="cloudProviderImportInput"
+                            class="form-control"
+                            type="file"
+                            accept=".cloud-pro.json,application/json"
+                            aria-describedby="cloudProviderImportHelp cloudProviderAddFeedback"
+                          />
+                        </div>
+                        <label class="form-label" for="cloudProviderImportApiKeyInput">
+                          API key for imported provider
+                        </label>
+                        <div class="input-group">
+                          <input
+                            id="cloudProviderImportApiKeyInput"
+                            class="form-control"
+                            type="password"
+                            autocomplete="new-password"
+                            placeholder="sk-..."
+                            aria-describedby="cloudProviderImportHelp cloudProviderAddFeedback"
+                          />
+                          <button
+                            id="importCloudProviderButton"
+                            type="submit"
+                            class="btn btn-outline-primary"
+                          >
+                            Test and import
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                    <div class="settings-control-group">
                       <p class="form-label mb-1" id="cloudProvidersListLabel">
                         Configured cloud providers
                       </p>

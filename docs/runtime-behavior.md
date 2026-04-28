@@ -71,7 +71,7 @@ Settings are browser-local. Important panels include:
 - `Tools`: built-in tool enablement and tool-prompt exposure.
 - `Proxy`: optional validated CORS proxy configuration.
 - `MCP Servers`: browser-reachable MCP HTTP endpoint import and command enablement.
-- `Cloud Providers`: OpenAI-compatible provider setup, saved API-key handling, model toggles, thinking/tool controls, generation defaults, and browser-local request caps.
+- `Cloud Providers`: OpenAI-compatible provider setup, saved API-key handling, secret-free `.cloud-pro.json` import/export, model toggles, thinking/tool controls, generation defaults, and browser-local request caps.
 - `Skills`: local `.zip` skill package import, preview, enablement, and removal.
 - `Orchestrations`: custom orchestration authoring, import/export, and read-only app-managed definitions.
 - `Debug`: user-visible runtime diagnostics.
@@ -119,6 +119,8 @@ The app uses browser-local storage by purpose:
 - OPFS-backed workspace storage for conversation artifacts and tool-accessible files.
 
 User prompts, outputs, and uploaded content stay local by default unless the user explicitly configures a remote provider or MCP endpoint.
+
+Cloud-provider exports are JSON files intended for moving provider settings between browsers. They include provider name, endpoint, selected model settings, and per-model generation defaults, but never saved API keys. Import asks for a new API key, validates the endpoint through the existing `/models` inspection path, then applies exported model settings only when the remote model id appears in the loaded model list.
 
 ## Help and Keyboard Behavior
 

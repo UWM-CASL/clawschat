@@ -130,6 +130,7 @@ Possible failures:
 - CORS blocks provider requests.
 - A saved proxy is required or later unavailable.
 - API keys are invalid, expired, or missing.
+- Imported `.cloud-pro.json` files are malformed, stale, or list models the provider no longer exposes.
 - Provider streaming differs from OpenAI-compatible expectations.
 - Provider limits differ from configured context/output settings.
 
@@ -139,6 +140,7 @@ Expected behavior:
 - Proxy-required providers are marked explicitly.
 - Requests fail with actionable messages.
 - API keys are never re-displayed after save.
+- Cloud-provider exports must omit API keys, imports must ask for a fresh key, and imported model settings should apply only after the provider successfully returns that model from `/models`.
 - Remote requests are user-configured and never the default local inference path.
 
 ## Rendering and Accessibility Failures

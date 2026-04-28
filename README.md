@@ -89,7 +89,7 @@ For the full user-visible runtime story, see [`docs/runtime-behavior.md`](docs/r
 
 ## Supported Models
 
-The bundled local model catalog and its browser-safe limits live in `src/config/models.json`. App-managed cloud provider defaults live in `src/config/cloud-models.json`, and user-added OpenAI-compatible providers are stored in this browser.
+The bundled local model catalog and its browser-safe limits live in `src/config/models.json`. App-managed cloud provider defaults live in `src/config/cloud-models.json`, and user-added OpenAI-compatible providers are stored in this browser. Cloud providers can be exported as secret-free `.cloud-pro.json` files containing the provider name, endpoint, and selected model settings; importing one asks for an API key, validates `/models`, and restores settings only for models the provider still reports.
 
 Model behavior changes should update [`docs/models.md`](docs/models.md) and, when backend behavior changes, [`docs/engine-selection.md`](docs/engine-selection.md). Do not commit model weights.
 

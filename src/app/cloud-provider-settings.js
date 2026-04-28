@@ -262,6 +262,122 @@ function normalizeRateLimitInput(candidate) {
   };
 }
 
+function cloneJsonObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  try {
+    const cloned = JSON.parse(JSON.stringify(value));
+    return cloned && typeof cloned === 'object' && !Array.isArray(cloned) ? cloned : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildCloudProviderExportFileName(provider) {
+  const baseName =
+    typeof provider?.displayName === 'string' && provider.displayName.trim()
+      ? provider.displayName.trim()
+      : 'cloud-provider';
+  const safeName = baseName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return `${safeName || 'cloud-provider'}.cloud-pro.json`;
+}
+
+function normalizeImportedCloudProviderPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Choose a valid .cloud-pro.json file.');
+  }
+  const rawProvider = payload.provider && typeof payload.provider === 'object' ? payload.provider : payload;
+  const endpoint = typeof rawProvider.endpoint === 'string' ? rawProvider.endpoint.trim() : '';
+  const displayName =
+    typeof rawProvider.name === 'string' && rawProvider.name.trim()
+      ? rawProvider.name.trim()
+      : typeof rawProvider.displayName === 'string'
+        ? rawProvider.displayName.trim()
+        : '';
+  if (!endpoint) {
+    throw new Error('The cloud provider export is missing an endpoint.');
+  }
+  const rawModels = Array.isArray(rawProvider.models)
+    ? rawProvider.models
+    : Array.isArray(rawProvider.selectedModels)
+      ? rawProvider.selectedModels
+      : [];
+  const models = rawModels
+    .map((model) => {
+      const id = typeof model?.id === 'string' ? model.id.trim() : '';
+      if (!id) {
+        return null;
+      }
+      return {
+        id,
+        displayName:
+          typeof model?.displayName === 'string' && model.displayName.trim()
+            ? model.displayName.trim()
+            : id,
+        ...(model?.generation && typeof model.generation === 'object'
+          ? { generation: cloneJsonObject(model.generation) }
+          : {}),
+        ...(model?.generationConfig && typeof model.generationConfig === 'object'
+          ? { generationConfig: cloneJsonObject(model.generationConfig) }
+          : {}),
+        ...(model?.features && typeof model.features === 'object'
+          ? { features: cloneJsonObject(model.features) }
+          : {}),
+        ...(model?.thinkingControl && typeof model.thinkingControl === 'object'
+          ? { thinkingControl: cloneJsonObject(model.thinkingControl) }
+          : {}),
+        ...(model?.rateLimit && typeof model.rateLimit === 'object'
+          ? { rateLimit: cloneJsonObject(model.rateLimit) }
+          : {}),
+      };
+    })
+    .filter(Boolean);
+  return {
+    displayName,
+    endpoint,
+    models,
+  };
+}
+
+function buildSelectedModelsFromImport(importedModels, inspectedProvider) {
+  const availableModelsById = new Map(
+    (inspectedProvider?.availableModels || []).map((model) => [model.id, model])
+  );
+  return importedModels
+    .filter((model) => availableModelsById.has(model.id))
+    .map((model) => {
+      const availableModel = availableModelsById.get(model.id);
+      return {
+        id: availableModel.id,
+        displayName: availableModel.displayName || model.displayName || availableModel.id,
+        generation: model.generation || REMOTE_MODEL_GENERATION_LIMITS,
+        supportsTopK: inspectedProvider.supportsTopK === true,
+        detectedFeatures: availableModel.detectedFeatures,
+        features: model.features || availableModel.detectedFeatures,
+        ...(model.thinkingControl ? { thinkingControl: model.thinkingControl } : {}),
+        ...(model.rateLimit ? { rateLimit: model.rateLimit } : {}),
+      };
+    });
+}
+
+function mergeImportedSelectedModels(existingSelectedModels, importedSelectedModels, availableModels) {
+  const availableModelIds = new Set((availableModels || []).map((model) => model.id));
+  const importedModelIds = new Set(importedSelectedModels.map((model) => model.id));
+  return [
+    ...(Array.isArray(existingSelectedModels) ? existingSelectedModels : []).filter(
+      (model) =>
+        model?.managed === true ||
+        (availableModelIds.has(model?.id) && !importedModelIds.has(model?.id))
+    ),
+    ...importedSelectedModels,
+  ];
+}
+
 export function createCloudProviderSettingsController({
   appState,
   documentRef = document,
@@ -281,6 +397,8 @@ export function createCloudProviderSettingsController({
   getModelGenerationLimits,
   syncGenerationSettingsFromModel,
   getSelectedModelId,
+  downloadFile = null,
+  BlobCtor = globalThis.Blob,
 }) {
   function setCloudProviderFeedback(message = '', variant = 'info') {
     if (!(cloudProviderAddFeedback instanceof HTMLElement)) {
@@ -735,6 +853,13 @@ export function createCloudProviderSettingsController({
 
       const actionGroup = documentRef.createElement('div');
       actionGroup.className = 'd-flex flex-wrap gap-2';
+      const exportButton = documentRef.createElement('button');
+      exportButton.type = 'button';
+      exportButton.className = 'btn btn-outline-secondary btn-sm';
+      exportButton.textContent = 'Export provider';
+      exportButton.dataset.cloudProviderExport = 'true';
+      exportButton.dataset.cloudProviderId = provider.id;
+      actionGroup.appendChild(exportButton);
       const refreshButton = documentRef.createElement('button');
       refreshButton.type = 'button';
       refreshButton.className = 'btn btn-outline-secondary btn-sm';
@@ -941,6 +1066,139 @@ export function createCloudProviderSettingsController({
     await reloadCloudProvidersFromStorage();
     clearCloudProviderFeedback();
     return savedProvider;
+  }
+
+  function buildCloudProviderExportPayload(provider) {
+    return {
+      schema: 'browser-llm-runner.cloud-provider',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      provider: {
+        name: provider.displayName,
+        endpoint: provider.endpoint,
+        models: provider.selectedModels.map((model) => {
+          const catalogModelId = buildCloudModelId(provider.id, model.id);
+          const generationConfig =
+            typeof getStoredGenerationConfigForModel === 'function'
+              ? getStoredGenerationConfigForModel(catalogModelId)
+              : null;
+          return {
+            id: model.id,
+            displayName: model.displayName,
+            generation: model.generation,
+            features: model.features,
+            ...(model.thinkingControl ? { thinkingControl: model.thinkingControl } : {}),
+            ...(model.rateLimit ? { rateLimit: model.rateLimit } : {}),
+            ...(generationConfig ? { generationConfig } : {}),
+          };
+        }),
+      },
+    };
+  }
+
+  function exportCloudProviderPreference(providerId) {
+    if (typeof downloadFile !== 'function' || typeof BlobCtor !== 'function') {
+      throw new Error('Cloud-provider export is unavailable.');
+    }
+    const provider = getCloudProviderById(appState.cloudProviders, providerId);
+    if (!provider) {
+      throw new Error('The selected cloud provider could not be found.');
+    }
+    const payload = buildCloudProviderExportPayload(provider);
+    const blob = new BlobCtor([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+    downloadFile(blob, buildCloudProviderExportFileName(provider));
+    return payload;
+  }
+
+  async function importCloudProviderFile(file, apiKey) {
+    if (
+      typeof inspectCloudProviderEndpoint !== 'function' ||
+      typeof saveCloudProvider !== 'function' ||
+      typeof updateCloudProvider !== 'function' ||
+      typeof saveCloudProviderSecret !== 'function'
+    ) {
+      throw new Error('Cloud-provider import is unavailable.');
+    }
+    if (!file || typeof file.text !== 'function') {
+      throw new Error('Choose a .cloud-pro.json file before importing.');
+    }
+    const normalizedApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+    if (!normalizedApiKey) {
+      throw new Error('Enter an API key before importing the provider.');
+    }
+
+    let parsedPayload;
+    try {
+      parsedPayload = JSON.parse(await file.text());
+    } catch {
+      throw new Error('Choose a valid .cloud-pro.json file.');
+    }
+    const importedProvider = normalizeImportedCloudProviderPayload(parsedPayload);
+    const inspectedProvider = await inspectCloudProviderEndpoint(
+      importedProvider.endpoint,
+      normalizedApiKey
+    );
+    const importedSelectedModels = buildSelectedModelsFromImport(
+      importedProvider.models,
+      inspectedProvider
+    );
+    const existingProvider =
+      normalizeCloudProviderConfigs(appState.cloudProviders).find(
+        (provider) => provider.endpoint === inspectedProvider.endpoint
+      ) || null;
+    const displayName = importedProvider.displayName || inspectedProvider.displayName;
+
+    let savedProvider;
+    if (existingProvider) {
+      await saveCloudProviderSecret(existingProvider.id, normalizedApiKey);
+      savedProvider = await updateCloudProvider({
+        ...existingProvider,
+        ...inspectedProvider,
+        id: existingProvider.id,
+        displayName,
+        hasSecret: true,
+        selectedModels: mergeImportedSelectedModels(
+          existingProvider.selectedModels,
+          importedSelectedModels,
+          inspectedProvider.availableModels
+        ),
+      });
+    } else {
+      savedProvider = await saveCloudProvider(
+        {
+          ...inspectedProvider,
+          displayName,
+          hasSecret: true,
+          selectedModels: importedSelectedModels,
+        },
+        { apiKey: normalizedApiKey }
+      );
+    }
+
+    if (typeof persistGenerationConfigForModel === 'function') {
+      const importedModelsById = new Map(importedProvider.models.map((model) => [model.id, model]));
+      importedSelectedModels.forEach((model) => {
+        const generationConfig = importedModelsById.get(model.id)?.generationConfig;
+        if (!generationConfig) {
+          return;
+        }
+        const catalogModelId = buildCloudModelId(savedProvider.id, model.id);
+        const sanitizedConfig = sanitizeGenerationConfig(
+          generationConfig,
+          getModelGenerationLimits(catalogModelId)
+        );
+        persistGenerationConfigForModel(catalogModelId, sanitizedConfig);
+      });
+    }
+
+    await reloadCloudProvidersFromStorage();
+    clearCloudProviderFeedback();
+    return {
+      provider: savedProvider,
+      importedModelCount: importedSelectedModels.length,
+    };
   }
 
   async function saveCloudProviderSecretPreference(providerId, apiKey) {
@@ -1195,6 +1453,8 @@ export function createCloudProviderSettingsController({
     addCloudProvider,
     applyCloudProviders,
     clearCloudProviderFeedback,
+    exportCloudProviderPreference,
+    importCloudProviderFile,
     refreshCloudProviderPreference,
     removeCloudProviderPreference,
     restoreCloudProvidersFromStorage,

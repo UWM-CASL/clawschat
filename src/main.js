@@ -344,6 +344,18 @@ const cloudProviderApiKeyInput = /** @type {HTMLInputElement | null} */ (
 const addCloudProviderButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('addCloudProviderButton')
 );
+const cloudProviderImportForm = /** @type {HTMLFormElement | null} */ (
+  document.getElementById('cloudProviderImportForm')
+);
+const cloudProviderImportInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('cloudProviderImportInput')
+);
+const cloudProviderImportApiKeyInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('cloudProviderImportApiKeyInput')
+);
+const importCloudProviderButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('importCloudProviderButton')
+);
 const cloudProviderAddFeedback = /** @type {HTMLElement | null} */ (
   document.getElementById('cloudProviderAddFeedback')
 );
@@ -2974,11 +2986,14 @@ const cloudProviderSettingsController = createCloudProviderSettingsController({
   getModelGenerationLimits,
   syncGenerationSettingsFromModel,
   getSelectedModelId: () => modelSelect?.value || DEFAULT_MODEL,
+  downloadFile: triggerDownload,
 });
 
 const {
   addCloudProvider,
   clearCloudProviderFeedback,
+  exportCloudProviderPreference,
+  importCloudProviderFile,
   refreshCloudProviderPreference,
   removeCloudProviderPreference,
   restoreCloudProvidersFromStorage,
@@ -3422,6 +3437,10 @@ bindSettingsEvents({
   cloudProviderEndpointInput,
   cloudProviderApiKeyInput,
   addCloudProviderButton,
+  cloudProviderImportForm,
+  cloudProviderImportInput,
+  cloudProviderImportApiKeyInput,
+  importCloudProviderButton,
   cloudProvidersList,
   corsProxyForm,
   corsProxyInput,
@@ -3475,6 +3494,8 @@ bindSettingsEvents({
   importSkillPackageFile,
   removeSkillPackagePreference,
   addCloudProvider,
+  importCloudProviderFile,
+  exportCloudProviderPreference,
   setCloudProviderFeedback,
   clearCloudProviderFeedback,
   refreshCloudProviderPreference,

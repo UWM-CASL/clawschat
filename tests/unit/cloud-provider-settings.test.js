@@ -63,11 +63,18 @@ function createHarness({
     return provider;
   });
   const saveCloudProvider = vi.fn(async (provider) => {
-    currentProviders = currentProviders.concat(provider);
-    return provider;
+    const savedProvider = {
+      ...provider,
+      id: provider.id || 'provider-imported',
+    };
+    currentProviders = currentProviders.concat(savedProvider);
+    return savedProvider;
   });
   const saveCloudProviderSecret = vi.fn(async () => true);
   const onProvidersChanged = vi.fn();
+  const getStoredGenerationConfigForModel = vi.fn(() => null);
+  const persistGenerationConfigForModel = vi.fn();
+  const downloadFile = vi.fn();
 
   const controller = createCloudProviderSettingsController({
     appState,
@@ -83,11 +90,12 @@ function createHarness({
     removeCloudProvider: vi.fn(),
     getCloudProviderSecret: vi.fn(),
     onProvidersChanged,
-    getStoredGenerationConfigForModel: vi.fn(() => null),
-    persistGenerationConfigForModel: vi.fn(),
+    getStoredGenerationConfigForModel,
+    persistGenerationConfigForModel,
     getModelGenerationLimits: vi.fn(() => REMOTE_MODEL_GENERATION_LIMITS),
     syncGenerationSettingsFromModel: vi.fn(),
     getSelectedModelId: vi.fn(() => 'meta-llama/3.1-8b-instruct'),
+    downloadFile,
   });
 
   return {
@@ -98,6 +106,9 @@ function createHarness({
     saveCloudProvider,
     saveCloudProviderSecret,
     updateCloudProvider,
+    getStoredGenerationConfigForModel,
+    persistGenerationConfigForModel,
+    downloadFile,
     onProvidersChanged,
   };
 }
@@ -333,5 +344,171 @@ describe('cloud-provider settings controller', () => {
     expect(providerText).toContain('cannot be removed here');
     expect(managedToggle?.disabled).toBe(true);
     expect(harness.document.querySelector('button[data-cloud-provider-remove="true"]')).toBeNull();
+  });
+
+  test('exports cloud providers without API keys and includes selected model settings', () => {
+    const harness = createHarness();
+    harness.getStoredGenerationConfigForModel.mockReturnValue({
+      maxOutputTokens: 512,
+      maxContextTokens: 4096,
+      temperature: 0.4,
+      topK: 50,
+      topP: 0.9,
+    });
+
+    const payload = harness.controller.exportCloudProviderPreference('provider-1');
+
+    expect(payload).toMatchObject({
+      schema: 'browser-llm-runner.cloud-provider',
+      version: 1,
+      provider: {
+        name: 'OpenRouter',
+        endpoint: 'https://openrouter.ai/api/v1',
+        models: [
+          expect.objectContaining({
+            id: 'meta-llama/3.1-8b-instruct',
+            generationConfig: {
+              maxOutputTokens: 512,
+              maxContextTokens: 4096,
+              temperature: 0.4,
+              topK: 50,
+              topP: 0.9,
+            },
+          }),
+        ],
+      },
+    });
+    expect(JSON.stringify(payload)).not.toContain('sk-');
+    expect(harness.downloadFile).toHaveBeenCalledWith(
+      expect.any(Blob),
+      'openrouter.cloud-pro.json'
+    );
+  });
+
+  test('imports matching exported models after validating the provided API key', async () => {
+    const harness = createHarness({ providers: [] });
+    const inspectCloudProviderEndpoint = vi.fn(async () => ({
+      type: 'openai-compatible',
+      endpoint: 'https://api.example/v1',
+      endpointHost: 'api.example',
+      displayName: 'api.example',
+      supportsTopK: true,
+      availableModels: [
+        {
+          id: 'matched/model',
+          displayName: 'Matched Model',
+          detectedFeatures: {
+            toolCalling: true,
+          },
+        },
+      ],
+      selectedModels: [],
+    }));
+    const controller = createCloudProviderSettingsController({
+      appState: harness.appState,
+      documentRef: harness.document,
+      cloudProviderAddFeedback: harness.document.getElementById('cloudProviderAddFeedback'),
+      cloudProvidersList: harness.document.getElementById('cloudProvidersList'),
+      inspectCloudProviderEndpoint,
+      loadCloudProviders: vi.fn(async () => [
+        {
+          id: 'provider-imported',
+          type: 'openai-compatible',
+          endpoint: 'https://api.example/v1',
+          endpointHost: 'api.example',
+          displayName: 'Course Provider',
+          hasSecret: true,
+          supportsTopK: true,
+          availableModels: [
+            {
+              id: 'matched/model',
+              displayName: 'Matched Model',
+              detectedFeatures: {
+                toolCalling: true,
+              },
+            },
+          ],
+          selectedModels: [
+            {
+              id: 'matched/model',
+              displayName: 'Matched Model',
+              features: {
+                toolCalling: false,
+              },
+            },
+          ],
+        },
+      ]),
+      saveCloudProvider: harness.saveCloudProvider,
+      saveCloudProviderSecret: harness.saveCloudProviderSecret,
+      updateCloudProvider: harness.updateCloudProvider,
+      removeCloudProvider: vi.fn(),
+      getCloudProviderSecret: vi.fn(),
+      getStoredGenerationConfigForModel: vi.fn(() => null),
+      persistGenerationConfigForModel: harness.persistGenerationConfigForModel,
+      getModelGenerationLimits: vi.fn(() => REMOTE_MODEL_GENERATION_LIMITS),
+      syncGenerationSettingsFromModel: vi.fn(),
+      getSelectedModelId: vi.fn(() => ''),
+      downloadFile: harness.downloadFile,
+    });
+    const file = {
+      text: vi.fn(async () =>
+        JSON.stringify({
+          schema: 'browser-llm-runner.cloud-provider',
+          version: 1,
+          provider: {
+            name: 'Course Provider',
+            endpoint: 'https://api.example/v1',
+            models: [
+              {
+                id: 'matched/model',
+                features: {
+                  toolCalling: false,
+                },
+                generationConfig: {
+                  maxOutputTokens: 256,
+                  maxContextTokens: 2048,
+                  temperature: 0.2,
+                  topK: 30,
+                  topP: 0.8,
+                },
+              },
+              {
+                id: 'missing/model',
+              },
+            ],
+          },
+        })
+      ),
+    };
+
+    const result = await controller.importCloudProviderFile(file, 'sk-import');
+
+    expect(inspectCloudProviderEndpoint).toHaveBeenCalledWith(
+      'https://api.example/v1',
+      'sk-import'
+    );
+    expect(harness.saveCloudProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'Course Provider',
+        selectedModels: [
+          expect.objectContaining({
+            id: 'matched/model',
+            features: {
+              toolCalling: false,
+            },
+          }),
+        ],
+      }),
+      { apiKey: 'sk-import' }
+    );
+    expect(harness.persistGenerationConfigForModel).toHaveBeenCalledWith(
+      'cloud:provider-imported:matched%2Fmodel',
+      expect.objectContaining({
+        maxOutputTokens: 256,
+        maxContextTokens: 2048,
+      })
+    );
+    expect(result.importedModelCount).toBe(1);
   });
 });

@@ -344,6 +344,7 @@ Current models in Settings:
   - use default `<think>` / `</think>` thinking tags when thinking control is enabled; OpenAI-compatible `reasoning_content` response fields are converted into that same tagged stream
   - show enabled-model defaults directly under each provider model switch instead of in a separate configured-model list
   - can also carry a browser-local request cap (`rateLimit`) so the browser blocks excess requests before another remote API call is sent; the settings UI supports second, minute, hour, day, and week windows and stores the normalized value as `windowMs`
+  - can be exported from `Settings -> Cloud Providers` as a `.cloud-pro.json` file that omits API keys and includes the provider name, endpoint, selected model feature/thinking/rate-limit settings, and browser-local generation defaults; importing that file requires the user to enter an API key, validates the endpoint with `/models`, and restores settings only for exported model ids that are still present in the loaded model list
 
 Notes:
 

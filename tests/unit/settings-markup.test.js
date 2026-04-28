@@ -57,6 +57,11 @@ describe('settings markup', () => {
     expect(
       dom.window.document.getElementById('cloudProviderApiKeyInput')?.getAttribute('type')
     ).toBe('password');
+    expect(dom.window.document.getElementById('cloudProviderImportForm')).not.toBeNull();
+    expect(dom.window.document.getElementById('cloudProviderImportInput')).not.toBeNull();
+    expect(
+      dom.window.document.getElementById('cloudProviderImportApiKeyInput')?.getAttribute('type')
+    ).toBe('password');
     expect(dom.window.document.getElementById('cloudProvidersList')).not.toBeNull();
     expect(dom.window.document.getElementById('cloudProviderStorageHelp')?.textContent).toContain(
       'cannot be shown again'

@@ -64,8 +64,14 @@ export function bindCloudProviderSettingsEvents({
   cloudProviderEndpointInput,
   cloudProviderApiKeyInput,
   addCloudProviderButton,
+  cloudProviderImportForm = null,
+  cloudProviderImportInput = null,
+  cloudProviderImportApiKeyInput = null,
+  importCloudProviderButton = null,
   cloudProvidersList,
   addCloudProvider,
+  importCloudProviderFile,
+  exportCloudProviderPreference,
   setCloudProviderFeedback,
   clearCloudProviderFeedback,
   refreshCloudProviderPreference,
@@ -152,6 +158,89 @@ export function bindCloudProviderSettingsEvents({
       if (typeof clearCloudProviderFeedback === 'function') {
         clearCloudProviderFeedback();
       }
+    });
+  }
+
+  if (cloudProviderImportInput instanceof HTMLInputElement) {
+    cloudProviderImportInput.addEventListener('change', () => {
+      if (typeof clearCloudProviderFeedback === 'function') {
+        clearCloudProviderFeedback();
+      }
+    });
+  }
+
+  if (cloudProviderImportApiKeyInput instanceof HTMLInputElement) {
+    cloudProviderImportApiKeyInput.addEventListener('input', () => {
+      if (typeof clearCloudProviderFeedback === 'function') {
+        clearCloudProviderFeedback();
+      }
+    });
+  }
+
+  if (
+    cloudProviderImportForm instanceof HTMLElement &&
+    cloudProviderImportForm.tagName === 'FORM'
+  ) {
+    cloudProviderImportForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const file =
+        cloudProviderImportInput instanceof HTMLInputElement &&
+        cloudProviderImportInput.files?.length
+          ? cloudProviderImportInput.files[0]
+          : null;
+      const apiKey =
+        cloudProviderImportApiKeyInput instanceof HTMLInputElement
+          ? cloudProviderImportApiKeyInput.value
+          : '';
+      if (!file) {
+        if (typeof setCloudProviderFeedback === 'function') {
+          setCloudProviderFeedback('Choose a .cloud-pro.json file before importing.', 'danger');
+        }
+        setStatus('Choose a cloud provider file before importing.');
+        return;
+      }
+      if (importCloudProviderButton instanceof HTMLButtonElement) {
+        importCloudProviderButton.disabled = true;
+      }
+      if (typeof setCloudProviderFeedback === 'function') {
+        setCloudProviderFeedback('Testing imported cloud provider...', 'info');
+      }
+      void Promise.resolve(
+        typeof importCloudProviderFile === 'function'
+          ? importCloudProviderFile(file, apiKey)
+          : null
+      )
+        .then(
+          (result) => {
+            if (cloudProviderImportInput instanceof HTMLInputElement) {
+              cloudProviderImportInput.value = '';
+            }
+            if (cloudProviderImportApiKeyInput instanceof HTMLInputElement) {
+              cloudProviderImportApiKeyInput.value = '';
+            }
+            const providerName = result?.provider?.displayName || 'Cloud provider';
+            const importedModelCount = Number.isInteger(result?.importedModelCount)
+              ? result.importedModelCount
+              : 0;
+            const label = `${providerName} imported with ${importedModelCount} selected model${importedModelCount === 1 ? '' : 's'}.`;
+            if (typeof setCloudProviderFeedback === 'function') {
+              setCloudProviderFeedback(label, 'success');
+            }
+            setStatus(label);
+          },
+          (error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            if (typeof setCloudProviderFeedback === 'function') {
+              setCloudProviderFeedback(message, 'danger');
+            }
+            setStatus(message);
+          }
+        )
+        .finally(() => {
+          if (importCloudProviderButton instanceof HTMLButtonElement) {
+            importCloudProviderButton.disabled = false;
+          }
+        });
     });
   }
 
@@ -460,6 +549,28 @@ export function bindCloudProviderSettingsEvents({
           .finally(() => {
             refreshButton.disabled = false;
           });
+        return;
+      }
+
+      const exportButton = target.closest('button[data-cloud-provider-export="true"]');
+      if (exportButton instanceof HTMLButtonElement) {
+        const providerId =
+          typeof exportButton.dataset.cloudProviderId === 'string'
+            ? exportButton.dataset.cloudProviderId
+            : '';
+        try {
+          const payload =
+            typeof exportCloudProviderPreference === 'function'
+              ? exportCloudProviderPreference(providerId)
+              : null;
+          setStatus(
+            payload?.provider?.name
+              ? `${payload.provider.name} exported as .cloud-pro.json.`
+              : 'Cloud provider exported as .cloud-pro.json.'
+          );
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error));
+        }
         return;
       }
 

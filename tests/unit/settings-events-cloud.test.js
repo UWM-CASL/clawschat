@@ -11,7 +11,18 @@ function createHarness() {
         <input id="cloudProviderApiKeyInput" type="password" />
         <button id="addCloudProviderButton" type="submit">Add provider</button>
       </form>
+      <form id="cloudProviderImportForm">
+        <input id="cloudProviderImportInput" type="file" />
+        <input id="cloudProviderImportApiKeyInput" type="password" />
+        <button id="importCloudProviderButton" type="submit">Import provider</button>
+      </form>
       <div id="cloudProvidersList">
+        <button
+          id="exportCloudProviderButton"
+          type="button"
+          data-cloud-provider-export="true"
+          data-cloud-provider-id="provider-1"
+        >Export provider</button>
         <form data-cloud-provider-secret-form="true" data-cloud-provider-id="provider-1">
           <input
             id="cloudProviderSecretInput"
@@ -97,8 +108,19 @@ function createHarness() {
     cloudProviderEndpointInput: document.getElementById('cloudProviderEndpointInput'),
     cloudProviderApiKeyInput: document.getElementById('cloudProviderApiKeyInput'),
     addCloudProviderButton: document.getElementById('addCloudProviderButton'),
+    cloudProviderImportForm: document.getElementById('cloudProviderImportForm'),
+    cloudProviderImportInput: document.getElementById('cloudProviderImportInput'),
+    cloudProviderImportApiKeyInput: document.getElementById('cloudProviderImportApiKeyInput'),
+    importCloudProviderButton: document.getElementById('importCloudProviderButton'),
     cloudProvidersList: document.getElementById('cloudProvidersList'),
     addCloudProvider: vi.fn(async () => ({ displayName: 'Course Provider' })),
+    importCloudProviderFile: vi.fn(async () => ({
+      provider: { displayName: 'Imported Provider' },
+      importedModelCount: 1,
+    })),
+    exportCloudProviderPreference: vi.fn(() => ({
+      provider: { name: 'Exported Provider' },
+    })),
     setCloudProviderFeedback: vi.fn(),
     clearCloudProviderFeedback: vi.fn(),
     refreshCloudProviderPreference: vi.fn(),
@@ -120,6 +142,7 @@ function createHarness() {
     deps,
     elements: {
       cloudProviderSecretInput: document.getElementById('cloudProviderSecretInput'),
+      exportCloudProviderButton: document.getElementById('exportCloudProviderButton'),
       cloudModelToolToggle: document.getElementById('cloudModelToolToggle'),
       cloudModelThinkingToggle: document.getElementById('cloudModelThinkingToggle'),
       cloudModelRateLimitRequests: document.getElementById('cloudModelRateLimitRequests'),
@@ -217,6 +240,50 @@ describe('settings-events-cloud', () => {
     );
     expect(harness.deps.setStatus).toHaveBeenCalledWith('Cloud provider API key saved.');
     expect(secretInput.value).toBe('');
+  });
+
+  test('imports a cloud provider file with an explicitly entered API key', async () => {
+    const harness = createHarness();
+    const form = harness.document.getElementById('cloudProviderImportForm');
+    const fileInput = /** @type {HTMLInputElement} */ (
+      harness.document.getElementById('cloudProviderImportInput')
+    );
+    const apiKeyInput = /** @type {HTMLInputElement} */ (
+      harness.document.getElementById('cloudProviderImportApiKeyInput')
+    );
+    const file = new harness.dom.window.File(['{}'], 'provider.cloud-pro.json', {
+      type: 'application/json',
+    });
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [file],
+    });
+
+    apiKeyInput.value = 'sk-import';
+    form?.dispatchEvent(
+      new harness.dom.window.Event('submit', { bubbles: true, cancelable: true })
+    );
+    await Promise.resolve();
+
+    expect(harness.deps.importCloudProviderFile).toHaveBeenCalledWith(file, 'sk-import');
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Imported Provider imported with 1 selected model.'
+    );
+    expect(apiKeyInput.value).toBe('');
+  });
+
+  test('exports cloud providers through delegated provider actions', () => {
+    const harness = createHarness();
+    const exportButton = /** @type {HTMLButtonElement} */ (
+      harness.elements.exportCloudProviderButton
+    );
+
+    exportButton.click();
+
+    expect(harness.deps.exportCloudProviderPreference).toHaveBeenCalledWith('provider-1');
+    expect(harness.deps.setStatus).toHaveBeenCalledWith(
+      'Exported Provider exported as .cloud-pro.json.'
+    );
   });
 
   test('persists cloud-model rate limits and announces status', async () => {
